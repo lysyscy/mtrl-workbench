@@ -44,7 +44,7 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
   }
   return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="notice-print-title" closing={closing}>
     <p>本批 {rows.length} 条通知书（含搜索隐藏行）。</p>
-    <div className="notice-print-list"><BoundedTable columns={[{ min: 12, max: 16 },{ min: 9, max: 28, flex: 1 },{ min: 10, max: 16 }]}><thead><tr><th>单据编码</th><th>付款项目</th><th>审批金额（元）</th></tr></thead><tbody>{rows.map(row=><tr key={row.notice_id}><td>{row.bill_no||'—'}</td><td>{row.project_display}</td><td>{money(row.amount_approved)}</td></tr>)}</tbody></BoundedTable></div>
+    <div className="notice-print-list"><BoundedTable><thead><tr><th>单据编码</th><th>付款项目</th><th>审批金额（元）</th></tr></thead><tbody>{rows.map(row=><tr key={row.notice_id}><td>{row.bill_no||'—'}</td><td>{row.project_display}</td><td>{money(row.amount_approved)}</td></tr>)}</tbody></BoundedTable></div>
     {busy&&<p role="status">正在{title}，请勿重复操作…</p>}
     {result&&<section aria-label="执行回执"><p role="status">{mode==='pdf'?'已生成':'已投递'} {result.success} / 共 {result.total} 条，失败 {result.failed} 条。</p>
       {result.unprinted_bill_nos.length>0&&<p className="notice" role="alert">未产出的单号：{result.unprinted_bill_nos.join('、')}</p>}

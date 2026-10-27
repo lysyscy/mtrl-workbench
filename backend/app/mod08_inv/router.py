@@ -19,6 +19,7 @@ from app.mod08_inv.repository import (
     clear_adjustment,
     load_rows,
     save_adjustment,
+    save_linked_adjustment,
 )
 # ⛔ **「手动 Excel 导入」已整体删除**（用户 2026-09-22 裁定：「库存单据手动导入这个模块给删掉，
 #    不要了」—— 降级通道改为：i8 不可用 ⇒ **显式报错待人处理**，⛔ 不做手动兜底入口）。
@@ -50,10 +51,14 @@ class AdjustRequest(BaseModel):
     row_id: int
     amount: str = ""
     remark: str = ""
+    values: dict[str, str] | None = None
+    basis: dict[str, str] = {}
+    expected: str = ""
 
 
 class ClearAdjustRequest(BaseModel):
     row_id: int
+    expected: str | None = None
 
 
 class FetchRequest(BaseModel):
@@ -86,7 +91,8 @@ def api_inventory() -> dict:
       壳里「过程资料」的入库 / 出库 5 列聚合直接吃它（⛔ 不在前端重写归集规则）。
     - `adjusted` = 这一行有没有调整单（壳里判 `adjOf` 用它，也用于「只看被调整行」筛选）。
     """
-    from app.mod06_proc.domain import to_category          # 归集规则的**唯一出口**
+    from app.mod06_proc.domain import to_category, MATERIAL_PROPERTIES
+    from app.mod08_inv.adjustment_values import edit_token, effective_value, original_values, adjustment_values
 
     with session_scope() as s:
         adjs = adjustments(s)
@@ -94,8 +100,10 @@ def api_inventory() -> dict:
         items = [
             {
                 **r,
-                "c5": to_category(r.get("material_property")) or "",
-                "adjusted": r.get("adj_amount") is not None,
+                "c5": to_category(effective_value(r, "material_property")) or "",
+                "adjusted": r["id"] in adjs,
+                "original_values": original_values(r),
+                "edit_token": edit_token(r, adjs.get(r["id"])),
             }
             for r in rows
         ]
@@ -105,6 +113,8 @@ def api_inventory() -> dict:
                 "row_id": a.row_id,
                 "before_amount": _money(a.before_amount),
                 "amount": _money(a.amount),
+                "values": adjustment_values(a),
+                "before_values": dict(a.before_values or {}),
                 "remark": a.remark or "",
                 "operator": a.operator or "",
                 "changed_at": a.changed_at.strftime("%Y-%m-%d %H:%M") if a.changed_at else "",
@@ -112,7 +122,7 @@ def api_inventory() -> dict:
             for a in sorted(adjs.values(), key=lambda x: x.id)
         ]
         projects = sorted({str(r.get("warehouse") or "") for r in rows if r.get("warehouse")})
-    return {"rows": items, "adjustments": payload, "count": len(items), "projects": projects}
+    return {"rows": items, "adjustments": payload, "count": len(items), "projects": projects, "material_properties": list(MATERIAL_PROPERTIES)}
 
 
 @router.post("/api/m08/adjust")
@@ -122,15 +132,17 @@ def api_adjust(req: AdjustRequest) -> dict:
     失败 **抛 `MustReportError`** ⇒ 400 ＋ 原样原因（壳侧把原因给用户，不静默）。
     ⚠️ 原始数据**永不被改**：调整单独立存储（`inv_adjustment`），抓取只刷新 `inv_detail`。
     """
-    problem = D.adjustment_problem(req.amount, req.remark)
+    problem = D.adjustment_problem(req.amount, req.remark) if req.values is None else ""
     if problem:
         raise MustReportError(problem)
     try:
         with session_scope() as s:
-            adj = save_adjustment(
-                s, row_id=req.row_id, new_amount=req.amount,
-                remark=req.remark, operator=current_operator(),
-            )
+            if req.values is None:
+                adj = save_adjustment(s, row_id=req.row_id, new_amount=req.amount,
+                                      remark=req.remark, operator=current_operator())
+            else:
+                adj = save_linked_adjustment(s, row_id=req.row_id, values=req.values,
+                    basis=req.basis, expected=req.expected, remark=req.remark, operator=current_operator())
             out = {
                 "ok": True,
                 "row_id": adj.row_id,
@@ -151,7 +163,7 @@ def api_adjust_clear(req: ClearAdjustRequest) -> dict:
     依据：原型 `V.m08` 的调整单弹窗**有「撤销调整单」按钮**（**原型即交互规格**，`D18`）。
     """
     with session_scope() as s:
-        clear_adjustment(s, row_id=req.row_id)
+        clear_adjustment(s, row_id=req.row_id, expected=req.expected)
     return {"ok": True, "row_id": req.row_id}
 
 

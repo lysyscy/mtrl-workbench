@@ -107,7 +107,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       const texts = values.map(amount => amount == null ? '—' : key.endsWith('rate') ? `${(Number(amount)*100).toFixed(1)}%` : money(String(amount)));
       const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?5:4;
       const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 8 : edge))));
-      return {...contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1),context:{widthFlex:1}};
+      return contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1);
     };
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
     const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});

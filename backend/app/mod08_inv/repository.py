@@ -14,11 +14,18 @@ from sqlalchemy.orm import Session
 
 from app.mod08_inv.domain import adjustment_problem
 from app.mod08_inv.models import InvAdjustment, InvDetail
+from app.core.money import to_money
+from app.mod08_inv.adjustment_values import adjustment_values
 
 
 def _with_adjustment(row: dict, adj: InvAdjustment | None) -> dict:
     if adj is not None:
-        row["adj_amount"] = adj.amount
+        values = adjustment_values(adj)
+        if "amount" in values:
+            row["adj_amount"] = to_money(values["amount"])
+        if adj.overrides is not None:
+            row["adjusted_values"] = values
+            row["adjustment_before_values"] = dict(adj.before_values or {})
         row["adj_remark"] = adj.remark or ""
         row["adj_operator"] = adj.operator or ""
         row["adj_at"] = adj.changed_at.strftime("%Y-%m-%d %H:%M") if adj.changed_at else ""
@@ -120,7 +127,7 @@ def save_adjustment(
     s: Session, *, row_id: int, new_amount, remark: str, operator: str, at: datetime | None = None
 ) -> InvAdjustment:
     """写入 / 更新调整单（**判据不过 = 抛错，不静默写入**）。"""
-    detail = s.get(InvDetail, row_id)
+    detail = s.get(InvDetail, row_id, with_for_update=True, populate_existing=True)
     if detail is None:
         raise ValueError(f"库存单据行不存在：{row_id}")
     problem = adjustment_problem(new_amount, remark)
@@ -131,11 +138,18 @@ def save_adjustment(
 
     amount = require_non_negative(new_amount, field="调整后金额")
     now = at or datetime.now()
-    adj = adjustments(s).get(row_id)
+    adj = s.execute(select(InvAdjustment).where(InvAdjustment.row_id == row_id)
+                    .with_for_update().execution_options(populate_existing=True)).scalars().first()
     if adj is None:
         adj = InvAdjustment(row_id=row_id, before_amount=detail.amount)
         s.add(adj)
     adj.amount = amount
+    if adj.overrides is not None:
+        values = {**adj.overrides, 'amount': format(amount, '.2f')}
+        qty = to_money(values.get('qty', detail.qty))
+        if qty:
+            values['price_excl'] = format(to_money(amount / qty), '.2f')
+        adj.overrides = values
     adj.remark = str(remark).strip()
     adj.operator = operator
     adj.changed_at = now
@@ -143,9 +157,64 @@ def save_adjustment(
     return adj
 
 
-def clear_adjustment(s: Session, *, row_id: int) -> None:
+
+def save_linked_adjustment(s: Session, *, row_id: int, values: dict, basis: dict,
+                           expected: str, remark: str, operator: str) -> InvAdjustment:
+    """Keep imported facts immutable and reject an old editor before writing."""
+    from app.core.errors import DataConflictError
+    from app.mod06_proc.domain import MATERIAL_PROPERTIES
+    from app.mod08_inv.adjustment_values import (
+        NUMERIC_FIELDS, adjustment_values, calculate_values, edit_token, original_values,
+    )
+    detail = s.scalar(select(InvDetail).where(InvDetail.id == row_id).with_for_update().execution_options(populate_existing=True))
+    if detail is None:
+        raise ValueError(f"库存单据行不存在：{row_id}")
+    adj = s.scalar(select(InvAdjustment).where(InvAdjustment.row_id == row_id).with_for_update().execution_options(populate_existing=True))
+    source = to_row(detail)
+    if not expected or expected != edit_token(source, adj):
+        raise DataConflictError("原单或调整单已变化，请重读后重新确认，当前输入仍可保留")
+    if not isinstance(remark, str) or not remark.strip():
+        raise ValueError("调整备注必填")
+    if len(remark.strip()) > 512:
+        raise ValueError("调整备注不能超过512字")
+    before = original_values(source)
+    previous = adjustment_values(adj)
+    baseline = {**before, **previous}
+    calculated = calculate_values(values, basis, baseline=baseline)
+    prop = calculated['material_property']
+    if prop not in (*MATERIAL_PROPERTIES, '', '-', before['material_property']):
+        raise ValueError("物料性质无效，请从现有类别选择")
+    linked = any(mode != 'unchanged' for mode in basis.values())
+    overrides = ({field: calculated[field] for field in NUMERIC_FIELDS} if linked
+                 else {key: value for key, value in previous.items() if key in NUMERIC_FIELDS})
+    if prop != before['material_property'] or 'material_property' in previous:
+        overrides['material_property'] = prop
+    if not overrides:
+        raise ValueError("没有需要保存的调整内容")
+    if adj is None:
+        adj = InvAdjustment(row_id=row_id, before_amount=detail.amount, before_values=before)
+        s.add(adj)
+    elif adj.before_values is None:
+        adj.before_values = before
+    adj.overrides = overrides
+    adj.amount = to_money(overrides.get('amount', detail.amount))
+    adj.remark = remark.strip()
+    adj.operator = operator
+    adj.changed_at = datetime.now()
+    s.flush()
+    return adj
+
+def clear_adjustment(s: Session, *, row_id: int, expected: str | None = None) -> None:
     """撤销调整单（**原始数据未受影响** —— 本表与 `inv_detail` 物理分离）。"""
-    adj = adjustments(s).get(row_id)
+    if expected is not None:
+        from app.core.errors import DataConflictError
+        from app.mod08_inv.adjustment_values import edit_token
+        detail = s.scalar(select(InvDetail).where(InvDetail.id == row_id).with_for_update().execution_options(populate_existing=True))
+        adj = s.scalar(select(InvAdjustment).where(InvAdjustment.row_id == row_id).with_for_update().execution_options(populate_existing=True))
+        if detail is None or edit_token(to_row(detail), adj) != expected:
+            raise DataConflictError("原单或调整单已变化，请重读后再撤销")
+    else:
+        adj = adjustments(s).get(row_id)
     if adj is not None:
         s.delete(adj)
         s.flush()

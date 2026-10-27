@@ -3,7 +3,7 @@ import { createPortal, flushSync } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
 import type { GridApi, IRowNode } from 'ag-grid-community';
 import { loadElementFonts, loadTextFonts } from './appearance-ready';
-import { tableWidths } from './table-widths';
+import { freezeGridFlex } from './grid';
 
 // Opt-in preparation. Rich cells render through a portal in the owning React tree,
 // keeping their real router, appearance and editor context during bounded measurement.
@@ -49,7 +49,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
   const restoredTop = useRef<number | null>(null), appliedGeometry = useRef('');
   const headerSize = useRef({ key: '', height: headerMinimum });
   const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string } | null>(null);
-  const fitted = useRef(''), appliedScope = useRef(scope), appliedIdentity = useRef(identity);
+  const autosized=useRef<{rows:T[];totals:T[];columns:TextGridColumn<T>[];width:string}|null>(null);
+  const appliedScope = useRef(scope), appliedIdentity = useRef(identity);
+  useLayoutEffect(()=>api&&root.current?freezeGridFlex(api,root.current):undefined,[api,root]);
   useLayoutEffect(() => {
     const node = root.current;
     if (!api || !node || !active) return;
@@ -102,18 +104,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const bodyFont = `${textCss.fontSize} ${textCss.fontFamily}`, singleLine = Math.ceil(parseFloat(textCss.lineHeight) + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom) + 2);
         const canFitLine = textCss.letterSpacing === 'normal' && textCss.wordSpacing === '0px';
         context.font = css.font;
-        const padding = parseFloat(css.paddingLeft) + parseFloat(css.paddingRight) || 16;
-        let plannedWidths = displayed.map(col => col.getActualWidth());
-        if (!userWidths.current && (fitted.current !== widthKey || displayed.some(col => col.getActualWidth() < (col.getColDef().minWidth ?? 0)))) {
-          const preferred = displayed.map(col => {
-            const spec = columns.find(c => c.id === col.getColId());
-            let width = col.getColDef().minWidth ?? col.getActualWidth();
-            if (spec) for (const text of new Set([...(spec.wrap ? rows.map(row => spec.text(row)) : []), ...totals.map(row => spec.text(row, true))])) width = Math.max(width, context.measureText(text).width + padding + 2);
-            return width;
-          });
-          plannedWidths = tableWidths(displayed.map(c => ({ min: c.getColDef().minWidth ?? 60, max: c.getColDef().maxWidth ?? 400, flex: c.getColDef().context?.widthFlex ?? 0 })), preferred, available, 1);
-
-        }
+        const padding=parseFloat(css.paddingLeft)+parseFloat(css.paddingRight)||16;
+        const plannedWidths = displayed.map(col => col.getActualWidth());
         const widthById = new Map(displayed.map((col,i) => [col.getColId(),plannedWidths[i]!]));
         const key = `${css.font}:${css.lineHeight}:${minimum}:${displayed.map(c => `${c.getColId()}:${widthById.get(c.getColId())}`).join('|')}`;
         const geometryChanged = appliedGeometry.current !== key;
@@ -191,9 +183,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const anchor = readingAnchor.current?.scope === scope ? readingAnchor.current : null;
         const contentChanged = publishedRows.current !== rows;
         heights.current = next;
-        const widths = displayed.flatMap((col,i) => Math.abs(col.getActualWidth() - plannedWidths[i]!) >= .5 ? [{key:col,newWidth:plannedWidths[i]!}] : []);
-        if (widths.length) grid.setColumnWidths(widths);
-        fitted.current = widthKey;
         if (Math.abs((grid.getGridOption('headerHeight') ?? headerMinimum) - header) >= .5) grid.setGridOption('headerHeight', header);
         if (publishedRows.current !== rows) { grid.setGridOption('rowData', rows); publishedRows.current = rows; }
         if (publishedTotals.current !== totals) { grid.setGridOption('pinnedBottomRowData', totals); publishedTotals.current = totals; }
@@ -203,6 +192,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (changed) grid.onRowHeightChanged();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (cancelled(run)) return;
+        const sized=autosized.current;
+        if(!userWidths.current&&(!sized||sized.rows!==rows||sized.totals!==totals||sized.columns!==columns||sized.width!==widthKey)) {
+          autosized.current={rows,totals,columns,width:widthKey};
+          const compact=displayed.filter(col=>{const spec=columns.find(c=>c.id===col.getColId());return spec&&!spec.wrap&&!spec.render&&!col.getFlex()&&col.getColDef().minWidth!==col.getColDef().maxWidth;});
+          if(compact.length)grid.autoSizeColumns(compact.map(c=>c.getColId()),true);
+          if(displayed.some((col,i)=>Math.abs(col.getActualWidth()-plannedWidths[i]!)>=.5)){schedule();return;}
+        }
         // Natural-height reports render the whole known result. A complete row model
         // can precede React's last row commit; publish after that actual dependency.
         if (grid.getGridOption('domLayout') === 'autoHeight') {
@@ -280,7 +276,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
     const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; const changed = next !== width || grid.getGridOption('domLayout') !== 'autoHeight' && nextHeight !== height; width = next; height = nextHeight; if (next && changed) schedule(); });
     resize.observe(node);
-    const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; userWidths.current = false; fitted.current = ''; schedule(); } });
+    const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; userWidths.current = false; autosized.current = null; schedule(); } });
     appearance.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
     const resized = (event: { source: string; finished?: boolean }) => { if (event.source === 'uiColumnResized' && event.finished) { userWidths.current = true; schedule(); } };
     grid.addEventListener('columnResized', resized);

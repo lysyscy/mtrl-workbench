@@ -8,8 +8,8 @@ import { numberColumnWidth } from './grid';
 import { mechanicalMoney as money, detailNet, detailProblems, detailSum, editDetailRow } from './mechanical-api';
 import type { Category, Detail, DetailRow } from './mechanical-api';
 
-export function mechanicalNumberWidth(values: readonly unknown[], scale: number, control = false) {
-  return numberColumnWidth(values, scale, control);
+export function mechanicalNumberWidth(values: readonly unknown[], scale: number, control = false, stretch = 0) {
+  return numberColumnWidth(values, scale, control, stretch);
 }
 const numericFields = ['amount','rate','net','qty','plan','used'];
 

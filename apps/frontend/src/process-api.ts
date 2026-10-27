@@ -9,7 +9,7 @@ export const dataKeys = [...materialKeys,...mechKeys];
 export const tabLabels = ['表① 原始表','表② 调整后表','差异表'];
 export type Amounts = Record<string,string|null>;
 export type ProcessRow = Amounts & { ym:string; materialEditable:string };
-export interface Difference { id:number; doc_no:string; seq:string; material:string; warehouse:string; before:string|null; after:string|null; delta:string|null; remark:string; operator:string; at:string }
+export interface Difference { id:number; doc_no:string; seq:string; material:string; warehouse:string; before:string|null; after:string|null; delta:string|null; remark:string; changes?:string; operator:string; at:string }
 export interface Matrix { raw:ProcessRow[]; adjusted:ProcessRow[]; totals:{raw:Amounts;adjusted:Amounts}; segments:{raw:{name:string;total:string|null}[];adjusted:{name:string;total:string|null}[]}; diffs:Difference[]; diff_totals:Amounts }
 export interface Confirmation { confirmed:true; effective_signature:string; detail_signature:string }
 export interface ProcessData { effectiveValues:Record<string,Record<string,Amounts>>; detailSignatures:Record<string,Record<string,string>>; projects:string[]; matrices:Record<string,Matrix>; sources:Record<string,Record<string,Record<string,{mode:string}>>>; signatures:Record<string,Record<string,string>> }

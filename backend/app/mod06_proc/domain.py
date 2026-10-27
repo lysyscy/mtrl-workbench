@@ -19,6 +19,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.core.money import sum_money, to_money
+from app.mod08_inv.adjustment_values import effective_value, LABELS
 
 # ============================================================ 材料类别（用户口述 2026-09-16）
 
@@ -181,7 +182,7 @@ def material_by_month(
         direction = str(row.get("direction") or "")
         if direction not in ("入库", "出库"):
             continue
-        category = to_category(row.get("material_property"))
+        category = to_category(effective_value(row, "material_property") if adjusted else row.get("material_property"))
         if category is None:
             continue
         amount = row_material_amount(row, adjusted=adjusted)
@@ -388,10 +389,17 @@ def diff_rows(inv_rows: list[dict], *, warehouse: str) -> list[dict]:
     for row in inv_rows or ():
         if str(row.get("warehouse") or "") != warehouse:
             continue
-        if row.get("adj_amount") in (None, ""):
+        if row.get("adj_amount") in (None, "") and not row.get("adjusted_values"):
             continue
         before = to_money(row.get("amount") or 0)
-        after = to_money(row["adj_amount"])
+        after = to_money(effective_value(row, "amount") or 0)
+        snapshot = row.get("adjustment_before_values") or {}
+        changes = []
+        for key, value in (row.get("adjusted_values") or {}).items():
+            original = row.get(key, snapshot.get(key, ""))
+            same = str(original or "") == str(value or "") if key == "material_property" else to_money(original or 0) == to_money(value)
+            if not same:
+                changes.append(f"{LABELS.get(key, key)}：{original} → {value}")
         out.append({
             "id": row.get("id"),
             "doc_no": row.get("doc_no") or "",
@@ -401,6 +409,7 @@ def diff_rows(inv_rows: list[dict], *, warehouse: str) -> list[dict]:
             "before": before,
             "after": after,
             "delta": to_money(after - before),
+            **({"changes": "；".join(changes)} if "adjusted_values" in row else {}),
             "remark": row.get("adj_remark") or "",
             "operator": row.get("adj_operator") or "",
             "at": row.get("adj_at") or "",

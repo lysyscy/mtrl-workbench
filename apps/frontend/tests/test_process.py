@@ -116,7 +116,7 @@ def test_difference_first_visible_frame_has_final_geometry(server,browser_page,a
       const e=document.querySelector('.process-matrix'),card=document.querySelector('.process-page');
       if(e?.checkVisibility({checkVisibilityCSS:true})&&window.__nativeFrames.length<30)
         window.__nativeFrames.push(JSON.stringify({table:e.offsetWidth,card:card.offsetWidth,
-          widths:[...e.querySelectorAll('col')].map(c=>c.getBoundingClientRect().width)}));
+          widths:[...e.querySelectorAll('tbody tr:first-child > th,tbody tr:first-child > td')].map(c=>c.getBoundingClientRect().width)}));
       if(window.__nativeFrames.length<30)requestAnimationFrame(nativeFrame);}nativeFrame();""")
     open_page(page,server,'process','过程资料')
     page.wait_for_function('window.__nativeFrames.length>=30')
@@ -133,5 +133,5 @@ def test_difference_first_visible_frame_has_final_geometry(server,browser_page,a
     page.locator('.process-tabs label').filter(has_text='差异表').click()
     page.wait_for_function('window.__differenceFrames.length>=30')
     frames=page.evaluate('window.__differenceFrames')
-    assert len(frames[0]['widths'])==11,frames
+    assert len(frames[0]['widths'])==12,frames
     assert len({str(frame) for frame in frames})==1,frames

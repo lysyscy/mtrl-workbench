@@ -77,6 +77,8 @@ class InvAdjustment(Base):
     )
     before_amount: Mapped[float] = mapped_column(MONEY, default=0)   # 改前（i8 原始金额）
     amount: Mapped[float] = mapped_column(MONEY, default=0)          # 改后（调整后金额，≥ 0）
+    overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # NULL preserves legacy amount-only adjustments
+    before_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     remark: Mapped[str] = mapped_column(String(512), default="")     # ⚠️ 必填（为什么调）
     operator: Mapped[str] = mapped_column(String(64), default="")    # 改动人（唯一出口 = identity）
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
