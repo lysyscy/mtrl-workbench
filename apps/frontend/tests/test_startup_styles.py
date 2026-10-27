@@ -1,5 +1,6 @@
 """First painted UI uses ready fonts/theme; real-copy reads only."""
 import json
+import pytest
 from pathlib import Path
 from playwright.sync_api import expect
 from test_preview import server, browser_page, login
@@ -170,6 +171,40 @@ def test_process_module_does_not_wait_for_retained_i8_read(server,browser_page):
     finally:
         for route in held:route.continue_()
         page.unroute('**/api/m02/fetch/records*')
+
+
+def test_inventory_does_not_wait_for_retained_i8_read(server,browser_page):
+    page,_=browser_page;login(page,server);held=[]
+    page.route('**/api/m02/fetch/records*',lambda route:held.append(route))
+    try:
+        with page.expect_request('**/api/m02/fetch/records*'):
+            page.get_by_role('link',name='i8 接入层',exact=True).click()
+        with page.expect_response('**/api/m08/inventory') as inventory:
+            page.get_by_role('link',name='库存单据与调整单',exact=True).click()
+        assert inventory.value.ok
+        assert held, 'The unrelated local records read was not held'
+        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_visible()
+        expect(page.locator('.inventory-grid')).to_be_visible()
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m02/fetch/records*')
+
+
+@pytest.mark.parametrize('read',['**/api/m08/inventory','**/api/m01/projects'])
+def test_inventory_waits_for_its_own_first_reads(server,browser_page,read):
+    page,_=browser_page;login(page,server);held=[]
+    page.route(read,lambda route:held.append(route))
+    try:
+        with page.expect_request(read):
+            page.get_by_role('link',name='库存单据与调整单',exact=True).click()
+        expect(page.locator('.page-loading')).to_contain_text('库存')
+        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_hidden()
+        assert held
+    finally:
+        for route in held:route.continue_()
+        page.unroute(read)
+    expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_visible()
+    expect(page.locator('.inventory-grid')).to_be_visible()
 
 
 def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_page):
