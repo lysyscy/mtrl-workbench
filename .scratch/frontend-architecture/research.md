@@ -376,3 +376,16 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。API生成、Flow、项目刷新、审计和后端候选各自明确未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
 
 原生runner失败退出日志与断言迁移统计有限归档至native-unit-20261028；两旧无消费者run已退出active、临时探针/shim/坏例和副本状态已删除，合同run只留当前在用release-build与必要报告。旧923c1824恢复点仍由父指定保留，原8065用户试用数据保持；所有产物沿当前retention至2026-11-26。未推送、合并或部署。
+
+
+## 22. 原有付款并发不变量修复（2026-10-28）
+
+父任务交付原发现者的完整HTTP动态证据：审批100、不同合成账号/request_id，顺序成功/拒绝后总100；两轮并发均两成功、有效总额及统计200。用户随后明确批准专用mtrl_workbench_test临时schema、合成付款和双会话、结束清理。本批据此优先修付款入口，其余Flow/项目刷新/工具候选暂停；没有真实付款、来源库写入或i8调用。
+
+新长期回归先在未改产品ed7e4e2d上运行：同单两个真实HTTP请求均ok:true，违反只许一笔的断言；反序双单另有HTTP500，日志不足以确定其异常原因，不冒称已证明死锁。旧confirm后双人Barrier已退出：现在暂停A的真实confirm结果、观察B实际pg_blocking_pids或旧confirm已到达，再finally释放A；固定后B必须真实等A事务的行锁，不把线程偶然顺序/timeout算通过。测试设置局部5s锁/10s语句上限，控制门8s和future限时，异常同样清理。
+
+产品只改apply_batch_pay调用与现有get_notices_by_ids可选for_update。后者用单条ORDER BY不可变主键、with_for_update(key_share=True)和populate_existing锁定刷新整批通知书，之后才读流水/关联/状态并沿原confirm_batch整批判定。SQLAlchemy2.1固定安装源码/官方文档确认key_share=True且read=False渲染FOR NO KEY UPDATE；与现有sync_stat_paid/撤销通知书锁同模式，兼容流水外键KEY SHARE。不增加流水行锁，保持撤销先flow后notice的既有顺序不会被付款新反向等待；不改账号历史锁、重算、人工旁路、request_id或schema。返回/流水创建顺序仍为输入去重后的选择顺序。两个310 spy只适配显式锁参数，拟方式fixture先flush它所声称的数据库值，原断言保持。
+
+新7case与既有19项合计26项在现有backend_verify临时schema通过（1.74s，不含迁移）：双账号同单、反序双单都一成功一明确拒绝、每单总100且回执保原序；真实等锁后刷新预缓存通知书，额度50/未批/剔除/撤单四种变化均拒绝；HTTP第二条写入异常后整批流水及统计回滚，下一账号可正常取得锁并付款。既有所选范围/缺失ID/集采关联/整批非法/幂等/异常回滚、手改统计/恢复自动及撤销保护继续通过。测试模块硬核current_database与backend_verify_ schema，合成提交不允许落普通测试schema。
+
+红/绿report及日志分别归payment-lock-red-20261028与payment-lock-green-20261028；两次原始退出1/0、cleanup_completed=true且临时schema已退出，不把红灯记为通过。原动态证据继续在task-4/backend-architecture-review/payment-concurrency，不复制全套报告。待原发现者独立复核此批，不能把前端独审替代资金并发审查。[SQLAlchemy锁选项](https://docs.sqlalchemy.org/en/21/core/selectable.html#sqlalchemy.sql.expression.Select.with_for_update)、[PostgreSQL锁模式/稳定顺序](https://www.postgresql.org/docs/current/explicit-locking.html)。现有其他抓取/事务候选与真实外部路径不在本补丁范围。

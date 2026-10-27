@@ -164,10 +164,14 @@ def adjust_notice_stat(
     return trace
 
 
-def get_notices_by_ids(session: Session, ids: list[int]) -> list[PaymentNotice]:
+def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False) -> list[PaymentNotice]:
     if not ids:
         return []
-    return list(session.execute(select(PaymentNotice).where(PaymentNotice.id.in_(ids))).scalars().all())
+    stmt = select(PaymentNotice).where(PaymentNotice.id.in_(ids))
+    if for_update:
+        # 整批按稳定主键先锁后读；NO KEY UPDATE与统计重算一致，兼容流水外键的KEY SHARE。
+        stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=True).execution_options(populate_existing=True)
+    return list(session.execute(stmt).scalars().all())
 
 
 # ---------------------------------------------------------------- 行级动作（能力 2 / 3 / 4）

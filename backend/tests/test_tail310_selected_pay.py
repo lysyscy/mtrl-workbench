@@ -66,13 +66,16 @@ def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
     for module, name in ((notices, 'get_notices_by_ids'), (flows, 'flows_of_notices'),
                          (contracts, 'links_by_notice')):
         original = getattr(module, name)
-        def spy(session, ids=None, *, notice_ids=None, original=original, name=name):
+        def spy(session, ids=None, *, notice_ids=None, for_update=False, original=original, name=name):
             chosen = ids if notice_ids is None else notice_ids
             assert session is s and chosen == [a.id]
             seen.append(name)
+            if name == 'get_notices_by_ids':
+                assert for_update
+                return original(session, chosen, for_update=True)
             return original(session, chosen)
         monkeypatch.setattr(module, name, spy)
-    a.planned_pay_method = '承兑'
+    a.planned_pay_method = '承兑'; s.flush()
     created, message = pay(s, [a.id])
     assert created == [a.id] and '700.00' in message
     assert len(seen) == 3
@@ -85,10 +88,10 @@ def test_order_duplicates_missing_and_archived_rows(sample, monkeypatch):
     s, a, b = sample
     original = notices.get_notices_by_ids
     selected = []
-    def spy(session, ids):
-        assert session is s
+    def spy(session, ids, *, for_update=False):
+        assert session is s and for_update
         selected.append(ids)
-        return original(session, ids)
+        return original(session, ids, for_update=for_update)
     monkeypatch.setattr(notices, 'get_notices_by_ids', spy)
     missing = -310
     created, _ = pay(s, [b.id, missing, a.id, b.id], drafts={

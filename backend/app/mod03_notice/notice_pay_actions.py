@@ -54,7 +54,7 @@ def apply_batch_pay(
     （`POST /api/m03/actions/batch-pay`）**共用这一份**：⛔ 不许两份判定、不许两份文案。
 
     管线（与 `act_pay` 原来的逐句一致，只是搬了个家）：
-      ① 所选通知书 / 实际流水 / 关联批量取数 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
+      ① 按ID锁定并刷新整批通知书，再读实际流水 / 关联 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
          **撤单 / 剔除行一律排除** §4.2.7）⇒ ③ `confirm_batch` 判定（金额 / 方式 / 备注 / 状态）
       ⇒ ④ 有错 ⇒ **整批不产生任何流水**（不落半批）⇒ ⑤ **`request_id` 幂等**（拒重复提交）
       ⇒ ⑥ `flow_service.create_flow` 逐条落流水（一次付款一条独立流水）。
@@ -73,7 +73,7 @@ def apply_batch_pay(
     from app.mod11_jc import service as contracts
 
     selected_ids = list(dict.fromkeys(ids))
-    by_id = {int(n.id): n for n in get_notices_by_ids(session, selected_ids)}
+    by_id = {int(n.id): n for n in get_notices_by_ids(session, selected_ids, for_update=True)}
     flows: dict[int, list[dict]] = {}
     for f in flow_service.flows_of_notices(session, selected_ids):
         flows.setdefault(int(f.notice_id), []).append({"amount": f.amount, "status": f.status})
