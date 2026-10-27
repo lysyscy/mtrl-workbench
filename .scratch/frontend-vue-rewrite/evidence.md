@@ -510,4 +510,27 @@ UTC源为后端快照datetime.now(timezone.utc).isoformat，局部原生Date格�
 
 当前活跃run=.artifacts/active/frontend-architecture/local-pages-20261028：唯一在用committed-build，reports含基线/候选、verified、auxiliary、final.xml、final-state及lifecycle.json；实际身份只查原主预览owner。API类型与机械身份/UTC的四个已关闭run移至相应.artifacts/archive，有限保留至2026-11-26，未用构建/临时副本私有状态及重复截图已退出。未采用API补丁正文删除；同一事实底稿因现行固定文档名契约改为[research.md](../frontend-architecture/research.md)，无兼容占位或第二份报告。task-9四个探针脚本和pnpm转发已实际删除。四个run的run-closed本任务scope均通过；工具总体rc=1仍因其他旧归档5项：backend-regression-integration/20261027-01/work、notice-association/20261026下三个临时运行目录及缺retention.json。该归属不在本轮删除范围，未擅清；完整条目在lifecycle.json，交父整合收尾，不能报全仓生命周期检查通过。
 
-独立复验请核923c1824：机械核对1280/900时间分组、原值title、依据窗开闭焦点；四页正常读取/搜索/切回、本地GET暂缓和自身错误重试，合同首屏/原列宽不变。深色最大字号使用归档后图或隔离副本，不写原偏好。完整业务权限/保存未知/撤销/i8/打印组合未重新穷举。整体全站验收仍归父任务后续独立终审，不以本批代用户验收。
+独立复验请核923c1824：机械核对1280/900时间分组、原值title、依据窗开闭焦点；四页正常读取/搜索/切回、本地GET暂缓和自身错误重试，合同首屏/原列宽不变。深色最大字号使用归档后图或隔离副本，不写原偏好。完整业务权限/保存未知/撤销/i8/打印组合未重新穷举。其后独立整合终审和最终综合结果见下一节；用户验收尚待本人实看。
+
+
+## 最终综合风险验证与验收准备（2026-10-28）
+
+**冻结与独立结果。** 产品保持923c1824，原工作树93dc1c23。代码独审cd9d6f6b→93dc1c23共18commit/38files、tsc及diff-check通过，无新阻断（父任务回执）。Terra整合15主入口进入/返回抽查、项目错误重试保搜索、机械UTC原值/输入取消、900弹层关闭回焦点及长表横滚无新阻断；原报告D:/UserData/Documents/Codex/2026-10-27/task-10/visual-audit/integration/review.md。其真实写入/主题全矩阵未独立重跑，按报告边界区分。本阶段没有新增架构范围或改产品。
+
+**高风险组合。** 支持的唯一入口停保原8065→可丢弃真实副本8066→正常恢复原8065，6case通过（26.87s）：身份核验中旧意图作废、共享保存未知/后续草稿、台账真实成功但丢回执后不重投/可靠读回、历史材料保存保下一草稿、未知结果下切流水/返回保台账草稿与导出锁、移除后备后的真实字体失败重试。所有写入只作用可丢弃schema，未操作真实i8/打印。
+
+另在同一冻结产品以真实账号Cookie从专用管理员切到专用普通用户，焦点核验后旧真实GET被abort、迟到原响应未恢复旧身份、上一账号机械草稿退出。普通用户深色1.4×/900/reduced-motion下输入机械草稿→切项目→返回→取消通过，代表按钮transition/animation均0s。首次身份探针未等待route.fetch完成，费用按钮探针误用可见文字而非aria名；修临时等待/定位后通过，未改产品，不计首次为通过。
+
+**原生滚条补验。** 仅给独立Chromium实例去掉Playwright hide-scrollbars默认参数并禁用其overlay feature，无OS/安全设置改动。原生DOM测得scrollbar宽15，费用AG横条invisible=false/高15，新增隔离手填行末行删除按钮下缘命中自身、barTop约525.92>按钮bottom约479.92，合计和横条均在业务行下；私密后图已实看。此前overlay宽0/回退16已有六组增删/横滚证明；现补齐本机Chromium两种模式代表，不外推所有OS/浏览器。新增手填数据随副本退出。
+
+run=.artifacts/archive/frontend-architecture/final-risk-20261028，reports保risk.xml（6case只计一次）、cross-results.json、original-before/after.json、cleanup-classification.json；完整输出日志归logs/risk-tests.log；本run的run-closed任务scope通过，总体rc1仍为上述5项旧归档。两张新增完整截图含副本业务/专用账号，仅本机私密，不作为用户外发图。源schema/全部列结构/40非账号表不变，临时schema已核不存在；主预览仍923c1824原schema，启动输出归其自身run。未推送/合并/生产切换。
+
+**旧内容分类与待父裁定方案（尚未移动）。** .scratch/perf-review共42件/2,826,855bytes：性能原始JSON、独有脚本、旧42878a3c构建及review；review是前阶段输入，其结论已吸收到架构证据。构建可从可达Git重建，原始测量/未跟踪脚本不能假称可再生。.workbuddy仅memory/2026-10-27.md，5,561bytes，是WorkBuddy项目笔记，非现行规则，亦无Git恢复。当前没有运行命令引用它们（排除本轮检查自身），但这不证明没有外部人工消费者；两目录未删、未提交、未新增ignore。
+
+精确可恢复方案：由父确认其旧任务已释放后，先核当前逐件hash仍等于cleanup-classification.json；原样移到D:/UserData/Documents/Codex/preserved/mtrl-workbench/20261028-final/perf-review及workbuddy（目标须不存在，复制清单同存，移动前核两端绝对路径），移后复核42/1件、字节与sha256完全一致。回退沿清单移动回原路径，原位置有新内容则停止，不能覆盖。此为外置保全，不是删除或Git提交，不执行其中旧脚本。
+
+生命周期旧5异常中，backend-regression-integration/20261027-01/work是空目录；notice-association/20261026下final/validation/verified三目录为13件历史日志/owner/构建指纹（合计259,403bytes），三个owner均stopped-disposable且live=false，旧构建已不存在、8dd15f16源码可达。它们有历史证据价值，非整棵可再生垃圾；另缺该effort retention.json。可由父将三目录按原树整体外置到上述保全根的notice-association/20261026，并修既有引用；空work仅在复核无子项后删除。也可在原归档按reports/logs正规重分类并补有限retention；本轮未替其他任务选路或擅动。旧browser错误标签此前策略阻止恢复/关闭，本轮未重试绕过；本轮新建headless contexts均已关闭。
+
+**安全前后图与用户验收文案。** task-10/visual-audit/integration/safe下appearance/inventory/fee的before/after共6张逐张看过像素：外观数字为组件静态示意，库存只有通用说明/按钮，费用是隔离“新项”局部，无真实业务或账号信息。只保本机审阅，不上传Library/第三方；完整nav/warm/机械/本轮综合图仍私密。
+
+可直接向用户说明：本机新版已可验看，15个入口完成架构与视觉审视，原试用数据和松绿/大一点偏好保留。已收敛辅助文字、只读值、弹层操作和长表细节，修复费用末行按钮遮挡；减少无关请求导致的整页等待和机械重复重建。业务保存、草稿、未知回执保护保持，独立代码/实图复验与定向风险验证未发现新阻断。可先按常用流程看项目/通知书/过程/机械，再看外观、库存调整原因和费用按钮。前后局部图可在本机记录中对照；完整业务组合未穷举，当前仅本地保存，尚未合并上线。

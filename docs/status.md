@@ -2,7 +2,7 @@
 
 ## React 前端独立重做
 
-机械稳定renderer452a7dc1、UTC可读展示9e557fd4、剩余四页局部就绪56e8c2ea及旧全局后备退出923c1824已技术验证，原8065加载923c1824并保40张非账号表/schema/松绿large；11case通过，待独立复验及用户整体验收。范围、当前owner、归档后图与保全回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#剩余四页局部就绪与后备退出2026-10-28)。同一架构底稿现按标准名为[research.md](../.scratch/frontend-architecture/research.md)，API类型生成因TS peer成本暂缓，未加依赖。未推送、合并或正式切换。
+最终冻结产品923c1824已加载原8065，代码独审与Terra15入口整合复验无新阻断；11项定向与最终6项风险验证、真实账号切换/旧GET作废、深色最大字草稿保活及15px原生滚条代表通过。40张非账号表/schema/松绿large保留，待用户实看；当前owner、后图/验收文案和两旧未跟踪目录的可恢复移出方案回[最终证据](../.scratch/frontend-vue-rewrite/evidence.md#最终综合风险验证与验收准备2026-10-28)。领域审视/实际整改/保留与暂缓分别见[研究底稿](../.scratch/frontend-architecture/research.md#18-冻结候选综合结论923c1824)。两旧目录未擅动，未推送、合并或正式切换。
 
 机械报表待核对退役、过程机械金额按同项目同月任何明细确认、成功提示退出、历史月份同行右置、通知书列宽和截图接线已完成，源码34f2e523/c3e443d9已保原数据加载8065，待用户实看；回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#机械金额确认与页面反馈调整2026-10-27)。
 
