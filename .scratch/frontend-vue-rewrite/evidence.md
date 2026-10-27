@@ -573,3 +573,12 @@ TS7严格检查和提交后构建通过；265列表行/三种实际详情经过�
 付款7f9151f2已获原发现者独立复核，无阻断；16项合成隔离关键回归通过，临时schema/连接均零，原报告task-4/backend-architecture-review/independent-fix-review。未重复跑整套付款。
 
 C1工具批将syntax/bytes的--staged真实输入交Git原生index，退出工作区内容冒充暂存、Git失败吞空及无关全仓扫描；保显式全量和原规则，补.ts/.tsx编码覆盖。8项独立临时Git回归及全量776Python/16壳件/原语法selftest通过，四个旧输入反例对8294e125原文确实失败；见[研究第23节](../frontend-architecture/research.md#23-c1提交审计复用git真实index2026-10-28)。无应用/DB/预览副作用，原8065产品7f9151f2不变；真实hook由本次提交验证，不新装共享hook。Flowreader和项目缓存失效仍未实施。
+
+
+## Flow读模型单端点与当前预览（2026-10-28）
+
+产品573252d9沿现有Valibot替代Flow手写接口/弱形状强转；不改付款/撤销/统计/欠款，只让原已承诺的字段、nullable归属及生效/已撤销两态在读取兑现，金额仍走原cents、历史空值/额外字段保留。原生红灯3fail/1pass，修后5文件11case及TS7/build通过；真实508行实际reader/金额消费者通过且有效合计/行引用不变。细节见[研究第24节](../frontend-architecture/research.md#24-flow单端点兑现读模型2026-10-28)。
+
+匿名浏览器只改本地GET的响应副本：缺日期、坏审批金额、缺状态均进入既有Query读取错误/重试，重试恢复实际网格，无pageerror；本地关键词空态/清空恢复通过。未登录、不改原账号设置，所有自有route/context/browser已finally退出。原8065产品573252d9 fresh、原schema/invadj261027、全部列结构及40非账号表保持；本次更新和匿名浏览器前后全部表零差异，8066无监听。JS未压缩增加704bytes，非性能收益。
+
+当前run=.artifacts/active/frontend-architecture/flow-schema-20261028，reports/real-shape.json、browser-read.json、release-state.json及original-before/after-browser.json保最小依据，logs保原生红绿/typecheck/build；完整真实响应已删除。临时转发已删。C1证据在.artifacts/archive/frontend-architecture/staged-index-20261028；付款独审通过后2e恢复构建无消费者已释放，合同必要证据归同effort archive/contracts-schema-20261028。保7f为当前Flow风险窗口回退、923为父指定原交付基线。C1与Flow待父定向独审；项目刷新/统计/欠款及其他事务候选仍未实施，未推送、合并或生产部署。

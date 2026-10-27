@@ -367,13 +367,13 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 | 剩余候选 | 证据与本轮边界 | 下一步或保留理由 |
 |---|---|---|
 | 项目写后跨域失效/历史头 | 静态6组key清单缺history；写后header旧态尚未浏览器复现，点击前仍有可靠预检 | 值得小批复核；复用QueryClient标脏与现有可靠读回，别全量强制fetch或改未知回执 |
-| 付款Flow读取形状 | 注入内存坏载荷已实际越过reader，缺date触发TypeError、坏审批金额穿透、缺status影响合计；非真实后端坏响应 | 复用本批Valibot后续小批，先Flow读模型，不改付款/撤销命令；本批未实施 |
-| staged审计真实index | 工具报告指syntax_audit仍全扫、工作区与index混读且Git失败可吞空；尚未由本任务重现实index场景 | 值得Git原生index定向批；须partial staging/失败非零证据，不能为快而关闭门禁 |
+| 付款Flow读取形状 | 原内存坏载荷越过reader；后按第24节修复并验证真实508行和浏览器错误重试 | Flow列表已实施；统计/欠款reader仍未覆盖，不改付款/撤销命令 |
+| staged审计真实index | 原工作区混读/吞Git失败已被旧版4个反例证实；第23节以原生index修复 | 已实施，8项临时Git回归、全量兼容及真实hook通过；待工具独审 |
 | 纯工具fixture/旧prune职责 | 4纯工具pytest装配全app、约255行prune可能职责退出 | 待消费者/收益确认，保DB守卫；不为删除行数贸然退役 |
 | 跨账号同通知书付款锁序 | 原只读风险随后获用户明确合成写测授权，动态证实审批100并发总200 | 后续已按第22节最小修复，交原发现者独立复验；不涉及真实付款 |
 | 抓取事务所有权/欠款重复组装 | 静态外部等待持账号锁、集采rollback外层；欠款本请求重复读事实 | 父按业务/事务风险另排，不把换库当解法、不真实i8验证 |
 
-保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。本节结束时API生成、Flow、项目刷新、审计和后端候选均未实施；后续付款锁修复见第22节，其余仍未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
+保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。本节结束时API生成、Flow、项目刷新、审计和后端候选均未实施；后续付款锁、Git index和Flow修复分别见第22–24节，其余仍未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
 
 原生runner失败退出日志与断言迁移统计有限归档至native-unit-20261028；两旧无消费者run已退出active、临时探针/shim/坏例和副本状态已删除，合同run只留当前在用release-build与必要报告。旧923c1824恢复点仍由父指定保留，原8065用户试用数据保持；所有产物沿当前retention至2026-11-26。未推送、合并或部署。
 
@@ -403,13 +403,16 @@ syntax的staged只编译暂存Python；仅旧web成员有变化（含删除/改�
 
 证据在staged-index-20261028的logs/unit-{red,green-final}.log、syntax-full.log、syntax-selftest.log和reports/{red,green}.json；临时Git仓由TemporaryDirectory退出，无DB/8065操作。新回归用stdlib unittest单独运行，不改现有业务pytest/conftest或DB守卫；指南同步入口。安装Git2.56.0.windows.2。[Git diff NUL与cached语义](https://git-scm.com/docs/git-diff)、[Git cat-file blob](https://git-scm.com/docs/git-cat-file)。未改全量职责，不把全仓编译永久取消。
 
-付款7f9151f2原发现者独立代码/合成schema复核通过：16项关键并发/缓存/回滚/既有310保护通过，临时schema/连接均零；原报告task-4/backend-architecture-review/independent-fix-review。它与本任务26case分开，未重复重跑付款，也不替代C1审查。Flow/项目刷新及其余后端候选仍未实施。
+付款7f9151f2原发现者独立代码/合成schema复核通过：16项关键并发/缓存/回滚/既有310保护通过，临时schema/连接均零；原报告task-4/backend-architecture-review/independent-fix-review。它与本任务26case分开，未重复重跑付款，也不替代C1审查。该C1阶段Flow/项目刷新及其余后端候选尚未实施；随后Flow结果见第24节。
 
 
 ## 24. Flow单端点兑现读模型（2026-10-28）
 
-C1后继续父已批准的一个最小端点：flow-api的loadFlows。原Flow接口声称21字段，reader却只验id/amount并强转；缺pay_date、坏amount_approved、缺status已由客户端扫描分别证实越过reader后触发render异常或错误排除有效合计。本批原生4case先跑原产品，3fail/1pass；补全schema后全5文件11case通过，TS7严格通过，无新依赖。Flow类型从Valibot schema推导，旧接口/强转退出，requestJson身份/abort/错误语义及付款/撤销命令不动。
+C1后继续父已批准的一个最小端点：flow-api的loadFlows。原Flow接口声称20字段，reader却只验id/amount并强转；缺pay_date、坏amount_approved、缺status已由客户端扫描分别证实越过reader后触发render异常或错误排除有效合计。本批原生4case先跑原产品，3fail/1pass；补全schema后全5文件11case通过，TS7严格通过，无新依赖。Flow类型从Valibot schema推导，旧接口/强转退出，requestJson身份/abort/错误语义及付款/撤销命令不动。
 
 只用纯schema和v.is，非数组对象约束沿现有record；正安全ID、nullable通知书/项目、明确effective/revoked两态在读取层兑现。两态来源为实际models/service常量与当前完整508行真实响应，不混用“已付清/未付清”的通知书付款状态。日期/方式/旧操作人空串照实保留，审批金额null与字符串0区分；不新增ISO日期/付款方式枚举或正数金额限制。金额字符串继续用原cents，非法金额仍“金额读取不完整”，不另写金额解析/默认0或用schema转换。每行仍为原对象、额外字段不剥，返回新rows数组沿旧map语义。
 
-实际GET508条（生效及已撤销）经真实loadFlows全部通过，金额显示消费者可用、有效合计/对象引用/额外字段保持；原始响应只取证临时保本机，交付前退出。正常/失联历史、审批null/0、空日期/方式、负数及旧反例有合成边界覆盖；当前原数据没有null审批，不冒充该条件的真实现场。统计/欠款reader与项目history失效、其他后端事务候选仍未实施。本批需后续构建/页面正常筛选和坏响应错误重试实看，不以TS替代运行验证。
+实际GET508条（生效及已撤销）经真实loadFlows全部通过，金额显示消费者可用、有效合计/对象引用/额外字段保持；原始响应只取证临时保本机，交付前退出。正常/失联历史、审批null/0、空日期/方式、负数及旧反例有合成边界覆盖；当前原数据没有null审批，不冒充该条件的真实现场。统计/欠款reader与项目history失效、其他后端事务候选仍未实施。后续构建/页面正常筛选与坏响应错误重试结果见下段，不以TS替代运行验证。
+
+
+573252d9发布构建/typecheck通过并正常加载原8065，fresh；全部JS未压缩相对7f发布增加704bytes，无新依赖/性能提升宣称。匿名新浏览器context仅拦截本地GET，缺日期、坏审批金额、缺状态三种响应各显示正确中文读取错误；点击既有重试后恢复真实网格（各有4个当前可见业务行），无pageerror。搜索不存在关键词进空态、清空恢复通过，finally解除route并关闭全部自有context/browser。更新及浏览器前后所有表/schema/列结构完全相同，8066未启动；未登录/改原账号。真实完整响应原文、临时pnpm转发已退出，只留计数/不变量与原始测试日志。付款独审已完成，2e合同旧恢复构建无消费者后删除并把必要run归档；当前保7f回退构建与父指定923原交付恢复点，当前主构建为flow-schema-20261028/work/release-build。C1/Flow交父定向独审；项目history失效没有动态确认，本轮不贸然改刷新链。
