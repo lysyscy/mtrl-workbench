@@ -1,49 +1,55 @@
+import * as v from 'valibot';
 import { ApiError, record, requestJson } from './api';
 import { body } from './notices-api';
 
 export const contractMoneyKeys = ['contract_amt','inv_sum','trade_contract_amt','trade_inv_sum','settle','pay_sum','debt'] as const;
 export const editableContractKeys = ['material_name','payment_term','payment_method','remark','arch','arch_no','ret_date'] as const;
 export type ContractFields = Record<typeof editableContractKeys[number], string>;
-export interface ContractRow {
-  id: number; project_seq: number | null; project_key: string; contract_no: string; date: string;
-  material: string; supplier: string; contract_amt: string; inv_sum: string; trade_co: string | null;
-  trade_contract_amt: string | null; trade_inv_sum: string; settle: string; pay_sum: string; debt: string;
-  payment_term: string; payment_method: string; remark: string; tag: string; arch: string; arch_no: string;
-  ret_date: string; notice_ids: number[];
-}
-export interface ContractList { rows: ContractRow[]; columns: { key: string; label: string; type: string }[]; tags: string[]; payment_methods: string[] }
-export interface ContractInvoice { id: number; kind: string; date: string; amount: string }
-export interface ContractDetail extends ContractRow { supplier_invoices: ContractInvoice[]; trade_invoices: ContractInvoice[] }
-const moneyText = (x: unknown) => typeof x === 'string' && /^-?\d+(?:\.\d{1,2})?$/.test(x);
-const id = (x: unknown): x is number => typeof x === 'number' && Number.isSafeInteger(x) && x > 0;
-function contractRow(value: unknown): ContractRow {
+const nonArrayObject = v.custom<object>(record);
+const positiveId = v.pipe(v.number(), v.safeInteger(), v.minValue(1));
+const moneyText = v.pipe(v.string(), v.regex(/^-?\d+(?:\.\d{1,2})?$/));
+const contractEntries = {
+  id: positiveId, project_seq: v.nullable(positiveId), contract_no: v.string(), date: v.string(),
+  material: v.string(), supplier: v.string(), contract_amt: moneyText, inv_sum: moneyText,
+  trade_co: v.nullable(v.string()), trade_contract_amt: v.nullable(moneyText), trade_inv_sum: moneyText,
+  settle: moneyText, pay_sum: moneyText, debt: moneyText, payment_term: v.string(), payment_method: v.string(),
+  remark: v.string(), tag: v.string(), arch: v.string(), arch_no: v.string(), ret_date: v.string(),
+};
+const contractSchema = v.intersect([v.object(contractEntries), nonArrayObject]);
+const rowSchema = v.intersect([v.object({ ...contractEntries, project_key: v.string(), notice_ids: v.array(positiveId) }), nonArrayObject]);
+const invoiceSchema = v.intersect([v.object({ id: positiveId, kind: v.string(), date: v.string(), amount: moneyText }), nonArrayObject]);
+const detailSchema = v.intersect([v.object({ ...contractEntries, supplier_invoices: v.array(invoiceSchema), trade_invoices: v.array(invoiceSchema) }), nonArrayObject]);
+const listSchema = v.intersect([v.object({
+  rows: v.array(v.unknown()),
+  columns: v.array(v.intersect([v.object({ key: v.string(), label: v.string(), type: v.string() }), nonArrayObject])),
+  tags: v.array(v.string()), payment_methods: v.array(v.string()),
+}), nonArrayObject]);
+export type ContractBase = v.InferOutput<typeof contractSchema>;
+export type ContractRow = v.InferOutput<typeof rowSchema>;
+export type ContractInvoice = v.InferOutput<typeof invoiceSchema>;
+export type ContractDetail = v.InferOutput<typeof detailSchema>;
+export type ContractList = Omit<v.InferOutput<typeof listSchema>, 'rows'> & { rows: ContractRow[] };
+function contractRow(value: unknown): ContractBase {
   if (record(value) && value.ret_date === null) value = { ...value, ret_date: '' };
-  if (!record(value) || !id(value.id) || !(value.project_seq === null || id(value.project_seq)) ||
-    !['contract_no','date','material','supplier','payment_term','payment_method','remark','tag','arch','arch_no','ret_date'].every(k => typeof value[k] === 'string') ||
-    !(value.trade_co === null || typeof value.trade_co === 'string') ||
-    !contractMoneyKeys.every(k => k === 'trade_contract_amt' && value[k] === null || moneyText(value[k]))) throw new ApiError('合同读取不完整，请重读。');
-  return value as unknown as ContractRow;
+  if (!v.is(contractSchema, value)) throw new ApiError('合同读取不完整，请重读。');
+  return value;
 }
 export function readContracts(value: unknown): ContractList {
-  if (!record(value) || !Array.isArray(value.rows) || !Array.isArray(value.columns) || !value.columns.every(c => record(c) && ['key','label','type'].every(k => typeof c[k] === 'string')) ||
-    !Array.isArray(value.tags) || !value.tags.every(x => typeof x === 'string') || !Array.isArray(value.payment_methods) || !value.payment_methods.every(x => typeof x === 'string')) throw new ApiError('合同列表读取不完整，请重读。');
+  if (!v.is(listSchema, value)) throw new ApiError('合同列表读取不完整，请重读。');
   const rows = value.rows.map((x: unknown) => {
     const row = contractRow(x);
-    if (typeof row.project_key !== 'string' || !Array.isArray(row.notice_ids) || !row.notice_ids.every(id)) throw new ApiError('合同归属或关联读取不完整，请重读。');
+    if (!v.is(rowSchema, row)) throw new ApiError('合同归属或关联读取不完整，请重读。');
     return row;
   });
-  return { rows, columns: value.columns as ContractList['columns'], tags: value.tags as string[], payment_methods: value.payment_methods as string[] };
+  return { rows, columns: value.columns, tags: value.tags, payment_methods: value.payment_methods };
 }
 export function readContractDetail(value: unknown): ContractDetail {
   if (!record(value) || !record(value.data)) throw new ApiError('合同详情读取不完整，请重读。');
   const row = contractRow(value.data);
-  for (const key of ['supplier_invoices','trade_invoices']) {
-    const invoices = value.data[key];
-    if (!Array.isArray(invoices) || !invoices.every(x => record(x) && id(x.id) && typeof x.kind === 'string' && typeof x.date === 'string' && moneyText(x.amount))) throw new ApiError('合同发票依据读取不完整，请重读。');
-  }
-  return { ...value.data, ...row } as unknown as ContractDetail;
+  if (!v.is(detailSchema, row)) throw new ApiError('合同发票依据读取不完整，请重读。');
+  return { ...value.data, ...row };
 }
-export function contractFields(row: ContractRow): ContractFields {
+export function contractFields(row: ContractBase): ContractFields {
   return { material_name: row.material, payment_term: row.payment_term, payment_method: row.payment_method,
     remark: row.remark, arch: row.arch, arch_no: row.arch_no, ret_date: row.ret_date };
 }

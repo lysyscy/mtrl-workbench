@@ -44,4 +44,4 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 `backend/tests/test_frontend_preview_runtime.py`验证跨进程排他、陈旧身份、实例切换授权、HTML构建输入、旧factory退役及待用构建不阻止正常停止；不监听端口。`apps/frontend/tests/test_preview_copy.py`仅作数据库/进程内合同，显式`MTRL_PREVIEW_SOURCE_ENV`用于确认测试目标，临时数据库样例不开放HTTP。它覆盖凭据投影、内容/序列、旧结构复制后只升目标及所有既有外部动作阻断。
 
-`backend/tests/test_frontend_measure.py`保纯计算、输出与预览身份保护，不依赖运行中的真实预览。采集器的现场验证由`tools/dev/frontend_measure.py run`在获准的真实副本上显式执行，默认后端回归不承担该验证，也不证明完整84组或本次用户实看。纯算法保护在apps/frontend运行`corepack pnpm test:unit`，由Node原生test runner配合锁定tsx直接导入真实TS模块；保存快照/未知回执、身份门及单据号匹配与浏览器pytest分开。仍运行`corepack pnpm typecheck`承担TS严格检查；单元测试不启动Vite/HTTP或数据库。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。
+`backend/tests/test_frontend_measure.py`保纯计算、输出与预览身份保护，不依赖运行中的真实预览。采集器的现场验证由`tools/dev/frontend_measure.py run`在获准的真实副本上显式执行，默认后端回归不承担该验证，也不证明完整84组或本次用户实看。纯算法保护在apps/frontend运行`corepack pnpm test:unit`，由Node原生test runner配合锁定tsx直接导入真实TS模块；保存快照/未知回执、身份门、单据号匹配及合同结构边界与浏览器pytest分开。仍运行`corepack pnpm typecheck`承担TS严格检查；单元测试不启动Vite/HTTP或数据库。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。

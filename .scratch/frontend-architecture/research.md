@@ -345,3 +345,12 @@ HTTP503与重试在无关GET暂缓时可见；本页首次主GET门保留，切�
 固定tsx开发依赖及锁；首次pnpm安装因esbuild0.28.2脚本待审批退出非零，按官方approve-builds只批准该依赖后postinstall通过、frozen-lockfile安装退出0，未忽略或覆盖安全检查。相同基线生成器CLI准备只在pnpm隔离缓存TS5.9.3运行成功，实际19条项目GET形状通过Pydantic严格验证；API生成仍未接入，待与其他成熟方案的维护收益比较，不因此推定支持生成器TS7。
 
 依据：[Node24测试执行模型](https://nodejs.org/docs/latest-v24.x/api/test.html#test-runner-execution-model)、[tsx测试加载](https://tsx.hirok.io/node-enhancement#test-runner)。本批先固定独立提交，后续合同schema另批裁定；认证/业务保存语义未改。
+
+
+## 20. 合同schema单一真源（Astra第二切口）
+
+Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端build_detail与三个真实详情均不返回project_key/notice_ids，旧ContractDetail extends ContractRow却承诺存在；调用方当前恰未读取，属于已证实类型漂移而非已发生用户故障。共同字段、列表归属/关联、详情双发票数组分别schema，类型由schema推导，contractFields只收共同字段；旧重复接口/形状循环及as unknown as断言退出。
+
+只用纯schema与v.is，不改输入、不剥额外字段；ret_date null→空串仍在边界显式归一，既有错误文案/金额字符串规则/正安全ID/非数组对象约束保持。安装源码证实v.object本身可收挂字段数组，故以原有record作为custom<object>与库intersect组合；v.is收窄InferInput，初次custom-first pipe未能给TS7收窄已修，不用断言压错。7个原生case通过、TS7严格检查及构建通过；265真实列表行/3种详情经真实reader通过，匿名合同材料弹窗实际值/关闭回焦点通过，完整私密样本只在本机产物中，不提交。
+
+实际全部JS产物增加5857bytes（未压缩），固定运行依赖无runtime传递依赖；对单处形状/类型漂移有维护净收益，不宣称运行性能提升。保留backend响应、业务保存和权限；API生成与上游picker越依赖范围升级不同时接入。[v.is保输入](https://valibot.dev/api/is/)、[固定1.5.0清单](https://raw.githubusercontent.com/open-circle/valibot/v1.5.0/library/package.json)；实际兼容看本项目TS7实测，不以peer范围推定。
