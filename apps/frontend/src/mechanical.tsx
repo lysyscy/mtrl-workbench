@@ -58,17 +58,26 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     else if(index===warehouses.length){row.c6=detailSum(data.summary.filter(item=>item.ym===report.ym&&warehouses.includes(item.warehouse)).map(item=>item.cumulative.weekly))??'';row.c11=detailSum(data.effective.filter(item=>item.ym===report.ym&&warehouses.includes(item.warehouse)).map(item=>item.values.weekly))??'';}
     return row;
   }), [report, projectIds, data, warehouses]);
+  const openDetail = useRef(detail); openDetail.current = detail;
+  const renderInternal = useCallback((params: ICellRendererParams<SummaryRow,string>) => {
+    const index = params.colDef?.field === 'c12' ? 3 : 4;
+    return params.node.rowPinned || !current.current.writable ? money(params.value) : <InternalCell id={params.data!.id} column={index === 3 ? 'mech_1' : 'mech_0'} value={params.value ?? ''} label={`${params.data?.c1} ${groupLabels[index]}`} editing={current} epoch={current.current.epoch} />;
+  }, []);
+  const renderDetail = useCallback((params: ICellRendererParams<SummaryRow,string>) => {
+    const index = params.colDef?.field === 'c9' ? 0 : 1;
+    return params.node.rowPinned ? money(params.value) : <Button className="mechanical-amount-button" aria-label={`${params.data?.c1} ${groupLabels[index]}明细`} onClick={() => openDetail.current(index + 1, params.data?.id ?? '')}>{money(params.value)}</Button>;
+  }, []);
   const columns = useMemo<(ColDef<SummaryRow> | ColGroupDef<SummaryRow>)[]>(() => [
     { field: 'c0', headerName: '序号', pinned: 'left', ...fixedWidth(48, scale) },
     { field: 'c1', headerName: '项目名称', pinned: 'left', ...contentWidth(120, 200, scale), wrapText: true, autoHeight: true },
     { headerName: '开工日期', children: [{ field: 'c2', headerName: '年', ...contentWidth(48, 68, scale) }, { field: 'c3', headerName: '月', ...contentWidth(34, 56, scale), cellClass: 'mechanical-group-end', headerClass: 'mechanical-group-end' }] },
     ...['开工累计费用（元）', '本月产生费用（元）'].map((name, group) => ({ headerName: name, headerClass: 'mechanical-group-end', children: groupLabels.map((label, index): ColDef<SummaryRow> => ({
       field: `c${4 + group * 5 + index}`, headerName: label, ...mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2,1), wrapText: false, autoHeight: true, valueFormatter:p=>money(p.value), cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
-      ...(group===1&&index>2?{cellRenderer:(params:ICellRendererParams<SummaryRow,string>)=>params.node.rowPinned||!current.current.writable?money(params.value):<InternalCell id={params.data!.id} column={index===3?'mech_1':'mech_0'} value={params.value??''} label={`${params.data?.c1} ${label}`} editing={current} epoch={current.current.epoch} />}:{}),
-      ...(group === 1 && index < 2 ? { cellRenderer: (params: ICellRendererParams<SummaryRow, string>) => params.node.rowPinned ? money(params.value) : <Button className="mechanical-amount-button" aria-label={`${params.data?.c1} ${label}明细`} onClick={() => detail(index + 1, params.data?.id ?? '')}>{money(params.value)}</Button> } : {}),
+      ...(group===1&&index>2?{cellRenderer:renderInternal}:{}),
+      ...(group === 1 && index < 2 ? { cellRenderer: renderDetail } : {}),
     })) })),
     { field: 'c14', headerName: '备注', ...contentWidth(72, 144, scale), wrapText: true, autoHeight: true },
-  ], [scale, detail, rows]);
+  ], [scale, rows, renderInternal, renderDetail]);
   const measurement = useMemo(() => ({signature:(row:SummaryRow,id:string,pinned:boolean)=>JSON.stringify([row[id],pinned,internal.writable])}), [internal.writable]);
   const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
   const scope = `${report.ym}:${warehouses.join('\0')}`;
