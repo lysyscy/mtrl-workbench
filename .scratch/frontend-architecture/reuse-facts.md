@@ -225,4 +225,4 @@ C4另有具体适配边界：`grid-render-layout.ts:22–32`测量仅提供data/
 
 本批run为`.artifacts/active/frontend-architecture/inventory-ready-20261027/`：reports/browser.xml、readonly-extra.json、data-before.json、data-after.json及version.json绑定本次结果；logs含正式typecheck/build与启动日志；recovery保原owner/version；work/verified-build当前被8065引用，必须保留。首次未登记重复work/build与临时pnpm shim已退出。当前预览供后续视觉整改及用户查看，保持运行；旧产品构建仍是恢复点，不清理他人资源。
 
-库存最小批至此完成技术验收；没有改共享就绪算法/CSS/grid/列宽/API/保存。采用现有通路退出了库存首次显示对全账号fetching的依赖，其余未迁页保留现状。没有运行机械测试，不冒报既有夹具已修。视觉实施仍待父任务下一批派发；最大字号/深色完整态等未验事项继续由视觉任务持有，不借库存通过宣称全站完成。
+库存最小批至此完成技术验收；没有改共享就绪算法/CSS/grid/列宽/API/保存。采用现有通路退出了库存首次显示对全账号fetching的依赖，其余未迁页保留现状。没有运行机械测试，不冒报既有夹具已修。随后视觉首批已按父任务派发实施，四字号/八主题及独立复验边界回[当前视觉证据](../frontend-vue-rewrite/evidence.md#共享控件与重点弹层视觉首批2026-10-28)；不借库存或视觉首批通过宣称全站完成。
