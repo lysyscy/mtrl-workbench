@@ -31,12 +31,14 @@ def test_first_page_waits_for_fonts_and_return_keeps_page(server, browser_page, 
       }
       window.__paintFrame=requestAnimationFrame(sample);
     }requestAnimationFrame(sample);""")
-    with page.expect_request('**/api/m03/notice-list?*', timeout=10000):
-        page.goto(server + '/preview/notices', wait_until='domcontentloaded')
-    assert held, 'Cold-font condition was not exercised'
-    assert not page.get_by_role('region', name='付款通知书列表', exact=True).is_visible()
-    for route in held:
-        route.continue_()
+    try:
+        with page.expect_request('**/api/m03/notice-list?*', timeout=10000):
+            page.goto(server + '/preview/notices', wait_until='domcontentloaded')
+        assert held, 'Cold-font condition was not exercised'
+        assert not page.get_by_role('region', name='付款通知书列表', exact=True).is_visible()
+    finally:
+        for route in held: route.continue_()
+        context.unroute('**/static/fonts/**/*.woff2')
     expect(page.get_by_role('region',name='付款通知书列表',exact=True)).to_be_visible()
     page.wait_for_function('window.__firstPaint.length > 3')
     samples=page.evaluate('window.__firstPaint')
@@ -223,3 +225,22 @@ def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_pa
         page.unroute('**/api/m15/users')
     expect(page.locator('.workspace')).not_to_have_attribute('inert','')
     expect(page.get_by_role('heading',name='项目档案',exact=True)).to_be_visible()
+
+
+@pytest.mark.parametrize('target,title',[('projects','项目档案'),('','首页'),('i8','i8 接入层')])
+def test_local_read_page_does_not_wait_for_unrelated_read(server,browser_page,target,title):
+    page,_=browser_page;login(page,server);held=[]
+    pattern='**/api/m01/trails?*' if target=='i8' else '**/api/m02/fetch/records*'
+    page.route(pattern,lambda route:held.append(route))
+    try:
+        with page.expect_request(pattern):
+            page.goto(server+'/preview/'+('projects' if target=='i8' else 'i8'),wait_until='domcontentloaded')
+        page.get_by_role('link',name=title,exact=True).click()
+        expect(page.locator('.page-view:not([hidden])')).to_be_visible()
+        if target=='projects':expect(page.get_by_label('项目搜索',exact=True)).to_be_enabled()
+        elif target=='i8':expect(page.get_by_role('region',name='各来源最近结果',exact=True)).to_be_visible()
+        else:expect(page.locator('.home-todos')).to_be_visible()
+        assert held
+    finally:
+        for route in held:route.continue_()
+        page.unroute(pattern)

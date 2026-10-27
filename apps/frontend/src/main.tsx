@@ -100,7 +100,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <PageSurface key={entry.path} active={active} title={entry.title} independent={['/notices','/debt','/mechanical','/settlement','/big','/process','/fees','/inventory'].includes(entry.path)}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
+          return <PageSurface key={entry.path} active={active} title={entry.title} independent={['/projects','/','/i8','/notices','/debt','/mechanical','/settlement','/big','/process','/fees','/inventory'].includes(entry.path)}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
@@ -136,6 +136,8 @@ function App() {
       else if (knownIdentity.current) setExpired(true);
       setRequestIdentity(next ? `${next.id}:${next.account}` : 'anonymous');
       knownIdentity.current = next; setMe(next); setChecking(false);
+      // Identity and appearance are verified; font I/O must not hold API intents.
+      finishVerification();
       // Mount read queries while shell glyphs load; only first paint waits for those glyphs.
       await loadTextFonts(pages.map(entry => entry.title).join('') + groups.map(group => group.title).join('') + '材料工作台独立预览管理员外观与字号撤销重做退出登录' + (next?.name ?? next?.account ?? ''));
       if (!controller.signal.aborted) setFontsReady(true);

@@ -16,7 +16,7 @@ export function HomePage({ blocked, active }: { blocked: boolean; active: boolea
     { key: 'void', label: '撤单但有牵涉', detail: 'i8 已撤单，仍有付款或合同关联', action: '去处理', tone: 'dg', count: rows.filter(r => live(r) && r.is_revoked).length },
   ];
   const total = todos.reduce((sum, todo) => sum + todo.count, 0);
-  return <section className="home-page" aria-labelledby="page-title">
+  return <section data-page-chrome data-page-loading={query.isPending||undefined} className="home-page" aria-labelledby="page-title">
     <div className="home-block">
       <h2>待办{query.data && <span className="home-summary">{total ? `共 ${total} 项需处理` : '当前没有需要处理的事'}</span>}</h2>
       {query.isPending ? <p role="status">正在读取待办…</p> : query.isError ? <div className="notice" role="alert"><span>{query.error.message}</span><Button htmlType="submit" onClick={() => void query.refetch()}>重读待办</Button></div> : <>

@@ -23,7 +23,7 @@ export function I8Page({ blocked }: { blocked: boolean }) {
   const [type, setType] = useState('all');
   const records = useQuery({ queryKey: ['i8-records', limit], enabled: !blocked, queryFn: async ({ signal }) => readRecords(await requestJson(`/api/m02/fetch/records?limit=${limit}`, { signal })), refetchOnMount: 'always' });
   const visible = records.data?.filter(row => type === 'all' || row.run_type === type) ?? [];
-  return <section className="i8-page" aria-labelledby="page-title">
+  return <section data-page-chrome data-page-loading={records.isPending||undefined} className="i8-page" aria-labelledby="page-title">
     <div className="i8-block">
       <h2>抓取结果回显</h2>{records.isError && records.data && <ReadError message={`记录更新失败，保留上次结果。${records.error.message}`} retry={() => void records.refetch()} label="重读记录" />}
       {records.isPending ? <p role="status">正在读取执行记录…</p> : records.isError && !records.data ? <ReadError message={records.error.message} retry={() => void records.refetch()} label="重读记录" /> : <>

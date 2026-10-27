@@ -26,14 +26,19 @@ def test_delayed_real_project_response_preserves_search(server, browser_page, pr
     row = next(p for p in projects if p['status']=='active' and p['disp'])
     pending = []
     page.route('**/api/m01/projects?status=all', lambda route: pending.append(route))
-    with page.expect_request('**/api/m01/projects?status=all'):
-        page.reload(wait_until='domcontentloaded')
-    field = page.get_by_label('项目搜索', exact=True)
-    field.fill(row['disp'])
-    page.wait_for_function('document.readyState === "complete"')
-    assert pending
-    for route in pending: route.fulfill(response=route.fetch())
-    page.unroute('**/api/m01/projects?status=all')
+    try:
+        with page.expect_request('**/api/m01/projects?status=all'):
+            page.reload(wait_until='domcontentloaded')
+        field = page.get_by_label('项目搜索', exact=True)
+        expect(field).to_be_visible()
+        field.fill(row['disp'])
+        expect(page.get_by_role('button',name='＋ 手工建档',exact=True)).to_be_disabled()
+        expect(page.locator('.projects-page .result')).to_have_count(0)
+        page.wait_for_function('document.readyState === "complete"')
+        assert pending
+    finally:
+        for route in pending: route.continue_()
+        page.unroute('**/api/m01/projects?status=all')
     expect(field).to_have_value(row['disp'])
     expect(page.get_by_label('展示名：'+row['disp'], exact=True)).to_be_visible()
 
