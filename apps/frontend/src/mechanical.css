@@ -108,7 +108,7 @@
 
 .mechanical-work{padding:.65rem 1rem}.mechanical-work-table .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.mechanical-work-tools button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri)}
 
-.mechanical-check-table,.mechanical-i8-review{table-layout:fixed}.mechanical-work-table td{min-width:0}.business-modal .mechanical-dialog:has(.mechanical-i8-review){width:min(1450px,94vw)}.mechanical-work-table th{position:static;white-space:normal}.mechanical-work-table thead{background:var(--sf2)}.mechanical-work-table textarea{min-height:6em}.mechanical-check-table th:nth-child(2),.mechanical-check-table th:nth-child(3){border-right:1px solid var(--bd)}.mechanical-work-table .mechanical-link{white-space:normal}
+.mechanical-check-table,.mechanical-i8-review{table-layout:fixed}.mechanical-work-table td{min-width:0}.business-modal .mechanical-dialog:has(.mechanical-i8-review){width:min(1450px,94vw)}.mechanical-work-table th{position:static;white-space:normal}.mechanical-work-table thead{background:var(--sf2)}.mechanical-work-table textarea{min-height:6em}.mechanical-check-table th:nth-child(2),.mechanical-check-table th:nth-child(3){border-right:1px solid var(--bd)}.mechanical-work-table .mechanical-link{white-space:normal}.mechanical-work-table .money>.ant-btn.mechanical-link{width:max-content;max-width:none;min-height:calc(28px * var(--fscale));padding:calc(2px * var(--fscale)) calc(8px * var(--fscale));line-height:1.4;white-space:nowrap;text-decoration:none}
 
 /* Keep the legacy work order while consuming the shared C theme. */
 .mechanical-month,.mechanical-summary-tools{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}

@@ -43,3 +43,8 @@
 .inventory-identifier .inventory-cell-text{white-space:nowrap;overflow-wrap:normal;width:max-content}
 .inventory-fields small{color:var(--tx2);font-variant-numeric:tabular-nums}.inventory-fields .ant-select{width:100%}
 .inventory-cell-text{width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+
+.inventory-dialog .inventory-actions{position:sticky;bottom:0;z-index:1;padding-block:calc(12px * var(--fscale));border-top:.5px solid var(--bd2);background:var(--sf)}
+.inventory-actions .inventory-problem{margin:0;margin-inline-end:auto;flex:1 1 10em;text-align:left}
+
+.inventory-actions>:is([role=status],[role=alert],.inventory-warning,.inventory-trail){flex-basis:100%;margin:0;text-align:left}
