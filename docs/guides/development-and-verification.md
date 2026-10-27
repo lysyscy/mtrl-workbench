@@ -5,11 +5,13 @@
 ## 按影响选检查
 
 ```text
-backend/.venv/Scripts/python.exe -X utf8 -m pytest <明确文件或节点>
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/backend_verify.py --source-env <明确来源.env> --test <backend内测试文件或节点> -- <pytest选项>
 backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged
 backend/.venv/Scripts/python.exe -X utf8 tools/audit/bytes_guard.py --staged
 backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py
 ```
+
+backend_verify从仓根调用，--test可重复，测试路径相对backend，--之后支持`-q/-v/-x/-k/-m/--maxfail/--tb/--durations/--disable-warnings`和清空默认参数的`-o addopts=`，不能追加收集路径；仅在已核专用测试库创建独占临时schema，升级后运行明确节点，成功或测试失败均退出自有schema。不启动HTTP预览，不停止现有8065，也不复制/改写正式业务数据。pytest从启动起DATABASE_URL就是测试目标，MTRL_TEST_SOURCE_ENV仅供守卫读取明确来源身份；同库、不同目标和错缓存仍拒绝。默认沿workspace_paths归档日志与JSON报告，含源提交/dirty、测试选择、退出码及清理结果，不记录DSN或凭据。
 
 pytest 在 backend 组件运行；选文件/节点前先看 fixture。保留真实原始退出码、失败节点和未验边界，不从票终态推当前环境通过。普通局部改动复用现有定向检查，不自动全量回归/变异。文档验证看业务语义、当前引用、imports/动态读取/配置及接手路径，不再生成旧验收 JSON 或四态报告。`@acc` 在存量业务测试中仍可作历史标识，不是新开发前置。
 

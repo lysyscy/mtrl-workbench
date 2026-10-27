@@ -21,7 +21,8 @@ sys.path.insert(0, str(ROOT))
 
 
 @contextmanager
-def isolated_database(source_env: Path | None = None, *, copy_source: bool = False, test_url: str = ""):
+def isolated_database(source_env: Path | None = None, *, copy_source: bool = False, test_url: str = "",
+                      preview: bool = True, log=None):
     from app.core.config import Settings
     from tests.db_guard import TestDatabaseGuard, database_identity
     from sqlalchemy import create_engine, text
@@ -43,7 +44,7 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
         from tools.dev.frontend_preview_copy import source_revision
         revision = source_revision(source.database_url)
     engine = create_engine(guard.test_url)
-    schema = 'frontend_rewrite_397_' + uuid.uuid4().hex
+    schema = ('frontend_rewrite_397_' if preview else 'backend_verify_') + uuid.uuid4().hex
     owned = False
     try:
         with engine.begin() as connection:
@@ -68,64 +69,69 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
                    ARTIFACTS_DIR=str(output_dir('work') / schema),
                    LOGS_DIR=str(output_dir('logs') / schema),
                    PYTHONPATH=str(ROOT / 'backend'), PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright')
-        migrate(env, revision)
+        if not preview:
+            env['FRONTEND_PREVIEW_DIR'] = ''
+            env['ALLOWED_IP_CIDRS'] = ''  # TestClient has an in-process host, no HTTP listener.
+            env['PGAPPNAME'] = schema
+        migrate(env, revision, log=log)
         if copy_source:
             from tools.dev.frontend_preview_copy import clone_from_source, schema_fingerprints, schema_columns
             clone_from_source(source.database_url, guard.test_url, schema)
             columns = schema_columns(guard.test_url, schema)
             before = schema_fingerprints(guard.test_url, schema, columns=columns)
-            migrate(env, 'head')
+            migrate(env, 'head', log=log)
             after = schema_fingerprints(guard.test_url, schema, tables=before.keys(), columns=columns)
             if before != after:
                 raise RuntimeError('目标升级改变了已复制业务数据；保留失败证据')
-        scoped = create_engine(guard.test_url, connect_args={'options': env['PGOPTIONS']})
-        try:
-            from app.mod15_user.models import UserAccount
-            from app.mod01_projects.models import Project
-            from sqlalchemy.orm import Session
-            with scoped.begin() as connection:
-                if connection.execute(text('SELECT current_schema()')).scalar_one() != schema:
-                    raise RuntimeError('schema隔离未生效')
-                # Initial migration seeds an admin; replace only inside our fresh schema.
-                if not copy_source:
-                    connection.execute(UserAccount.__table__.delete())
-            with Session(scoped) as session:
-                session.add_all([
-                    UserAccount(account='preview-admin', name='预览管理员', role='admin', password=''),
-                    UserAccount(account='preview-user', name='预览同事', role='user', password='', theme='深色', ui_scale='large'),
-                ])
-                if not copy_source:
+        if preview:
+            scoped = create_engine(guard.test_url, connect_args={'options': env['PGOPTIONS']})
+            try:
+                from app.mod15_user.models import UserAccount
+                from app.mod01_projects.models import Project
+                from sqlalchemy.orm import Session
+                with scoped.begin() as connection:
+                    if connection.execute(text('SELECT current_schema()')).scalar_one() != schema:
+                        raise RuntimeError('schema隔离未生效')
+                    # Initial migration seeds an admin; replace only inside our fresh schema.
+                    if not copy_source:
+                        connection.execute(UserAccount.__table__.delete())
+                with Session(scoped) as session:
                     session.add_all([
-                        Project(project_type='normal', name_full='隔离验收项目', warehouse_name='隔离验收仓库', disp='隔离项目', ord=1),
-                        Project(project_type='normal', name_full='隔离验收归档项目', warehouse_name='隔离归档仓库', disp='归档样例', status='archived', ord=2),
-                        Project(project_type='normal', name_full='隔离验收长项目名称用于核对窄屏换行与横向滚动的可读性', warehouse_name='长名称验收仓库', disp='长项目名验收', ord=3),
+                        UserAccount(account='preview-admin', name='预览管理员', role='admin', password=''),
+                        UserAccount(account='preview-user', name='预览同事', role='user', password='', theme='深色', ui_scale='large'),
                     ])
-                    session.flush()
-                    from app.mod05_flow.models import OpeningBalance
-                    from app.mod03_notice.models import PaymentNotice
-                    from sqlalchemy import select
-                    project = session.scalar(select(Project).where(Project.disp == '隔离项目'))
-                    other = session.scalar(select(Project).where(Project.disp == '长项目名验收'))
-                    session.add_all([
-                        OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
-                                       cutoff_ym='2025-10', settle_amount=1000, paid_amount=100, remark='合成历史行甲'),
-                        OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
-                                       cutoff_ym='2025-11', settle_amount=500, paid_amount=50, remark='合成历史行乙'),
-                        OpeningBalance(project_id=project.id, category='mechanical', entry_kind='month',
-                                       cutoff_ym='2025-11', settle_amount=0, paid_amount=75, remark='合成机械付款'),
-                        OpeningBalance(project_id=other.id, category='material', entry_kind='manual',
-                                       cutoff_ym='2025-11', settle_amount=300, paid_amount=30, remark='另一项目测试行'),
-                        PaymentNotice(ph_id='PREVIEW-HISTORY', bill_no='PREVIEW-HISTORY', project_name=project.name_full,
-                                      ownership_id=project.id, category='material', doc_date='2025-09-01',
-                                      stat_settle=200, stat_paid=20, amount_approved=200),
-                        PaymentNotice(ph_id='PREVIEW-NORMAL', bill_no='PREVIEW-NORMAL', project_name=project.name_full,
-                                      ownership_id=project.id, category='material', doc_date='2025-12-01',
-                                      stat_settle=400, stat_paid=40, amount_approved=400),
-                    ])
-                session.commit()
-        finally:
-            scoped.dispose()
-        print(f'ISOLATION ready database={actual[0]} role={actual[1]} schema={schema}', flush=True)
+                    if not copy_source:
+                        session.add_all([
+                            Project(project_type='normal', name_full='隔离验收项目', warehouse_name='隔离验收仓库', disp='隔离项目', ord=1),
+                            Project(project_type='normal', name_full='隔离验收归档项目', warehouse_name='隔离归档仓库', disp='归档样例', status='archived', ord=2),
+                            Project(project_type='normal', name_full='隔离验收长项目名称用于核对窄屏换行与横向滚动的可读性', warehouse_name='长名称验收仓库', disp='长项目名验收', ord=3),
+                        ])
+                        session.flush()
+                        from app.mod05_flow.models import OpeningBalance
+                        from app.mod03_notice.models import PaymentNotice
+                        from sqlalchemy import select
+                        project = session.scalar(select(Project).where(Project.disp == '隔离项目'))
+                        other = session.scalar(select(Project).where(Project.disp == '长项目名验收'))
+                        session.add_all([
+                            OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
+                                           cutoff_ym='2025-10', settle_amount=1000, paid_amount=100, remark='合成历史行甲'),
+                            OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
+                                           cutoff_ym='2025-11', settle_amount=500, paid_amount=50, remark='合成历史行乙'),
+                            OpeningBalance(project_id=project.id, category='mechanical', entry_kind='month',
+                                           cutoff_ym='2025-11', settle_amount=0, paid_amount=75, remark='合成机械付款'),
+                            OpeningBalance(project_id=other.id, category='material', entry_kind='manual',
+                                           cutoff_ym='2025-11', settle_amount=300, paid_amount=30, remark='另一项目测试行'),
+                            PaymentNotice(ph_id='PREVIEW-HISTORY', bill_no='PREVIEW-HISTORY', project_name=project.name_full,
+                                          ownership_id=project.id, category='material', doc_date='2025-09-01',
+                                          stat_settle=200, stat_paid=20, amount_approved=200),
+                            PaymentNotice(ph_id='PREVIEW-NORMAL', bill_no='PREVIEW-NORMAL', project_name=project.name_full,
+                                          ownership_id=project.id, category='material', doc_date='2025-12-01',
+                                          stat_settle=400, stat_paid=40, amount_approved=400),
+                        ])
+                    session.commit()
+            finally:
+                scoped.dispose()
+        print(f'ISOLATION ready database={actual[0]} role={actual[1]} schema={schema}', flush=True, file=log)
         yield env
     finally:
         if owned:
@@ -134,13 +140,13 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
                 if owner != actual[1]:
                     raise RuntimeError('schema所有权变化，保留现场，拒绝自动清理')
                 connection.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
-            print(f'ISOLATION cleaned schema={schema}', flush=True)
+            print(f'ISOLATION cleaned schema={schema}', flush=True, file=log)
         engine.dispose()
 
 
-def migrate(env, revision):
+def migrate(env, revision, *, log=None):
     subprocess.run([sys.executable, '-B', '-X', 'utf8', '-m', 'alembic', 'upgrade', revision],
-                   cwd=ROOT / 'backend', env=env, check=True)
+                   cwd=ROOT / 'backend', env=env, check=True, stdout=log, stderr=log)
 
 
 def main() -> None:

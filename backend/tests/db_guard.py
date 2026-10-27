@@ -73,10 +73,26 @@ def point_tests_at_test_db(settings_type, environ) -> TestDatabaseGuard:
         raise RuntimeError('无法读取应用数据库配置；测试库守卫拒绝继续') from None
     if file_values.get('test_database_url') and not original.test_database_url:
         raise RuntimeError('数据库配置不完整：配置文件存在测试库来源，但有效 TEST_DATABASE_URL 为空')
-    guard = TestDatabaseGuard.from_sources(
-        (original.database_url, file_values.get('database_url', '')),
-        original.test_database_url,
-    )
+    source_env = environ.get('MTRL_TEST_SOURCE_ENV')
+    if source_env:
+        # The runner starts with the test target already selected. Read source
+        # identities separately; never make the source URL an application target.
+        try:
+            declared = DotEnvSettingsSource(settings_type, env_file=source_env)()
+        except Exception:
+            raise RuntimeError('无法读取隔离测试的明确来源配置') from None
+        guard = TestDatabaseGuard.from_sources(
+            (declared.get('database_url', ''), file_values.get('database_url', '')),
+            declared.get('test_database_url', ''),
+        )
+        if not guard.test_url:
+            raise RuntimeError('明确来源配置必须包含原库和专用测试库')
+        guard.assert_runtime(original.database_url, original.test_database_url)
+    else:
+        guard = TestDatabaseGuard.from_sources(
+            (original.database_url, file_values.get('database_url', '')),
+            original.test_database_url,
+        )
     if guard.test_url:
         environ['DATABASE_URL'] = guard.test_url
     return guard

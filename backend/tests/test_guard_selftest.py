@@ -25,7 +25,7 @@ TEST = 'postgresql+psycopg://tester:test_secret@localhost/mtrl_test'
 def settings_type(monkeypatch):
     # 不继承应用 Settings，避免任何真实 env_file 或凭据进入这些反例。
     for key in tuple(os.environ):
-        if key.lower() in {'database_url', 'test_database_url'}:
+        if key.lower() in {'database_url', 'test_database_url', 'mtrl_test_source_env'}:
             monkeypatch.delenv(key)
     # 登记后移除，既让 dotenv 正常兜底，也让 helper 的直接覆盖在 teardown 恢复。
     for key in ('DATABASE_URL', 'TEST_DATABASE_URL'):
@@ -271,7 +271,7 @@ def get_settings():
         (core.parent / module).write_text('def register_all():\n    pass\n', encoding='utf-8')
     (tmp_path / 'pytest.ini').write_text('[pytest]\npythonpath = .\n', encoding='utf-8')
     env = {key: value for key, value in os.environ.items()
-           if key.lower() not in {'database_url', 'test_database_url', 'pythonpath'}}
+           if key.lower() not in {'database_url', 'test_database_url', 'pythonpath', 'mtrl_test_source_env'}}
     env['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
     if scenario != 'no_config':
         env['DATABASE_URL'] = TEST if scenario == 'same_database' else DEV
@@ -284,3 +284,21 @@ def get_settings():
     assert (result.returncode == 0) is passes, result.stdout + result.stderr
     if not passes:
         assert 'RuntimeError' in result.stderr
+
+
+def test_explicit_source_identity_keeps_application_at_test_target(settings_type,monkeypatch,tmp_path):
+    source=tmp_path/'source.env';source.write_text(f'DATABASE_URL={DEV}\nTEST_DATABASE_URL={TEST}\n',encoding='utf-8')
+    monkeypatch.setenv('MTRL_TEST_SOURCE_ENV',str(source))
+    monkeypatch.setenv('DATABASE_URL',TEST);monkeypatch.setenv('TEST_DATABASE_URL',TEST)
+    guard=point_tests_at_test_db(settings_type,os.environ)
+    assert settings_type().database_url==TEST and os.environ['DATABASE_URL']==TEST
+    assert_application_targets(guard,settings_type,settings_type,None)
+
+
+@pytest.mark.parametrize('declared_source,declared_test,actual',[(TEST,TEST,TEST),(DEV,TEST,DEV),(DEV,DEV,TEST)])
+def test_explicit_source_rejects_same_or_wrong_target(settings_type,monkeypatch,tmp_path,declared_source,declared_test,actual):
+    source=tmp_path/'source.env';source.write_text(f'DATABASE_URL={declared_source}\nTEST_DATABASE_URL={declared_test}\n',encoding='utf-8')
+    monkeypatch.setenv('MTRL_TEST_SOURCE_ENV',str(source))
+    monkeypatch.setenv('DATABASE_URL',actual);monkeypatch.setenv('TEST_DATABASE_URL',TEST)
+    with pytest.raises(RuntimeError) as error:point_tests_at_test_db(settings_type,os.environ)
+    assert 'secret' not in str(error.value)
