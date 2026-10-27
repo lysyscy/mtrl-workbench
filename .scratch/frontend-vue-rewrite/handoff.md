@@ -38,3 +38,18 @@
 - 旧交接PH-20261026-react-trial-01已由本编号接续；旧正文可从e2de8da5本路径追溯。通知书试点阶段正文可从5d400461本路径追溯，不继续消费其旧回退入口。
 
 <!-- MTRL-HANDOFF-END PH-20261026-notice-visual-01 -->
+
+
+<!-- MTRL-HANDOFF-BEGIN PH-20261027-fee-item-01 -->
+## 特殊费用数据模型交接
+
+- 编号`PH-20261027-fee-item-01`；源对话`01a17bf5-6137-7923-bb97-08748a62f9ce`，接手`01a17c2a-1c9e-72f0-b414-4eef7a72dbaf`。源对话登记并交出修改权后已接手；当前状态：实施、验证、源码保存及原8065加载完成，待用户实看。
+- 实际工作树`D:/UserData/Documents/Codex/2026-10-22/task/mtrl-workbench`，分支`codex/react-frontend-rewrite`，源码提交`aa68c5b9`；后续文档HEAD不冒充产品SHA。未在主检出重复实施，未合并master/推送公共远端。非本任务`.scratch/perf-review/`、`.workbuddy/`保持。
+- 用户已确认统一费用项、每项年度一行、每月唯一金额、空零分开、整项跨年改名/删除与安全撤销、安文费只读和原月报导出；保留旧原记录并按金额相加迁移。现行口径已同步`docs/requirements/materials-reports.md`，不再消费此前按月原记录编辑方案。
+- 共享撤销早先自动审批拒绝的风险已保留：本次依据后续明确授权、真实失败及缩小后的具体补丁走正常审批获准，未绕过。完整变更/xmin/外部依赖/整批回滚保护保持，父子按外键次序重放；不猜测重写旧费用历史。旧入口并发和探针调用者已兼容，双轴独立审查及原发现复核完成。
+- 结果：相关后端192项、最终可丢弃真实副本浏览器8项通过，原用户实例只读入口1项通过；覆盖与首次非零、截图修正、审查及资源退出回[evidence](evidence.md#特殊费用统一费用项2026-10-27)。旧真机探针没有运行，用户schema没有自动业务写测。
+- 唯一试用仍是`http://127.0.0.1:8065/preview`，原run`react-writable-preview/20261025-admin-i8`，同一用户schema原位升级至feeitem261027，在用`work/fee-items-release-20261027`。实际身份查主检出current指针与原run owner；registered_preview已核实际进程/HTTP/最新源码/完整资源。
+- 38张原表全部原字段升级前后相同，6条原费用保留，生成3项/5个月金额，1组重复按金额相加，聚合差异0；后续只读验看后37张非账号表仍一致。原run/reports/fee-item-preservation.json持有保全结果；recovery/before-feeitem261027.dump为本次目标schema恢复点，风险窗口结束后退出，不能重拷正式库覆盖用户试用数据。
+- 三个验证副本/schema、中间构建、旧WIP源码副本及旧用户构建已退出；必要日志/截图归本机`.artifacts/archive/fee-item-model`至2026-11-26。费用范围已退出active；目录整体closed检查仅有原notice-association归档work/缺retention四项非零，未处理无关历史或冒报全绿。
+- 下一步只接用户对原8065新费用项交互的实看反馈；其他React验收/合流沿原规格。正式服务/正式库迁移、真实i8外呼及实体打印没有本次授权。
+<!-- MTRL-HANDOFF-END PH-20261027-fee-item-01 -->
