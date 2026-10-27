@@ -2,7 +2,7 @@
 
 ## React 前端独立重做
 
-费用自然高短表横条末行覆盖已修，源码9d86f46a已保原数据加载8065；隔离行增删/末行按钮/合计/横滚/最大字号验证通过，待独立复验。当前范围与资源回[费用修复证据](../.scratch/frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)；前三批回原证据。API消费者类型实证通过，生成器TS5 peer与项目TS7存在边界，直接接入暂缓；结果回[事实底稿第14节](../.scratch/frontend-architecture/reuse-facts.md#14-api消费者实证通过原项目直接接入暂缓)；机械时间/身份试验等仍未完成，不宣称全站结束。
+机械稳定renderer452a7dc1、UTC可读展示9e557fd4、剩余四页局部就绪56e8c2ea及旧全局后备退出923c1824已技术验证，原8065加载923c1824并保40张非账号表/schema/松绿large；11case通过，待独立复验及用户整体验收。范围、当前owner、归档后图与保全回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#剩余四页局部就绪与后备退出2026-10-28)。同一架构底稿现按标准名为[research.md](../.scratch/frontend-architecture/research.md)，API类型生成因TS peer成本暂缓，未加依赖。未推送、合并或正式切换。
 
 机械报表待核对退役、过程机械金额按同项目同月任何明细确认、成功提示退出、历史月份同行右置、通知书列宽和截图接线已完成，源码34f2e523/c3e443d9已保原数据加载8065，待用户实看；回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#机械金额确认与页面反馈调整2026-10-27)。
 

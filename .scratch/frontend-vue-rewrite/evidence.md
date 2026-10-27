@@ -438,7 +438,7 @@ Terra首批登录态复验已完成并释放源码；第二批以819a66d3为基�
 
 **验证与保留失败。** 现行typecheck/build通过，最终prepare-build通过；只有既有大chunk提示。最初big输入重复className造成TS17001，已合并原金额class后通过。impeccable4.8.0在界面完成后只运行一次detect，十个改动源码目标结果为空，不能替代实图/行为验收。四个既有只读代表通过（项目本地搜索/IME与过滤、过程原始/调整行和合计、分组表头置顶、全路由首帧共享样式；26.15s）。隔离副本项目未知回执锁定/重读通过；过程两个写入代表最初因虚拟列表未搜索失败，修正上述定位后2 passed in12.44s，实际历史材料与机械金额保存/读回及第二草稿通过。
 
-现有test_delayed_real_project_response_preserves_search仍失败：首次项目GET暂缓时PageSurface将整页/筛选设visibility:hidden，字段存在但不能输入；该路径没有被本批改动，未取得改前运行证据，不冒称已证明旧版同样失败。失败用例的未释放route使通用unroute_all(wait)清理等待，该轮被结束；单独有界复现明确同因并释放请求。其余四例另行完整运行通过，不把中断轮算全过。本批未扩大到公共就绪或测试平台；候选取舍见[事实底稿第11节](../frontend-architecture/reuse-facts.md#11-视觉第二批的共享边界与机械试验复核)。
+现有test_delayed_real_project_response_preserves_search仍失败：首次项目GET暂缓时PageSurface将整页/筛选设visibility:hidden，字段存在但不能输入；该路径没有被本批改动，未取得改前运行证据，不冒称已证明旧版同样失败。失败用例的未释放route使通用unroute_all(wait)清理等待，该轮被结束；单独有界复现明确同因并释放请求。其余四例另行完整运行通过，不把中断轮算全过。本批未扩大到公共就绪或测试平台；候选取舍见[事实底稿第11节](../frontend-architecture/research.md#11-视觉第二批的共享边界与机械试验复核)。
 
 **版本、数据与退出。** run为`.artifacts/active/frontend-visual/readability-20261028/`，reports中before/after-geometry.json、themes.json、dark-max.json、readonly-stable.xml、disposable-writes.xml（含初次两定位失败）、disposable-process-writes.xml、search-delay.json、impeccable-detect.json与final-original.json保实际条件。screenshots留每种条件最新前/后图及失败图，丁香浅紫标签已纠正，不冒作深色；最终原副本1280后图为final-original-1280-projects/process-170913/170915。源码提交构建和已测候选files/frontend_sources逐项相同，原8065的source/backend_commit均e41c8edb，product_digest `299ffdfeba62f772ecf3583da8f0a19f055fa5e40737e18607f49dcfc5cdc407`，registered_preview核源码/构建/HTTP一致。
 
@@ -486,6 +486,28 @@ run为`.artifacts/active/frontend-visual/batch3-20261028/`：reports保baseline.
 
 原8065正常恢复到9d86f46a，registered_preview核源码/构建/HTTP新鲜。40非账号业务表摘要、schema/全部列结构/invadj261027不变，仅user_account登录差异；原账号松绿/large保持。两次自建schema正常退出并核不存在，无原业务写入/重置/迁移、i8、打印、推送或部署。
 
-run=`.artifacts/active/frontend-visual/fee-scroll-20261028/`：reports/flow-trial.json持有改前失败和static试验，verified.json持有六组实际候选数据，wheel.json记录真实横滚，final.json与data-before/after.json持有身份/保全；screenshots/fee-one-1280-181152-811947.png、fee-max-900-181157-260272.png及改前图可对照。当前committed-build被8065使用，recovery保原产品入口；未用候选、临时脚本/shim收尾退出。后续Terra若需复验手填行，必须用隔离副本，不能在原库点增加手填项。
+run=`.artifacts/active/frontend-visual/fee-scroll-20261028/`：reports/flow-trial.json持有改前失败和static试验，verified.json持有六组实际候选数据，wheel.json记录真实横滚，final.json与data-before/after.json持有身份/保全；screenshots/fee-one-1280-181152-811947.png、fee-max-900-181157-260272.png及改前图可对照。该次committed-build已由后续923c1824替换，恢复沿Git及当前owner；未用候选、临时脚本/shim收尾退出。后续Terra若需复验手填行，必须用隔离副本，不能在原库点增加手填项。
 
-同期API消费者类型实证通过，但生成器peer仅TS5、项目TS7，直接正式接入暂缓，**未合入产品**，结果和待复制补丁回[事实底稿第14节](../frontend-architecture/reuse-facts.md#14-api消费者实证通过原项目直接接入暂缓)与其补丁包；真实HTTP形状核对仍是正式批前置。机械时间显示仍待定，renderer身份试验未做；本批不代表全站结束。
+同期API消费者类型实证通过，但生成器peer仅TS5、项目TS7，直接正式接入暂缓，**未合入产品**，结果回[事实底稿第14节](../frontend-architecture/research.md#14-api消费者实证通过原项目直接接入暂缓)；真实HTTP形状核对仍是正式批前置。未采用补丁正文现已退出当前工作树。机械时间显示仍待定，renderer身份试验未做；本批不代表全站结束。
+
+
+## 机械稳定引用与UTC展示（2026-10-28）
+
+产品452a7dc1与9e557fd4分别保存renderer和UTC展示。备注实证只在支持的唯一可丢弃真实副本通过matter-save改备注，未造summary.note（后端当前不输出该字段）、未切页和切换权限。有效样本7行业务行/28个控件，同值GET及输入中GET前后均0替换；非输入态备注读回由28替换降为0，金额/列宽/业务行键相同，草稿/焦点保留。旧AG center选择器零样本无效，最终用当前真实.ag-row[row-id]及非零断言；额外匿名测量行不计业务行键。typecheck/build、现有汇总金额/合计/分组/滚动/草稿焦点代表1case通过；两次内租草稿取消、零租/包月金额按钮导航另在隔离副本通过。引用数量不作为收益，未测INP、不为内联defaultColDef另造改动，保存未知等组合未重新穷举。
+
+UTC源为后端快照datetime.now(timezone.utc).isoformat，局部原生Date格式化，不沿业务日/月改成本地时区。time的datetime/title可核完整原值，显示日期和时分秒UTC；空值/未知格式保原输出，核查摘要复制仍全精度。6条真实时间在Pacific/Honolulu和Asia/Shanghai两context一致；普通1280/900与隔离深色最大1.4×后图已实看，日期与时分秒UTC各自完整，依据窗关闭回焦点通过。原8065已加载9e557fd4、registered_preview新鲜；后续四页候选在相同schema上继续正常更新，不从历史source_commit标签冒充当前产品。
+
+证据：机械基线/候选reports分别在.artifacts/archive/frontend-architecture/mechanical-identity-20261028与mechanical-identity-candidate-20261028；时间run为.artifacts/archive/frontend-visual/mechanical-time-20261028，visual-result.json及main-data-before/after.json保实际条件与保全。最终后图为screenshots/mechanical-time-1280-utc-185243-324706.png、mechanical-time-900-utc-185243-885272.png、mechanical-time-900-dark-max-185248-910866.png。原schema/invadj261027及40非账号表/全部列结构不变，临时schema已正常清理，原账号偏好未写。断连仅发生在命令创建前，恢复核候选和进程后正常继续，无绕审批或未知写入。未经独立验/用户验的条件不冒称完成。
+
+
+## 剩余四页局部就绪与后备退出（2026-10-28）
+
+产品56e8c2ea对付款流水/集采/规则/用户四页退出无关Query等待；923c1824删除已无消费者的旧PageSurface全局isFetching、网格DOM后备、开关列表及双rAF。唯一调用者仍main，15入口均使用页面显式首次状态和实际字体范围，字体/布局各归现有主人，无新状态机、错误边界、依赖或合同列宽改动。四页本页首次完整读取门仍保留：流水统计与项目、合同项目、规则三份读取等尚未拆逐块发布；不把本轮说成全部附属GET都不再等待。
+
+9e557fd4基线暂缓本地i8执行记录GET，四页自身数据已到却均隐藏；相同候选四页均可见，流水/合同搜索可用。临时只读探针分别验证本页首次主GET门、保活重读、流水/合同搜索值和焦点；HTTP503/重试在无关GET未完成时可见；三个附属GET（统计/合同项目/集采剔除名单）延迟保原首门、503可见。冷字体用仅内存继承Cookie的新context真实暂缓woff2，四页有效首帧采样均ready；缓存context未发字体请求的初次尝试作废。规则/用户没有同类搜索输入，焦点保留字段为不适用，不报为失败或新增搜索。
+
+最终923c1824已正常加载原8065，typecheck/build、11case通过（54.53s）：七组局部读取、15入口样式/首显、真实冷字体/返回保活、字体失败重试、机械汇总金额/分组/合计/滚动/聚焦草稿。更早8case与临时探针不重复累计。原40非账号表及全部列结构/schema/invadj261027不变，仅user_account登录记录差异；原松绿/large不变，临时8066无监听。日志归属纠正后同一版本正常重启，registered_preview再次确认实际923c1824与原schema，启动输出归原试用run/logs/preview-923c1824.log。无原业务写入、迁移、i8/打印、推送或部署。
+
+当前活跃run=.artifacts/active/frontend-architecture/local-pages-20261028：唯一在用committed-build，reports含基线/候选、verified、auxiliary、final.xml、final-state及lifecycle.json；实际身份只查原主预览owner。API类型与机械身份/UTC的四个已关闭run移至相应.artifacts/archive，有限保留至2026-11-26，未用构建/临时副本私有状态及重复截图已退出。未采用API补丁正文删除；同一事实底稿因现行固定文档名契约改为[research.md](../frontend-architecture/research.md)，无兼容占位或第二份报告。task-9四个探针脚本和pnpm转发已实际删除。四个run的run-closed本任务scope均通过；工具总体rc=1仍因其他旧归档5项：backend-regression-integration/20261027-01/work、notice-association/20261026下三个临时运行目录及缺retention.json。该归属不在本轮删除范围，未擅清；完整条目在lifecycle.json，交父整合收尾，不能报全仓生命周期检查通过。
+
+独立复验请核923c1824：机械核对1280/900时间分组、原值title、依据窗开闭焦点；四页正常读取/搜索/切回、本地GET暂缓和自身错误重试，合同首屏/原列宽不变。深色最大字号使用归档后图或隔离副本，不写原偏好。完整业务权限/保存未知/撤销/i8/打印组合未重新穷举。整体全站验收仍归父任务后续独立终审，不以本批代用户验收。

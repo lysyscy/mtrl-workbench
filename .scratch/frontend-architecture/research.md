@@ -1,5 +1,7 @@
 # React 分支成熟能力复用：架构事实底稿
 
+第1节固定最初盘点基线；当前机械与四页实施回执见第16–17节，运行归属与后图回既有evidence及其owner。本文由reuse-facts.md按现行任务文档名契约改名，保持同一底稿。
+
 供父任务的 Astra high 路线评审与分批整改使用；这是只读调查与建议，不是批准后的架构规则或实施规格。用途结束、有效裁决已归现行主人后沿 Git 退出。项目规则仍以 [AGENTS](../../AGENTS.md)、[workflow](../../docs/agents/workflow.md)、[architecture](../../docs/architecture.md)、[requirements](../../docs/requirements.md) 及活动 React 规格为准。
 
 ## 1. 基线、覆盖与证据强度
@@ -293,11 +295,27 @@ Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一
 
 最后依赖复核发现明确接入边界：7.13.0声明peer typescript ^5.x，临时npm树实际装5.9.3；项目根是7.0.2。上述“TS7编译通过”验证的是生成结果消费者，**不是生成器在TS7 peer下兼容**。因此收回直接正式接入建议，本晚暂缓原仓安装；不压低项目TS、不加peer忽略/覆盖，也不为11字段另建TS5子工程。peer不匹配不是已证实运行崩溃，但当前单端点维护收益不足以承担兼容例外，符合本轮停止条件。
 
-精简[实验补丁包](project-types-probe.md)保留真实生成文件、alias和消费者diff，仍未应用。未来有明确支持TS7的版本或已有合适工具包时，可采用固定开发生成器+简单离线生成+一份生成声明/alias，删原两份结构；运行reader/传输不动。ProjectOut11字段4项schema optional，用有来源的Required表达_out全部提供/reader必填的边界；正式批仍须真实HTTP字段/null/默认形状比对。本轮未碰8065执行该HTTP检查，不能用纯TS替代。
+生成声明/alias实证未应用；未采用的实验补丁正文已退出当前工作树，可从6877dbb0的原路径恢复，不保留死实施计划。未来有明确支持TS7的版本或已有合适工具包时，可采用固定开发生成器+简单离线生成+一份生成声明/alias，删原两份结构；运行reader/传输不动。ProjectOut11字段4项schema optional，用有来源的Required表达_out全部提供/reader必填的边界；正式批仍须真实HTTP字段/null/默认形状比对。本轮未碰8065执行该HTTP检查，不能用纯TS替代。
 
 费用根因进一步收窄：安装AG36.2 FakeHScrollComp在ag-stack检测浏览器scrollbar宽0时走invisible模式，原生overlay厚度回退16，refreshCompBottom把bottom设为pinnedBottom总高（实测36）；因此横条恰覆盖最后业务行末16，而不是NameCell超出80px行。此前测得button下沿/row下沿均合法；不是列宽、formatter或行高测量少算内容。下一批先在隔离副本试该原生overlay组件在autoHeight费用容器内恢复普通流占位（保native实测高度、事件和列宽）；若必须自测padding/行行补偿则停止。正常/overlay滚动条、合计、行增删与窄窗/最大字号必须实看；现在仍属候选，尚未修复。旧版公开issues不直接证明36.2同因，不引用其补丁当结论。
 
 
 ## 15. 费用滚条差额已实施
 
-第14节费用候选在隔离副本证实：position:relative仍会应用原生inline bottom而可能覆盖合计；position:static使native高度自动入流且忽略偏移。9d86f46a仅局部fees.css两行，六组行增删/字号布局与真实横向wheel通过，末行按钮下缘和合计均无覆盖；原8065恢复及40非账号表保全回[费用修复证据](../frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)。不使用padding魔数或改列宽。API实证必要schema/锁/编译日志保在.artifacts/active/frontend-architecture/api-types-20261028/reports；临时安装/源码副本已删除，正式直接接入因TS peer边界暂缓，HTTP形状尚未比对。
+第14节费用候选在隔离副本证实：position:relative仍会应用原生inline bottom而可能覆盖合计；position:static使native高度自动入流且忽略偏移。9d86f46a仅局部fees.css两行，六组行增删/字号布局与真实横向wheel通过，末行按钮下缘和合计均无覆盖；原8065恢复及40非账号表保全回[费用修复证据](../frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)。不使用padding魔数或改列宽。API实证必要schema/锁/编译日志保在.artifacts/archive/frontend-architecture/api-types-20261028/reports；临时安装/源码副本已删除，正式直接接入因TS peer边界暂缓，HTTP形状尚未比对。
+
+
+## 16. 机械稳定引用和UTC展示已实施
+
+452a7dc1仅稳定两类公司汇总renderer，以原有内部编辑ref和最新明细callback保持语义；没有全面memo化、改defaultColDef/行键/rows测宽依赖、原生列宽或保存链。AG36.2实际行结构已核：旧center-cols-container选择器产生零样本，已作废并加非零断言。最终实证统计7行的28个真实金额按钮/输入，排除portal、pinned总计、权限切换及切页卸载；同值GET、输入中GET均0替换。仅在可丢弃副本通过真实matter-save更新事项备注、保持Summary挂载再读回，非输入态控件替换28→0，金额/列宽/非空业务行键不变。输入态与草稿/焦点保留；后续两次草稿取消及c9零租/c10包月明细导航通过。现有汇总金额/合计/表头/滚动/聚焦草稿用例通过；未宣称测得现场INP或保存未知组合已穷举。
+
+9e557fd4局部用原生Date.toISOString呈现快照UTC日期和时分秒，时分秒UTC不可拆组；后端workbench_i8.py的fetched_at明确由datetime.now(timezone.utc).isoformat生成。现有业务月/日帮助函数使用Asia/Shanghai，职责不同，未借其转换；无新库/全站时间抽象。time的datetime/title保完整微秒与偏移，复制核查摘要仍保原值，空值/未知格式继续原显示。实际6条时间跨Pacific/Honolulu与Asia/Shanghai完全相同；1280/900、深色1.4×已实看，依据窗Esc回焦点通过。原8065正常更新，全部原业务表/结构不变，临时schema均退出。具体版本/后图与有限保留证据回既有[机械本轮证据](../frontend-vue-rewrite/evidence.md#机械稳定引用与utc展示2026-10-28)。
+
+
+## 17. 剩余四页局部就绪与旧路径退出
+
+56e8c2ea把/ledger付款流水、/contracts集采、/rules规则、/users用户接入既有局部通路，先在9e557fd4同基线暂缓本地i8执行记录GET，四页自身数据已到但均隐藏；候选四页均变可见，流水/合同搜索可用。保留其本页首次数据门：流水flows/stats/projects、合同list/projects、规则三个独立读取、用户列表；它们不新增业务写门或改原权限。各页自己的整页首次依赖仍按原边界等待，本轮未实现统计卡/规则块的逐块渐进发布，不能声称所有附属读取均不阻塞本页。
+
+HTTP503与重试在无关GET暂缓时可见；本页首次主GET门保留，切出切回和后台重读保已有内容，流水/合同搜索值与焦点保持。统计/合同项目/规则剔除名单三个附属GET延迟的原门保持，附属503可见。冷字体用仅内存继承登录Cookie的新context拦截真实woff2，四页有效首帧文字均已就绪；缓存上下文未实际发出字体请求的初次尝试作废。11个最终定向case及实际保全结果回既有证据，不把工具通过推成全业务或现场INP。
+
+至此15入口均有局部通路，仓内PageSurface唯一消费者为main。923c1824删除零消费者的independent开关、全局isFetching/网格DOM后备及额外双rAF；保留实际使用的工具字体、页面显式首次门、QueryCache唤醒和首次完成后保活。没有另造状态机/错误边界或改表格列宽。第12/13节对四个后备消费者的描述是当时基线，现已由本节取代；API生成仍为暂缓，其他业务定制保留裁决不变。
