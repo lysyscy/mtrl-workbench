@@ -139,3 +139,34 @@ def test_notice_tools_are_usable_while_first_data_is_pending(server, browser_pag
     expect(table).to_be_visible()
     assert table.bounding_box() == before, 'First table publication changed its reserved box'
     expect(search).to_be_focused()
+
+
+def test_fee_tools_publish_while_first_fee_data_is_pending(server,browser_page):
+    page,_=browser_page;login(page,server);held=[]
+    page.route('**/api/m09/fee/year?*',lambda route:held.append(route))
+    try:
+        with page.expect_request('**/api/m09/fee/year?*'):
+            page.get_by_role('link',name='特殊费用',exact=True).click()
+        expect(page.get_by_label('费用年份',exact=True)).to_be_visible()
+        expect(page.get_by_label('费用年份',exact=True)).to_be_enabled()
+        assert held
+        assert not page.locator('.fees-grid').count()
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m09/fee/year?*')
+    expect(page.locator('.fees-grid')).to_have_attribute('data-layout-state','ready')
+
+
+def test_process_module_does_not_wait_for_retained_i8_read(server,browser_page):
+    page,_=browser_page;login(page,server);held=[]
+    page.route('**/api/m02/fetch/records*',lambda route:held.append(route))
+    try:
+        with page.expect_request('**/api/m02/fetch/records*'):
+            page.get_by_role('link',name='i8 接入层',exact=True).click()
+        page.get_by_role('link',name='过程资料',exact=True).click()
+        expect(page.locator('.process-matrix')).to_be_visible()
+        expect(page.get_by_label('过程资料项目',exact=True)).to_be_enabled()
+        assert held
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m02/fetch/records*')

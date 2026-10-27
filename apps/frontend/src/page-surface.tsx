@@ -18,7 +18,7 @@ export function PageSurface({ active, title, independent = false, children }: { 
       if (disposed || preparing) return;
       const failed = independent ? null : node!.querySelector<HTMLElement>('[data-layout-state=error]');
       if (failed) { setError(failed.dataset.layoutError || '表格尺寸准备失败，请重试。'); return; }
-      if (node!.querySelector('[data-page-loading]') || !independent && (client.isFetching() || node!.querySelector('[data-layout-state=preparing]'))) return;
+      if (!independent && (node!.querySelector('[data-page-loading]') || client.isFetching() || node!.querySelector('[data-layout-state=preparing]'))) return;
       preparing = true;
       // These pages own their table boundaries; only their existing tool areas
       // contribute to the page's first font preparation. Data reads stay parallel.
@@ -30,6 +30,7 @@ export function PageSurface({ active, title, independent = false, children }: { 
         if (disposed) return;
         if (independent) {
           preparing = false;
+          if (node!.querySelector('[data-page-loading]')) return;
           if (text() !== before) { schedule(); return; }
           complete.current = true; setReady(true); observer.disconnect(); unsubscribe();
           return;

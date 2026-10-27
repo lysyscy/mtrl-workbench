@@ -60,7 +60,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     const editable = () => grid.getEditingCells().length > 0 || node.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea');
     const geometryStamp = () => {
       const css = getComputedStyle(node!.querySelector('.ag-root') ?? node!);
-      return `${node!.clientWidth}:${node!.clientHeight}:${css.fontFamily}:${css.fontSize}:${css.fontWeight}:${css.lineHeight}:${minimum}:${headerMinimum}:${grid.getAllDisplayedColumns().map(c => `${c.getColId()}:${c.getActualWidth()}:${c.getColDef().headerName ?? ''}`).join('|')}`;
+      return `${node!.clientWidth}:${grid.getGridOption('domLayout') === 'autoHeight' ? 'natural' : node!.clientHeight}:${css.fontFamily}:${css.fontSize}:${css.fontWeight}:${css.lineHeight}:${minimum}:${headerMinimum}:${grid.getAllDisplayedColumns().map(c => `${c.getColId()}:${c.getActualWidth()}:${c.getColDef().headerName ?? ''}`).join('|')}`;
     };
     const schedule = () => { if (ready.current) setState('updating'); version++; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { void prepare(version); }); };
     async function prepare(run: number) {
@@ -269,7 +269,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     const scrolled = () => { if (!preparing && viewport?.scrollTop !== restoredTop.current) { cancelAnimationFrame(anchorFrame); anchorFrame = requestAnimationFrame(captureAnchor); } };
     viewport?.addEventListener('scroll', scrolled, {passive: true});
     let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
-    const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; if (next && (next !== width || nextHeight !== height)) { width = next; height = nextHeight; schedule(); } });
+    const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; const changed = next !== width || grid.getGridOption('domLayout') !== 'autoHeight' && nextHeight !== height; width = next; height = nextHeight; if (next && changed) schedule(); });
     resize.observe(node);
     const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; userWidths.current = false; fitted.current = ''; schedule(); } });
     appearance.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });

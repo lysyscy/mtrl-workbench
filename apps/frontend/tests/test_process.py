@@ -77,8 +77,18 @@ def test_real_process_cell_write_and_later_draft(server,browser_page,api,project
 def test_difference_first_visible_frame_has_final_geometry(server,browser_page,api,projects):
     page,_=browser_page;data=get(api,'/api/m06/matrix')
     project=next(p for p in projects if p['warehouse_name'] in data['matrices'] and not data['matrices'][p['warehouse_name']]['diffs'])
-    page.set_viewport_size({'width':1280,'height':720})
+    page.set_viewport_size({'width':2560,'height':1080})
+    page.add_init_script("""window.__nativeFrames=[];function nativeFrame(){
+      const e=document.querySelector('.process-matrix'),card=document.querySelector('.process-page');
+      if(e?.checkVisibility({checkVisibilityCSS:true})&&window.__nativeFrames.length<30)
+        window.__nativeFrames.push(JSON.stringify({table:e.offsetWidth,card:card.offsetWidth,
+          widths:[...e.querySelectorAll('col')].map(c=>c.getBoundingClientRect().width)}));
+      if(window.__nativeFrames.length<30)requestAnimationFrame(nativeFrame);}nativeFrame();""")
     open_page(page,server,'process','过程资料')
+    page.wait_for_function('window.__nativeFrames.length>=30')
+    native=page.evaluate('window.__nativeFrames')
+    assert len(set(native))==1,native
+    page.set_viewport_size({'width':1280,'height':720})
     pick_option(page,'过程资料项目',project['disp'])
     page.evaluate("""window.__differenceFrames=[];
       function sample(){const e=document.querySelector('.process-grid');

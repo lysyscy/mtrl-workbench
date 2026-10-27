@@ -1,11 +1,16 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
+import Button from 'antd/es/button';
+import { loadElementFonts } from './appearance-ready';
 import { tableWidths } from './table-widths';
 import type { TableColumnWidth } from './table-widths';
 
-export function BoundedTable({ columns, children, style, ...props }: ComponentProps<'table'> & { columns: readonly TableColumnWidth[] }) {
+export function BoundedTable({ columns, children, style, prepareFonts = false, layoutVersion, ...props }: ComponentProps<'table'> & { columns: readonly TableColumnWidth[]; prepareFonts?: boolean; layoutVersion?: unknown }) {
   const ref = useRef<HTMLTableElement>(null), [widths, setWidths] = useState<number[]>([]);
   const specification = JSON.stringify(columns);
+  const [ready,setReady] = useState(!prepareFonts), [error,setError] = useState(''), [retry,setRetry] = useState(0);
+  const prepared = useRef(!prepareFonts), [fitWidth,setFitWidth] = useState(-1);
+  useLayoutEffect(() => { if (prepareFonts && widths.length && prepared.current && ref.current?.parentElement?.clientWidth === fitWidth) setReady(true); }, [prepareFonts,widths,fitWidth]);
   useLayoutEffect(() => {
     const table = ref.current, container = table?.parentElement;
     if (!table || !container) return;
@@ -37,16 +42,22 @@ export function BoundedTable({ columns, children, style, ...props }: ComponentPr
         for (let i = 0; i < occupied.length; i++) occupied[i] = Math.max(0, occupied[i]! - 1);
       }
       const next = tableWidths(columns, measured, available, em);
+      prepared.current = true; setFitWidth(available);
       setWidths(old => old.length === next.length && old.every((n, i) => Math.abs(n - next[i]!) < .5) ? old : next);
     };
-    const schedule = () => { if (!disposed && !frame) frame = requestAnimationFrame(fit); };
+    const prepare = async () => {
+      frame = 0;
+      try { if (prepareFonts) await loadElementFonts(table); if (!disposed) { fit(); setError(''); } }
+      catch (failure) { if (!disposed) setError(failure instanceof Error ? failure.message : '字体准备失败，请重试。'); }
+    };
+    const schedule = () => { if (!disposed && !frame) frame = requestAnimationFrame(() => { void prepare(); }); };
     const observer = new ResizeObserver(() => { const width = container.clientWidth; if (width !== lastWidth) { lastWidth = width; schedule(); } });
     const afterEdit = () => { if (pending) schedule(); };
     const fonts = new MutationObserver(() => { const next = getComputedStyle(table).font; if (next !== font) { font = next; schedule(); } });
     fonts.observe(document.documentElement, { attributes: true, attributeFilter: ['class','style'] });
     table.addEventListener('focusout', afterEdit);
-    observer.observe(container); fit(); lastWidth = container.clientWidth; void document.fonts.ready.then(schedule);
+    observer.observe(container); if (prepareFonts) void prepare(); else fit(); lastWidth = container.clientWidth; if (!prepareFonts) void document.fonts.ready.then(schedule);
     return () => { disposed = true; observer.disconnect(); fonts.disconnect(); table.removeEventListener('focusout', afterEdit); cancelAnimationFrame(frame); };
-  }, [specification]);
-  return <table {...props} ref={ref} className={`bounded-table ${props.className ?? ''}`} style={{ ...style, tableLayout: 'fixed', minWidth: 0, maxWidth: 'none', width: widths.length ? widths.reduce((a, b) => a + b, 0) : undefined }}><colgroup>{columns.map((_, i) => <col key={i} style={{ width: widths[i] }} />)}</colgroup>{children}</table>;
+  }, [specification,prepareFonts,layoutVersion,retry]);
+  return <>{error&&<p role="alert">{error}<Button onClick={()=>setRetry(n=>n+1)}>重试表格加载</Button></p>}<table {...props} ref={ref} data-page-loading={prepareFonts && !ready && !error ? true : undefined} data-layout-state={prepareFonts ? error ? 'error' : ready ? 'ready' : 'preparing' : undefined} inert={prepareFonts && !ready} className={`bounded-table ${props.className ?? ''}`} style={{ ...style, visibility:prepareFonts && !ready ? 'hidden' : style?.visibility, tableLayout: 'fixed', minWidth: 0, maxWidth: 'none', width: widths.length ? widths.reduce((a, b) => a + b, 0) : undefined }}><colgroup>{columns.map((_, i) => <col key={i} style={{ width: widths[i] }} />)}</colgroup>{children}</table></>;
 }
