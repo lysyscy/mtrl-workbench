@@ -1,3 +1,4 @@
+html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale))}
 .business-project-picker{display:inline-block;min-width:min(10rem,100%);max-width:100%;vertical-align:middle}
 .business-project-picker .ant-select{width:100%}
 .business-project-popup{max-width:calc(100vw - 24px)}
@@ -29,7 +30,8 @@
 .mechanical-import-table .ant-select{min-width:10em;width:100%}
 .notice-pay-table .ant-select{min-width:7em;width:100%}
 .contract-form-grid .ant-picker,.contract-field>.ant-picker,.subtable-draft .ant-picker{width:100%;min-width:0}
-.subtable-draft .ant-picker-input>input{min-width:0}
+.business-date-picker{font-size:calc(12px * var(--fscale))}
+.business-date-picker .ant-picker-input>input{min-width:0;font-size:inherit}
 .ant-tag.status-tag{margin-inline-end:0}
 
 .history-confirm-dialog h2{font-size:calc(18px * var(--fscale));margin:0}

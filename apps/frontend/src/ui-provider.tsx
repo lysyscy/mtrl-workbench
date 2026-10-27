@@ -13,6 +13,7 @@ function appearance() {
   const radius = Number.parseFloat(read('--radius-input')) || 6;
   return { dark: read('--ui-scheme') === 'dark', token: {
     fontFamily: read('--fs') || 'MiSans, sans-serif', fontSize: (Number(read('--font-ui-size')) || 13.5) * scale,
+    fontSizeSM: 12 * scale,
     controlHeight: 32 * scale, controlHeightSM: 32 * scale, lineWidth: .5,
     borderRadius: radius, borderRadiusSM: radius, borderRadiusLG: Number.parseFloat(read('--radius-card')) || 8,
     colorPrimary: read('--pri'), colorTextLightSolid: read('--on'), colorPrimaryHover: read('--pri-d'), colorText: read('--tx'),
@@ -37,6 +38,9 @@ export function UiProvider({ children, appearanceKey }: { children: ReactNode; a
   // Keep the provider tree stable when the OS motion preference changes mid-edit.
   return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
     algorithm: value.dark ? [theme.darkAlgorithm, theme.compactAlgorithm] : theme.compactAlgorithm,
-    token: value.token, components: { Tag: { borderRadiusSM: 4 }, Checkbox: { borderRadiusSM: 4 } },
+    token: value.token, components: {
+      Input: { inputFontSizeSM: value.token.fontSizeSM }, DatePicker: { inputFontSizeSM: value.token.fontSizeSM },
+      Select: { fontSize: value.token.fontSizeSM }, Button: { fontSizeSM: value.token.fontSizeSM }, Segmented: { fontSize: value.token.fontSizeSM },
+      Tag: { borderRadiusSM: 4 }, Checkbox: { borderRadiusSM: 4 } },
   }}><App component={false}>{children}</App></ConfigProvider></MotionProvider>;
 }

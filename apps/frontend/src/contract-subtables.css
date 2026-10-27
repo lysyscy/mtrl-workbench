@@ -34,11 +34,11 @@
 .contract-subtables .ant-btn,.contract-subtable-dialog > div > .dialog-actions .ant-btn { height:auto;min-height:calc(32px * var(--fscale));border-radius:var(--radius-pill);white-space:normal;line-height:1.5; }
 .contract-subtables .ant-btn-sm { min-height:calc(28px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(8px * var(--fscale)); }
 .subtable-draft { background:var(--sf2); }
-.subtable-draft .ant-input,.subtable-draft .business-date-picker,.subtable-draft .ant-picker { width:100%;min-width:0;min-height:calc(32px * var(--fscale));font-size:inherit;border-radius:var(--radius-input); }
+.subtable-draft .ant-input,.subtable-draft .ant-picker { width:100%;min-width:0;height:var(--control-h);min-height:var(--control-h);padding-block:0;font-size:inherit;border-radius:var(--radius-input); }
 .subtable-draft input:not([type=date]) { text-align:right; }
 .subtable-draft .ant-picker input { text-align:left; }
 .subtable-draft-actions { display:flex;flex-wrap:wrap;gap:calc(8px * var(--fscale)); }
-.subtable-draft .ant-btn { padding:calc(4px * var(--fscale)) calc(8px * var(--fscale));font-size:calc(12px * var(--fscale)); }
+.subtable-draft .ant-btn { min-height:var(--control-h);padding:calc(4px * var(--fscale)) calc(8px * var(--fscale));font-size:calc(12px * var(--fscale)); }
 .subtable-pagination { display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:calc(8px * var(--fscale)) 0 calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale)); }
 .subtable-linked-group { margin:calc(16px * var(--fscale)) 0; }
 .subtable-links { gap:calc(8px * var(--fscale));margin-bottom:8px;line-height:1.5;overflow-wrap:anywhere; }

@@ -61,7 +61,7 @@ export function timeMatches(value: string, date: string) {
 
 export function BusinessDate({ value, onChange, disabled = false, label }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string }) {
   return <DatePicker aria-label={label} value={value ? dayjs(value) : null} onChange={date => onChange(date ? date.format('YYYY-MM-DD') : '')}
-    disabled={disabled} format="YYYY-MM-DD" classNames={{ popup: { root: 'ag-custom-component-popup' } }}
+    disabled={disabled} format="YYYY-MM-DD" className="business-date-picker" classNames={{ popup: { root: 'ag-custom-component-popup' } }}
     getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body} />;
 }
 
