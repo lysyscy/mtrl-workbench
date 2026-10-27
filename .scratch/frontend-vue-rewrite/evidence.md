@@ -399,4 +399,4 @@ UI批累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`；445–448技术实
 
 唯一原8065保持原schema、账号主题和私有状态，目标升级仅新增两个可空旁路JSON列至invadj261027；41张原表原字段升级前后保全。最终40张非账号表摘要仍一致，账号仅正常登录变化。自动业务写测只在独占可丢弃真实副本，已停止并确认schema不存在；原试用未做自动业务保存。未合并master、正式切换、i8新外呼或打印。
 
-必要证据有限保留于本机 .artifacts/archive/inventory-adaptive-20261027/{01,ui} 至2026-11-26；研究与本轮规格已吸收到现行主人，其快照随证据保留。原run保在用 inventory-native-sizing-final-20261027 构建、owner/version及升级恢复点；实际进程/源输入核 registered_preview，不复制旧PID。其他.scratch/perf-review与.workbuddy保持。用户可刷新原入口验看；技术验证不冒充人工验收。
+必要证据有限保留于本机 .artifacts/archive/inventory-adaptive-20261027/{01,ui} 至2026-11-26；研究与本轮规格已吸收到现行主人，其快照随证据保留。产品源码06ce32fd已推送并核远端SHA，原run保在用 inventory-native-sizing-release-20261027 构建、owner/version及升级恢复点；实际进程/源输入核 registered_preview，不复制旧PID。其他.scratch/perf-review与.workbuddy保持。本轮closed范围检查通过；检查器总体仍非零，均为既存backend-regression-integration归档work及notice-association三目录/缺retention五项，未改无关历史或冒报全绿。用户可刷新原入口验看；技术验证不冒充人工验收。
