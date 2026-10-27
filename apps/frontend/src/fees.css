@@ -25,6 +25,8 @@
 
 .fees-annual-grid{height:auto;min-height:0}
 .fees-annual-grid .ag-grid-scrolling-rows{min-height:0}
+/* Natural-height fee rows need the native overlay bar to occupy its own space. */
+.fees-annual-grid .ag-body-horizontal-scroll.ag-scrollbar-invisible{position:static}
 .fees-annual-grid .ag-cell-wrap-text{white-space:normal;overflow-wrap:anywhere}
 .fee-toolbar label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
 .fee-record-names,.fee-record-amounts{display:flex;flex-direction:column;gap:calc(6px * var(--fscale));width:100%;padding-block:calc(6px * var(--fscale))}
