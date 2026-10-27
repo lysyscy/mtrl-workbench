@@ -226,3 +226,18 @@ C4另有具体适配边界：`grid-render-layout.ts:22–32`测量仅提供data/
 本批run为`.artifacts/active/frontend-architecture/inventory-ready-20261027/`：reports/browser.xml、readonly-extra.json、data-before.json、data-after.json及version.json绑定本次结果；logs含正式typecheck/build与启动日志；recovery保原owner/version；work/verified-build当前被8065引用，必须保留。首次未登记重复work/build与临时pnpm shim已退出。当前预览供后续视觉整改及用户查看，保持运行；旧产品构建仍是恢复点，不清理他人资源。
 
 库存最小批至此完成技术验收；没有改共享就绪算法/CSS/grid/列宽/API/保存。采用现有通路退出了库存首次显示对全账号fetching的依赖，其余未迁页保留现状。没有运行机械测试，不冒报既有夹具已修。随后视觉首批已按父任务派发实施，四字号/八主题及独立复验边界回[当前视觉证据](../frontend-vue-rewrite/evidence.md#共享控件与重点弹层视觉首批2026-10-28)；不借库存或视觉首批通过宣称全站完成。
+
+
+## 11. 视觉第二批的共享边界与机械试验复核
+
+Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一产品写权。只读字段淡化、1280过程金额拆行、项目展示名列过窄均有真实截图与DOM尺寸依据；通知书勾选疑点已撤回，不作为整改项。第二批沿既有主题、AntD和浏览器自动表格布局：已有记录字段显式选择record-value，单独恢复disabled/readOnly文字；按钮、选择框、新建表单和权限判断不跟随覆盖。项目字段给10em内容下限，过程money单元格声明nowrap；公共BoundedTable、AG列宽及保存契约不改。运行证据和覆盖缺口统一回[视觉证据](../frontend-vue-rewrite/evidence.md#记录可读性与窄窗表格第二批2026-10-28)，不另建视觉或架构报告。
+
+**成熟能力及保留项。** 已核安装AntD6.6.7的Input variants实现：disabled颜色来自colorTextDisabled，opacity为1；因此局部已有记录语义选择足够，不必全局修改token或把disabled改成可编辑。[官方Input](https://ant.design/components/input/)、[disabled语义](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/disabled)。原生自动表格已有内容最小宽度与滚动能力，数字不可拆行和项目输入的内容下限由CSS表达；不新增测量、比例或余宽算法。[CSS自动表格布局](https://www.w3.org/TR/CSS22/tables.html#auto-table-layout)、[white-space](https://developer.mozilla.org/en-US/docs/Web/CSS/white-space)。金额、只读权限、未知回执、输入焦点/IME、原列宽任务成果继续保留。
+
+**C4机械静态复核缩小了原疑点。** mechanical.tsx当前已对candidates/selected/warehouses/reportWarehouses使用useMemo，detail回调已useCallback；公司汇总rows和columns也有useMemo。columns依赖rows有真实全结果金额宽度下限，不能直接删除；保存时writable切换使输入变成静态金额是现行语义，不能将预期卸载当性能缺陷。TanStack Query5.104.5安装源码replaceData默认replaceEqualDeep，未变化JSON通常结构共享；“每次相同GET或每个按键都重建所有列”没有得到证明。[Query结构共享](https://tanstack.com/query/latest/docs/framework/react/guides/render-optimizations)。
+
+剩余小试验仅限Summary内联defaultColDef稳定常量，以及两类匿名renderer是否有实测重复挂载收益；保留当前编辑ref/epoch、useRetainedGridColumns、完整rows宽度和原生拟宽。若需要命名renderer，既有useGridPresentation context可承当前detail/editing引用，测量与运行时共用；普通cellRendererParams没有被测量适配器展开，不能直接搬参数后宣称等价。无需扩公共适配器、造列DSL或新状态层。[AG React引用建议](https://www.ag-grid.com/react-data-grid/react-hooks/)、[Context](https://www.ag-grid.com/react-data-grid/context/)。
+
+该试验不与视觉源码或预览取证并行；另开小提交，以隔离副本同范围相同GET/合法重读，或仅测试时的挂载计数/DOM身份记录，比较可避免的挂载、焦点及耗时。后台GET结构共享下若本来没有重建，或只有引用数量变化而无实际净收益，则保留现状，不继续扩大抽象。未知保存、第二草稿、总计、明细按钮、输入/宽度冻结均为停止与回退条件。第二批尚未实施机械重构。
+
+**新运行边界。** 现有test_delayed_real_project_response_preserves_search在本批候选中失败：暂缓首次项目GET时，PageSurface把projects-page/filters设为visibility:hidden，搜索框存在但不能输入。单独有界复现保留相同原因；四个其他只读代表通过。该路径不在本批十个文件差异中，尚未在改前运行该用例，不冒称已证明旧版本同样失败；后续可复核项目页显式就绪和安全本地搜索的最小差额。失败用例缺finally释放暂缓请求，使通用unroute_all(wait)清理等待；本批未改测试框架或为此加防护平台。不要将该失败删去或算作通过。

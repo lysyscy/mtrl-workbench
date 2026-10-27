@@ -424,3 +424,26 @@ UI批累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`；445–448技术实
 **待独立Terra复验/下一批。** 本批不是全站完成：请在同版本实看外观文字层级、发票行基线、1280/900关联滚动与底部动作、草稿日期和正常/reduced开闭手感；标明新鲜度与未验条件。后续继续跨页面工具条/筛选分组、原生与AntD行内编辑的hover/focus/disabled/unknown等状态一致性、付款/导出/长子表等业务弹层在窄/矮窗的操作可达性，以及过程三表/提取完成态与机械各子页的字号例外。机械核对时间先核项目既有时区/格式再决定显示，保原值可查。不要借共享样式强行同高所有表格、改金额/保存语义或恢复已退役键盘模式。
 
 方法来源采用已安装frontend-design/ui-ux-pro-max的上下文和实图复核；未接入Huashu、未复制其代码/文档或物料风格规则。外部建议只借任务反馈克制/同类对齐的原则；popup容器、关闭协议与现有AntD体系均保留，不另建popup管理器。架构后续仍按真实净收益推进，库存批不重做。
+
+
+## 记录可读性与窄窗表格第二批（2026-10-28）
+
+Terra首批登录态复验已完成并释放源码；第二批以819a66d3为基点，唯一写入、本地提交`e41c8edb6caa23678dff5e21268a13e097bbdf52`，已正常加载原8065。目标是恢复已有记录的阅读质量与原生表格的内容下限，保既有视觉语言、密度、业务含义及列宽成果；不是全站验收完成。
+
+**实际范围。** projects/process/big/contracts/fees/settlement/inventory-adjust的已有记录输入显式选择record-value，共享ui.css只在disabled/readOnly状态恢复主题正文色；placeholder保辅助色，按钮/Select/新建表单的禁用态不跟随覆盖，disabled/readOnly条件与权限均未改。项目字段容器最小10em；过程money单元格禁止拆数字，仍用浏览器自动表格与现有横向滚动。未改公共就绪、BoundedTable、AG拟宽/列宽、API、保存、草稿或撤销，也未新增依赖/按钮/信息。两个已有过程写入用例改为与只读用例相同的“输入项目名搜索，再选虚拟列表项”，解决大字号下目标项未渲染的测试定位。
+
+**前后证据。** 改前在原副本1280宽度，匿名项目显示名输入宽12px、登录large宽13px；改后分别133px、149px。过程静态金额/合计的多行项分别从42/61处变为0；2552宽亦通过。匿名已有记录仍真实disabled，文字由rgba(0,0,0,.25)恢复为主题正文；原淡灰样本约1.82:1，仅作阅读问题证据，不据此声称禁用控件违反WCAG。
+
+可丢弃真实副本中逐一实际保存八主题并读回，在项目/过程本地GET失败、保留旧数据且实际disabled的状态采样，最低对比度11.15:1；禁用按钮仍保持其原状态。焦点核验按现行协议保持本地操作响应，最初测试误以为它会全页inert，修正测试假设而未改产品。最大1.4×在1280/900，丁香浅紫与另补的真实深色均实看：项目输入187px，过程70个静态金额/合计均一行且无单元格溢出，长表继续横向滚动。月度大表/集采台账也保存最大字号代表后图；费用当前样本只有自动CBS行，结存当前视图无手填余额字段，库存调整弹层本轮未逐态实看，不能宣称这些已全覆盖。
+
+**验证与保留失败。** 现行typecheck/build通过，最终prepare-build通过；只有既有大chunk提示。最初big输入重复className造成TS17001，已合并原金额class后通过。impeccable4.8.0在界面完成后只运行一次detect，十个改动源码目标结果为空，不能替代实图/行为验收。四个既有只读代表通过（项目本地搜索/IME与过滤、过程原始/调整行和合计、分组表头置顶、全路由首帧共享样式；26.15s）。隔离副本项目未知回执锁定/重读通过；过程两个写入代表最初因虚拟列表未搜索失败，修正上述定位后2 passed in12.44s，实际历史材料与机械金额保存/读回及第二草稿通过。
+
+现有test_delayed_real_project_response_preserves_search仍失败：首次项目GET暂缓时PageSurface将整页/筛选设visibility:hidden，字段存在但不能输入；该路径没有被本批改动，未取得改前运行证据，不冒称已证明旧版同样失败。失败用例的未释放route使通用unroute_all(wait)清理等待，该轮被结束；单独有界复现明确同因并释放请求。其余四例另行完整运行通过，不把中断轮算全过。本批未扩大到公共就绪或测试平台；候选取舍见[事实底稿第11节](../frontend-architecture/reuse-facts.md#11-视觉第二批的共享边界与机械试验复核)。
+
+**版本、数据与退出。** run为`.artifacts/active/frontend-visual/readability-20261028/`，reports中before/after-geometry.json、themes.json、dark-max.json、readonly-stable.xml、disposable-writes.xml（含初次两定位失败）、disposable-process-writes.xml、search-delay.json、impeccable-detect.json与final-original.json保实际条件。screenshots留每种条件最新前/后图及失败图，丁香浅紫标签已纠正，不冒作深色；最终原副本1280后图为final-original-1280-projects/process-170913/170915。源码提交构建和已测候选files/frontend_sources逐项相同，原8065的source/backend_commit均e41c8edb，product_digest `299ffdfeba62f772ecf3583da8f0a19f055fa5e40737e18607f49dcfc5cdc407`，registered_preview核源码/构建/HTTP一致。
+
+原schema/revision/全部列结构不变，41原表中40非账号业务表摘要一致，仅user_account登录差异；原账号松绿/large未改。临时副本正常退出、schema已核不存在；原8065运行供后续复验。无原业务写入/重置/迁移、i8外呼、打印、推送/合并/部署。临时脚本、pnpm转发与未用候选构建收尾退出；本run当前committed-build仍由主预览使用，recovery指向首批资源，二者保留至复验/恢复窗口结束。原`.scratch/perf-review/`、`.workbuddy/`不属于本任务，未改未删。
+
+**独立复验及后续覆盖。** 请Terra优先实际匿名只读的项目/过程，与登录large的1280项目显示列及金额/合计；核只读权限、hover/focus、正常输入/保存锁和横向滚动，随后对照深色/最大字号后图。原账号主题不要为复验而改；需要其他持久设置或业务写入时按唯一入口用可丢弃副本。费用手填行、结存历史余额、库存调整只读/未知弹层仍缺本批运行证据。后续继续跨页面工具条/筛选分组、状态文字与行内编辑、付款/导出/长子表弹层、过程差异表与提取完成态、机械各子页例外的系统实看；这些尚未整改，不能用两批完成代替全站完成。机械稳定引用仅静态复核，已发现现成memo与Query结构共享，应先小试验证明净收益而不删宽度/保存保护。
+
+本批仅使用有效frontend-design与恢复后的impeccable；保现有MiSans、主题token与AntD，不接入Huashu或新设计系统。官方能力、保留/试验与串行边界合入既有架构事实底稿，没有新增长报告或修改权威业务规则。
