@@ -543,3 +543,16 @@ run=.artifacts/archive/frontend-architecture/final-risk-20261028，reports保ris
 本次只整理历史资料，没有修改产品、原8065、数据库/schema或在用构建。此前目录检查非零是当时事实，旧回执原文仍保全；本次run-closed整体及本任务/其他归档均通过。用户笔记/旧报告未入Git，未推送。最新运行归属继续查原主预览owner；browser错误标签策略边界保持。
 
 完整active复核另发现旧table-stability-research.md不符合固定任务文档名；其215行原字节/散列不变地改为本effort的research.md，TAIL-449仅修研究链接，原票状态及历史结论不变。复核结果以preservation-lifecycle-all.json最新输出为准。
+
+
+## 扩大成熟方案复用：原生测试入口与合同schema（2026-10-28）
+
+用户延长验收至北京时间09:00，扩大方向为成熟方案承担通用机制。本批产品2e806908，前一独立工具提交ea9b9581；事实、全域扫描新增候选与准确未实施边界见[研究第19–21节](../frontend-architecture/research.md#19-用户扩大成熟方案复用后原生测试入口)。原生Node24+tsx固定版本替代三个Python/Vite纯测试装载器，保留38行业务assert；三项隔离故意失败均exit1，原生runner共7case通过。合同schema推导类型并保v.is原输入/额外字段和ret_date显式归一，修列表/详情虚假继承；原保存/权限/后端不动。
+
+TS7严格检查和提交后构建通过；265列表行/三种实际详情经过真实reader，匿名材料弹窗可读及Esc回焦点无pageerror。已有合同2case在唯一可丢弃真实副本通过（10.67s），包含真实POST成功但响应破损后的unknown锁与可靠读回。副本正常退出并核schema不存在，原8065已恢复产品2e806908；候选/发布资源散列相同。原schema/invadj261027、全部列结构和40非账号表不变，合同副本验证仅账号登录差异，发布更新本身全部表无差异；原松绿/large设置未写。registered_preview核最新，8066无监听。
+
+当前版本与运行身份以原主预览reports/real_owner.json为准，当前构建在.artifacts/active/frontend-architecture/contracts-schema-20261028/work/release-build。该run的reports/release-state.json、contract-browser.xml、real-shape.log和browser-read.json持最小证据；完整真实业务响应样本取证后退出，不入Git或外发。Node失败退出与CLI准备证据在同effort archive的native-unit-20261028和project-cli-20261028，当前retention至2026-11-26。本任务临时脚本、pnpm shim、坏例、无消费者构建和已停副本私有状态已实际清理；旧923恢复构建按父指定仍保留。
+
+请父对d79c4285→2e806908的两个新增独立批次定向审查，重点迁移断言不漏、依赖安装范围、v.is不转换/不剥额外字段、合同实际列表/详情分界及unknown读回。现有独审/Terra结论不覆盖本批新增差异。项目刷新、Flow读取、staged审计和后端锁/事务候选只是已识别后续项，未在本批实施；当前没有宣称全业务组合穷举、已人工验收或已上线。
+
+收尾复核：2026-10-27 22:45UTC，四个显式原生文件共7case/0失败/0跳过再次通过；frontend-architecture active及native-unit/project-cli两个run-closed总体均ok、other_archives零异常。当前8065产品2e806908 fresh、8066无监听，preserved原manifest仍在。文档三文件独立提交后Git含untracked再核，不用文档提交号自指更新产品构建。

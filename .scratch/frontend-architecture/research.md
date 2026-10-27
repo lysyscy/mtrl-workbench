@@ -354,3 +354,25 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 只用纯schema与v.is，不改输入、不剥额外字段；ret_date null→空串仍在边界显式归一，既有错误文案/金额字符串规则/正安全ID/非数组对象约束保持。安装源码证实v.object本身可收挂字段数组，故以原有record作为custom<object>与库intersect组合；v.is收窄InferInput，初次custom-first pipe未能给TS7收窄已修，不用断言压错。7个原生case通过、TS7严格检查及构建通过；265真实列表行/3种详情经真实reader通过，匿名合同材料弹窗实际值/关闭回焦点通过，完整私密样本只在本机产物中，不提交。
 
 实际全部JS产物增加5857bytes（未压缩），固定运行依赖无runtime传递依赖；对单处形状/类型漂移有维护净收益，不宣称运行性能提升。保留backend响应、业务保存和权限；API生成与上游picker越依赖范围升级不同时接入。[v.is保输入](https://valibot.dev/api/is/)、[固定1.5.0清单](https://raw.githubusercontent.com/open-circle/valibot/v1.5.0/library/package.json)；实际兼容看本项目TS7实测，不以peer范围推定。
+
+
+## 21. 扩大成熟方案复用后的交付与剩余候选（2026-10-28）
+
+用户将验收延至北京时间09:00（UTC01:00），本子批不依赖后端并发验证。已本地提交ea9b9581与2e806908：前者替代三个Vite纯算法装载器，后者使合同runtime形状与TS类型同源。合同7项原生case、TS7 typecheck/build通过；265真实列表行/3种详情、匿名材料弹窗读值/关闭回焦点通过。受支持可丢弃副本的现有合同两case通过（10.67s），包含真实写成功但回执损坏后锁定、可靠重读解除；所有写入只在该副本。原8065正常恢复到2e806908，候选/提交后发布资源逐件散列相同，fresh通过，更新前后全部业务表及schema/列结构无变化，临时8066与其schema退出。合同JS未压缩增量5857bytes，收益为减少双写和纠正列表/详情类型漂移，不宣称性能收益。
+
+第14节“不能采用隔离生成器”的原结论已被新实证缩小：官方固定包调用可在pnpm dlx缓存内以openapi-typescript7.13.0+TS5.9.3运行，无需修改应用TS7或peer覆盖；实际19条项目GET的11字段通过严格Pydantic验证。生成器仍不是本批正式接入项：Astra在对照维护收益后优先选择原生runner和合同schema，既有运行reader/业务窄化保留。准备证据归.artifacts/archive/frontend-architecture/project-cli-20261028；不要把兼容路径可行写成已集成，也不要继续以“TS5隔离绝对不可行”作暂缓理由。
+
+新增全域扫描分别来自task-4/backend-architecture-review/review.md（201业务+52迁移）、task-5/architecture-b/review.md（99React+14旧JS及入口资产）、task-6/architecture-c.md（297工具Py、ops、构建/补丁、技能业务脚本和delivery参考）。它们是结构/调用链扫描加关键主人深读，不是逐行全语义验证；扫描者Git ownership阻止独立dirty核验，不能拿其报告证明工作区干净。本任务已用正常Git环境核实自己的提交与状态。完整原始报告保各任务本机目录，不复制成长篇第二套报告。
+
+| 剩余候选 | 证据与本轮边界 | 下一步或保留理由 |
+|---|---|---|
+| 项目写后跨域失效/历史头 | 静态6组key清单缺history；写后header旧态尚未浏览器复现，点击前仍有可靠预检 | 值得小批复核；复用QueryClient标脏与现有可靠读回，别全量强制fetch或改未知回执 |
+| 付款Flow读取形状 | 注入内存坏载荷已实际越过reader，缺date触发TypeError、坏审批金额穿透、缺status影响合计；非真实后端坏响应 | 复用本批Valibot后续小批，先Flow读模型，不改付款/撤销命令；本批未实施 |
+| staged审计真实index | 工具报告指syntax_audit仍全扫、工作区与index混读且Git失败可吞空；尚未由本任务重现实index场景 | 值得Git原生index定向批；须partial staging/失败非零证据，不能为快而关闭门禁 |
+| 纯工具fixture/旧prune职责 | 4纯工具pytest装配全app、约255行prune可能职责退出 | 待消费者/收益确认，保DB守卫；不为删除行数贸然退役 |
+| 跨账号同通知书付款锁序 | 完整链只在后置重算锁定，无前置锁后校验；隔离合成并发验证被拒，尚未动态证实 | 父任务独立持有授权及后端处置；本任务不写后端、不换路径重试 |
+| 抓取事务所有权/欠款重复组装 | 静态外部等待持账号锁、集采rollback外层；欠款本请求重复读事实 | 父按业务/事务风险另排，不把换库当解法、不真实i8验证 |
+
+保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。API生成、Flow、项目刷新、审计和后端候选各自明确未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
+
+原生runner失败退出日志与断言迁移统计有限归档至native-unit-20261028；两旧无消费者run已退出active、临时探针/shim/坏例和副本状态已删除，合同run只留当前在用release-build与必要报告。旧923c1824恢复点仍由父指定保留，原8065用户试用数据保持；所有产物沿当前retention至2026-11-26。未推送、合并或部署。
