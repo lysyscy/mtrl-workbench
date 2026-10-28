@@ -16,7 +16,12 @@ def test_real_inventory_filter_is_local_and_keeps_amounts(server,browser_page,ap
     page.get_by_role('button',name=re.compile('^列筛选')).click()
     pick_option(page,'筛选列','物料')
     requests=[];page.on('request',lambda r:requests.append(r.url) if '/api/m08/inventory' in r.url else None)
-    page.get_by_label('列包含文字',exact=True).fill(row['material'])
+    field=page.get_by_label('列包含文字',exact=True)
+    for term in ['__no_inventory_match__',row['material'][:1],row['material']]:
+        field.fill(term)
+    expected=sum(row['material'].lower() in item['material'].lower() for item in data['rows'])
+    expect(page.locator('.inventory-count-feedback')).to_have_text(f"{expected} / {len(data['rows'])} 行")
+    expect(page.locator('.inventory-grid')).to_have_attribute('aria-busy','false',timeout=30000)
     expect(grid_row(page,'.inventory-grid',row['id'])).to_be_visible()
     assert not requests
     expect(page.get_by_role('button',name='导出文件…',exact=True)).to_be_disabled()
