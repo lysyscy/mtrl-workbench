@@ -374,6 +374,13 @@ def create_app() -> FastAPI:
         def web_shell(request: Request) -> Response:
             return _static_file(request, _APP_DIR / "web" / "index.html", "text/html")
 
+        @app.get("/app/{path:path}", include_in_schema=False)
+        def legacy_deep_link(path: str) -> Response:
+            # React bookmarks still reach a working shell during interface rollback.
+            if path.startswith('assets/') or Path(path).suffix:
+                raise HTTPException(status_code=404)
+            return RedirectResponse('/app', status_code=302)
+
     # ⭐ **壳的外链件**（`web/shell/*.js`）—— 壳的**接线层**都在这几件里（`P4`② 2026-09-19 起拆 · `P2-a` 2026-09-28 加件）。
     #    ⚠️ **件清单的唯一出口 = `index.html` 的 `<script src>`**（`tools/audit/shell_source.py` 按它现读）
     #       ⇒ ⛔ 别在此处写死件数或件名（会随拆件涨，写了必漂）。

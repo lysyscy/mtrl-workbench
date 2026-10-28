@@ -36,3 +36,17 @@ def test_mixed_or_incomplete_release_fails_before_opening(tmp_path):
     (root/'index.html').write_text('<script src="/app/assets/missing.js"></script>',encoding='utf-8')
     with pytest.raises(RuntimeError,match='缺失'):
         install_frontend(FastAPI(),str(root),None,base='/app')
+
+
+def test_legacy_rollback_accepts_react_bookmarks_but_not_missing_assets(monkeypatch):
+    from app.core.config import get_settings
+    from app.main import create_app
+    monkeypatch.setenv('FRONTEND_APP_DIR','')
+    get_settings.cache_clear()
+    try:
+        with TestClient(create_app()) as client:
+            response=client.get('/app/fees',follow_redirects=False)
+            assert response.status_code==302 and response.headers['location']=='/app'
+            assert client.get('/app/fees').status_code==200
+            assert client.get('/app/assets/retired.js').status_code==404
+    finally:get_settings.cache_clear()
