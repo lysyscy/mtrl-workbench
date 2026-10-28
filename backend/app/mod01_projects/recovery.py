@@ -276,6 +276,44 @@ def recover_unknown_warehouses(
             "unresolved_items": failures, "degraded": False, "message": msg}
 
 
+def promote_synced_placeholders(session: Session, warehouse_rows: list[dict]) -> dict:
+    """Promote unambiguous existing placeholders; leave other cases for confirmation."""
+    from collections import Counter
+    from sqlalchemy import select
+    from app.mod01_projects import repository
+    from app.mod01_projects.models import Project
+
+    projects = list(session.scalars(select(Project).order_by(Project.id).with_for_update()
+                                   .execution_options(populate_existing=True)))
+    known = {p.warehouse_name for p in projects if p.warehouse_name}
+    owners, warehouses_by_owner = {}, {}
+    for row in warehouse_rows:
+        wh = str(row.get('warehouse_name') or '').strip()
+        if wh:
+            owner = _norm(row.get('owner_full_name') or '')
+            owners.setdefault(wh, set()).add(owner)
+            warehouses_by_owner.setdefault(owner, set()).add(wh)
+    conflicts = {wh for wh, names in owners.items() if wh not in known and len(names) > 1}
+    failures = [dict(warehouse_name=wh, reason='同一仓库对应多个项目全名，需人工核对')
+                for wh in sorted(conflicts)]
+    plan = plan_recovery(unknown_wh=set(owners) - known - conflicts,
+                         warehouse_rows=warehouse_rows, projects=projects)
+    failures.extend(plan['unresolved'])
+    failures.extend(dict(warehouse_name=r['warehouse_name'], owner_full_name=r['name_full'],
+                         reason='壳下新仓库需确认具体小微档案，本次不自动新建') for r in plan['create'])
+    counts = Counter(r['project_id'] for r in plan['promote'])
+    by_id = {p.id: p for p in projects}
+    promoted = []
+    for item in sorted(plan['promote'], key=lambda r: r['project_id']):
+        if counts[item['project_id']] > 1 or len(warehouses_by_owner[_norm(item['name_full'])]) > 1:
+            failures.append(dict(warehouse_name=item['warehouse_name'], owner_full_name=item['name_full'],
+                                 reason='同一占位档案对应多个仓库，需人工选定，本次不自动扶正'))
+            continue
+        repository.promote_placeholder(session, by_id[item['project_id']], item['warehouse_name'])
+        promoted.append({**item, 'reason': f"已扶正：{item['old_placeholder']} → {item['warehouse_name']}"})
+    return {'promoted': promoted, 'unresolved': failures}
+
+
 def summary_text(result: dict | None) -> str:
     """把一次自动建档的摘要变成**回执里给人看的一句**（**没有动作也没有待办 ⇒ 空串**）。
 

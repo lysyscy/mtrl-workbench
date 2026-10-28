@@ -1389,7 +1389,7 @@ uiScaleSet:async t=>{
         `<b style="color:var(--wn)">${esc(String((e&&e.message)||e))}</b>`); }
     try { await reloadM02(); } catch(_){ /* 取数失败 ⇒ 日志卡里会如实说 */ }
     /* 同步「常用项目列表」会**真的建档**（`ACC-PRJ-SYNC-001`）⇒ 档案与「待人工建档」卡都得跟着刷 */
-    if(!isWh){ try{ await reloadProjects(); }catch(_){} }
+    try{ await reloadProjects(); }catch(_){}
     if(r && r.degraded) return fetchResultModal(`同步结果 · ${isWh?'仓库名单':'常用项目列表'}`,
       `⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`);
     const ct=(r&&r.counts)||{};

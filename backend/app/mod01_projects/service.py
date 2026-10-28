@@ -69,4 +69,10 @@ def warehouse_index(session):
     return R.warehouse_index(session)
 
 
-__all__ = ["all_projects", "get_project", "list_projects", "export_phids", "create_project", "set_keywords", "warehouse_index"]
+def promote_synced_placeholders(session, warehouse_rows):
+    """仓库同步后，在原档案上扶正；不创建新项目。"""
+    from app.mod01_projects import recovery
+    return recovery.promote_synced_placeholders(session, warehouse_rows)
+
+
+__all__ = ["all_projects", "get_project", "list_projects", "export_phids", "create_project", "set_keywords", "warehouse_index", "promote_synced_placeholders"]

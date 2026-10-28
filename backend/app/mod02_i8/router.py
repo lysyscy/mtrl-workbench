@@ -210,8 +210,8 @@ def sync_warehouses(
 ) -> SyncOut:
     """**同步仓库名单**（`API-05`，手动点击）—— 建档推导判据 / 占位行扶正的数据源。
 
-    ⚠️ 仓库名单**本身不落库**（它是「仓库名 ↔ 所属项目全名」的**映射**、不是档案行）——
-       它是**建档的输入**；要建档请点「**同步常用项目列表**」（`ACC-PRJ-SYNC-001`）。
+    取回名单后，在原ID上扶正唯一匹配的占位档案；不创建新项目或改已有真实仓库。
+    歧义与未建档项目逐项列出，扶正与成功记录同事务提交，失败整体回滚。
     """
     from app.core.identity import require_expected_account
 
@@ -224,10 +224,25 @@ def sync_warehouses(
             object_desc="仓库列表", success=0, fail=0, error_message=str(exc)
         ), started=t0)
         return SyncOut(table="warehouse_list", degraded=True, message=str(exc))
-    _persist_fetch(run_type="sync",
-                   payload=fetch_record_payload(object_desc="仓库列表", success=len(rows), fail=0),
-                   started=t0)
-    return SyncOut(table="warehouse_list", count=len(rows), sample=rows[:5])
+    from app.mod01_projects import service as projects
+    try:
+        with session_scope() as s:
+            outcome = projects.promote_synced_placeholders(s, rows)
+            failures = outcome['unresolved']
+            rec = create_run_record(s, run_type='sync', target='仓库列表', total=len(rows), started_at=t0)
+            finish_run_record(s, rec, status='partial' if failures else 'success',
+                              success=len(rows) - len(failures), fail=len(failures),
+                              detail={'warehouse_promotion': outcome})
+    except Exception as exc:
+        _persist_fetch(run_type='sync', payload=fetch_record_payload(
+            object_desc='仓库列表', success=0, fail=0, error_message=str(exc)), started=t0)
+        return SyncOut(table='warehouse_list', degraded=True, message=f'仓库同步扶正失败，档案未改动：{exc}')
+    promoted = outcome['promoted']
+    changes = '；'.join(item['reason'] for item in promoted)
+    return SyncOut(table='warehouse_list', count=len(rows),
+                   counts={'promote': len(promoted), 'unresolved': len(failures)},
+                   sample=[*promoted, *failures],
+                   message=f'取到仓库 {len(rows)} 条，扶正 {len(promoted)} 条，待人工 {len(failures)} 条。{changes}')
 
 
 @router.post("/sync/common-projects", response_model=SyncOut)

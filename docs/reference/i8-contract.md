@@ -104,6 +104,8 @@
 - **响应**：`{"Record": [...]}` · **字段**：`PhId` · `Whname`（仓库名）· `PhidPc_EXName`（全名）· `Nullify`（`"1"` = 作废，跳过）
 - **全名尾部编号**：`新疆慧能横窑安装项目(XMCB2025080001)` ⇒ 需剥离（正则 `\s*[（(][A-Za-z]{2,}[0-9]+[)）]$`）
 
+本地 `POST /api/m02/sync/warehouses` 取数后调用项目域的占位档案扶正，规则回[项目需求](../requirements/projects.md#名称与归属)。`count`仍为取回名单条数，`counts.promote/unresolved`为扶正/待人工数；`message`与`sample`列实际处理结果，执行记录`detail.warehouse_promotion`保同一明细。`degraded`表示取数或事务失败；已取回但需人工的情况正常返回并记partial，不报成已扶正。查询 `/api/m03/notices/warehouse-check` 仍只查名单，不触发该写入。
+
 ### `API-06` GetCommonUseList（**`phid` 的权威来源**）
 
 - **URL**：`{BASE}/SUP/RichHelp/GetCommonUseList?helpid=project_table_pchelp&ORMMode=true&skipInfoAuth=1`（**GET**）

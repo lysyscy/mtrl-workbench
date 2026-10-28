@@ -1613,7 +1613,7 @@ async function reloadM02IfOn() {
 async function m02Sync(which) {
   const isWh = which === 'warehouses';
   const name = isWh ? '仓库名单' : '常用项目列表';
-  const tail = isWh ? '只读取仓库名单；建档请同步常用项目列表'
+  const tail = isWh ? '读取仓库名单并扶正唯一匹配的占位档案；保留原ID及业务关联，歧义逐项列出；新项目建档请同步常用项目列表'
                     : '新项目建档，已有项目不重复建档；待人工项目请到项目档案处理';
   modal({
     title: `同步 ${name}`,
