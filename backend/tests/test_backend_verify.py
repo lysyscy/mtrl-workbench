@@ -11,6 +11,7 @@ TEST='postgresql+psycopg://test:private@127.0.0.1:1/business_test'
 
 @pytest.fixture
 def prepared(tmp_path,monkeypatch):
+    tmp_path=tmp_path/'带 空格的工作区';tmp_path.mkdir()
     for key in ('DATABASE_URL','TEST_DATABASE_URL','MTRL_TEST_SOURCE_ENV'):
         monkeypatch.delenv(key,raising=False)
     monkeypatch.setattr(runner,'ROOT',tmp_path)
@@ -35,12 +36,17 @@ def test_test_only_environment_and_exact_exit_after_cleanup(prepared,monkeypatch
         env=kwargs['env'];assert env['DATABASE_URL']==env['TEST_DATABASE_URL']==TEST
         assert env['MTRL_TEST_SOURCE_ENV']==str(prepared)
         assert DEV not in env.values()
+        temporary=runner.Path(command[command.index('--basetemp')+1])
+        assert temporary.is_absolute() and temporary.parent==prepared.parent/'work'
+        (temporary/'generated.txt').write_text('owned temporary output',encoding='utf-8')
         return SimpleNamespace(returncode=exit_code)
     monkeypatch.setattr(runner,'isolated_database',isolated);monkeypatch.setattr(runner.subprocess,'run',child)
     code,path=runner.verify(prepared,['tests/test_example.py'])
     report=json.loads(path.read_text(encoding='utf-8'))
     assert code==exit_code and report['pytest_returncode']==exit_code and report['cleanup_completed'] is True
     assert cleaned==[True] and DEV not in path.read_text(encoding='utf-8')
+    assert report['temporary_cleanup_completed'] is True
+    assert not runner.Path(report['pytest_basetemp']).exists()
 
 def test_empty_selection_rejected_before_database(prepared,monkeypatch):
     monkeypatch.setattr(runner,'isolated_database',lambda *a,**k:pytest.fail('No test selection must not create schema'))
@@ -55,6 +61,25 @@ def test_setup_failure_is_nonzero_and_not_reported_as_pytest_success(prepared,mo
     code,path=runner.verify(prepared,['tests/test_example.py'])
     report=json.loads(path.read_text(encoding='utf-8'))
     assert code==3 and report['pytest_returncode'] is None and report['cleanup_completed'] is None
+    assert report['temporary_cleanup_completed'] is True
+
+
+@pytest.mark.parametrize('error',[OSError('child failed'),KeyboardInterrupt()])
+def test_child_failure_still_releases_owned_temporary_directory(prepared,monkeypatch,error):
+    @contextmanager
+    def isolated(*args,**kwargs):
+        yield {'DATABASE_URL':TEST,'TEST_DATABASE_URL':TEST,'PGOPTIONS':'-c search_path=backend_verify_fixture'}
+    def child(command,**kwargs):
+        temporary=runner.Path(command[command.index('--basetemp')+1])
+        (temporary/'partial.txt').write_text('partial',encoding='utf-8')
+        raise error
+    monkeypatch.setattr(runner,'isolated_database',isolated)
+    monkeypatch.setattr(runner.subprocess,'run',child)
+    code,path=runner.verify(prepared,['tests/test_example.py'])
+    report=json.loads(path.read_text(encoding='utf-8'))
+    assert code==(130 if isinstance(error,KeyboardInterrupt) else 1)
+    assert report['pytest_returncode'] is None and report['temporary_cleanup_completed'] is True
+    assert not runner.Path(report['pytest_basetemp']).exists()
 
 
 @pytest.mark.parametrize('options',[['--maxfail','1'],['-k','fee']])

@@ -4,8 +4,10 @@ import os
 import subprocess
 import sys
 import pytest
+from types import SimpleNamespace
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from tools.dev import frontend_preview_runtime as runtime
+from tools.dev import frontend_preview_server as server
 
 
 def test_other_process_cannot_prepare_another_preview_and_crash_releases_lock(tmp_path, monkeypatch):
@@ -90,3 +92,42 @@ def test_stop_uses_verified_active_owner_even_with_pending_build(tmp_path,monkey
     monkeypatch.setattr(runtime,'listening',lambda port:False)
     runtime.request_stop()
     assert runtime.read_json(path.parent/'stop-request.json')=={'process':owner['process']}
+
+
+@pytest.mark.parametrize('actual',['12.15.0','11.25.0'])
+def test_build_uses_corepack_and_rejects_wrong_package_manager(tmp_path,monkeypatch,actual):
+    root=tmp_path/'带 空格的项目';front=root/'apps/frontend';front.mkdir(parents=True)
+    (front/'package.json').write_text('{"packageManager":"pnpm@12.15.0"}',encoding='utf-8')
+    run=root/'.artifacts/active/build/one';build=run/'work/build'
+    monkeypatch.setattr(server,'ROOT',root)
+    monkeypatch.setattr(server,'product_sources',lambda **kwargs:{'input':'stable'})
+    monkeypatch.setattr(server.shutil,'which',lambda name:'corepack' if name.startswith('corepack') else pytest.fail('Direct pnpm fallback is forbidden'))
+    commands=[]
+    def child(command,**kwargs):
+        commands.append(command)
+        if command[0]=='git':return SimpleNamespace(stdout='fixture\n')
+        assert command[:2]==['corepack','pnpm'] and kwargs['cwd']==front
+        if command[2]=='--version':
+            return subprocess.CompletedProcess(command,0,actual+'\n','')
+        if command[2]=='build':
+            build.mkdir(parents=True);(build/'index.html').write_text('complete',encoding='utf-8')
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(server.subprocess,'run',child)
+    args=SimpleNamespace(run=run,prepare_build=build)
+    if actual!='12.15.0':
+        with pytest.raises(RuntimeError,match='pnpm版本不符'):server.prepare_build(args)
+        assert len(commands)==1 and not build.exists()
+    else:
+        server.prepare_build(args)
+        assert [c[2] for c in commands if c[0]=='corepack']==['--version','typecheck','build']
+        version=runtime.read_json(run/'reports/version.json')
+        assert version['package_manager']['version']==actual
+
+
+def test_missing_corepack_cannot_fall_back_to_path_pnpm(tmp_path,monkeypatch):
+    monkeypatch.setattr(server,'ROOT',tmp_path)
+    monkeypatch.setattr(server,'product_sources',lambda **kwargs:{})
+    monkeypatch.setattr(server.shutil,'which',lambda name:None if name.startswith('corepack') else 'wrong-pnpm')
+    run=tmp_path/'.artifacts/active/build/one'
+    with pytest.raises(RuntimeError,match='未找到Corepack'):
+        server.prepare_build(SimpleNamespace(run=run,prepare_build=run/'work/build'))

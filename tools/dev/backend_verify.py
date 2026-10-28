@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / 'backend')]
@@ -65,10 +66,15 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
     report_path = output_dir('reports') / 'backend-verify.json'
     report = {'started_at': datetime.now(timezone.utc).isoformat(), 'source': source_state(),
               'pytest_args': pytest_args, 'database': database_identity(guard.test_url)[2],
-              'schema': None, 'pytest_returncode': None, 'cleanup_completed': None}
+              'schema': None, 'pytest_returncode': None, 'cleanup_completed': None,
+              'pytest_basetemp': None, 'temporary_cleanup_completed': None}
     code = 1
+    pytest_temp = None
     try:
-        with log_path.open('w', encoding='utf-8') as log:
+        with TemporaryDirectory(prefix='pytest-', dir=output_dir('work')) as temporary, \
+                log_path.open('w', encoding='utf-8') as log:
+            pytest_temp = Path(temporary).resolve()
+            report['pytest_basetemp'] = str(pytest_temp)
             with isolated_database(source_env, preview=False, log=log) as env:
                 report['schema'] = env['PGOPTIONS'].split('search_path=', 1)[1]
                 # DATABASE_URL and TEST_DATABASE_URL stay at the test target from
@@ -76,7 +82,8 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
                 env['MTRL_TEST_SOURCE_ENV'] = str(source_env)
                 env['PYTHONPATH'] = os.pathsep.join((str(ROOT), str(ROOT / 'backend')))
                 result = subprocess.run([sys.executable, '-B', '-X', 'utf8', '-m', 'pytest',
-                    *pytest_args], cwd=ROOT / 'backend', env=env, stdout=log, stderr=log)
+                    '--basetemp', str(pytest_temp), *pytest_args],
+                    cwd=ROOT / 'backend', env=env, stdout=log, stderr=log)
                 code = report['pytest_returncode'] = result.returncode
             report['cleanup_completed'] = True
     except KeyboardInterrupt:
@@ -86,6 +93,8 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
         code = getattr(exc, 'returncode', 1) or 1
         report['error'] = type(exc).__name__
     finally:
+        if pytest_temp is not None:
+            report['temporary_cleanup_completed'] = not pytest_temp.exists()
         report['returncode'] = code
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

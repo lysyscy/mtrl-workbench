@@ -28,7 +28,9 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --run 
 
 ## 启动、更新与切换
 
-先离线准备。核旧owner后正常退出，再开放新实例；统一入口在任何副本持久写入前取得排他锁及目标端口。未知来源修订、迁移分叉、数据库身份或search_path不符均拒绝，不stamp、不回退public、不改来源结构。参数中的配置只用于明确来源和专用测试目标。
+先离线准备。构建统一经Corepack调用package.json声明的pnpm，先核实际版本，再typecheck/build，版本身份随version.json记录；缺Corepack或版本不符即停止，不回落PATH中的其他pnpm。核旧owner后正常退出，再开放新实例；统一入口在任何副本持久写入前取得排他锁及目标端口。未知来源修订、迁移分叉、数据库身份或search_path不符均拒绝，不stamp、不回退public、不改来源结构。参数中的配置只用于明确来源和专用测试目标。
+
+共享检出上开始累计回归或加载前，先与相关输入主人核目标修订和产品指纹，约定需要稳定的源码及窗口；实施期间可并行，验证窗口内保持这些输入稳定。无法冻结时使用隔离检出，仍遵守唯一预览和已登记真实副本约束。沿现有任务/owner沟通，不增加登记表；独立清理与归档不占共享索引窗口。
 
 ```text
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop

@@ -37,6 +37,8 @@ def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     from app.core import preview_store
     from app.mod02_i8 import cookie_store, source_cache, wh_cache
     monkeypatch.chdir(tmp_path)
+    for name in ('LOGS_DIR', 'ARTIFACTS_DIR'):
+        monkeypatch.delenv(name, raising=False)
     settings = Settings(_env_file=None)
     root = Path(__file__).resolve().parents[2]
     assert settings.exports_path == root / 'exports'

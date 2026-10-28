@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from datetime import datetime, timezone
 from functools import lru_cache
 import hashlib
+import json
 import os
 from pathlib import Path
 import secrets
@@ -39,15 +40,29 @@ def prepare_build(args):
     if not build.is_relative_to(run / 'work') or build.exists():
         raise RuntimeError('新构建必须位于本run/work且不能覆盖已有资源')
     before = product_sources(frontend_only=True)
-    executable = shutil.which('pnpm.cmd') or shutil.which('pnpm')
+    executable = shutil.which('corepack.cmd') or shutil.which('corepack')
     if not executable:
-        raise RuntimeError('未找到项目pnpm')
-    for command, name in [([executable, 'typecheck'], 'typecheck.log'),
-                          ([executable, 'build', '--outDir', str(build)], 'build.log')]:
+        raise RuntimeError('未找到Corepack，不能核验项目声明的pnpm')
+    declaration = json.loads((ROOT / 'apps/frontend/package.json').read_text(encoding='utf-8'))['packageManager']
+    if not declaration.startswith('pnpm@'):
+        raise RuntimeError('前端packageManager须声明pnpm版本')
+    expected = declaration.removeprefix('pnpm@').split('+', 1)[0]
+    command = [executable, 'pnpm']
+    probe = subprocess.run([*command, '--version'], cwd=ROOT / 'apps/frontend',
+        capture_output=True, encoding='utf-8')
+    version_log = run / 'logs/package-manager.log'
+    version_log.parent.mkdir(parents=True, exist_ok=True)
+    version_log.write_text(probe.stdout + probe.stderr, encoding='utf-8')
+    probe.check_returncode()
+    actual = probe.stdout.strip()
+    if actual != expected:
+        raise RuntimeError(f'pnpm版本不符：声明{expected}，实际{actual}')
+    for invocation, name in [([*command, 'typecheck'], 'typecheck.log'),
+                             ([*command, 'build', '--outDir', str(build)], 'build.log')]:
         log = run / 'logs' / name
         log.parent.mkdir(parents=True, exist_ok=True)
         with log.open('w', encoding='utf-8') as stream:
-            subprocess.run(command, cwd=ROOT / 'apps/frontend', stdout=stream, stderr=stream, check=True)
+            subprocess.run(invocation, cwd=ROOT / 'apps/frontend', stdout=stream, stderr=stream, check=True)
     if before != product_sources(frontend_only=True):
         raise RuntimeError('构建期间前端输入变化，不能登记为最新构建')
     files = {p.relative_to(build).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -56,6 +71,7 @@ def prepare_build(args):
                               encoding='utf-8', check=True).stdout.strip()
     write_json(run / 'reports/version.json', dict(build_path=str(build), files=files,
         index_sha256=files['index.html'], frontend_sources=before, source_commit=revision,
+        package_manager=dict(declaration=declaration, version=actual, corepack=executable),
         diagnostic_instrumentation=False, prepared_at=datetime.now(timezone.utc).isoformat()))
 
 
