@@ -24,9 +24,13 @@
 
 迁移前的范围、决定与技术证据按需查[共同规格](../.scratch/frontend-vue-rewrite/spec.md)、[问题与确认](../.scratch/frontend-vue-rewrite/questions.md)、[前端证据](../.scratch/frontend-vue-rewrite/evidence.md)及[架构深化证据](../.scratch/frontend-architecture/evidence.md)。这些材料中的原8065版本、PID和当时阶段状态属于历史快照；当前正式运行与用户验收以本页顶部及正式master的423/424为准。
 
-## Mini App 付款原表核对台
+## Mini App 付款原表核对台（暂缓）
 
-[本地规格与七票入口](../.scratch/miniapp-payment-plan-audit/spec.md)已随本次整合保存在正式master，规格已确认、尚未实施；身份、依赖、验收和授权沿原规格与原票。核对口径归`skills/payment-plan-audit`，源码整合不代表Mini App已实施、个人技能已分发或真实拟方式回写已获授权。
+用户2026-10-28决定当前暂不推进。[规格与七票](../.scratch/miniapp-payment-plan-audit/spec.md)原地保留、尚未实施，七票统一needs-info，待用户以后重新安排；恢复时再核主前端、后端接口及宿主变化。既有`skills/payment-plan-audit`仍按自身业务用途保留。
+
+## 集合筛选研究（暂存参考）
+
+[可行性研究](../.scratch/share-feasibility/research.md)已完成官方接口与合成小样验证。用户2026-10-28确认只是了解、当前先不做，本effort原地保留，未进入实施排期。
 
 ## 机械费现有具体跟进
 

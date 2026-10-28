@@ -2,9 +2,9 @@
 
 **What to build:** 仓库里出现一个能被本机托管起来的 Mini App「付款原表核对台」：包落在 miniapps/payment-plan-audit-desk/，publish → inspect → open 三步走通，打开后是一个明暗主题齐备的空壳页；后面六张票都在这个包里做。
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** needs-info
 
 - [ ] `miniapp.init` 返回的 packagePath 落在 `miniapps/payment-plan-audit-desk/`，不另造目录；manifest 的 `agentAccess` 是字符串 `"session.run"`（不是数组）
 - [ ] `publish` → `inspect` → `open` 三步走通；`inspect` 能读到包身份与 client、node 两个非空 payload 根
@@ -21,6 +21,8 @@
 ---
 
 ## Comments
+
+**2026-10-28 · 用户暂缓。** 用户当前暂不准备实施Mini App，本票改为needs-info；规格和技术依赖原地保留，待用户以后重新安排。当前状态回[规格](../../miniapp-payment-plan-audit/spec.md)。
 
 **2026-10-22 · 建票（agent）。** 来源：用户2026-10-22确认Mini App七票及依赖｜不做会怎样：没有可托管的包，后面六张票全部无处落地｜落点：[TAIL-425](TAIL-425-MiniApp包骨架与托管通路.md)｜阶段 / 时机：随时｜**排期四问**（`§14.3` 同源）：①只做包骨架与托管通路②后续票都要一个能跑的包③独立成票才能单独验证④依赖和验收见本票
 
