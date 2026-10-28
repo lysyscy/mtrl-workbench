@@ -26,7 +26,7 @@ ops/nssm_install.ps1 注册 mtrl-workbench-server，nssm_uninstall.ps1 退出注
 
 已有库升级仅 schema 变化时走 Alembic 并核开发/测试两库结构；纯文档/模块位置变化不触发 upgrade。隔离目标和实际 engine 未核实前不执行写入检查。数据恢复另读 [数据库备份](database-backup.md)，先在隔离空库验证再考虑替换，恢复不能用全仓 hard reset。
 
-依赖声明和唯一锁是 backend/pyproject.toml、backend/uv.lock，官方 PyPI 来源沿配置；部署 `uv sync --locked --no-dev`，开发用 `uv sync --locked`/`uv run --locked`。新增依赖同时更新声明/锁，按实际风险做已有审计，不恢复旧 requirements 或 venv 私有索引副本。ops/init_db.sql 按既有用户裁定保留，不因此扩大凭据公开。
+依赖声明和唯一锁是 backend/pyproject.toml、backend/uv.lock，官方 PyPI 来源沿配置。本机主检出的 backend/.venv 同时承担服务运行与开发验证；按用户2026-10-28确认，发布及开发统一用 `uv sync --locked` 保留开发组，验证可用 `uv run --locked`。首次空库安装工具的独立运行环境仍按其参数处理。新增依赖同时更新声明/锁，按实际风险做已有审计，不恢复旧 requirements 或 venv 私有索引副本。ops/init_db.sql 按既有用户裁定保留，不因此扩大凭据公开。
 
 ## 预览副本升级与完整前端切换
 

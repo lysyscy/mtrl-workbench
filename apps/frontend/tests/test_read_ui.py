@@ -1,4 +1,5 @@
 """Real project filtering, composition and delayed-read continuity."""
+import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page, login
 
@@ -96,3 +97,70 @@ def test_notice_checkbox_tracks_selection_without_blur(server, browser_page):
     header.click()
     expect(header).not_to_be_checked(timeout=2000)
     expect(checkbox).not_to_be_checked(timeout=2000)
+
+
+@pytest.mark.parametrize('press_ms', [0, 80])
+def test_notice_amount_blur_keeps_first_mouse_selection(server, browser_page, press_ms):
+    """One physical click must survive the amount blur; never retry the click."""
+    page, _ = browser_page
+    writes = []
+    page.on('request', lambda request: writes.append(request.url) if '/api/' in request.url and request.method != 'GET' else None)
+    login(page, server)
+    page.get_by_role('link', name='付款通知书', exact=True).click()
+    grid = page.locator('.notice-grid')
+    expect(grid).to_have_attribute('data-layout-state', 'ready', timeout=30000)
+    first = grid.locator('.ag-row:not(.ag-row-pinned) [col-id="pick"] input[type="checkbox"]:not(:disabled)').first
+    expect(first).to_be_visible()
+    label = first.get_attribute('aria-label')
+    assert label and label.startswith('勾选')
+    search = page.get_by_label('通知书搜索', exact=True)
+    search.fill(label[2:])
+    checkbox = grid.get_by_label(label, exact=True).first
+    row = grid.locator('.ag-row:not(.ag-row-pinned)').filter(has=page.get_by_label(label, exact=True)).first
+    amount = row.locator('[col-id="pay_amount"] input:not(:disabled)')
+    selection = page.locator('.notice-selection > span').first
+
+    def click_once(target):
+        expect(target).to_be_visible()
+        box = target.bounding_box()
+        assert box
+        page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        page.mouse.down()
+        if press_ms:
+            page.wait_for_timeout(press_ms)
+        page.mouse.up()
+
+    amount.fill('321.09')
+    expect(amount).to_be_focused()
+    click_once(checkbox)
+    expect(selection).to_contain_text('已勾选 1 行')
+    expect(checkbox).to_be_checked()
+    expect(amount).to_have_value('321.09')
+    expect(amount).not_to_be_focused()
+    expect(page.locator('.notice-selection > span').nth(2)).to_contain_text('321.09')
+    search.fill(label[2:] + '-no-match')
+    expect(grid.get_by_role('checkbox', name='全选当前筛选结果', exact=True)).to_be_disabled()
+    expect(selection).to_contain_text('已勾选 1 行')
+    search.fill(label[2:])
+    expect(checkbox).to_be_checked()
+
+    amount.fill('123.45')
+    click_once(checkbox)
+    expect(selection).to_contain_text('已勾选 0 行')
+    expect(checkbox).not_to_be_checked()
+    expect(amount).to_have_value('123.45')
+
+    header = grid.get_by_role('checkbox', name='全选当前筛选结果', exact=True)
+    amount.fill('234.56')
+    click_once(header)
+    expect(header).to_be_checked()
+    expect(checkbox).to_be_checked()
+    expect(amount).to_have_value('234.56')
+    amount.fill('345.67')
+    click_once(header)
+    expect(header).not_to_be_checked()
+    expect(checkbox).not_to_be_checked()
+    expect(selection).to_contain_text('已勾选 0 行')
+    expect(amount).to_have_value('345.67')
+    expect(search).to_have_value(label[2:])
+    assert not writes, 'Amount and selection changes must remain local'

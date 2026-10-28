@@ -85,3 +85,45 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     expect(header(page, '.contracts-grid', 'material')).to_have_attribute('aria-sort', 'ascending')
     expect(page.get_by_role('button', name='恢复自动列宽', exact=True)).to_be_disabled()
     assert page.evaluate('key=>localStorage.getItem(key)', storage_key(me, 'contracts')) is None
+
+
+def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_page, preview_screenshot):
+    page, _ = browser_page
+    open_page(page, server, 'notices', '付款通知书')
+    grid = page.locator('.notice-grid')
+    expect(grid).to_have_attribute('data-layout-state', 'ready')
+    first = grid.locator('.ag-row:not(.ag-row-pinned) [col-id="pick"] input[type="checkbox"]:not(:disabled)').first
+    expect(first).to_be_visible()
+    label = first.get_attribute('aria-label')
+    assert label and label.startswith('勾选')
+    page.get_by_label('通知书搜索', exact=True).fill(label[2:])
+    checkbox = grid.get_by_label(label, exact=True).first
+    row = grid.locator('.ag-row:not(.ag-row-pinned)').filter(has=page.get_by_label(label, exact=True)).first
+    amount = row.locator('[col-id="pay_amount"] input:not(:disabled)')
+    manual_width = resize(page, '.notice-grid', 'project_display')
+    pay_header = header(page, '.notice-grid', 'pay_amount')
+    before = pay_header.bounding_box()['width']
+    amount.fill('9876543210.12')
+    # Editing freezes actual widths; blur must still publish the new amount minimum.
+    expect(pay_header).to_have_css('width', f'{before:g}px')
+    box = checkbox.bounding_box()
+    assert box
+    page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+    page.mouse.down()
+    page.wait_for_timeout(80)
+    page.mouse.up()
+    expect(checkbox).to_be_checked()
+    expect(amount).to_have_value('9876543210.12')
+    page.wait_for_function('width=>document.querySelector(".notice-grid .ag-header-cell[col-id=pay_amount]").getBoundingClientRect().width>width+1', arg=before)
+    expect(header(page, '.notice-grid', 'project_display')).to_have_css('width', f'{manual_width}px')
+    page.get_by_role('button', name='恢复自动列宽', exact=True).click()
+    expect(checkbox).to_be_checked()
+    expect(page.get_by_label('通知书搜索', exact=True)).to_have_value(label[2:])
+    preview_screenshot('notice-amount-selection-widths')
+
+    page.get_by_role('button', name='手动新增', exact=True).click()
+    draft_pick = grid.locator('.ag-row[row-id="-2"] [col-id="pick"]')
+    expect(draft_pick).to_have_text('草稿')
+    expect(draft_pick.locator('input[type=checkbox]')).to_have_count(0)
+    page.get_by_role('button', name='取消草稿', exact=True).click()
+    expect(draft_pick).to_have_count(0)
