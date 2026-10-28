@@ -19,7 +19,7 @@ pytest 在 backend 组件运行；选文件/节点前先看 fixture。保留真�
 
 backend/tests/conftest.py 的守卫先保留原目标、验证专用 TEST_DATABASE_URL，再装配业务，核 Settings 与缓存 engine；缺失、同库别名或无法确认时拒绝。不能回退 SQLite 或借业务库。rollback_db 接管已核测试库的会话工厂，commit 仅释放 savepoint，结束回滚外层事务；自建 engine、原生连接和另一个进程不受它保护。真实写入必须另外核目标、身份、可废弃范围和清理所有权。
 
-db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/模板回归保持。环境失败如实报告，不跳保护换绿灯。UI 模拟接口只证明交互；离线源码检查不能证明 DOM 已显示、真实数据库已写或文件实际可打开。先用可替代边界验证，再按现有授权判断是否需要现场。
+db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/模板回归保持。环境失败如实报告，不跳保护换绿灯。离线源码检查不能证明 DOM 已显示、真实数据库已写或文件实际可打开；界面诊断和回归的证据边界见下文。
 
 ## 界面和外部链路
 
@@ -40,9 +40,11 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 ## React 浏览器与预览工具验证
 
-构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；React browser_page在失败或捕获运行错误时、关闭页面前保存截图，按需验看使用preview_screenshot(label)；两者经tools/dev/frontend_capture.py写入本轮screenshots及同名JSON，记录实际预览身份、页面、视口和图像散列，身份核验失败明确标记，不冒称最新页面已验。共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`，不再运行浏览器业务seed或自造业务回包。
+构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；React browser_page在失败或捕获运行错误时、关闭页面前保存截图，按需验看使用preview_screenshot(label)；两者经tools/dev/frontend_capture.py写入本轮screenshots及同名JSON，记录实际预览身份、页面、视口和图像散列，身份核验失败明确标记，不冒称最新页面已验。共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`；上述React自动浏览器回归不运行浏览器业务seed或自造业务回包。
 
 只读代表可复用当前真实试用实例；写入代表须通过每例重新核验的disposable门，先停并保存用户试用归属，使用唯一可丢弃真实副本，完成后恢复原入口。真实数据缺场景时记录具名覆盖缺口，不构造模拟页面补成全过。按受影响页面选择现有节点；域金额组合、日期/归属和模板由相应后端/文件层承担，React保登录/权限、草稿/焦点、未知回执、实际写读和下载范围代表。
+
+一次性定位界面交互时，可用隔离的简化页面或模拟接口辅助诊断；只证明模拟条件下的界面行为，不能证明真实权限、业务写入或正式运行，也不能替代本节的真实副本回归。诊断不授权真实i8、打印或业务写入；副本不可用时记录未验入口、原因和已有证据。
 
 `backend/tests/test_frontend_preview_runtime.py`验证跨进程排他、陈旧身份、实例切换授权、HTML构建输入、旧factory退役及待用构建不阻止正常停止；不监听端口。`apps/frontend/tests/test_preview_copy.py`仅作数据库/进程内合同，显式`MTRL_PREVIEW_SOURCE_ENV`用于确认测试目标，临时数据库样例不开放HTTP。它覆盖凭据投影、内容/序列、旧结构复制后只升目标及所有既有外部动作阻断。
 
