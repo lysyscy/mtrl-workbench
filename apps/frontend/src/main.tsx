@@ -92,12 +92,12 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
   return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
-    <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
+    <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
+    <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
     </nav></aside>
     <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
-      <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
+      <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section aria-labelledby="not-found-title"><h2 id="not-found-title">没有找到这个页面</h2><NavLink to="/">返回首页</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;

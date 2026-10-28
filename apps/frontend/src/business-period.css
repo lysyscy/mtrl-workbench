@@ -12,4 +12,4 @@
 
 .business-period-panel table{table-layout:fixed;width:100%;font-size:inherit}.business-period-panel td{padding:calc(2px * var(--fscale)) 0;min-width:0!important;max-width:none;border:0;vertical-align:middle;white-space:nowrap}.business-period-panel tbody tr:hover{background:transparent}
 
-.business-period-panel .business-period-month.ant-btn{width:calc(100% - 8px * var(--fscale));height:calc(36px * var(--fscale));padding:0;border:0;box-shadow:none;font-size:inherit}.business-period-panel .business-period-month.is-selected{background:var(--pri);color:var(--on)}.business-period-month:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.business-period-panel .business-period-month.ant-btn{width:calc(100% - 8px * var(--fscale));height:calc(36px * var(--fscale));padding:0;border:0;box-shadow:none;font-size:calc(14px * var(--fscale))}.business-period-panel .business-period-month.is-selected{background:var(--pri);color:var(--on)}.business-period-month:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
