@@ -14,23 +14,21 @@ from pathlib import Path
 
 
 from tests.shell_src import api_entry, func_body
+from tests.ui_helpers import ui_page  # noqa: F401
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
 #    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · `API` 条目 ⇒ `api_entry`）。⛔ 别写回来。
 
 
-def test_新小微那块有查名单入口且先二次确认():
-    """⭐ 用户原话「兜底前…应该有去仓库跑了一环」⇒ 弹窗的「新小微」那块必须有这一环，
-    且因为**会登录 i8 并强踢**（`D9`）⇒ 先弹二次确认、确认之后才发请求。"""
+def test_新小微直接查名单并允许强踢():
+    """界面主动查询允许强踢，保留建档前核对，不再另问强踢授权。"""
     dlg = func_body("openOwnDialog")
     assert 'data-act="ownWhCheck"' in dlg, "没有「先查 i8 仓库名单」这个入口"
     assert "id=\"ownWhRes_" in dlg, "没有就地显示结果的位置"
     check = func_body("ownWhCheck")
-    assert "会登录 i8，可能顶掉该账号在线会话" in check and 'data-act="ownWhOk"' in check, "要先二次确认、讲清会顶号"
-    assert "只查询、不写入" in check, "必须说明查询不写入的范围"
-    assert "API.whCheck(" not in check, "打开确认窗不得提前登录查询"
+    assert 'ownWhOk(i)' in check and 'modal(' not in check
     ok = func_body("ownWhOk")
-    assert "allow_kick: true" in ok and "API.whCheck(" in ok, "确认之后才发请求（⛔ 别在按钮点下就发）"
+    assert "allow_kick: true" in ok and "API.whCheck(" in ok
 
 
 def test_没查过不许建_没命中要人确认():
@@ -57,11 +55,33 @@ def test_四态文案分开且没取到不等于没有():
 
 def test_反向_强踢授权只有一处且壳里不自己判定():
     """⛔ 两条反向：
-    ① `allow_kick: true` **只有一处**（确认之后的那个函数里）—— 别在别处悄悄打开；
+    ① `allow_kick: true` 由主动查询的调用方传入；
     ② 壳里**不许**自己比对名单（那是 `i8_warehouse_lookup` 的活）。"""
     ok = func_body("ownWhOk")
-    assert ok.count("allow_kick: true") == 1, "强踢授权只允许出现在确认出口那一处"
+    assert ok.count("allow_kick: true") == 1
     api = api_entry("whCheck")
     assert "allow_kick" not in api, "适配层⛔ 不许自己写死 allow_kick（要向调用方拿）"
     for forbidden in ("owner_full_name", "warehouse_rows"):
         assert forbidden not in ok, f"壳里⛔ 不许自己解析 i8 名单（发现有 {forbidden}）"
+
+
+def test_query_runs_on_click_and_keeps_separate_archive_confirmation(ui_page):
+    p = ui_page
+    p.evaluate('''async () => {
+      window.warehouseQueries=[]; window.archiveWrites=[];
+      API.unresolved=async()=>({items:[{project_name:'壳全名',doc_name:'测试材料',kind:'needs_keyword',shell_id:2,candidates:[]}]});
+      API.whCheck=async body=>{warehouseQueries.push(body);return {found:false,degraded:false,owners:[],total:0,message:'名单里没有'};};
+      API.assignOwnership=async body=>{archiveWrites.push(body);return {ok:false,message:'隔离写出口'};};
+      await openOwnDialog();
+    }''')
+    p.locator('#ownNewName_0').fill('测试新仓库')
+    p.locator('#ownNewKw_0').fill('测试')
+    p.get_by_role('button', name='① 先查 i8 仓库名单', exact=True).click()
+    p.wait_for_function('warehouseQueries.length===1 && !!document.querySelector("#ownWhForce_0")')
+    assert p.evaluate('warehouseQueries[0]') == {'warehouse_name': '测试新仓库', 'allow_kick': True}
+    assert p.locator('#ownNewName_0').is_visible()
+    p.get_by_role('button', name='建档并归集', exact=True).click()
+    assert p.evaluate('archiveWrites.length') == 0
+    p.locator('#ownWhForce_0').check()
+    p.get_by_role('button', name='建档并归集', exact=True).click()
+    p.wait_for_function('archiveWrites.length===1')

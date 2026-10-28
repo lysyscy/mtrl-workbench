@@ -509,7 +509,7 @@ async function openOwnDialog() {
           <span id="ownWhRes_${i}" class="sm" style="margin-left:calc(8px * var(--fscale))"></span>
         </div>
         <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">⭐ <b>建档前必须先跑这一环</b>（用户 2026-09-18 口述裁定）——
-          不查就建＝凭猜填仓库名，会留下与 i8 不符的<b>假档案行</b>。⚠️ 查名单要登录 i8，<b>会顶号</b>，故要二次确认。</div>
+          不查就建＝凭猜填仓库名，会留下与 i8 不符的<b>假档案行</b>。查询可能重新登录 i8，并使该账号其他会话下线；只查名单，不建档。</div>
         <div style="margin-top:calc(8px * var(--fscale))"><button class="btn" data-act="ownAssign" data-i="${i}" data-pid="__new">建档并归集</button></div>
       </div>
     </div>`;
@@ -538,20 +538,12 @@ async function ownWhCheck(i) {
   const el = $('#ownNewName_' + i);
   const name = String((el && el.value) || '').trim();
   if (!name) return toast('先填<b>仓库名</b>，再查 i8 名单');
-  /* ⚠️ `D9`：查名单**要登录 i8**（可能**强踢**在线用户）⇒ 先二次确认，确认之后才发请求。 */
-  modal({
-    title: `查 i8 仓库名单 · ${esc(name)}`,
-    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))">会登录 i8，可能顶掉该账号在线会话；请避开同事使用时段。</div>
-      <div class="tip" style="margin:0">查询「${esc(name)}」及所属项目，只查询、不写入。</div>`,
-    footer: `<button class="btn" data-act="closeModal">取消</button>
-      <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
-  });
+  return ownWhOk(i);
 }
 
 async function ownWhOk(i) {
   const el = $('#ownNewName_' + i);
   const name = String((el && el.value) || '').trim();
-  closeModal();
   let r = null;
   try {
     r = await API.whCheck({warehouse_name: name, allow_kick: true});
@@ -1614,7 +1606,7 @@ async function reloadM02IfOn() {
 
 /* ⭐ 两个同步（`API-05` / `API-06`）的**唯一入口** —— 壳里三处入口共用它：
    `m02` 表里 API-05/06 两行的「触发」＋ `m01` 页首那两个「同步…」按钮。
-   ⚠️ **D9：会强踢该账号的在线用户** ⇒ ① 先弹**二次确认**（讲清顶号与时段），⛔ 不确认不发请求；
+   界面主动同步允许强踢 ⇒ ① 先确认同步的业务范围并提示会话下线；
       ② 失败 / 降级 ⇒ 后端那句中文说明**原样**转给用户；③ 成功 ⇒ 刷新执行记录（回显与日志跟着变），
       同步**常用项目列表**还会**真的建档** ⇒ 顺手刷新档案与「待人工建档」卡（`TAIL-45`）。
    签发给谁：本函数的两种入参就是那两个端点（`warehouses` / `common-projects`）。 */

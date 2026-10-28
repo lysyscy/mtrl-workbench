@@ -64,8 +64,7 @@ class ClearAdjustRequest(BaseModel):
 class FetchRequest(BaseModel):
     """按月抓取（`API-03`）。
 
-    ⚠️ `confirm` = **用户在壳的抓取弹窗里点过「按 X 抓取」**（D9 二次确认）。
-    ⛔ 缺它一律拒（400）—— 防止任何"直接打进来"的静默抓取（**会顶号**）。
+    `confirm` = 用户已在抓取弹窗确认核算月与写入范围；省略拒绝，避免静默写入。
     """
 
     month: str = ""
@@ -171,7 +170,7 @@ def api_adjust_clear(req: ClearAdjustRequest) -> dict:
 def api_fetch(req: FetchRequest) -> dict:
     """**按月抓取**库存单据明细（`API-03`）—— 人工触发。
 
-    ⚠️ **会登录 i8 并强踢在线用户**（D9）：`confirm` 必须为真（= 用户已在壳的弹窗里确认过）。
+    `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
     ⚠️ 失败**显式报错待人处理**（原因 + 请稍后重试；⛔ 无手动兜底 —— 2026-09-22 用户裁定），**绝不自动重试登录**（D9）。
     """
     from app.mod08_inv import fetch_service as FS
@@ -193,7 +192,7 @@ def api_export_inventory(
 
     - 取数 = **HTTP 现导**（`report_export.export`，`spec_key='inv'`）；期间缺省 = 本页默认月（§9.2）。
     - ⭐ 2026-09-21 用户裁定「抓取导出分开」：src = **最近一次抓取的源文件缓存**（`source_cache`），
-      **导出不碰 i8** ⇒ 不再有 `allow_kick`（D9 的二次确认都在「抓取」侧）。缺缓存 ⇒ 中文报「请先抓取」。
+      **导出不碰 i8** ⇒ 不需要 `allow_kick`。缺缓存 ⇒ 中文报「请先抓取」。
     - ⚠️ 三种失败（模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ **不产出文件**，
        改成 **JSON 200 ＋ `ok:false` ＋ 中文原因** —— 壳侧据 `content-type` 分流：
        `application/json` ⇒ 弹原因；否则当文件下载。

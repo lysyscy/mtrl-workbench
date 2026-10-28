@@ -210,7 +210,7 @@ def warehouse_check(
 
     ⚠️ **只读**：不落库、不建档（名单本身也不留档 —— 与 `POST /api/m02/sync/warehouses` 同一口径）；
        判定走 `mod01_projects.domain.i8_warehouse_lookup`（**唯一出口**），本层只组装回执。
-    ⚠️ 取名单**要登录 i8**、可能**强踢**在线用户 ⇒ `allow_kick` 默认 `False`，壳侧必须**二次确认之后**才传 `True`（`D9`）。
+    `allow_kick` 默认 `False`，界面主动查询传 `True`，无需另行确认强踢。
     ⚠️ **禁静默**：取不到 ⇒ `degraded=True` ＋ 中文说明，⛔ **不许把"没取到"说成"名单里没有"**（那是两回事）。
     """
     name = str(req.warehouse_name or "").strip()

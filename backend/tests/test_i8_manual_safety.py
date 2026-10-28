@@ -85,7 +85,7 @@ def test_stale_account_is_rejected_before_any_execution(monkeypatch):
         fetch_notices(FetchRequest(year_month='2026'), executor=forbidden)
 
 
-def test_online_conflict_never_kicks_without_explicit_confirmation(monkeypatch):
+def test_generic_client_default_stays_closed_and_explicit_opt_in_kicks(monkeypatch):
     calls, cookies = [], []
     monkeypatch.setattr(clients.I8Client, '_creds', lambda self: ('synthetic', 'synthetic-password'))
     def login(**kwargs):

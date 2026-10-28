@@ -246,7 +246,7 @@ class MoveRequest(BaseModel):
 
 
 class FetchRequest(BaseModel):
-    """按月抓取 —— ⚠️ `confirm` 缺省为假（**防"直接打进来"的静默抓取，会顶号**）。"""
+    """按月抓取；`confirm` 缺省为假，保留核算月与写入范围确认。"""
 
     month: str = ""
     confirm: bool = False
@@ -311,7 +311,7 @@ def api_big_move(req: MoveRequest) -> dict:
 def api_fetch(req: FetchRequest) -> dict:
     """**按月抓取**收发结存（`API-02`）—— 人工触发。
 
-    ⚠️ **会登录 i8 并强踢在线用户**（D9）：`confirm` 必须为真（= 用户已在壳的弹窗里确认过）。
+    `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
     ⚠️ 失败**降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
     """
     from app.mod07_setl import fetch_service as FS

@@ -137,8 +137,8 @@ def preview_payload(lists, projects, previous=None):
             'scope': '第四工程公司权限内全部项目', 'counts': {k: v['total'] for k, v in lists.items()}}
 
 
-def read_preview(projects, previous=None):
-    client = I8Client(allow_kick=False)
+def read_preview(projects, previous=None, *, allow_kick=False):
+    client = I8Client(allow_kick=allow_kick)
     try:
         return preview_payload(fetch_lists(client), projects, previous)
     finally:

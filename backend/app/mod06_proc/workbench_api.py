@@ -66,6 +66,9 @@ def export_report(ym: str = '', projects: str = '', snapshot_token: str = ''):
 def perform_action(name: str, payload: dict, request: Request):
     if name == 'i8-fetch':
         from app.mod06_proc.workbench_i8 import read_preview
+        allow_kick = payload.get('allow_kick', False)
+        if not isinstance(allow_kick, bool):
+            raise MustReportError('允许强踢须为布尔值')
         started, operator = datetime.now(), current_operator()
         try:
             with session_scope() as session:
@@ -77,7 +80,7 @@ def perform_action(name: str, payload: dict, request: Request):
                         for row in rows if row.get('projectId')})
                     previous[snapshot['warehouse']] = ids
                 projects = project_service.all_projects(session)
-            incoming = read_preview(projects, previous)
+            incoming = read_preview(projects, previous, allow_kick=allow_kick)
             incoming['request_id'] = payload.get('request_id', '')
             with session_scope() as session:
                 result = workbench.action(session, 'i8-preview', incoming, operator)

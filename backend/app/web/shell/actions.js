@@ -661,9 +661,8 @@ const ACT={
     界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
     ⚠️ `fetchDlg` 的 **nt 分支文案一字未改**（既有断言钉着它）；wh / iv 两个分支另写。 */
  ownAssign:t=>ownAssignSubmit(Number(t.dataset.i), t.dataset.pid),
- /* `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（问 → 二次确认 → 就地显示结果）；判定全在后端 */
+ /* `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（主动查询 → 就地显示结果，建档确认另保留）；判定全在后端 */
  ownWhCheck:t=>ownWhCheck(Number(t.dataset.i)),
- ownWhOk:t=>ownWhOk(Number(t.dataset.i)),
  fetchNt:()=>{ fetchKind='nt'; return ACT.fetchDlg(); },
  fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm; return ACT.fetchDlg(); },   /* 默认 = 本页「核算年月」当前所选 */
  fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm; return ACT.fetchDlg(); },   /* 同上 */
@@ -2176,11 +2175,11 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    modal({title:'一键关联集采合同',body:'<div class="tip">正在读取采购合同应付并核对合同来源…</div>'});
    const loading=lastModal;
    try{
-     const data=await API.m11AutoLinkPreview({notice_ids:ids});
+     const data=await API.m11AutoLinkPreview({notice_ids:ids,allow_kick:true});
      if(lastModal!==loading) return;
      if(!data||!data.ok) throw errHuman(data&&data.message||'采购合同应付未能读取');
      const selections=data.rows.filter(r=>r.contract_id!=null);
-     modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled title="暂无可关联的通知书，请查看逐行处理结果"'}>关联这 ${selections.length} 条</button>`});
+     modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections,allow_kick:true},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。确认时可能重新登录 i8，并使该账号其他会话下线。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled title="暂无可关联的通知书，请查看逐行处理结果"'}>关联这 ${selections.length} 条</button>`});
    }catch(e){if(lastModal===loading) modal({title:'应付读取失败',body:`<div class="tip wn">${esc(String(e.message||e))}</div>`,footer:'<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="jcAutoLink">重试</button>'});}
  },
  jcAutoLinkOk:async t=>{

@@ -234,7 +234,7 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
 
     class Client:
         def __init__(self, *, allow_kick):
-            assert not allow_kick
+            assert allow_kick
             assert api.tracker['active'] == 0
             calls.append('create')
 
@@ -253,7 +253,7 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
 
     monkeypatch.setattr(workbench_i8, 'I8Client', Client)
     monkeypatch.setattr(workbench_i8, 'fetch_lists', fetch_lists)
-    response = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'network-boundary'})
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'network-boundary', 'allow_kick': True})
     assert response.status_code == 200
     body = response.json()
     assert body['counts'] == {'usage': 1, 'project': 0, 'team': 0}
@@ -274,7 +274,7 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
 
 
 def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
-    def fail_read(projects, previous):
+    def fail_read(projects, previous, **kw):
         assert api.tracker['active'] == 0
         raise MustReportError('读取失败，旧值保持')
 
@@ -332,7 +332,7 @@ def test_i8_preview_failure_rolls_back_business_but_keeps_execution_record(api, 
     incoming = {'projects': [{'warehouse': '甲', 'projectId': 'i8-a',
         'sources': {'usage': [{'id': 'u', 'projectId': 'i8-a', 'amount': '1.00'}], 'project': [], 'team': []},
         'complete': {'usage': True, 'project': True, 'team': True}}], 'counts': {'usage': 1, 'project': 0, 'team': 0}}
-    monkeypatch.setattr(workbench_i8, 'read_preview', lambda projects, previous: deepcopy(incoming))
+    monkeypatch.setattr(workbench_i8, 'read_preview', lambda projects, previous, **kw: deepcopy(incoming))
     action = workbench.action
 
     def fail_after_preview(session, name, payload, operator=''):

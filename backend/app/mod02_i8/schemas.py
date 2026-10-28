@@ -19,7 +19,7 @@ class FetchPlanOut(BaseModel):
 
 class FetchPreviewRequest(BaseModel):
     year_month: str
-    allow_kick: bool = Field(False, description="⚠️ 强制踢掉该账号其他在线会话，须用户显式授权")
+    allow_kick: bool = Field(False, description="界面主动操作传 true；省略时不强踢在线会话")
 
 
 class FetchPreviewOut(BaseModel):
@@ -34,7 +34,7 @@ class FetchPreviewOut(BaseModel):
 
 class FetchRunRequest(BaseModel):
     year_month: str
-    allow_kick: bool = Field(False, description="⚠️ 登录含强踢（KillOnlineUser），须显式授权")
+    allow_kick: bool = Field(False, description="界面主动操作传 true；省略时不强踢在线会话")
 
 
 class FetchRunOut(BaseModel):

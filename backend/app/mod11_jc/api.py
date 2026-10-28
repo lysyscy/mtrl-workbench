@@ -174,11 +174,11 @@ def api_fetch(payload: FetchIn) -> dict:
     ⭐ **增量**：`since` 不传 ⇒ 后端用 `default_since`（库里最大合同日期 **− 3 天**）
        ⇒ 日常抓取 **1~5 秒**（实测：无过滤 40.4s vs 带日期 0.5~1.0s）；
        库空（首次）⇒ 自动全量（~40 秒）＋ 逐条补材料名（就这一次）。
-    ⚠️ 抓取**会顶号**（`D9`：登录 i8 会踢掉该账号其它在线会话）⇒ ⛔ 缺 `confirm` 一律拒（防静默抓取）。
+    `confirm` 表示用户确认合同抓取与写入范围；登录按界面主动操作策略允许强踢。
     """
     if not payload.confirm:
         return {"ok": False, "kind": "err",
-                "message": "抓取前必须二次确认（这一步会登录 i8，可能顶掉该账号的其它会话）"}
+                "message": "请先确认采购合同抓取范围，再执行抓取"}
     with session_scope() as s:
         since = payload.since if payload.since is not None else FS.default_since(s)
         return FS.run_fetch(s, confirmed=True, since=str(since or ""))
@@ -303,12 +303,13 @@ class AutoLinkSelection(BaseModel):
 class AutoLinkIn(BaseModel):
     notice_ids: list[int] = Field(min_length=1, max_length=5000)
     selections: list[AutoLinkSelection] = Field(default_factory=list, max_length=5000)
+    allow_kick: bool = Field(False, description='界面主动读取传 true；省略时不强踢在线会话')
 
 
-def _read_payables():
+def _read_payables(*, allow_kick=False):
     from app.mod02_i8.client import I8Client
     from app.mod02_i8.payable_source import fetch_payables
-    client = I8Client(allow_kick=False)
+    client = I8Client(allow_kick=allow_kick)
     try:
         return fetch_payables(client)
     finally:
@@ -317,7 +318,7 @@ def _read_payables():
 
 @router.post('/api/m11/auto-link-preview')
 def api_auto_link_preview(payload: AutoLinkIn) -> dict:
-    payables = _read_payables()
+    payables = _read_payables(allow_kick=payload.allow_kick)
     with session_scope() as s:
         return SV.auto_link_plan(s, payload.notice_ids, payables)
 
@@ -326,7 +327,7 @@ def api_auto_link_preview(payload: AutoLinkIn) -> dict:
 def api_auto_link(payload: AutoLinkIn) -> dict:
     if not payload.selections or {r.notice_id for r in payload.selections} - set(payload.notice_ids):
         return {'ok': False, 'message': '请先预览本次可关联通知书'}
-    payables = _read_payables()
+    payables = _read_payables(allow_kick=payload.allow_kick)
     with session_scope() as s:
         return SV.act_auto_link(s, [r.model_dump() for r in payload.selections], payables)
 

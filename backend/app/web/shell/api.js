@@ -178,8 +178,7 @@ const API = {
 
   /* ---- MOD-02 · i8 接入层（`TAIL-27`）----
      ⭐ 「抓取结果回显」与「抓取任务日志」的**唯一数据源 = 执行记录**（原先两张卡是模拟值/硬编码行）。
-     ⚠️ 两个同步都会**登录 i8 并强踢该账号在线用户**（D9）⇒ `allow_kick=true` 只允许在
-        界面**二次确认**之后传 —— 下面 `m02Sync()` 里那个弹窗就是那道闸（⛔ 不确认就不发请求）。 */
+     界面主动操作显式允许强踢；业务范围确认沿所属弹窗。 */
   m02Records: (limit = 50) => API.get(`/api/m02/fetch/records?limit=${limit}`),
   m02SyncWh: () => API.post('/api/m02/sync/warehouses?allow_kick=true', {}),
   m02SyncPj: () => API.post('/api/m02/sync/common-projects?allow_kick=true', {}),
@@ -207,7 +206,7 @@ const API = {
   jcUnsettled: () => API.get('/api/m11/unsettled'),
   assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
   /* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（`API-05`）—— ⚠️ 会登录 i8、可能**强踢**（`D9`）
-     ⇒ `allow_kick=true` 只允许在**二次确认之后**传（`ownWhCheck` 那个弹窗就是那道闸）。只查**不落库**。 */
+     界面主动操作显式允许强踢；业务范围确认沿所属弹窗。 */
   whCheck: body => API.post('/api/m03/notices/warehouse-check', body),
   /* ⭐ `TAIL-46`：批量打印 / 只导出 PDF / 打印机设置（`MOD-03` 三条**真出口**）——
      这三件事原先**只有旧页 `mod03_notice/static/m03.html` 能做**；接上之后才谈删旧页（§19 批 4.5）。

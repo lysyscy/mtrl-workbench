@@ -78,7 +78,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, operat
     try {await operate(async()=>{
       setFeedback('');
       try {
-        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:crypto.randomUUID()})}));
+        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:crypto.randomUUID(),allow_kick:true})}));
         const refreshed=await refresh();
         if(!mounted.current||currentScope.current!==scope)return;
         if(!refreshed){setFeedback('取数预览已取得，重新读取失败；请重新读取后再抓取。');return;}

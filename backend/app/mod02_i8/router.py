@@ -58,7 +58,7 @@ def get_notice_rows() -> Callable[[str, bool], list[dict]]:
 
 
 def get_warehouse_rows() -> Callable[..., list[dict]]:
-    """仓库名单取数（`API-05`）。`allow_kick` 默认 `False`（**D9：强踢必须显式授权**）。
+    """仓库名单取数（`API-05`）。通用 `allow_kick` 默认 `False`，界面主动操作显式传 `True`。
 
     ⭐ 传入 `client` ⇒ **复用该会话**（不新建、不关闭）：让「抓一次」只登录一次
        （抓取链路要顺带取名单来建档，见 `TAIL-29`-③；⛔ 否则一次抓取会登录 3 次 = 顶号 3 次）。
@@ -181,7 +181,7 @@ def fetch_run(
 ) -> FetchRunOut:
     """**手动触发**抓取（001-05）；每次抓取**留一条执行记录**（001-07）。
 
-    ⚠️ `allow_kick=True` 会强制踢掉该账号其他在线会话 —— 须用户在界面显式确认。
+    `allow_kick=True` 允许登录时退出该账号其他在线会话，界面主动操作显式传入。
     ⚠️ 失败**不自动重试登录**（D9）；接口不可用 ⇒ **降级为手动 Excel 导入并显式说明**（001-06）。
     """
     target = f"付款通知书 {req.year_month}"
@@ -204,7 +204,7 @@ def fetch_run(
 
 @router.post("/sync/warehouses", response_model=SyncOut)
 def sync_warehouses(
-    allow_kick: bool = Query(False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢）"),
+    allow_kick: bool = Query(False, description="界面主动同步传 true；省略时不强踢在线会话"),
     rows_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
     expected_account: str | None = Query(None),
 ) -> SyncOut:
@@ -232,7 +232,7 @@ def sync_warehouses(
 
 @router.post("/sync/common-projects", response_model=SyncOut)
 def sync_common_projects(
-    allow_kick: bool = Query(False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢）"),
+    allow_kick: bool = Query(False, description="界面主动同步传 true；省略时不强踢在线会话"),
     rows_loader: Callable[..., list[dict]] = Depends(get_common_project_rows),
     wh_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
     expected_account: str | None = Query(None),
@@ -244,7 +244,7 @@ def sync_common_projects(
     需要人定的**显式列出、不自动建**（多仓库 / 壳下具体小微 / 缺 phid）—— **禁静默**。
 
     ⚠️ 仓库名单（`API-05`）**与本次同步一起取**（它是"仓库名 ↔ 所属项目全名"的映射，建档要用）。
-    ⚠️ `allow_kick=True` 会**踢掉该账号其他在线会话**（D9）⇒ 只能由界面二次确认后传。
+    `allow_kick=True` 允许登录时退出该账号其他在线会话，界面主动同步显式传入。
     """
     from app.core.identity import require_expected_account
     from app.mod01_projects.sync_service import sync_and_archive      # noqa: PLC0415

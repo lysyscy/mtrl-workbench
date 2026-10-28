@@ -51,7 +51,7 @@ class FetchRequest(BaseModel):
     expected_account: str | None = None
     allow_kick: bool = Field(
         False,
-        description="是否允许强踢（KillOnlineUser）。⚠️ 登录会挤掉该账号其他在线会话，须用户显式授权",
+        description="界面主动抓取传 true；省略时不强踢在线会话",
     )
 
 
@@ -118,8 +118,7 @@ class AssignResponse(BaseModel):
 class WarehouseCheckRequest(BaseModel):
     """**兜底前先跑一次 i8 仓库名单**（`TAIL-39`）。
 
-    ⚠️ `allow_kick` 默认 `False`（`D9`）：取名单**要登录 i8**、可能**强踢**在线用户
-       ⇒ 壳侧**必须在二次确认之后**才允许传 `True`。
+    `allow_kick` 默认 `False`；界面主动查询传 `True`，允许登录时退出该账号其他在线会话。
     """
 
     warehouse_name: str = ""
