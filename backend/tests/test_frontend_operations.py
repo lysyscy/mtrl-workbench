@@ -90,7 +90,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_publish_checks_actual_resources_and_keeps_previous_release(self):
         result = self.apply()
-        target = self.root / 'var/frontend/releases' / ('b' * 12)
+        target = (self.root / 'var/frontend/releases' / ('b' * 12)).resolve()
         self.assertEqual(result['status'], 'loaded')
         self.assertEqual(result['assets_verified'], 1)
         self.assertEqual(self.service.calls, ['stop', 'start'])
@@ -102,6 +102,11 @@ class ReleaseTests(unittest.TestCase):
     def test_restart_keeps_exact_configuration(self):
         self.assertEqual(self.apply(candidate=False)['status'], 'loaded')
         self.assertEqual((self.root / '.env').read_bytes(), self.original)
+
+    def test_canonical_paths_keep_the_release_boundary(self):
+        self.assertEqual(release.no_links(self.old, self.root.resolve()), self.old.resolve())
+        with self.assertRaisesRegex(ValueError, '路径不属于指定目录'):
+            release.no_links(self.candidate, self.root / 'var/frontend/releases')
 
     def test_corrupt_build_is_rejected_before_stopping(self):
         (self.candidate / 'assets/app.js').write_text('corrupted', encoding='utf-8')

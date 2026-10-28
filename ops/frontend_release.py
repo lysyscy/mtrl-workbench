@@ -57,15 +57,16 @@ def git(*arguments):
 
 
 def no_links(path, root):
-    path, root = Path(path).absolute(), Path(root).resolve()
-    if not path.is_relative_to(root):
-        raise ValueError('路径不属于指定目录')
+    path, root = Path(path).absolute(), Path(root).absolute()
     for item in [path, *path.parents]:
         if item.is_symlink() or item.is_junction():
             raise ValueError('发布路径含链接')
         if item == root:
             break
-    return path.resolve()
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        raise ValueError('路径不属于指定目录')
+    return resolved
 
 
 def validate_release(directory):
