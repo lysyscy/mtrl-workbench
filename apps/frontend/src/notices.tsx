@@ -125,7 +125,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   useEffect(() => {
     const grid = api.current, root = gridRoot.current; if (!active || !grid || !root) return;
     const refresh = () => { if (!grid.isDestroyed()) { grid.refreshCells({force: true}); grid.refreshHeader(); } };
-    const editor = root.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea') ? document.activeElement : null;
+    const editor = root.contains(document.activeElement) && document.activeElement?.matches('input:not([type="checkbox"]),select,textarea') ? document.activeElement : null;
     if (!editor) { refresh(); return; }
     // The current action guard remains authoritative while this renderer retains
     // its local input. Rebuilding any part of its row can replace the editor.

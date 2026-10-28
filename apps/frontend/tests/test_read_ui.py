@@ -66,3 +66,33 @@ def test_notice_reread_retains_active_payment_draft(server, browser_page):
         page.unroute('**/api/m03/notice-list?*')
     page.wait_for_load_state('networkidle')
     expect(field).to_have_value('321.09');expect(field).to_be_focused()
+
+
+def test_notice_checkbox_tracks_selection_without_blur(server, browser_page):
+    """Selection and its visible checkbox must agree before focus leaves the grid."""
+    page, _ = browser_page
+    login(page, server)
+    page.get_by_role('link', name='付款通知书', exact=True).click()
+    grid = page.locator('.notice-grid')
+    expect(grid).to_have_attribute('aria-busy', 'false', timeout=30000)
+    first = grid.locator('.ag-row:not(.ag-row-pinned) [col-id="pick"] input[type="checkbox"]:not(:disabled)').first
+    expect(first).to_be_visible()
+    label = first.get_attribute('aria-label')
+    assert label and label.startswith('勾选')
+    page.get_by_label('通知书搜索', exact=True).fill(label[2:])
+    checkbox = grid.get_by_label(label, exact=True).first
+    selection = page.locator('.notice-selection > span').first
+    expect(checkbox).not_to_be_checked()
+    checkbox.click()
+    expect(selection).to_contain_text('已勾选 1 行')
+    expect(checkbox).to_be_checked(timeout=2000)
+    checkbox.click()
+    expect(selection).to_contain_text('已勾选 0 行')
+    expect(checkbox).not_to_be_checked(timeout=2000)
+    header = grid.get_by_role('checkbox', name='全选当前筛选结果', exact=True)
+    header.click()
+    expect(header).to_be_checked(timeout=2000)
+    expect(checkbox).to_be_checked(timeout=2000)
+    header.click()
+    expect(header).not_to_be_checked(timeout=2000)
+    expect(checkbox).not_to_be_checked(timeout=2000)
