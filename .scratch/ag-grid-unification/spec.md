@@ -26,8 +26,12 @@
 
 完成条件：34处全部落地、动态入口核清、原生业务table/BoundedTable消费者清零后删共享旧根及无用样式、模板及后端业务口径不变；累计双轴独立并行审查关闭；文档与资源收尾；提交推送核远端SHA；完整/app构建加载并核资源/服务。测试、人工验看和加载分别记录。
 
-当前：四类代表通过，B1—B6共34处实现已完成，原生业务table/BoundedTable消费者已清零并移除旧根及151条失效HTML选择器；正在完成累计回归、独立实看与最终双轴审查，尚未提交或正式加载。证据：20261028-pilot的pilot-small-10（双侧小表宽度同步/重置）、pilot-detail-08（草稿/增删/净额/完整合计）、pilot-gates-04中的项目全局拖排及年度年月/快照两项；关联状态及四页原模板下载在pilot-gates-02通过。代表中的失败均已定位到发布刷新、空表/最小高度、测试行ID编码或小表配置。累计最终还会重验共享影响。
+四类代表通过后，B1—B6共34处实现已完成，原生业务table/BoundedTable消费者已清零并移除旧根及151条失效HTML选择器。代表证据：20261028-pilot的pilot-small-10（双侧小表宽度同步/重置）、pilot-detail-08（草稿/增删/净额/完整合计）、pilot-gates-04中的项目全局拖排及年度年月/快照两项；关联状态及四页原模板下载在pilot-gates-02通过。
 
 已发现的大候选集问题：全部候选可产生77张发票小表，一次全部挂载开销过大；B3必须以成熟列表虚拟化承载原候选卡片，保完整候选集合及选择，不自写虚拟器、不增加分页前置。轻量小表和同快照纯报表采用原生行/表头自适应，复杂编辑工作区继续复用PreparedGrid，业务输入及保存仍归原主人。
 
-2026-10-28候选验收：累计105个唯一浏览器用例覆盖通过（cumulative-browser-23、report-final-25、review-fixes-26、review-controls-26按受影响范围补验，索引acceptance-coverage.json）；11项原前端单测的被测API/队列未改，复用其通过证据；锁定类型检查及/preview与/app完整构建通过。独立Standards/Spec累计审查的2类P2已在build-26关闭：三处焦点内选择的旧闭包改为稳定renderer+业务Context，N12同类状态一起核清；项目导出改由AG公开遍历取得全部已排序ID。真实副本增加不离焦分类与多列排序实际导出保护；i8/冲突选择的独立受控诊断仅证实本地交互，未真实外呼/写入。原生表根清零，当前等待提交推送、正式加载及资源退出。
+2026-10-28最终验收：累计105个唯一浏览器用例覆盖通过（cumulative-browser-23、report-final-25、review-fixes-26、review-controls-26按受影响范围补验，索引acceptance-coverage.json）；11项原前端单测的被测API/队列未改，复用其通过证据；锁定类型检查及/preview与/app完整构建通过。独立Standards/Spec累计审查的2类P2已在build-26关闭：三处焦点内选择的旧闭包改为稳定renderer+业务Context，N12同类状态一起核清；项目导出改由AG公开遍历取得全部已排序ID。真实副本增加不离焦分类与多列排序实际导出保护；i8/冲突选择的独立受控诊断仅证实本地交互，未真实外呼/写入。独立视觉复核关闭所查视口中的过程输入和报送金额裁切；不将检查范围扩称全站人工签收。
+
+源码41e2a11bbc9a36879f9e7fa9aab34c185adb01bd已正常钩子提交、推送并核远端SHA。正式mtrl-workbench-server已重启加载var/frontend/releases/41e2a11b；15个深链、31份构建资源逐份核实，主题和119次字体响应正常，旧壳资源404。正式浏览器核付款通知书、过程及机械页，无JS/AG错误或非读取请求；数据库仍为mtrl_workbench.public / invadj261027，无迁移和业务写入。上一完整React资源aa9cc766保留回退。
+
+8065本次专属预览已正常停止，专用测试库的可丢弃schema已核不存在；仅移除本次owner指针，不恢复已退役旧owner。pilot与release两次运行的work及active已退出，必要原始证据有限保留于.artifacts/archive/ag-grid-unification（2026-11-27到期）；run-closed检查整体及本范围均通过。终态保存入Git后，本规格、盘点、研究及451原票按项目Git-only退出，再核closed；现行结构和界面规则已归architecture与frontend-design。
