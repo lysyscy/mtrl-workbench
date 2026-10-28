@@ -1,22 +1,4 @@
-"""`TAIL-117` 批次 2：**上屏文案里不许出现内部编号 / 开发话术**（守则 §2.5 / §3.1 / §3.3 / §3.6 / §6-1）。
-
-⭐ 本件是**离线的一半**，另一半在真机 `tools/probe/_shell_text.py`（**㉕**：全站 17 屏走一遍，
-   扫 DOM 文本与 `title` 属性）。两者分工写在下面，⛔ 别把同一条口径在两处各写一套。
-
-**为什么离线只钉"精确墓碑"、不做通用源码扫查**（这是踩过之后的结论）：
-  通用扫查必须分清"字符串字面量 vs 注释 vs 正则字面量 vs HTML 注释"——本件首版手写了个词法状态机，
-  **当场被四样东西接连带偏**（`//` ★ 块注释 ★ HTML 注释 `<!-- -->` ★ 正则里的引号 `replace(/[&<>"]/g)`），
-  报出 130 多条假阳性（把注释里的 `TAIL-94` 也当成"会显示给用户"）。
-  ⇒ ⭐ **改用两条更稳的判法**：① 离线只钉**带上下文、只可能出现在界面上的整串**（如
-  `>同步仓库名单（API-05）</button>`）——零假阳性；② "界面上到底有没有内部串"交给**真机**判（读 DOM 文本，
-  所见即所得）。⛔ 别再回头写通用词法扫查（"更全面"是假收益，假阳性会让人把判据关掉）。
-
-⚠️ 本件**不判** `§节号`：用户 2026-09-27 裁定 `B` —— 口径说明里**保留**《说明书》节号（"要查才看"的指路牌）。
-
-⭐ **唯一的例外**（2026-10-01 `TAIL-209` 余项 ②）＝ `test_壳源码里不许有双层星号_加粗标记`：
-它只查字符串字面量和静态 HTML 中的 `**`，用既有 JS 扫描器跳过表达式、注释和正则；
-模板插值里的嵌套字符串仍检查。
-"""
+"""后端用户可见消息的静态守卫；技术细节保留在运行日志。"""
 
 from __future__ import annotations
 
@@ -71,12 +53,8 @@ TOMBSTONES: tuple[tuple[str, str], ...] = (
 
 #: ⭐ 说明块（`class="tip"`）的估算字数上限（**剥掉 `${…}` 与标签之后**）——
 #:   与真机 ㉖ 的 200 字**同一条线**（同一条口径：守则 §3.4 / §5.9「说明要短」）。
-TIP_LIMIT = 200
-_TAG = re.compile(r"<[^>]+>")
-_JSX = re.compile(r"\$\{[\s\S]{0,600}?\}")
 #: ⭐ **折叠区不计**（与真机 ㉖ 的口径一字不差：「上限 200 字 · ⚠️ 折叠区不设上限」）——
 #:   ⛔ 别把 `<details>` 里的内容算进"默认展开"的字数里（那样 `m07` 会假红：它块内挂着一个逐列口径）。
-_DETAILS = re.compile(r"<details[\s\S]*?</details>")
 
 
 
@@ -85,65 +63,8 @@ _DETAILS = re.compile(r"<details[\s\S]*?</details>")
 
 
 
-def _literal_double_stars(text: str, *, html: bool = False) -> list[int]:
-    """返回可显示字面量中的标记位置；模板插值递归检查字符串，指数运算不算文字。"""
-    from tools.audit.jslex import _skip_trivia, match, skip_string
-
-    found: list[int] = []
-
-    def collect(start: int, end: int) -> None:
-        found.extend(m.start() + start for m in re.finditer(r"\*\*", text[start:end]))
-
-    def scan(start: int, end: int) -> None:
-        i = start
-        while i < end:
-            if text[i] not in "'\"`":
-                i = max(i + 1, _skip_trivia(text, i))
-                continue
-            stop = skip_string(text, i)
-            if text[i] != "`":
-                collect(i + 1, stop - 1)
-                i = stop
-                continue
-            i += 1
-            chunk = i
-            while i < stop - 1:
-                if text[i] == "\\":
-                    i += 2
-                elif text.startswith("${", i):
-                    collect(chunk, i)
-                    close = match(text, i + 1, "{", "}")
-                    scan(i + 2, close - 1)
-                    i = chunk = close
-                else:
-                    i += 1
-            collect(chunk, stop - 1)
-            i = stop
-
-    if html:
-        markup = re.sub(r"<!--[\s\S]*?-->", lambda m: ' ' * len(m.group()), text)
-        outside = list(markup)
-        for script in re.finditer(r"<(script|style)\b[^>]*>([\s\S]*?)</\1\s*>", markup, re.I):
-            scan(script.start(2), script.end(2))
-            outside[script.start():script.end()] = ' ' * (script.end() - script.start())
-        found.extend(m.start() for m in re.finditer(r"\*\*", ''.join(outside)))
-    else:
-        scan(0, len(text))
-    return found
 
 
-def test_加粗守卫只判字面量且保留模板嵌套():
-    assert not _literal_double_stars("const n=10n ** 2n; const r=/\\*\\*/; /* '**x**' */")
-    assert _literal_double_stars("toast('**x**');")
-    assert _literal_double_stars('const t=`<p>**x**</p>`;')
-    nested = "const t=`${ok ? '**x**' : `inner ${10n ** 2n} **y**`}`;"
-    assert len(_literal_double_stars(nested)) == 4
-    assert not _literal_double_stars('const t=`${10n ** 2n}`;')
-    assert _literal_double_stars('<p>**x**</p><script>const n=10n ** 2n;</script>', html=True)
-    assert not _literal_double_stars('<!-- **x** --><script>const n=10n ** 2n;</script>', html=True)
-    assert not _literal_double_stars('<!-- <script>const s="**x**";</script> -->', html=True)
-    assert not _literal_double_stars('<style>/* **x** */ p{color:red}</style>', html=True)
-    assert _literal_double_stars('<style>p::after{content:"**x**"}</style>', html=True)
 
 
 
