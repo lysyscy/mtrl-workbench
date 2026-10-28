@@ -35,7 +35,7 @@ ops/nssm_install.ps1 注册 mtrl-workbench-server，nssm_uninstall.ps1 退出注
 前端切换先处理未保存编辑并记录数据、后端与完整构建身份，停止旧实例后切完整资源目录，再核索引/版本资源、缺失资源404、深链及真实下载。回退保留当前数据库和正常业务写入，只恢复上一套完整前端资源与入口，不能以旧数据库备份撤回正常业务。
 
 
-## React正式入口候选
+## React正式入口与界面回退
 
 `FRONTEND_APP_DIR`指向完整的`/app/`生产构建目录时，现有FastAPI在`/app`及其深链提供React，`/api`、登录、主题与字体出口不变；空值仍提供旧壳。配置在新进程加载，不在运行实例上改指针试切。`FRONTEND_PREVIEW_DIR`只管理`/preview`，不构成正式切换。完整候选的构建用`MTRL_FRONTEND_BASE=/app/`；预览构建保持默认`/preview/`，两种构建不可混用，启动检查入口基址及首页引用资源。
 

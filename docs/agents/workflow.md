@@ -45,4 +45,4 @@ React 和 Mini App 的既有规格、身份、依赖、验收、Comments 与授�
 
 普通业务按已有业务入口和显式技能执行，记忆使用不触发工程实施、票务或额外收尾；开发代码、辅助工具或技能才读取本页实施方法。现行规则、关键理由与活动状态仍由项目文件持有，偏好、决定背景及验证经验按共同政策留存。首次完整接入和专项内容迁移才读取同源 `references/memory-adoption.md`，平常任务不重跑筛选。
 
-主线与 `codex/react-frontend-rewrite` 共库；本轮入口调整在 React 工作分支，未合入 master。以后随正常 Git 合并接收项目文件，只更正受影响记忆范围，不重复导入，也不把合并称为部署。
+主线与 `codex/react-frontend-rewrite` 共库；2026-10-28已通过 `codex/react-cutover-candidate` 将本轮候选整合至正式master并加载React入口，原React检出保留。源码整合、现场加载和用户验收仍分别记录，当前状态回status及TAIL-423；只更正受影响记忆范围，不重复导入。
