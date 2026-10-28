@@ -10,7 +10,8 @@ export function initialLayoutColumns<T>(definitions: (ColDef<T> | ColGroupDef<T>
   return definitions.map(definition => {
     if ('children' in definition) return {...definition, children: initialLayoutColumns(definition.children)};
     const {width, autoHeight: _autoHeight, autoHeaderHeight: _autoHeaderHeight, ...rest} = definition;
-    return width === undefined ? rest : {...rest, initialWidth: width};
+    return {...rest, ...(width === undefined ? {} : {initialWidth: width}),
+      suppressAutoSize: rest.suppressAutoSize ?? Boolean(rest.wrapText || rest.cellRenderer || rest.cellRendererSelector)};
   });
 }
 

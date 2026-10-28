@@ -41,7 +41,7 @@ function Monthly({ me, blocked, active }: Props) {
   ],[scale]);
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
-  const presentation = useGridPresentation({root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
+  const presentation = useGridPresentation({table: 'settlement-month', root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
   return <>
     <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
@@ -53,7 +53,7 @@ function Monthly({ me, blocked, active }: Props) {
     {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
       <p className="settlement-summary">{ym}，{query.data.counts.warehouses} 仓，{query.data.counts.rows} 行，{query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
       <PreparedGrid presentation={presentation} className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
-        getRowId:p=>p.data.id,defaultColDef:{resizable:false,sortable:false,suppressMovable:true},
+        getRowId:p=>p.data.id,defaultColDef:{resizable: true,sortable:false,suppressMovable:true},
         overlayNoRowsTemplate:'该核算月没有收发结存数据',suppressColumnVirtualisation:true,suppressScrollOnNewData:true}} />
     </>}
   </>;
@@ -127,13 +127,13 @@ function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').Annua
     return [
       {field:'warehouse',headerName:'仓库名',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(160,320,scale,1)},
       {field:'prior',headerName:'往年金额',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.prior),grid.sum_row[0]])},
-      ...grid.months.map((month,i):ColDef<AnnualRow> => ({colId:month,headerName:`${i+1}月`,valueGetter:p => p.data?.cells[i],valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...amountWidth([...grid.rows.map(row => row.cells[i]),grid.sum_row[i+1]])})),
+      ...grid.months.map((_month,i):ColDef<AnnualRow> => ({colId:`month-${i+1}`,headerName:`${i+1}月`,valueGetter:p => p.data?.cells[i],valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...amountWidth([...grid.rows.map(row => row.cells[i]),grid.sum_row[i+1]])})),
       {field:'total',headerName:'合计',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.total),grid.sum_row[13]])},
       ...(history ? [{field:'balance' as const,headerName:'2025-11及之前',cellRenderer:BalanceInput,...amountWidth(grid.rows.map(row => row.balance),148),context:{kind:grid.kind}}] : []),
     ];
   },[grid,history,scale]);
   const total = useMemo<AnnualRow[]>(() => [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}], [grid]);
-  const presentation = useGridPresentation({root, active, rows: grid.rows, totals: total, columns, rowId: annualRowId, scale, scope: grid.year, identity: grid.year});
+  const presentation = useGridPresentation({table: `extract-${grid.kind}`, root, active, rows: grid.rows, totals: total, columns, rowId: annualRowId, scale, scope: grid.year, identity: grid.year});
   return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><PreparedGrid presentation={presentation} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
     getRowId:p=>p.data.warehouse,defaultColDef:{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
     overlayNoRowsTemplate:`当前筛选条件下没有${grid.kind}数据`,suppressScrollOnNewData:true,suppressColumnVirtualisation:true}} /></section>;

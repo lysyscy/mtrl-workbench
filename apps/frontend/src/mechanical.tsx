@@ -81,7 +81,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   const measurement = useMemo(() => ({signature:(row:SummaryRow,id:string,pinned:boolean)=>JSON.stringify([row[id],pinned,internal.writable])}), [internal.writable]);
   const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
   const scope = `${report.ym}:${warehouses.join('\0')}`;
-  const presentation = useGridPresentation({root, active, rows: bodyRows, totals: total, columns, measurement, rowId: summaryRowId, scale, scope, identity: scope});
+  const presentation = useGridPresentation({table: 'mechanical-summary', root, active, rows: bodyRows, totals: total, columns, measurement, rowId: summaryRowId, scale, scope, identity: scope});
   useLayoutEffect(() => { if (presentation.state === 'ready') fitHeight(); }, [presentation.state, fitHeight]);
   return <PreparedGrid presentation={presentation} className="mechanical-grid" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapHeaderText:true},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
         api.current = event.api;

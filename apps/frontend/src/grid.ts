@@ -27,7 +27,7 @@ export function pageGridGeometry(scale = 1) {
 }
 
 export function fixedWidth(width: number, scale = 1) {
-  return { width: width * scale, minWidth: width * scale, maxWidth: width * scale, flex: 0 };
+  return { width: width * scale, minWidth: width * scale, maxWidth: width * scale, flex: 0, resizable: false, suppressAutoSize: true };
 }
 
 export function contentWidth(min: number, max: number, scale = 1, stretch = 0) {
@@ -63,7 +63,7 @@ export function freezeGridFlex(api:GridApi,root:HTMLElement) {
   const freeze=()=>{
     if(frozen||api.isDestroyed()||!editing())return;
     frozen=api.getColumnState().flatMap(c=>c.flex? [{colId:c.colId,flex:c.flex}]:[]);
-    if(frozen.length) api.applyColumnState({state:frozen.map(c=>({colId:c.colId,width:api.getColumn(c.colId)!.getActualWidth(),flex:null}))});
+    if(frozen.length) api.applyColumnState({state:frozen.map(c=>({colId:c.colId,flex:null}))});
   };
   const restore=()=>{
     if(frozen&&!api.isDestroyed())api.applyColumnState({state:frozen});
@@ -73,29 +73,4 @@ export function freezeGridFlex(api:GridApi,root:HTMLElement) {
   root.addEventListener('focusin',freeze);root.addEventListener('focusout',release);
   api.addEventListener('cellEditingStarted',freeze);api.addEventListener('cellEditingStopped',release);
   return()=>{cancelAnimationFrame(frame);root.removeEventListener('focusin',freeze);root.removeEventListener('focusout',release);api.removeEventListener('cellEditingStarted',freeze);api.removeEventListener('cellEditingStopped',release);restore();};
-}
-const fittedGrids=new WeakMap<GridApi,{run:(measure:boolean)=>void}>();
-export function fitGridColumns(api:GridApi,root:HTMLElement|null,measure=false) {
-  if(!root||api.isDestroyed())return;
-  let state=fittedGrids.get(api);
-  if(!state) {
-    let frame=0,needsMeasure=false,pending=false;
-    const unfreeze=freezeGridFlex(api,root);
-    const fit=()=>{
-      frame=0;if(api.isDestroyed())return;
-      if(api.getEditingCells().length||root.contains(document.activeElement)&&document.activeElement?.matches('input,select,textarea')){pending=true;return;}
-      pending=false;
-      if(needsMeasure) {
-        needsMeasure=false;
-        const compact=api.getAllDisplayedColumns().filter(c=>!c.getFlex()&&!c.getColDef().cellRenderer&&c.getColDef().minWidth!==c.getColDef().maxWidth).map(c=>c.getColId());
-        if(compact.length)api.autoSizeColumns(compact,true);
-      }
-    };
-    const run=(measure:boolean)=>{needsMeasure||=measure;if(!frame)frame=requestAnimationFrame(fit);};
-    const release=()=>{if(pending)run(false);};
-    root.addEventListener('focusout',release);
-    api.addEventListener('gridPreDestroyed',()=>{cancelAnimationFrame(frame);root.removeEventListener('focusout',release);unfreeze();});
-    state={run};fittedGrids.set(api,state);
-  }
-  state.run(measure);
 }

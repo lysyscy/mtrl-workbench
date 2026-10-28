@@ -15,7 +15,7 @@ import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const ledgerRowId = (row: LedgerRow) => row.key;
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
-const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: false, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
+const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: true, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
 
 interface Scope { key: string; owner: string; project: number; end: string }
 interface Draft { text: string; base: string; version: number; queued: boolean; month: string }
@@ -97,7 +97,7 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
     { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
   const measurement = useMemo(() => ({signature:(row:LedgerRow,id:string,pinned:boolean)=>JSON.stringify([pinned,row[id as keyof LedgerRow],row.row_kind,row.editable,writable])}), [writable]);
-  const presentation = useGridPresentation({root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
+  const presentation = useGridPresentation({table: `ledger-${side.category}`, root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
   useEffect(() => { if (presentation.state === 'ready') sizeTable(); }, [presentation.state, visible, total, scale]);
   useEffect(() => {
     if (!focusRecord || !api.current) return;

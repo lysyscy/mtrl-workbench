@@ -3,7 +3,6 @@ import { createPortal, flushSync } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
 import type { GridApi, IRowNode } from 'ag-grid-community';
 import { loadElementFonts, loadTextFonts } from './appearance-ready';
-import { freezeGridFlex } from './grid';
 
 // Opt-in preparation. Rich cells render through a portal in the owning React tree,
 // keeping their real router, appearance and editor context during bounded measurement.
@@ -44,14 +43,12 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
   const configured = useRef<GridApi<T> | null>(null), publishedRows = useRef<T[] | null>(null), publishedTotals = useRef<T[] | null>(null), rowSize = useRef({minimum,rowId});
   rowSize.current = {minimum,rowId};
   const ready = useRef(false), heights = useRef(new Map<string, number>());
-  const cache = useRef(new Map<string, number>()), geometry = useRef(''), userWidths = useRef(false);
+  const cache = useRef(new Map<string, number>()), geometry = useRef('');
   const readingAnchor = useRef<{id: string; offset: number; header: number; scope: string} | null>(null), appliedWidth = useRef(0), appliedHeight = useRef(0);
   const restoredTop = useRef<number | null>(null), appliedGeometry = useRef('');
   const headerSize = useRef({ key: '', height: headerMinimum });
   const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string } | null>(null);
-  const autosized=useRef<{rows:T[];totals:T[];columns:TextGridColumn<T>[];width:string}|null>(null);
   const appliedScope = useRef(scope), appliedIdentity = useRef(identity);
-  useLayoutEffect(()=>api&&root.current?freezeGridFlex(api,root.current):undefined,[api,root]);
   useLayoutEffect(() => {
     const node = root.current;
     if (!api || !node || !active) return;
@@ -90,9 +87,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const displayed = grid.getAllDisplayedColumns();
         const viewport = node!.querySelector<HTMLElement>('.ag-grid-viewport,.ag-body-viewport');
         if (!viewport) throw new Error('表格尺寸准备失败，请重试。');
-        // Reserve the vertical scrollbar before measuring widths, including an empty result.
-        const available = viewport.clientWidth - (node!.querySelector<HTMLElement>('.ag-body-vertical-scroll')?.offsetWidth ?? 0);
-        const widthKey = `${available}:${minimum}:${getComputedStyle(node!).font}`;
         const context = document.createElement('canvas').getContext('2d')!;
         host = document.createElement('div'); host.className = 'ag-row grid-layout-measure'; host.ariaHidden = 'true'; host.inert = true;
         Object.assign(host.style, { display: 'block', position: 'fixed', left: '-100000px', top: '0', height: 'auto', width: 'max-content', visibility: 'hidden', pointerEvents: 'none', contain: 'layout style' });
@@ -192,13 +186,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (changed) grid.onRowHeightChanged();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (cancelled(run)) return;
-        const sized=autosized.current;
-        if(!userWidths.current&&(!sized||sized.rows!==rows||sized.totals!==totals||sized.columns!==columns||sized.width!==widthKey)) {
-          autosized.current={rows,totals,columns,width:widthKey};
-          const compact=displayed.filter(col=>{const spec=columns.find(c=>c.id===col.getColId());return spec&&!spec.wrap&&!spec.render&&!col.getFlex()&&col.getColDef().minWidth!==col.getColDef().maxWidth;});
-          if(compact.length)grid.autoSizeColumns(compact.map(c=>c.getColId()),true);
-          if(displayed.some((col,i)=>Math.abs(col.getActualWidth()-plannedWidths[i]!)>=.5)){schedule();return;}
-        }
         // Natural-height reports render the whole known result. A complete row model
         // can precede React's last row commit; publish after that actual dependency.
         if (grid.getGridOption('domLayout') === 'autoHeight') {
@@ -276,9 +263,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
     const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; const changed = next !== width || grid.getGridOption('domLayout') !== 'autoHeight' && nextHeight !== height; width = next; height = nextHeight; if (next && changed) schedule(); });
     resize.observe(node);
-    const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; userWidths.current = false; autosized.current = null; schedule(); } });
+    const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; schedule(); } });
     appearance.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
-    const resized = (event: { source: string; finished?: boolean }) => { if (event.source === 'uiColumnResized' && event.finished) { userWidths.current = true; schedule(); } };
+    const resized = (event: { finished?: boolean }) => { if (event.finished) schedule(); };
     grid.addEventListener('columnResized', resized);
     const afterEdit = () => { if (pendingEdit) schedule(); };
     // Every uncached measurement awaits its own text/control fonts before reading dimensions.

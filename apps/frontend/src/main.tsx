@@ -14,6 +14,7 @@ import { readIdentity, setRequestIdentity, requestJson, beginIdentityVerificatio
 import type { Identity } from './api';
 import type { ComponentType } from 'react';
 import { Projects } from './projects';
+import { GridWidthOwner } from './grid-width-owner';
 
 type WorkspacePageProps = {
   me: Identity | null; blocked: boolean; active: boolean;
@@ -90,7 +91,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
       window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
+  return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
@@ -105,7 +106,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
-  </div></HistoryScope></QueryClientProvider>;
+  </div></HistoryScope></GridWidthOwner></QueryClientProvider>;
 }
 
 function preserveIdentity(current: Identity | null, incoming: Identity | null) {

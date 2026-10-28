@@ -11,6 +11,8 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .business-time-picker .ant-picker{min-width:0;max-width:100%}
 .business-time-picker .ant-select{min-width:5em}
 .ag-custom-component-popup{font-family:var(--fs)}
+.grid-width-tools{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));padding:calc(4px * var(--fscale)) 0;flex:none}
+.grid-width-tools [role=status]{color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .ant-btn{font-variant-numeric:tabular-nums}
 .ant-btn.dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
 .ant-btn.dialog-close-button svg{width:1.1rem;height:1.1rem;fill:none;stroke:currentColor;stroke-width:1.8}

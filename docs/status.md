@@ -16,6 +16,8 @@
 
 全站视觉、交互和业务流程的用户实看仍待确认，按实际反馈处理，不把技术检查或切换成功当作用户签收。付款通知书编辑付款金额后首次勾选可能无效，原因及未修复范围见423的前端更新记录。TAIL-449已按原范围验收关闭，既有性能取舍及未验边界沿下述原证据保留。
 
+2026-10-28已实现现有AG Grid表格的列宽记忆：付款通知书开放拖宽，仅保存手调列，按当前浏览器的账号/表格隔离，恢复入口保筛选/排序/勾选；自动列继续使用原生拟宽与flex，原生HTML特殊表保持自动布局。19项相关浏览器检查、11项前端单测、类型检查与构建通过，未执行后端全量回归。本批尚未加载正式8000，须按当次授权办理；交互规则回[前端设计](guides/frontend-design.md)。
+
 未实施架构候选统一由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，状态needs-triage；本次启用不自动启动或要求全部完成。
 
 迁移前的范围、决定与技术证据按需查[共同规格](../.scratch/frontend-vue-rewrite/spec.md)、[问题与确认](../.scratch/frontend-vue-rewrite/questions.md)、[前端证据](../.scratch/frontend-vue-rewrite/evidence.md)及[架构深化证据](../.scratch/frontend-architecture/evidence.md)。这些材料中的原8065版本、PID和当时阶段状态属于历史快照；当前正式运行与用户验收以本页顶部及正式master的423/424为准。

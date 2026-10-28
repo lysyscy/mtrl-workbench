@@ -11,7 +11,8 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
+import { GridWidthControls, useGridWidths } from './grid-widths';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
 import { contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
@@ -25,7 +26,7 @@ import { ContractExports } from './contract-export';
 import { ContractSubtableDialog, hasSubtableDrafts } from './contract-subtables';
 import type { SubtableWorkspace } from './contract-subtables';
 
-const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true};
+const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true};
 
 function decimalCents(value:bigint){const abs=value<0n?-value:value;return `${value<0n?'-':''}${abs/100n}.${String(abs%100n).padStart(2,'0')}`;}
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:''});
@@ -82,7 +83,6 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   useHistoryGuard('contracts',()=>busy||lock.current||Object.values(subtables).some(s=>s.busy)?'集采合同正在处理，请稍候。':uncertain||Object.values(subtables).some(s=>s.uncertain)?'合同操作结果待核实，请先重读。':Object.values(subtables).some(hasSubtableDrafts)?'合同子表有未保存输入，请先处理。':Object.keys(inlineDraftRef.current).length?'合同收发登记有未保存输入，请先处理。':'');
   useEffect(()=>{const valid=new Set(rows.map(row=>row.id));setPicked(old=>{const next=new Set([...old].filter(id=>valid.has(id)));return next.size===old.size?old:next;});},[rows]);
   useEffect(()=>{if(!active)return;const id=Number(params.get('contract'));if(id>0&&query.data){const row=query.data.rows.find(row=>row.id===id);pendingFocus.current=id;if(row){setEditorId(null);setFilters({...initialFilters(),tag:''});setSearch('');grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');}else {setEditorId(null);setError('合同已不在列表中，请重读核对。');}}},[params.get('contract'),active,Boolean(query.data)]);
-  useEffect(()=>{if(!blocked&&active&&grid.current)fitGridColumns(grid.current,root.current);},[active,blocked]);
   // Uncertain flips do not change row data, so cells must be forced to re-render their disabled state.
   useEffect(()=>{if(active&&grid.current)grid.current.refreshCells({force:true});},[uncertain]);
   async function refresh(){await client.invalidateQueries({predicate:q=>q.queryKey[0]!=='contract-detail'&&q.queryKey[0]!=='notice-maintenance'},{throwOnError:true});}
@@ -125,6 +125,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['remark','arch_no','ret_date','payment_term','payment_method','actions']});},[active,unavailable,inlineDrafts]);
   const state=useRef({unavailable,picked,shown,tag});state.current={unavailable,picked,shown,tag};
   const scale=Number(me?.ui_scale_css??1);
+  const widths=useGridWidths('contracts',root,scale,active&&!blocked);
   const columns=useMemo<ColDef<ContractRow>[]>(()=>[
     {colId:'select',headerName:'选择',...fixedWidth(36,scale),sortable:false,pinned:'left',headerComponent:()=> <Checkbox aria-label="选择当前合同" checked={shown.length>0&&shown.every(r=>picked.has(r.id))} onChange={e=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/>,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>},
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
@@ -157,7 +158,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     {(feedback||busy||query.isFetching&&!query.isPending)&&<p className="contract-feedback" role="status">{busy?'正在保存…':query.isFetching?'正在更新合同，保留当前列表…':feedback}</p>}
     {(error||query.isError||projects.isError)&&<p className="notice" role="alert">{error||(query.isError?`合同更新失败，保留上次结果。${query.error.message}`:projects.error?.message)}<Button onClick={()=>void reread()}>重读核对</Button></p>}
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={setFeedback}/>}
-    {query.isPending?<p role="status">正在读取集采合同…</p>:<div className="contracts-grid" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={columns} defaultColDef={defaultColumn} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;fitGridColumns(e.api,root.current,true);}} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} onRowDataUpdated={e=>{fitGridColumns(e.api,root.current);if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div>}
+    {!query.isPending&&<GridWidthControls widths={widths} disabled={blocked||!active} />}
+    {query.isPending?<p role="status">正在读取集采合同…</p>:<div className="contracts-grid" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={columns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div>}
     {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={setFeedback}/>)}
     {subtable&&<ContractSubtableDialog scale={scale} row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} change={changeSubtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
     {remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value);}} close={()=>setRemarkEditor(null)}/>}

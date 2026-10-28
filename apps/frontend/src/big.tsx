@@ -125,7 +125,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     ];
   },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
-  const presentation = useGridPresentation({root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
+  const presentation = useGridPresentation({table: 'monthly-big', root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
   return <>
     <div data-page-chrome className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
@@ -146,7 +146,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       cancel:id=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[id];return next;})}}>
       {!query.data.mat_available && <p className="notice">主材累计暂不可得，请先核对集采取数。</p>}
       <PreparedGrid presentation={presentation} className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
-        getRowId:p=>p.data.warehouse,defaultColDef:{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
+        getRowId:p=>p.data.warehouse,defaultColDef:{resizable: true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
         groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
         overlayNoRowsTemplate:`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`,
 }} />

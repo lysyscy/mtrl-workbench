@@ -163,7 +163,7 @@ function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
   const root = useRef<HTMLDivElement>(null);
   const diffRows = matrix.diffs;
   const diffTotals = useMemo(() => [{...matrix.diff_totals,id:-1,doc_no:'合计'} as unknown as Difference], [matrix]);
-  const presentation = useGridPresentation({root,active,rows:diffRows,totals:diffTotals,columns:diffs,rowId:differenceRowId,scale,scope:warehouse,identity:warehouse});
+  const presentation = useGridPresentation({table:'process-differences',root,active,rows:diffRows,totals:diffTotals,columns:diffs,rowId:differenceRowId,scale,scope:warehouse,identity:warehouse});
   return <PreparedGrid presentation={presentation} className="process-grid" grid={{domLayout:'autoHeight',theme:gridTheme,
     getRowId:p=>String(p.data.id),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,overlayNoRowsTemplate:'当前项目没有调整差异',animateRows:false}} />;
 }

@@ -82,7 +82,7 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
     ];
   },[year,scale,rows,query.data]);
   const totals=useMemo<FeeYearRow[]>(()=>query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[]}]:[],[query.data]);
-  const presentation=useGridPresentation({root,active:active&&Boolean(ready),rows,totals,columns,rowId,scale,scope:year+':'+project,identity:year+':'+project});
+  const presentation=useGridPresentation({table:'fees',root,active:active&&Boolean(ready),rows,totals,columns,rowId,scale,scope:year+':'+project,identity:year+':'+project});
   useEffect(()=>{if(!project&&query.data?.project)setProject(query.data.project);},[project,query.data]);
   return <section className="fees-page" aria-label="特殊费用">
     <div data-page-chrome className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
