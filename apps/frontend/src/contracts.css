@@ -22,6 +22,7 @@
 .contracts-grid{flex:1;min-height:calc(320px * var(--fscale));min-width:0;border-radius:var(--radius-card);box-shadow:var(--shadow);overflow:hidden}
 .contracts-grid .ag-cell{display:flex;align-items:center;line-height:1.5;white-space:normal;overflow-wrap:anywhere;padding:calc(6px * var(--fscale))}
 .contracts-grid .ag-cell.money{white-space:nowrap;overflow-wrap:normal;justify-content:flex-end;text-align:right;font-variant-numeric:tabular-nums}
+.contracts-grid .ag-cell.contract-identifier{white-space:nowrap;overflow-wrap:normal}
 .contracts-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .contracts-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .contracts-grid .ag-cell .ant-btn{white-space:normal;height:auto;min-height:calc(28px * var(--fscale));padding:calc(3px * var(--fscale)) calc(8px * var(--fscale));text-align:left;font-size:calc(12px * var(--fscale));line-height:1.5}
