@@ -94,10 +94,13 @@ const JC_PIN_IDS = ['project_seq', 'date', 'material'];
    ⚠️ 取数前是**空数组** ⇒ 表头只剩控件列；那一帧由页级四态（`pageGate`「正在读取这一页的数据…」）
       顶住 —— 正常路径下 `V.m11` 渲染时数据已到（进页 `go()` ⇒ `loadPaths` ⇒ `reloadM11` ⇒ 再 `render()`）。 */
 const JC_COLUMNS = [];
+const JC_PAYMENT_METHODS = [];
 const JC_SUM_KEYS = [];  /* /api/m11/list 的 sum_keys = domain.SUM_KEYS，壳不另列求和名单。 */
 /** 普通新增列按后端同名字段生成；特殊控件由 V.m11 的 id 映射提供。 */
 function jcDefaultCell(j,c){
   const v = j.columnValues[c.key];
+  if(c.key==='payment_term') return `<td><input class="inp" aria-label="账期" style="width:110px" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_term" value="${esc(v||'')}"></td>`;
+  if(c.key==='payment_method') return `<td data-v="${esc(v||'')}"><select class="inp" aria-label="合同付款方式" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===v?'selected':''}>${esc(m)}</option>`).join('')}</select></td>`;
   return c.type === 'num' ? `<td class="num">${M(N0(v))}</td>` : `<td>${esc(v == null ? '' : String(v))}</td>`;
 }
 /** 现有七列仍走原取值（子表/列表共用）；新增金额列读同名行字段。 */
@@ -372,6 +375,8 @@ const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><label>合同金额</label><input class="inp num" style="width:118px" id="jcNAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="contractAmt" value="${esc(jcND.contractAmt)}"></div>
       <div class="fi"><label>贸易公司名</label><input class="inp" style="min-width:130px" id="jcNTradeCo" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeCo" value="${esc(jcND.tradeCo)}" placeholder="留空 = 无贸易公司"></div>
       <div class="fi"><label>贸易公司合同金额</label><input class="inp num" style="width:118px" id="jcNTradeAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeContractAmt" value="${esc(jcND.tradeContractAmt)}" placeholder="—"></div>
+      <div class="fi"><label for="jcNTerm">账期</label><input class="inp" style="width:110px" id="jcNTerm" data-act="jcNSet" data-k="payment_term" value="${esc(jcND.payment_term||'')}"></div>
+      <div class="fi"><label for="jcNMethod">合同付款方式</label><select class="inp" id="jcNMethod" data-act="jcNSet" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===jcND.payment_method?'selected':''}>${esc(m)}</option>`).join('')}</select></div>
       <div class="fi"><label>备注</label><input class="inp" style="min-width:130px" id="jcNRemark" data-act="jcNSet" data-k="remark" value="${esc(jcND.remark)}"></div>
       <button class="btn pri" data-act="jcRowSave" title="建档（两态默认「纳入台账」，与抓取行一致）">保存</button>
       <button class="btn" data-act="jcRowCancel" title="丢弃这条录入（不入库）">取消</button>
@@ -400,3 +405,16 @@ function jcNextArchiveNumbers(){
 let busy=false;
 const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;
 
+
+
+function payTermsHtml(rows,available=true){
+  if(available===false) return '<div class="tip">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</div>';
+  const warnings=rows.filter(r=>r.term_warning);
+  if(!warnings.length) return '';
+  return `<section class="pay-term-note" aria-label="账期提醒"><div class="pay-term-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 19 18H1Z"/><path d="M10 7v5m0 3v.1"/></svg><b>未满账期</b><span>可继续付款</span></div><table class="pay-term-details"><thead><tr><th>付款项目</th><th>合同材料名</th><th class="num">本条付款金额</th><th>发票日期</th><th>账期</th><th>提醒截止</th></tr></thead><tbody>${warnings.map(r=>{
+    const w=r.term_warning, id=String(r.notice_id), n=NO.find(n=>n.id===id);
+    const j=JCs.find(j=>j.id===String(r.contract_id)), count=w.invoices.length;
+    const amount=n&&!ntPayBlock(n)?numOf(payDraft[id]?.a??payEff(n)):NaN;
+    return w.invoices.map((i,index)=>`<tr${index?'':' class="pay-term-start"'}>${index?'':`<td rowspan="${count}">${n?dispCell(n.proj,n):'—'}</td><td rowspan="${count}">${esc(j?.material||'—')}</td><td rowspan="${count}" class="num" data-pay-term-amount="${esc(id)}"><b>${Number.isFinite(amount)?M(amount):'—'}</b></td>`}<td><time>${esc(i.invoice_date)}</time></td>${index?'':`<td rowspan="${count}" class="now">${esc(w.payment_term)}</td>`}<td><time>${esc(i.remind_through||'日期范围以外')}</time></td></tr>`).join('');
+  }).join('')}</tbody></table></section>`;
+}

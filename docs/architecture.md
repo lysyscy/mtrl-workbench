@@ -1,6 +1,6 @@
 # 当前架构与工程不变量
 
-FastAPI 承载业务，PostgreSQL 保存事实，NSSM 托管现行单 worker 服务。旧前端在 backend/app/web；React 在独立工作树的 `apps/frontend` 开发；可选 `FRONTEND_PREVIEW_DIR` 仅启用隔离 `/preview`，未配置时无入口，构建与操作见[预览指南](guides/frontend-preview.md)。正式 `/app` 尚未切换。抓取走 HTTP，PDF/打印渲染在服务身份下运行。
+FastAPI 承载业务，PostgreSQL 保存事实，NSSM 托管现行单 worker 服务。旧前端在 backend/app/web；React 在独立工作树的 `apps/frontend` 开发；候选 `FRONTEND_APP_DIR` 可将同源 `/app` 指向完整React发布目录，空值保旧壳；`FRONTEND_PREVIEW_DIR` 只启用隔离 `/preview`。构建与操作见[预览指南](guides/frontend-preview.md)。正式 `/app` 尚未切换。抓取走 HTTP，PDF/打印渲染在服务身份下运行。
 
 React 已获准采用构建步骤；原无构建/不另用 React 的旧阶段限制已被本次授权取代。业务判定、金额与写入仍归后端，正式切换和旧版退役分别守原授权。
 

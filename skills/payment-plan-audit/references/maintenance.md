@@ -28,3 +28,10 @@ Git提交推送另依当次授权。维护本技能不授权运行真实业务�
 ## 本技能补充
 
 规则或枚举改变时先在材料工作台运行tools/oneoff/_build_plan_audit_runtime.py，更新resources/audit-runtime.zip及dist/payment-plan-audit.skill并运行技能测试。--repo仅为开发规则入口，不恢复本机数据库取数。
+
+
+### 豆包实体副本恢复
+
+用户2026-10-23确认：豆包会自行将技能软链接展开成实体文件；本次及以后对Skills Manager已登记的豆包部署目标，发布时可直接删除该实体副本后由Manager重建，不备份、不重复询问此类处理。
+
+既有sync_business_skills.py已落实此规则：只接受deploy的TARGET_CONFLICT，冲突须唯一指向当前技能已登记的豆包目标，且位于豆包既定.user_skills目录；确认目录为实体、内部无链接后才删除，立即重试受管部署并记回执。未登记、其他Agent或目录、多个冲突、软链接/junction仍保留现场按原规则处理。此例外不授权删除维护源、用户Excel或其他业务资料。

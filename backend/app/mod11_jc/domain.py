@@ -363,6 +363,44 @@ def normalize_payment_fields(fields: dict) -> dict:
     return result
 
 
+def remark_payment_proposal(*, remark, payment_term="", payment_method="") -> dict:
+    """迁移明确的独立或连写片段；保留增补、质保及有歧义的条款。"""
+    parts = re.split(r"([，,；;、\n]+)", remark or "")
+    methods = {"银行承兑": "承兑", "银承": "承兑", **{m: m for m in PAY_METHODS}}
+    candidates = {"payment_term": [], "payment_method": []}
+    pattern = (r"(?:增补)?\s*(?P<term>[0-9]+\s*(?:±\s*[0-9]+\s*(?:天(?:内)?)?|天(?:内)?))?"
+               r"\s*(?P<method>银行承兑|银承|现汇|承兑|供应链|其他)?"
+               r"\s*(?:[0-9]+(?:\.[0-9]+)?[%％]质保金.*)?")
+    for index in range(0, len(parts), 2):
+        token = parts[index].strip()
+        match = re.fullmatch(pattern, token)
+        if not match:
+            continue
+        offset = len(parts[index]) - len(parts[index].lstrip())
+        for key, group in (("payment_term", "term"), ("payment_method", "method")):
+            if match[group]:
+                value = (normalize_payment_term(match[group].removesuffix("内")) if key == "payment_term"
+                         else methods[match[group]])
+                start, end = match.span(group)
+                candidates[key].append((index, value, start + offset, end + offset))
+    result = {"payment_term": payment_term or "", "payment_method": payment_method or "", "remark": remark or ""}
+    remove = {}
+    for key, matches in candidates.items():
+        values = {value for _, value, _, _ in matches}
+        if len(values) == 1 and not result[key]:
+            result[key] = next(iter(values))
+            for index, _, start, end in matches:
+                remove.setdefault(index, []).append((start, end))
+    if remove:
+        for index, spans in remove.items():
+            for start, end in sorted(spans, reverse=True):
+                parts[index] = parts[index][:start] + parts[index][end:]
+        kept = [i for i in range(0, len(parts), 2) if parts[i].strip()]
+        result["remark"] = "".join((parts[i-1] if n else "") + parts[i] for n, i in enumerate(kept)).strip()
+    return result
+
+
+
 def payment_term_warning(*, payment_term, trade_co, invoices, debt, pay_date):
     from datetime import date
     if not payment_term or Decimal(str(debt)) <= 0 or not pay_date:

@@ -99,6 +99,8 @@ def instructions(plan):
                 issue(f"缺流程金额，系统审批{amount(n['approved'])}元" if n else '流程金额缺失或无效', 'flow_amount')
             elif '预付款金额' in problem:
                 issue('计划金额缺失或无效', 'planned_amount')
+            elif '合同付款方式' in problem:
+                issue(problem, 'pay_method')
             elif '付款方式' in problem:
                 issue(f"方式“{r['pay_method_raw'] or '空'}”待确认", 'pay_method')
             elif '项目未唯一' in problem:

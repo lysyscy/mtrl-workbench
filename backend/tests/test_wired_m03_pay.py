@@ -40,17 +40,17 @@ def _slice(start: str, end: str, *, what: str) -> str:
 
 def _batch_pay() -> str:
     """批量付款窗口的组装出口 `batchPay`（含"不可付 / 排除撤单"的提示与页脚按钮）。"""
-    return _slice("batchPay:()=>{", "/* 草稿记录", what="批量付款窗口出口")
+    return _slice("batchPay:async()=>{", "/* 草稿记录", what="批量付款窗口出口")
 
 
 def _batch_pay_ok() -> str:
     """提交出口 `batchPayOk`（整批重算 + 拦截 + 走后端）。"""
-    return _slice("batchPayOk:t=>{", "revDlg:async t=>{", what="批量付款提交出口")
+    return _slice("batchPayOk:async t=>{", "revDlg:async t=>{", what="批量付款提交出口")
 
 
 def _batch_pay_del() -> str:
     """「移出本次付款」处理器 `batchPayDel`。"""
-    return _slice("batchPayDel:t=>{", "batchPayOk:t=>{", what="移出处理器")
+    return _slice("batchPayDel:t=>{", "batchPayOk:async t=>{", what="移出处理器")
 
 
 def _pay_block() -> str:
@@ -72,7 +72,7 @@ def test_壳里存在不可付行则确认付款禁用并给原因与解决路�
     并**说清原因 ＋ 给解决路径**（否则用户只知道点不动）。
 
     新壳：不可付 = `未审批 或 本次应付 ≤ 0` ⇒ `bad.length` 非空 ⇒ 页脚按钮加 `disabled`
-    ＋ 一段说明（含"点该行的删除把它移出本次付款"这条路径）。
+    ＋ 行内原因与删除按钮，不再要求重复的顶部说明块。
     """
     reg = _batch_pay()
     # ⭐ 2026-09-24（`TAIL-91`）：判据改成**结构无关**的「**委托 ＋ 内核真做事**」——
@@ -87,15 +87,12 @@ def test_壳里存在不可付行则确认付款禁用并给原因与解决路�
     assert '<button class="btn pri" data-act="batchPayOk"${bad.length?` disabled ' \
            'title="有 ${bad.length} 条不可付，请先删除这些行"`:\'\'}>确认付款</button>' in reg, \
         "有不可付行时「确认付款」没有被禁用"
-    assert "条不可付，「确认付款」已禁用" in reg, "禁用没给原因"
     # ⭐ 2026-09-25（用户点检后**追加要求**）：**不可付要说清是哪种原因**，⛔ 不能只写"不可付"。
     #   判据仍走「委托 ＋ 内核」两段式：窗口**委托**唯一出口 `ntPayBlock`，
-    #   行单元格（`whyCell`）与顶部禁用提示（`badWhy`）**都由它给原因**，壳里⛔ 不另写文案。
+    #   行单元格（`whyCell`）由它给原因，壳里⛔ 不另写文案。
     assert "whyCell(n)" in reg, "行内只写「不可付」、没说清是哪种原因"
-    assert "badWhy" in reg, "顶部提示只有条数、没有「为什么」"
     assert "ntPayBlock(n)" in reg, "原因没走唯一出口 `ntPayBlock`（另写一套文案 ⇒ 必然漂）"
-    assert "请移出不可付记录，或关闭后调整勾选" in reg, "没给解决路径（只说不行、不说怎么办）"
-    assert "移出会取消该行勾选，其他行已填方式与金额保留" in reg, "没讲清移出后勾选变化及保留其他行草稿"
+    assert 'data-act="batchPayDel"' in reg, "缺少移出不可付行的操作"
     # ⭐ 2026-09-29（`TAIL-64` A′）：这张表的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt cond" …>`）。
     #   ⚠️ 它在这条判据里是**第二例**「委托 ＋ 内核」——同一条判据守着同一段切片的两处委托（`ntPayBlock` 与 `TBL`）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M34 去掉这处委托 ⇒ 必须红。
@@ -205,7 +202,7 @@ def test_壳里移出后其它行已填值仍在():
     reg = _batch_pay()
     assert "Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });" in reg, \
         "草稿清理没有只清「已不在批次里」的那些（会连其它行的已填值一起清掉）"
-    assert "const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);" in reg, \
+    assert "const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a??can.toFixed(2);" in reg, \
         "重建窗口时没有把已填值带回来（其它行会回默认）"
 
 
@@ -228,9 +225,9 @@ def test_壳里付款金额超过本次应付被拦():
 def test_壳里付款方式选其他必须填备注():
     """`DEV-P-01`：付款方式选「其他」⇒ **备注必填**（否则这笔钱的去向就说不清了）。
 
-    窗口里先把这条讲在明处（`选「其他」须填备注`），提交时逐行拦下。
+    备注控件提示必填条件，提交时逐行拦下，不要求顶部重复说明。
     """
-    assert "选「其他」须填备注" in _batch_pay(), "窗口没预先说明「选其他须填备注」"
+    assert 'id="bRemark"' in _batch_pay() and '选「其他」时必填' in _batch_pay(), "备注控件缺少必填条件"
     ok = _batch_pay_ok()
     assert "if(m==='其他'&&!rm){ errs.push(`" in ok, "选「其他」没填备注时没有被拦"
     assert "付款方式选「其他」必须填备注" in ok, "拦下时没说清是哪条规则"

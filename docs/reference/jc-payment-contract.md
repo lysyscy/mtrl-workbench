@@ -1,10 +1,10 @@
 # 集采付款约定接口
 
-供旧前端与 React 接入；业务含义见[集采](../requirements/central-procurement.md)。后端来源固定 `a8004d605b409d70ba5e255e2218d7d2c530368d`；本分支当前 UI、验证与加载状态回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。
+供旧前端与 React 接入；业务含义见[集采](../requirements/central-procurement.md)。后端、技能与服务加载分别核实；React UI、验证与加载状态回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。
 
 ## 合同字段
 
-迁移 `c432261023`（前置 `c391261021`，与main原件一致）只新增 `jc_contract.payment_term`（varchar(32)）和 `payment_method`（varchar(16)），NOT NULL、默认空串。空合并节点 `c2a261023` 汇合本分支 `c419261022` 与main的 `c432261023`，保持两条已发布父链身份；从任一前置升级都保留另一侧必要迁移。不转换历史 `method`，不改备注、金额、发票和付款。
+迁移 `c432261023`（前置 `c391261021`）只新增 `jc_contract.payment_term`（varchar(32)）和 `payment_method`（varchar(16)），NOT NULL、默认空串。不转换历史 `method`，不改备注、金额、发票和付款。当前候选在其后沿 `bmonth261026 → feeitem261027 → pmat261027 → invadj261027` 单链升级；历史试用schema的 `c419261022/c2a261023` 不作当前发布目标。
 
 - `GET /api/m11/list` 的每行、`GET /api/m11/detail?id=` 的data包含这两个同名字符串。
 - `POST /api/m11/add` 接受这两个字段；`POST /api/m11/fields` 通过fields只更新传入字段，空串清空。
@@ -26,10 +26,22 @@ main 的旧付款窗口打开时读取默认；未满账期的通知书整行黄
 
 `remind_through` 是录入发票日期加最大账期的提醒截止，不能标为准确应付款日。来源接口没有可信度等级、开票来源核验或到期可付额；不解析备注来猜账期。无法解析的发票日期跳过；空提醒只说明本次规则没有返回提醒，不证明日期真实或合同可付。金额、准入、幂等和事务仍由原 batch-pay 校验。
 
-迁移/模型验证先核明确的专用测试 schema 及当前版本；本分支目标为合并节点 `c2a261023`。在用预览的模型、schema、前端和回退依据分别核实，不能仅换前端而沿旧 schema 使用新模型；本次文档吸收不操作任何预览。notice-list、payment-preview 及 batch-pay 的 React 既有字段继续保留；payment-context 不写草稿、关联或流水。
+迁移/模型验证先核明确的专用测试 schema 及当前版本；当前候选目标为 `invadj261027`。在用预览的模型、schema、前端和回退依据分别核实，不能仅换前端而沿旧 schema 使用新模型；本次文档吸收不操作任何预览。notice-list、payment-preview 及 batch-pay 的 React 既有字段继续保留；payment-context 不写草稿、关联或流水。
 
 React阶段2D已按上述契约接入付款窗口，状态与证据回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。默认只初始化未手改方式，改期不重置金额/备注/方式，最终确认先重读；404明确人工核对，其他错误阻止继续并可重试。材料名读取失败单独提供重读，不冒充已获取材料或完整合同页；付款成功后列表重读失败与未知提交结果分别表述。
 
-## 主线原表核对与备注迁移
+## 备注迁移
 
-主线已有合同方式快照/核对例外及逐条备注迁移的共享接口扩展，其有效契约和真实写入确认边界见[主线固定接口正文](https://github.com/lysyscy/mtrl-workbench/blob/e55ff04822c78338d130e0fd914835ce60deaa2b/docs/reference/jc-payment-contract.md#excel核对与计划回写)及同件“备注迁移”。本分支尚未吸收对应 snapshot/method-preview/methods 与 `_jc_payment_terms.py` 实现；文档吸收不等于这些能力或个人技能已发布到 React，后续范围回共同规格。
+`tools/oneoff/_jc_payment_terms.py <本机预览JSON>` 默认只读，生成JSON及同名Markdown逐条对照。只迁出独立明确片段，冲突、阶段、月份及质保条款留在备注；已填字段不覆盖。
+
+正式字段迁移与真实备注回写分别需要用户明确授权。获准后才对已确认JSON使用 `--apply --confirmed-sha256 <摘要>`；同事务锁定并核对合同身份、原字段与重算建议，任一变化整批拒绝。JSON及真实合同对照保存在本机exports，不入Git。
+
+## Excel核对与计划回写
+
+现有`GET /api/m03/plan-audit/snapshot`的每条notice增加`jc_contract`，未关联为null；已关联为`{id,contract_no,payment_method}`。payment_method为空表示合同未约定，包括正式字段尚未迁移的兼容读取；不冒充i8原值或已确认计划。
+
+技能compare比较原Excel方式与此约定，冲突或未填时标原方式格及M列，并跳过本行候选，普通未关联合同行保持原行为。明确确认例外用核对命令`--confirm-method-row`原Excel行号重建预览；金额、归属及既有预览确认仍有效。
+
+现有method-preview每条change附带`jc_contract`及布尔`method_exception_confirmed`。原methods端点在同一事务锁定现有通知书/流水及合同/关联表，再核当前关联、合同方式、原拟方式、金额和状态；合同上下文变更整批拒绝。方式不一致或未约定须有明确例外确认，否则拒绝。旧预览未带上下文时，仅未关联合同的行可按原规则处理；当前有关联的须重新核对。客户端原文件SHA、预览SHA、备份和回执机制保持。
+
+新快照字段依赖后端加载；技能发布/实际安装与工作台后端部署分别核实。已有Mini App继续复用这些端点与skill脚本，不另造核对网页。

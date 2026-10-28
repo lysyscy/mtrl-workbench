@@ -48,7 +48,8 @@ const pages: { path: string; title: string; mod: string; group: string; loading?
 // Skip parent-only updates for unrelated retained pages; context updates still propagate.
 for (const entry of pages) entry.component = memo(entry.component);
 
-const loginUrl = '/login?next=%2Fpreview%2Fprojects';
+const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
+function loginUrl() { return '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash); }
 
 function Notice({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="notice" role="alert"><span>{message}</span>{retry && <Button htmlType="submit" onClick={message.includes('字体加载失败') ? () => window.location.reload() : retry}>{message.includes('字体加载失败') ? '重试字体加载' : '重试'}</Button>}</div>;
@@ -86,15 +87,15 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
     try {
       await requestJson('/api/m15/logout', { method: 'POST' });
       await client.cancelQueries(); client.clear(); onLogout();
-      window.location.assign(loginUrl);
+      window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
   return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
-    </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
+    </nav>{appBase === '/preview' && <a className="old-app" href="/app">打开旧版预览</a>}</aside>
+    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
@@ -161,10 +162,10 @@ function App() {
   if (me === undefined) return <main className="startup">{error ? <Notice message={error} retry={() => void check()} /> : <p role="status">正在识别账号…</p>}</main>;
   return <UiProvider appearanceKey={`${me?.account}:${me?.theme}:${me?.ui_scale_css}`}>
     {!fontsReady && !error && <p className="page-loading" role="status">正在准备界面…</p>}
-    {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}
+    {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl()}>重新登录</a></div>}
     {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : null}
     <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} onPreferencesSaved={() => check(false)} onLogout={() => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
   </UiProvider>;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename="/preview"><App /></BrowserRouter></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename={appBase}><App /></BrowserRouter></StrictMode>);

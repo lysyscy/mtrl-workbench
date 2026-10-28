@@ -10,7 +10,7 @@ SKILL = ROOT/'skills/payment-plan-audit'
 TARGET = SKILL/'resources/audit-runtime.zip'
 PACKAGE = ROOT/'dist/payment-plan-audit.skill'
 PACKAGE_FILES = (
-    'SKILL.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
+    'SKILL.md', 'references/maintenance.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
     'scripts/annotate.py', 'scripts/audit.py', 'scripts/methods.py',
     'scripts/projects.py', 'scripts/remote.py', 'scripts/snapshot.py',
 )

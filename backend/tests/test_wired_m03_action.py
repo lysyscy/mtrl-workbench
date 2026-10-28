@@ -256,6 +256,9 @@ def test_壳里草稿行统计结算可填且录入人不由手填():
     assert "${esc(CUR.name)}" in reg, "录入人不是取当前登录用户（变成可手填了）"
     assert 'data-act="ntRowSave"' in reg and 'data-act="ntRowCancel"' in reg, "草稿行的保存/取消没了"
     assert 'data-act="ntRowAdd"' in SHELL and "＋ 手动新增通知书" in SHELL, "增行入口没了"
+    add = SHELL.split("ntRowAdd:", 1)[1].split("ntRowSet:", 1)[0]
+    assert "naEditId=NT_NEW_ID" in add and "ntReveal()" in add and "modal(" not in add, \
+        "新增通知书必须显示表内草稿，不能改成弹窗"
 
 
 def test_壳里统计两列是行内可改格且未手改不黄底():

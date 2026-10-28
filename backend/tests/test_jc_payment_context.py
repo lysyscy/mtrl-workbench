@@ -1,4 +1,5 @@
 """付款前上下文的真实API/PG回归；复用已有隔离事务夹具。"""
+from decimal import Decimal
 import pytest
 from sqlalchemy import select
 from app.core import db

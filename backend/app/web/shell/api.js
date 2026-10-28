@@ -132,6 +132,14 @@ const API = {
   /* 批量付款（§4.4.4）：**整批重算 / 整批不落半批 / 幂等** 全在后端同一出口
      （`notice_actions.apply_batch_pay`）—— 前端只管发与显示回执（⛔ 不本地往 FLs 塞流水冒充落库）。
      ⚠️ 必须带 `request_id`（幂等号）：服务端据它**拒重复提交**。 */
+  paymentContext: async body => {
+    const url='/api/m03/payment-context';
+    const response=await postSafe(url,body,'POST '+url);
+    if(response.status===404) return {ok:true,available:false,rows:[]};
+    if(!response.ok){ const [why,next]=errWhyByStatus(response.status);
+      throw errHuman('账期核对失败：'+why+'。'+next,`POST ${url} → HTTP ${response.status}`); }
+    return response.json();
+  },
   batchPay: body => API.post('/api/m03/actions/batch-pay', body),
   /* ⭐ `M5-5`「集采实际供应商」（§6.6.3）：判定（**仅「集采」分类可填**）与落库都在后端
      （`notice_actions.jc_supplier_problem` 是唯一出口）—— 前端只负责发与显示回执（⛔ 不本地改 `n.sup`）。 */

@@ -485,7 +485,7 @@ const ACT={
        + (r.printer_name ? ` · 打印机 <b>${esc(r.printer_name)}</b>` : '')
        + pidMsg + `（<b>即时生效</b>，无需重启）`, 9000); }
    catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9500); } },
- batchPay:()=>{ reconcilePick(); const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ batchPay:async()=>{ reconcilePick(); const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    /* ⭐ 撤单行**不进付款批次**（走 `ntPayCand`，§4.2.7 方向）：正常路径下它们**根本勾不上**
       （勾选框对撤单行禁用、全选/按计划勾选也走同一出口）；这里再兜一道，
       防的是"勾上之后才被标撤单"这类**状态错位**把一张已作废的单送进付款。 */
@@ -500,17 +500,22 @@ const ACT={
         ⛔ 别在这里另写一套文案（两套必然漂）。 */
   const whyCell=n=>{ const w=ntPayBlock(n);
     return w?`<span class="mut sm" title="${esc(w)}">不可付：${esc(w)}</span>`:'<span class="mut sm">不可付</span>'; };
-  const badWhy=(()=>{ const m={}; bad.forEach(n=>{ const w=ntPayBlock(n); if(w) m[w]=(m[w]||0)+1; });
-    return Object.keys(m).map(w=>w+' '+m[w]+' 条').join(' · '); })();
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
+   const dt=$('#bDate')?.value||SYS_TODAY, remark=$('#bRemark')?.value||'';
+   const request=++payContextRequest, view=VIEW;
+   let context;
+   try{ context=await API.paymentContext({ids:rows.map(n=>Number(n.id)),pay_date:dt}); }
+   catch(e){ return toast(esc(e.message||'无法核对合同账期，请重试')); }
+   if(request!==payContextRequest||VIEW!==view) return;
+   if(!context?.ok) return toast(esc(context?.message||'无法核对合同账期，请重试'));
+   const byId=new Map(context.rows.map(r=>[String(r.notice_id),r]));
    const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
-   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）；剔除或撤单记录不产生付款，请核对已付与关联记录。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。付款方式选「其他」须填备注；<b>任一校验不通过，整批不产生流水。</b></div>
-     ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请移出不可付记录，或关闭后调整勾选；移出会取消该行勾选，其他行已填方式与金额保留。${bad.some(ntJcUnlinked)?'<br>集采未关联合同的记录须先在付款通知书页关联合同。':''}</div>`:''}
-     <div class="tw" style="max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）；剔除或撤单记录不产生付款，请核对已付与关联记录。</div>`:''}
+     <div class="tw" style="min-height:0;max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
-       const dm=n.plannedPayMethod||'现汇';
-       const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
-       return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
+       const dm=byId.get(n.id)?.default_pay_method||n.plannedPayMethod||'现汇';
+       const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a??can.toFixed(2);
+        return `<tr data-pay-notice-id="${n.id}" class="${[ok?'':'hl',byId.get(n.id)?.term_warning?'pay-term-warning':''].filter(Boolean).join(' ')}"><td class="fc">${n.code}</td>
        <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
        <td class="ctr">${astatTag(n.astat)}</td>
        <td class="num">${M(n.approve)}</td><td class="num">${M(p)}</td>
@@ -518,30 +523,54 @@ const ACT={
        <td>${ok?`<select class="inp" id="bm${i}" data-act="payDraft" data-id="${n.id}" data-f="m">${optsOf(enumVals('payMethod'),curM)}</select>`:whyCell(n)}</td>
        <td class="num">${ok?`<input class="inp num" id="ba${i}" data-act="payDraft" data-id="${n.id}" data-f="a" value="${curA}">`:'<span class="mut">—</span>'}</td>
        <td class="ctr now"><button class="btn sm dg" data-act="batchPayDel" data-id="${n.id}">删除</button></td></tr>`}),
-     sum:rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:rs=>N2(rs.reduce((a,n)=>a+Number((payDraft[n.id]&&payDraft[n.id].a)||payEff(n)),0))},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计（改金额后重绘刷新）'}):''})}</div>
+     sum:rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:[rs=>N2(rs.reduce((a,n)=>a+numOf(payDraft[n.id]?.a??payEff(n)),0)),v=>`<b id="batchPayTotal">${Number.isFinite(v)?M(v):'—'}</b>`]},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计'}):''})}</div>
      <div class="f2" style="margin-top:calc(11px * var(--fscale))">
-       <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" value="${SYS_TODAY}"></div>
-       <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
+       <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" data-act="batchPayTerms" value="${esc(dt)}"></div>
+       <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" value="${esc(remark)}" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
      </div>
-     <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
+      <div id="batchPayTerms" aria-live="polite">${payTermsHtml(context.rows,context.available)}</div>`;
    payBatchIds=rows.map(n=>n.id);  /* 本次窗口的行序，防删除 / 撤单后金额输入框串到剩余行。 */
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
  /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
  payDraft:t=>{ const id=t.dataset.id; const d=payDraft[id]||(payDraft[id]={});
-   if(t.dataset.f==='m') d.m=t.value; else d.a=t.value; },
- batchPayCancel:()=>{ payDraft={}; closeModal(); },
+   if(t.dataset.f==='m') d.m=t.value;
+   else { d.a=t.value;
+     const amount=numOf(t.value), cell=$(`[data-pay-term-amount="${id}"] b`);
+     if(cell) cell.textContent=Number.isFinite(amount)?M(amount):'—';
+     const total=$('#batchPayTotal'), sum=payBatchIds.reduce((a,id)=>a+numOf(payDraft[id]?.a??payEff(NO.find(n=>n.id===id))),0);
+     if(total) total.textContent=Number.isFinite(sum)?M(sum):'—';
+   } },
+ batchPayTerms:async()=>{
+   const box=$('#batchPayTerms'), date=$('#bDate');if(!box||!date) return null;
+   const request=++payContextRequest, day=date.value;
+   box.textContent='正在核对合同账期…';
+   try{
+     const result=await API.paymentContext({ids:payBatchIds.map(Number),pay_date:day});
+     if(request!==payContextRequest||!box.isConnected||date.value!==day) return null;
+     if(!result?.ok){box.textContent=result?.message||'账期核对失败，请重试';return null;}
+      box.innerHTML=payTermsHtml(result.rows,result.available);
+      const warningIds=new Set(result.rows.filter(r=>r.term_warning).map(r=>String(r.notice_id)));
+      box.closest('.modal').querySelectorAll('[data-pay-notice-id]').forEach(row=>
+        row.classList.toggle('pay-term-warning',warningIds.has(row.dataset.payNoticeId)));
+      return result;
+   }catch(e){if(request===payContextRequest&&box.isConnected&&date.value===day) box.textContent=e.message||'账期核对失败，请重试';return null;}
+ },
+ batchPayCancel:()=>{ payContextRequest++;payDraft={}; closeModal(); },
  /* 删除行：从本次付款中移出该行（= 取消该行勾选），并重建弹窗 */
  batchPayDel:t=>{ const id=t.dataset.id, n=NO.find(x=>x.id===id);
    pickSet.delete(id); render();
    if(pickSet.size){ toast(`已把 <b>${n?n.code:id}</b> 移出本次付款（同时取消该行勾选）`); ACT.batchPay(); }
    else { closeModal(); toast('已移除全部记录，本次付款未提交'); } },
- batchPayOk:t=>{ if(busy) return; reconcilePick();
+ batchPayOk:async t=>{ if(busy) return; reconcilePick();
    /* ⭐ 与 `batchPay` 同一道闸：撤单行**不得产生付款流水**（窗口里已排除，这里兜底防状态错位） */
    const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean).filter(ntPayCand);
    if(rows.length!==payBatchIds.length||rows.some((n,i)=>n.id!==payBatchIds[i])){
      ACT.batchPay(); return toast('勾选记录已变化，请重新核对本次付款后再确认',5200); }
    if(!rows.length) return toast('没有可付款的记录');
+   const context=await ACT.batchPayTerms();
+   if(!context) return;
+   if(context.rows.some(r=>r.term_warning)&&!confirm('该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？')) return;
    const dt=($('#bDate')&&$('#bDate').value)||SYS_TODAY;
    const rm=(($('#bRemark')&&$('#bRemark').value)||'').trim();
    const batch=[], errs=[];
@@ -2026,6 +2055,10 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const v=String(t.value==null?'':t.value).trim();
    await jcAct(()=>API.m11Fields({id:j.id, fields:{ret_date:v}}),
      `合同 <b>${j.id}</b> 寄回日期已保存${v?`：<b>${esc(v)}</b>`:'（已清空）'}`); },
+ jcPaymentField:async t=>{
+   const j=JCs.find(x=>x.id===t.dataset.id);if(!j) return;
+   await jcAct(()=>API.m11Fields({id:j.id,fields:{[t.dataset.k]:t.value}}), '合同付款约定已保存');
+ },
  jcRemark:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const v=String(t.value==null?'':t.value).trim();
    await jcAct(()=>API.m11Fields({id:j.id, fields:{remark:v}}),
@@ -2222,6 +2255,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
        material_name:String(jcND.material||'').trim(), supplier:String(jcND.supplier||'').trim(),
        contract_amt:String(amt), trade_co:String(jcND.tradeCo||'').trim()||null,
        trade_contract_amt:(tAmt===''?null:String(tAmt)),
+       payment_term:jcND.payment_term||'',payment_method:jcND.payment_method||'',
        remark:(jcND.history?JC_HISTORY_PREFIX+jcND.cutoff+'；':'')+String(jcND.remark||'').trim()}),
      x=>`已新增集采合同 <b>#${x.id}</b>（${esc(pjLabel(jcND.pj))} · ${esc(String(jcND.material||'').trim()||'（未填材料名）')}）—— 三态默认 <b>${esc(x.tag||'纳入台账')}</b><br><span class="mut sm">发票 / 付款金额请在该行「子表」里录入</span>`);
    if(r){
@@ -2490,6 +2524,7 @@ document.addEventListener('change',e=>{
 let ntSearchTimer;
 document.addEventListener('compositionstart',e=>{if(e.target.id==='ntSearch')clearTimeout(ntSearchTimer);});
 document.addEventListener('input',e=>{
+  if(e.target.dataset.act==='payDraft'){ACT.payDraft(e.target);return;}
   if(e.target.id==='supManualValue'&&!e.isComposing){ACT.supManualFilter(e.target);return;}
   const search=e.target.closest('[data-act="ntSearch"]');
   if(search&&!e.isComposing){ACT.ntSearch(search);return;}

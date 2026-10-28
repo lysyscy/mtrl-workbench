@@ -366,9 +366,13 @@ def create_app() -> FastAPI:
 
     # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。
     #    ⚠️ 挂在 `/app`（**不抢 `/`**）：打样期间与旧服务端渲染页**并存** ⇒ 逐页切换、随时可停。
-    @app.get("/app", include_in_schema=False)
-    def web_shell(request: Request) -> Response:
-        return _static_file(request, _APP_DIR / "web" / "index.html", "text/html")
+    if settings.frontend_app_dir:
+        from app.core.frontend import install_frontend
+        install_frontend(app, settings.frontend_app_dir, _static_file, base='/app')
+    else:
+        @app.get("/app", include_in_schema=False)
+        def web_shell(request: Request) -> Response:
+            return _static_file(request, _APP_DIR / "web" / "index.html", "text/html")
 
     # ⭐ **壳的外链件**（`web/shell/*.js`）—— 壳的**接线层**都在这几件里（`P4`② 2026-09-19 起拆 · `P2-a` 2026-09-28 加件）。
     #    ⚠️ **件清单的唯一出口 = `index.html` 的 `<script src>`**（`tools/audit/shell_source.py` 按它现读）

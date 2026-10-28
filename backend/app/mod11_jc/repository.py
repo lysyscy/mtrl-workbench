@@ -30,6 +30,22 @@ from app.mod11_jc.models import (
 )
 
 
+def plan_audit_contexts(conn, *, lock=False):
+    """同连接读取合同约定；确认回写时锁住关联及约定，防止检查后变化。"""
+    from sqlalchemy import inspect, text
+    inspector = inspect(conn)
+    if not inspector.has_table('jc_contract') or not inspector.has_table('jc_payment'):
+        return {}
+    if lock and conn.dialect.name == 'postgresql':
+        conn.exec_driver_sql('LOCK TABLE jc_contract, jc_payment IN SHARE ROW EXCLUSIVE MODE')
+    columns = {c['name'] for c in inspector.get_columns('jc_contract')}
+    method = 'c.payment_method' if 'payment_method' in columns else "'' AS payment_method"
+    rows = conn.execute(text('SELECT p.notice_id,c.id,c.contract_no,' + method +
+        ' FROM jc_payment p JOIN jc_contract c ON c.id=p.contract_id WHERE p.notice_id IS NOT NULL')).mappings()
+    return {int(r['notice_id']): {'id': r['id'], 'contract_no': r['contract_no'], 'payment_method': r['payment_method']}
+            for r in rows}
+
+
 def _project_key(s: Session, project_id: int) -> tuple[str, str]:
     """`project_id` → `(仓库名, 展示名)`（§2.7.4：**键 = 仓库名**，展示名只用于显示）。"""
     p = next((p for p in PS.all_projects(s) if p.id == int(project_id)), None) if project_id else None

@@ -43,7 +43,7 @@ def inputs(tmp_path):
     wb.save(source)
     notices = [dict(id=i, bill_no=doc, approved='100.00', paid='20.00',
                     ownership_id=1, project_name='系统甲', payee='系统单位',
-                    planned_pay_method='', excluded=False, i8_revoked=False)
+                    planned_pay_method='', excluded=False, i8_revoked=False, jc_contract=None)
                for i, doc in enumerate('ABCDE', 1)]
     snapshot = dict(schema=1, complete=True, captured_at='2026-10-15T10:00:00+08:00',
                     scope='测试完整范围', database_fingerprint='offline', method_column_available=True,
@@ -277,3 +277,57 @@ def test_apply_is_atomic_and_updates_only_planned_method(conflict):
         first = conn.execute(text('SELECT planned_pay_method, amount_approved FROM payment_notice WHERE id=1')).one()
         assert first == ('' if conflict else '承兑', 100)
     engine.dispose()
+
+
+
+def test_contract_method_conflict_skips_only_that_row_and_marks_original(inputs, tmp_path):
+    source, snapshot = inputs
+    snapshot['notices'][0]['jc_contract'] = {'id': 61, 'contract_no': 'CGHT-TEST', 'payment_method': '承兑'}
+    original = source.read_bytes()
+    plan = read_plan(source, '2026-10')
+    preview = compare(plan, snapshot)
+    assert [c['bill_no'] for c in preview['changes']] == ['E']
+    assert '合同付款方式' in '；'.join(plan['rows'][0]['input_issues'])
+    backup = annotate(plan, tmp_path/'backup')
+    wb = load_workbook(source)
+    assert wb['材机付款计划明细']['E3'].value == '电汇'
+    assert '承兑' in wb['材机付款计划明细']['M3'].value
+    assert wb['材机付款计划明细']['L4'].value == '人工付款附注'
+    assert wb['其他']['A1'].value == '=1+2'
+    assert Path(backup['backup']).read_bytes() == original
+
+
+def test_confirmed_method_exception_is_in_preview_and_missing_contract_method_skips(inputs):
+    source, snapshot = inputs
+    snapshot['notices'][0]['jc_contract'] = {'id': 61, 'contract_no': 'CGHT-TEST', 'payment_method': '承兑'}
+    plan=read_plan(source,'2026-10')
+    preview=compare(plan,snapshot,confirmed_method_rows=[3])
+    a=next(c for c in preview['changes'] if c['bill_no']=='A')
+    assert a['method_exception_confirmed'] is True
+    assert a['jc_contract']==snapshot['notices'][0]['jc_contract']
+    assert a['new']=='现汇'
+    snapshot['notices'][0]['jc_contract']['payment_method']=''
+    plan=read_plan(source,'2026-10')
+    preview=compare(plan,snapshot)
+    assert [c['bill_no'] for c in preview['changes']]==['E']
+    assert '未填写' in '；'.join(plan['rows'][0]['input_issues'])
+
+
+
+def test_old_snapshot_missing_contract_context_cannot_write_methods(inputs):
+    source, snapshot = inputs
+    snapshot['notices'][0].pop('jc_contract')
+    plan=read_plan(source,'2026-10')
+    preview=compare(plan,snapshot,confirmed_method_rows=[3])
+    assert [c['bill_no'] for c in preview['changes']]==['E']
+    assert '上下文缺失' in '；'.join(plan['rows'][0]['input_issues'])
+
+
+def test_paid_plan_keeps_blue_state_even_if_contract_method_changed(inputs):
+    source,snapshot=inputs
+    snapshot['notices'][0].update(jc_contract={'id':61,'contract_no':'CGHT-TEST','payment_method':'承兑'},
+        paid='20',payments=[{'amount':'20','pay_date':'2026-10-01'}])
+    plan=read_plan(source,'2026-10')
+    preview=compare(plan,snapshot)
+    assert plan['rows'][0]['final_status']=='本月已付'
+    assert [c['bill_no'] for c in preview['changes']]==['E']

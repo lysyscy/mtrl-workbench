@@ -23,6 +23,13 @@ def validate_changes(preview):
         if (type(c.get('ownership_id')) is not int or c['ownership_id'] <= 0
                 or type(c.get('source_row')) is not int or c['source_row'] <= 0):
             raise ValueError('回写清单缺少归属或来源行')
+        contract = c.get('jc_contract')
+        if contract is not None and (not isinstance(contract, dict) or type(contract.get('id')) is not int
+                or contract['id'] <= 0 or not isinstance(contract.get('contract_no'), str)
+                or contract.get('payment_method') not in ('', *PAY_METHODS)):
+            raise ValueError('回写清单的合同约定无效')
+        if type(c.get('method_exception_confirmed', False)) is not bool:
+            raise ValueError('付款方式例外须明确确认')
         approved, paid, flow, planned = (to_money(c.get(k)) for k in
                                         ('approved', 'paid', 'flow_amount', 'planned_amount'))
         if approved < 0 or paid < 0 or flow != approved or planned <= 0 or planned > approved-paid:
@@ -37,7 +44,14 @@ def apply_changes(conn, preview):
     # 单据号并非唯一约束；锁表防止检查与更新之间插入重号。
     if conn.dialect.name == 'postgresql':
         conn.exec_driver_sql('LOCK TABLE payment_notice, payment_flow IN SHARE ROW EXCLUSIVE MODE')
+    from app.mod11_jc import service as JC
+    contracts = JC.plan_audit_contexts(conn, lock=True)
     for c in preview['changes']:
+        contract = contracts.get(c['id'])
+        if contract != c.get('jc_contract'):
+            raise ValueError(f"关联合同或付款约定已变化：{c['bill_no']}；须重新核对，整批未写入")
+        if contract and (not contract['payment_method'] or contract['payment_method'] != c['new']) and c.get('method_exception_confirmed') is not True:
+            raise ValueError(f"合同付款方式待核实：{c['bill_no']}；须确认例外后再回写")
         rows = conn.execute(text(
             'SELECT id, ownership_id, planned_pay_method, excluded, i8_revoked, amount_approved, '
             "(SELECT COALESCE(SUM(amount),0) FROM payment_flow f WHERE f.notice_id=payment_notice.id "
