@@ -109,9 +109,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
         const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
         function cellKey(row: T, column: TextGridColumn<T>, pinned: boolean) {
-          const start = displayed.findIndex(col=>col.getColId()===column.id);
           const span = Math.max(1, Math.floor(column.span?.(row,pinned) ?? 1));
-          const width = plannedWidths.slice(start,start+span).reduce((sum,value)=>sum+value,0), weight = pinned ? '600' : '400', text = column.text(row, pinned);
+          let width = widthById.get(column.id) ?? 0;
+          if (span !== 1) {
+            const start = displayed.findIndex(col=>col.getColId()===column.id);
+            width = plannedWidths.slice(start,start+span).reduce((sum,value)=>sum+value,0);
+          }
+          const weight = pinned ? '600' : '400', text = column.text(row, pinned);
           return { key: `${column.id}\0${width}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
         }
         // Compute each domain text/signature once; applying measured heights must
@@ -229,6 +233,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
             await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
             if (cancelled(run)) return;
           }
+        }
+        // Publishing rows can reveal the vertical scrollbar and shrink flex columns.
+        // Never cache heights measured at the previous widths under that new geometry.
+        const finalColumns = grid.getAllDisplayedColumns();
+        if (finalColumns.length !== displayed.length || finalColumns.some((column, i) => column.getColId() !== displayed[i]!.getColId() || column.getActualWidth() !== plannedWidths[i])) {
+          prepared.current = null;
+          schedule(); return;
         }
         appliedGeometry.current = key; appliedScope.current = scope; appliedIdentity.current = identity; appliedWidth.current = node!.clientWidth; appliedHeight.current = node!.clientHeight;
         restoredTop.current = viewport.scrollTop;

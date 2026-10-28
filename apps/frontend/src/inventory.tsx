@@ -19,7 +19,6 @@ import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
-import { InventoryText } from './inventory-rows';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true};
@@ -67,15 +66,16 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
   const amountWidths = useMemo(() => Object.fromEntries(fields.filter(([, ,type]) => type === 'num').map(([field]) => {
-    return [field, numberColumnWidth([...rows,...totals].map(row=>row[field as keyof typeof row]).filter(value=>value!=null&&value!=='').map(value=>money(String(value))),scale)];
+    const values = new Set([...rows,...totals].map(row=>row[field as keyof typeof row]).filter(value=>value!=null&&value!=='').map(String));
+    return [field, numberColumnWidth([...values].map(value=>money(value)),scale)];
   })), [scale,rows,totals]);
   const identifiers=useMemo(()=>Object.fromEntries(['doc_no','doc_date','biz_type'].map(field=>[field,fullTextWidth(rows.map(row=>row[field as Field]),scale)])),[rows,scale]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
-    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),cellRenderer:type === 'num' ? undefined : InventoryText,
+    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
       ...(type === 'num' ? amountWidths[field]! : identifiers[field] ?? contentWidth(['seq','unit'].includes(field)?40:field==='spec'?56:['wbs_name','cbs_name'].includes(field)?60:field==='material_property'?64:76,['seq','unit'].includes(field)?85:300,scale,['material','vendor','warehouse','spec','wbs_name','cbs_name'].includes(field)?1:0)),
-      ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier'}:{}),
+      ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier',suppressAutoSize:true}:{}),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
   ] satisfies ColDef<InventoryRow>[]),[scale, amountWidths, identifiers]);

@@ -57,6 +57,9 @@ def test_known_inventory_rows_keep_scroll_extent(server,browser_page,api):
     open_page(page,server,'inventory','库存单据与调整单')
     grid=page.locator('.inventory-grid')
     expect(grid).to_have_attribute('aria-busy','false')
+    text_values=grid.locator('.ag-cell:not(.money):not([col-id=actions]) .ag-cell-value')
+    expect(text_values.first).to_be_visible()
+    assert text_values.evaluate_all("els=>els.every(e=>e.scrollHeight<=e.clientHeight+1&&e.scrollWidth<=e.clientWidth+1)"), 'Initial flex-column sizing clipped inventory text'
     page.get_by_role('button',name='库存核算期间',exact=True).click()
     page.get_by_role('dialog',name='库存核算期间选择',exact=True).get_by_text('全部',exact=True).click();page.keyboard.press('Escape')
     expect(page.locator('.inventory-count-feedback')).to_have_text(f"{len(data['rows'])} / {len(data['rows'])} 行")
@@ -66,7 +69,7 @@ def test_known_inventory_rows_keep_scroll_extent(server,browser_page,api):
     for fraction in [.25,.5,.75,1,0]:
         viewport.evaluate("""async(e,f)=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*f;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));}""",fraction)
         assert viewport.evaluate('e=>e.scrollHeight')==extent
-        assert grid.locator('.inventory-cell-text').evaluate_all("""els=>els.every(e=>{const c=e.closest('.ag-cell');return e.getBoundingClientRect().height<=c.clientHeight+1})""")
+        assert text_values.evaluate_all("els=>els.every(e=>e.scrollHeight<=e.clientHeight+1&&e.scrollWidth<=e.clientWidth+1)")
         assert grid.locator('.ag-cell.money').evaluate_all('els=>els.every(e=>e.scrollWidth<=e.clientWidth+1)')
     # Re-entering the same compressed row model must not compound native rounding.
     viewport.evaluate("async e=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*.5;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));}")

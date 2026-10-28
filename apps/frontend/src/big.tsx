@@ -105,8 +105,9 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       const values = (query.data?.rows ?? []).map(row => value(key,{data:row}));
       values.push(query.data?.totals[key as TotalKey] ?? null);
       const texts = values.map(amount => amount == null ? '—' : key.endsWith('rate') ? `${(Number(amount)*100).toFixed(1)}%` : money(String(amount)));
-      const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?5:4;
-      const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 8 : edge))));
+      // The shared density uses 4px on each side, plus the cell borders.
+      const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?11:10;
+      const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 14 : edge))));
       return contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1);
     };
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
@@ -114,7 +115,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
     return [
       {headerName:'项目',marryChildren:true,children:[
-        {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(18,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 4)),scale)},
+        {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(40,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 12)),scale)},
         {field:'display',headerName:'项目名称',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(46,180,scale,1)},
         {...manual('open_ym'),pinned:'left'},
       ]},
