@@ -145,7 +145,7 @@ def application(args, run, env, owner, version, source, guard):
         values = PreviewSettings(_env_file=(args.source_env, config.ENV_FILE))
         return values.model_copy(update=dict(database_url=guard.test_url, test_database_url=guard.test_url,
             session_secret=secret, app_env='dev', allowed_ip_cidrs='127.0.0.1/32,::1/128', cors_allow_origins='',
-            frontend_preview_dir=version['build_path'], artifacts_dir=str(ROOT / 'var/data/react-writable-preview' / run.name),
+            frontend_preview_dir=version['build_path'], frontend_app_dir='', artifacts_dir=str(ROOT / 'var/data/react-writable-preview' / run.name),
             logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='', printer_name=''))
     config.get_settings = settings
     os.environ.update(env)
