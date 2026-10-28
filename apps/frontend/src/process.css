@@ -54,3 +54,5 @@
 .process-matrix-scroll .business-grid{flex:1;min-height:0}
 .process-matrix .process-cell .ant-input{width:100%;field-sizing:fixed}
 .process-matrix .ag-cell.process-segment{border-inline-start:.5px solid var(--bd)}
+.process-matrix .process-segment-total{display:flex;flex-wrap:wrap;justify-content:flex-end;column-gap:.35em;line-height:1.5}
+.process-matrix .process-segment-total>span{white-space:nowrap}

@@ -1,6 +1,7 @@
 import './styles.css';
 import { prepareAppearance, loadTextFonts } from './appearance-ready';
 import { PageSurface } from './page-surface';
+import { PageErrorBoundary } from './page-error';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
 import { UiProvider } from './ui-provider';
@@ -101,7 +102,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <PageSurface key={entry.path} active={active} title={entry.title}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
+          return <PageErrorBoundary key={entry.path} active={active} title={entry.title}><PageSurface active={active} title={entry.title}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface></PageErrorBoundary>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}

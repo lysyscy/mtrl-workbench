@@ -102,3 +102,15 @@
 独立只读审查发现的两项设置边界与一项跨页重载保护均已落实。build11目标执行8pass，2项lazy测试只因测试状态选择器指向包装层失败；改为实际“项目列表”region后2pass，产品未因该测试修正再改。10个唯一节点功能断言通过，失败原始日志保留，不声称一次全绿。日志browser-mechanical-02.log、browser-loading-03.log。
 
 补充：未知设置回执后重读仍失败时保持“待核实”，不沿用普通成功写入后的“修改已保存”文案。build13对应lost/stale/mismatch三个目标全部通过（33.45s），包含重读失败、输入保留、禁重复写及再次重读恢复。日志browser-settings-05.log。
+
+## 第五批：资源失败恢复和实测小窗口修正
+
+- 已实测build10项目JS失败使root_children=0、nav_links=0。按React官方错误边界逐页保住壳和其他页面实例；明确重载复用现有草稿/在途保护。项目首入等待、失败提示、恢复及其他页面保留草稿已通过真实静态资源故障测试。来源https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary 。
+- single-entry期间Popover从bottomLeft改为官方支持自动移位的bottom，避免上下均不足时只翻转仍越界。核本机AntD6.6.7 placements源码和官方FAQ https://ant.design/components/tooltip/#faq ，未自造定位器。800×650/1.4的面板从bottom854.53越界改为bottom644.53，鼠标点外关闭正常。
+- 通知书单据名称按实际React渲染器准备行高，移出纯文本捷径；窄窗长名称少一行的裁切已消失。过程表分组合计把标签和完整金额分别作为可换行项，金额本身单行，2px裁切消失；不改数值、合计范围或导出。
+- build12另10项目标回归全部通过（80.43s）：过程原始/调整表完整行合计和表头滚动、通知书付款草稿/鼠标选择、手调列宽重载/窗口/账号与清除保工作状态、字体首帧。日志browser-final-targets-04.log。
+- 45项尺寸/外观采样：1280×800/1.12默认为14/15内容完整，1024×768/1.4默认与800×650/1.4深色reduced-motion各15/15。必要网格横滚单列记录，页面横向溢出均0；项目页一次首入行高异常未假称修复。追加3个新context及3次实际字号切换均未复现；原始响应矩阵与6次探针都保留。最终构建仍需复核，不用重试替代原因。
+- 800×650/1.4深色的项目选择、关键词、期间面板、新增规则均实际可达/取消。外观覆盖面板aria-modal=true、主区inert、正文可滚动；reduced-motion弹窗animation=none、transition=0s，状态反馈仍保留。
+- Impeccable按现有配置扫apps/frontend/src，exit0、JSON=[]，属于源码检测，不等同浏览器全a11y认证。唯一后续改动为设置重读失败文案，目标测试已通过，最终仅复核该文件检测。
+
+当前收敛产品改动，后续完成提交版本的最终桌面与响应式核验、其余代表性弹窗、首页性能复测、资源生命周期和验收记录。不扩大架构或恢复键盘专项。

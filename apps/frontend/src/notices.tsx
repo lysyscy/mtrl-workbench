@@ -189,7 +189,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;
     return JSON.stringify([pinned, row.notice_id === -2, id === 'pick' ? '' : id === 'actions' ? [row.has_any_flow,cents(row.amount_paid ?? '0') > 0n,row.is_manual,Boolean(draft)] : [fixedInput ? '' : row[id as keyof NoticeRow],row.is_excluded,row.is_revoked,row.is_manual,row.has_link,row.is_overpaid,row.category]]);
-  },textOnly:draft?[]:['doc_date','bill_no','bill_name','biz_type','payee','input_by']}), [draft]);
+  },textOnly:draft?[]:['doc_date','bill_no','biz_type','payee','input_by']}), [draft]);
   const presentation = useGridPresentation({table: 'notices', root: gridRoot, fontRoot: countRoot, active: active && !blocked, rows: shown, totals: footer, columns, measurement, rowId: noticeRowId, scale, scope: JSON.stringify([filters,search,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
   useEffect(() => { if (presentation.state === 'ready' && pendingFocus.current) { const node = api.current?.getRowNode(String(pendingFocus.current)); if (node) { api.current?.ensureNodeVisible(node, 'middle'); pendingFocus.current = 0; } } }, [presentation.state,shown]);
   const postSortRows = useMemo(() => (params: PostSortRowsParams<NoticeRow>) => { const top = params.nodes.filter(node => pasteTop.has(node.data!.notice_id)), rest = params.nodes.filter(node => !pasteTop.has(node.data!.notice_id)); params.nodes.splice(0,params.nodes.length,...top,...rest); }, [pasteTop]);
