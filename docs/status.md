@@ -1,5 +1,9 @@
 # 当前活动工作
 
+## 正式入口隔离候选（待窗口授权）
+
+`codex/react-cutover-candidate`已整合本地master与React，产品846b4913，真实备份恢复/四迁移/新写后界面回退及定向验证、两轴独审完成；原8000/8065继续原状态。用户已裁定8065全部试用、不回灌。证据、维护窗口及仍待授权动作归[TAIL-423](../.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md#2026-10-28-隔离候选准备与演练结果待正式窗口)，旧端删除归[424](../.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)，尚未正式启用或退役。
+
 ## React 前端独立重做
 
 用户要求本轮收尾后先研究新前端启用与旧端退役；未做架构项已收敛为[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)（needs-triage，非全部必改）。启用/退役复用[423](../.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md)/[424](../.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)，当前只保存研究交接，尚未正式切换。
