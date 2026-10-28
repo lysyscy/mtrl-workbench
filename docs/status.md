@@ -12,9 +12,6 @@
 
 未实施架构候选统一由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，状态needs-triage；本次启用不自动启动或要求全部完成。
 
-TAIL-451的[AG Grid全量统一](../.scratch/ag-grid-unification/spec.md)已完成：四类代表通过后迁移34处原生业务声明，复用11处既有AG声明，Excel/PDF保持原模板；恢复自动列宽入口收进表头。累计105项唯一浏览器覆盖、11项既有单测复用及独立双轴审查通过，源码41e2a11b已推送并正式加载。本次测试副本及临时资源已退出，终态材料保存Git后按项目生命周期退出；现行结构回[架构](architecture.md)，界面规则回[前端设计](guides/frontend-design.md)。未扩大450其余候选。
-
-
 ## Mini App 付款原表核对台（暂缓）
 
 用户2026-10-28决定当前暂不推进。[规格与七票](../.scratch/miniapp-payment-plan-audit/spec.md)原地保留、尚未实施，七票统一needs-info，待用户以后重新安排；恢复时再核主前端、后端接口及宿主变化。既有`skills/payment-plan-audit`仍按自身业务用途保留。
