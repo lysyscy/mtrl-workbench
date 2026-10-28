@@ -185,3 +185,11 @@
 完整正式资源`var/frontend/releases/8efc407f`已交付并重启原NSSM服务，上一版95556f14保留作界面回退；回退保当前后端和正常业务数据。服务PID11956、uvicorn PID11792（启动UTC 2026-10-28T03:06:47Z）及注册目录/命令已核。正式`/app`、项目深链和32个assets逐个SHA一致，缺资源404；运行中OpenAPI包含新扶正契约，正式项目API已读回ID244/广东茂名项目。用户使用后的全站验收与424旧壳退役边界保持。
 
 [正式扶正回执](../../../.artifacts/archive/warehouse-promotion/20261028-release/reports/maoming-promotion.json)、[加载核验](../../../.artifacts/archive/warehouse-promotion/20261028-release/reports/http-verify.json)及同effort的隔离验证日志保近期复查；临时测试环境、构建和操作脚本退出，正式在用及上一版完整资源保留。
+
+## 2026-10-28 列宽记忆加载
+
+用户明确“加载”，本批产品6228dfc1已按正式`/app/`基址重新构建并加载原NSSM服务。完整资源在`var/frontend/releases/6228dfc1`，34个文件散列及manifest已核；上一版8efc407f完整资源保留，回退保持当前后端与业务数据库。仅切换`.env`的FRONTEND_APP_DIR，其他配置字节保持；没有迁移数据库或写入正式业务数据。
+
+服务PID24052，venv启动进程31756、实际Python进程28912，命令与原注册目录均已核。停服后的日志捕获曾发生TypeError，核实原服务已停后续接切换，没有重复停服。新版本于北京时间12:38完成启动；正式入口及5条深链HTML、32个assets逐个SHA匹配，缺失资源404，库仍为`mtrl_workbench.public / invadj261027`。独立匿名浏览器在正式付款通知书验证日期/编码/项目可拖宽，实际拖动后刷新保留、恢复自动列宽可用，页面脚本错误和业务写入尝试均为0。
+
+实现阶段的19项相关浏览器检查、11项前端单测及构建证据沿[列宽验证](../../../.artifacts/archive/grid-widths/20261028-01/reports/validation.json)复用，本次正式基址类型检查与构建另行通过。[正式HTTP核验](../../../.artifacts/archive/grid-widths/20261028-release/reports/http-verify.json)、[正式页面核验](../../../.artifacts/archive/grid-widths/20261028-release/reports/formal-ui.json)及同目录restart.json保近期复查。本批只统一现有AG Grid列宽能力，原生HTML业务表未迁入AG Grid；进一步统一仍为建议。用户日常业务验收及424旧壳退役范围保持。
