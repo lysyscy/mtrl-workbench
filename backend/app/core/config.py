@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     cors_allow_origins: str = ""
     # Opt-in isolated React build; empty keeps the current entry points.
     frontend_preview_dir: str = ""
-    # Complete release directory; empty keeps the legacy /app rollback surface.
+    # Complete React release directory; empty serves APIs and optional /preview only.
     frontend_app_dir: str = ""
 
     # --- 数据库（开发库 / 测试库物理隔离）---

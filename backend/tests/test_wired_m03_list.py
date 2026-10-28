@@ -21,231 +21,41 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, const_src, func_body, page_seg, page_slice, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：`_NT_THEAD_RE`（自写正则）**已删** —— 取句走 `const_src`。⛔ 别写回来。
 
 
-def _nt_region() -> str:
-    """本页渲染函数（`ntTb`）的正文 —— 从 `const NT_THEAD=` 到它的 `</div>\\`;` 收尾。
-
-    ⚠️ 断言一律在这个**切片**里找，不到全文里撞 —— 否则 `10:rs=>N2(rs.reduce(` 这种片段
-    会被别的表（如库存单据 `ivSums`）的同款写法**假命中**。
-
-    ⚠️⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：本页的**表头模板 `NT_THEAD`／`ntActCell`／
-       `pjPanel`** 已随拆件搬进 `web/shell/proj.js`，而**渲染函数 `V.m03` 按计划 §23 留在
-       `index.html`** ⇒ 两者在**合并后的壳**里不再相邻（`read_shell()` 的顺序 = `index.html` …
-       `proj.js` …），一段 `find(i) → find(term, i)` 会把收尾找到**下一页**去。
-       ⇒ 本函数取**两段并起来**：① 表头模板那一段（`proj.js`）② `V.m03` 切片那一段（`index.html`）。
-       ⭐ 判据内容**一字未改**，只换取材方式（本仓既有做法：拆件后判据改指，⛔ 不是不许拆件）。
-    """
-    # ⭐ 2026-10-03（`TAIL-219` 批 2b）：两段改走壳的语义口径（表头模板 ⇒ `const_src` · 页面 ⇒ `page_slice`）
-    return const_src("NT_THEAD") + "\n" + page_slice("m03")
 
 
-def _nt_heads() -> list[str]:
-    """本表表头（`NT_THEAD`）的**列标签**（勾选列由 `<input>` 渲染 ⇒ 它的标签是空串）。"""
-    raw = re.findall(r"<th[^>]*>([\s\S]*?)</th>", const_src("NT_THEAD"))
-    return [re.sub(r"<[^>]*>", "", h).strip() for h in raw]
 
 
 # ---------------------------------------------------------------- 骨架与列
 
 
-def test_壳里列表页骨架齐备且表头18列():
-    """旧页：五段骨架（`data-seg=tip/kpis/filter/data`）＋ **18 列**（勾选 + 16 数据 + 操作）。
-
-    新壳同款（换了实现，没换要求）：口径说明（`details.tip`）→ 筛选栏（`.fbar`）→ 数据区
-    （`.tw > table.dt`）→ 计数 pill ＋ 空态行；表头 = `NT_THEAD`，**18 列**、末列「操作」。
-    ⚠️ 旧页的「指标区」那一段本就**是空的**（MOD-03 这页没有 KPI）⇒ 新壳直接不渲染，不算丢。
-    """
-    # ⭐ 2026-09-30（`TAIL-64` P4-c-b）：口径说明块已收进出口 `CALIB` ⇒ 原先把
-    #   `<details class="tip">` 钉死**退化成真空断言**了（内核里那一份也能让它过 ——
-    #   哪怕本页的块被整段删掉）。⛔ 别退回钉字面（＝宣布以后不许抽通用件）⇒ **改钉意图**：
-    #   **本页真的委托了出口**（⛔ 不是"全文随便哪儿有一份"）。
-    #   ⚠️ `m03` 是**唯一**带 `post`（那多出来的一个 `&nbsp;`）的页 ⇒ 两种开局都收。
-    _seg = page_seg("m03")
-    # ⭐ 2026-10-01（`TAIL-213` **甲** · 批 1）：**折叠的口径说明块已按用户拍板撤掉**（原话「一次也没进去看过」）
-    #   ⇒ `m03` 改成**页内默认展开的一小段**（只留"会做错的后果"）。⛔ 判据**不删**、**改钉意图**：
-    #   「本页仍有一段口径说明，而且它**不是**收起来的折叠块」（⛔ 别退回钉 `CALIB` 字面 —— 那等于禁止撤块）。
-    assert '<div class="tip">' in _seg, "m03 的口径说明段没了（它现在该是**页内默认展开**的一段）"
-    assert 'class="tip"><summary>口径说明' not in _seg, \
-        "口径说明又收进折叠块了（`TAIL-213` 甲：用户从不点开那个抽屉）"
-    # ⭐ 2026-09-30（`TAIL-64` P4-b）：筛选栏的**外壳**已收进统一出口 `FBAR`
-    #   ⇒ 原先把 `<div class="fbar">` 钉死就**假红**了（那串现在**只在 `FBAR` 内核里**）。
-    #   ⛔ 别退回钉字面 —— 那等于宣布"以后不许抽通用件"（与 `TAIL-64` 相反）。
-    #   现在断的是**意图**："这一页的筛选栏还在"（它那几个筛选控件点名在）＋ **外壳走了出口**。
-    #   ⚠️ 全站"有没有漏掉没换的裸外壳"由 `test_ux_pages.py::test_筛选栏外壳全站都走统一出口` 一次看。
-    assert 'id="fCat"' in SHELL and 'data-act="filterReset"' in SHELL, \
-        "筛选栏没了（分类 / 审批 / 付款状态那几个控件 ＋「重置」）"
-    assert "FBAR({body:" in SHELL, "筛选栏的外壳没走统一出口 `FBAR`（`TAIL-64` P4-b）"
-    # ⭐ 2026-09-29（`TAIL-64` P3）：表外壳走统一出口 `TBL` ⇒ 原先把整串
-    #   `<div class="tw"><table class="dt" data-sort data-sort-key="m03:notices">` 钉死就假红了
-    #   （那串搬进 `TBL` 内核后切片里不再出现）。⛔ 别退回钉字面（等于宣布"以后不许抽通用件"）。
-    #   现在断三件事：① 切片**委托** `TBL` 并交出自己的身份（`key:'m03:notices'` ＋ 表头出口 `NT_THEAD`）；
-    #   ② 行的**来源**仍是预算好的 `tb`（不是页里另拼一份）；③ 内核里「可排」那条分支**真的**出
-    #   `data-sort` ＋ `data-sort-key`。渲染形态以正式壳及其浏览器核验为准，旧原型自检已退役。
-    #   自证 = `tools/mut/_mut_tbl.py` 的 M12（去掉这处委托）必须红。
-    assert "TBL({head:NT_THEAD,key:'m03:notices',cls:'notice-table',rows:[tb]})" in SHELL, \
-        "数据区没了（或没走统一出口 `TBL` / 没交出自己的身份 `m03:notices`）"
-    kern = tbl_kernel()
-    assert "' data-sort data-sort-key=\"'+key+'\"'" in kern, \
-        "`TBL` 内核里没把 `key` 落成 `data-sort data-sort-key`（可排序身份丢了）"
-    heads = _nt_heads()
-    assert len(heads) == 18, f"本表应 18 列（勾选 + 16 数据 + 操作），实得 {len(heads)}：{heads}"
-    assert heads[-1] == "操作", f"末列应是「操作」，实得 {heads[-1]!r}"
-    assert 'id="pickAllBox"' in SHELL, "勾选列（表头全选）没了"
-    # 金额是千分位 2 位（与打印件的「零值留空」故意不同）—— 走全站唯一金额出口 `M()`
-    assert "const M=n=>" in SHELL, "金额千分位出口 `M()` 没了"
-    assert "(v<0?'-':'')+s.replace(" in SHELL, "千分位格式没了"
 
 
-def test_壳里年月走统一时间控件且单据日期是闭区间():
-    """旧页：`name="period"` 用统一控件取值语法（`YYYY-MM`）＋「闭区间」只读显示。
-    新壳：`tmBtn(...,{scope:'nt',modes:['月','跨月','年','全部']})` ＋ 只读的闭区间输入框。
-    """
-    assert "tmBtn('ntMonth',{scope:'nt',val:fNt.month,label:tmLabel(fNt.month)," \
-           "modes:['月','跨月','年','全部']})" in SHELL, "单据年月没走统一时间控件（或丢了四档模式）"
-    assert "对应单据日期（闭区间）" in SHELL, "「单据日期（闭区间）」这条只读显示没了"
-    assert '<input class="inp" readonly style="width:198px" value="${esc(tmRange(fNt.month))}"' in SHELL, \
-        "闭区间既要在、又要**只读**、且由区间出口 `tmRange()` 算"
 
 
 # ---------------------------------------------------------------- 剔除 / 撤单的默认可见性
 
 
-def test_壳里有效行口径与计数三档():
-    """旧页：默认视图**隐藏剔除与撤单行**，且右侧 pill 报「有效 N 条 / i8 已撤单 N 条」。
-
-    新壳：有效行 = `ntLive`（非剔除，且「没撤单」或「撤单但有牵涉」——§4.2.7 的细化）；
-    pill 报**四档**（显示 / 有效 / 剔除 / i8 已撤单），每档都由同一个口径出口算。
-    """
-    assert "const ntLive=n=>!n.excl&&(!ntVoid(n)||ntVoidJoint(n));" in SHELL, "有效行口径变了"
-    reg = _nt_region()
-    assert "显示 <b>${list.length}</b> 条" in reg, "「显示 N 条」计数没了"
-    assert "有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条" in reg, "「有效 N 条」计数没了"
-    assert "剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条" in reg, "「剔除 N 条」计数没了"
-    assert "i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条" in reg, "「i8 已撤单 N 条」计数没了"
 
 
-def test_汇总pill把撤单里有牵涉的单独报一档():
-    """⭐ 2026-09-28（用户口径：「i8 删除付款通知书情况**非常少非常少**；但是可以做一个**保险**」）：
-    常驻那句「i8 已撤单 N 条」看不出**其中有多少条仍有牵涉**（已挂付款流水 / 集采关联）——
-    而这一类按 §4.2.7 **仍参与统计**、必须人先撤销付款 / 解绑才会退出。
-    ⇒ 汇总 pill 要把它**单独报一档**（含悬停说明与去处），否则"保险"只在抓取回执里出现过一次。
-
-    ⚠️ 能证伪：把 `ntVoidJoint(n)&&inM(n)` 那一档从 pill 里摘掉 ⇒ 本件必红。
-    ⚠️ 只**加**一档，⛔ 不动既有四档文案（那四档由 `test_壳里有效行口径与计数三档` 继续守）。
-    """
-    reg = _nt_region()
-    assert "ntVoidJoint(n)&&inM(n)" in reg, "汇总 pill 没给「有牵涉」单独一档"
-    assert "条有牵涉" in reg, "「有牵涉」那一档没有看得见的字（用户认不出）"
-    assert "仍参与统计" in reg, "没说明它为什么还在统计里（只说数字，用户不知道要不要管）"
 
 
-def test_壳里剔除来源分档不混作一谈():
-    """旧页：切「分类 = 剔除」时按来源分档打标签（`人工批量剔除` / `规则命中` / `i8 已撤单`）。
-    新壳：保留原始来源 `exsource` 与后端规则提示 `exrule`
-    ＋ 行标签出口 `ntArchTag`（§4.2.2）。
-    ⚠️ **两类的分档仍要分开标** —— 哪怕两者都能恢复，用户也要看得出"这一条当初是被谁剔掉的"。
-    """
-    assert "exsource: x.exclude_source || ''," in SHELL, \
-        "剔除来源分档出口没了"
-    assert "x.exclude_rule_hint" in SHELL and 'title="${esc(n.exrule' in SHELL
-    assert "n.exsource==='manual'?'手动剔除':n.exsource==='rule'?'自动剔除'" in SHELL
-    # ⭐ 2026-10-08 用户裁定：**规则命中的也能用「恢复剔除」放回** ⇒ 按钮提示不得再写
-    #    "任何情况下都不在此恢复"，那正是让用户以为按钮坏了的兑现不了的承诺。
-    assert "任何情况下都不在此恢复" not in SHELL, \
-        "「恢复剔除」的提示还在说规则命中的不恢复（与实际行为相反 = 界面在说假话）"
-    assert "「人工批量剔除」和「规则命中」两类都恢复" in SHELL, \
-        "「恢复剔除」的提示没讲清两类都能恢复，也没说清想长期剔除该改规则并再抓一次"
 
 
 # ---------------------------------------------------------------- 集采关联的判据来源
 
-def test_壳里集采关联判据只认notice_ids_不认按需加载的子表():
-    """⭐ 2026-10-08 BUG 钉子：集采合同**明明关联成功了**，付款时仍报「集采未关联合同」。
-
-    根因：`jcRefOf` / `jcUsedNids` 读的是 `j.payments`，而那是**子表明细** ——
-    `adaptJc` 里恒为 `[]`，只有打开过那张合同的子表弹窗（`jcLoadSub`）才被填上
-    ⇒ 没打开过弹窗就**恒判"未关联"**，且**不报错**。
-    ⛔ 正确来源是 `j.notice_ids`（`/api/m11/list` 每行都给；后端 `service.build_list` 的注释
-    早就写明"不带 `notice_ids` ⇒ 这三处静默变空"）—— 修的就是这个错位。
-    ⚠️ **整行断言**（⛔ 不从壳文本里按字面剪一段 —— `tests/shell_scissors.py` 守着这条）；
-       顺带好处：换写法就红，比切片更严。
-    """
-    assert ("const jcUsedNids=()=>new Set(JCs.flatMap(j=>(j.notice_ids||[]).map(String)));"
-            in SHELL), "全库已引用集合 `jcUsedNids` 没读 `j.notice_ids`（去重会失效 + 关联反查恒空）"
-    assert ("const jcRefOf=nid=>JCs.find(j=>(j.notice_ids||[]).some(x=>String(x)===String(nid)))||null;"
-            in SHELL), "「已关联」的反查出口 `jcRefOf` 没走 `notice_ids`"
-    # ⛔ 旧的错误写法不得复活（读按需加载的子表 ⇒ 没打开过弹窗就恒判未关联）
-    assert "(j.payments||[]).filter(p=>p[3])" not in SHELL, "`jcUsedNids` 又改回读子表 `j.payments` 了"
-    assert "(j.payments||[]).some(p=>p[3]===nid)" not in SHELL, "`jcRefOf` 又改回读子表 `j.payments` 了"
-    # 依赖它的两处必须都还在（修这一处才能一处生效）
-    for name in ("ntJcUnlinked=n=>n.cat==='集采'&&!jcRefOf(n.id)", "ntHasLink=n=>!!jcRefOf(n.id)"):
-        assert name in SHELL, f"{name} 没了（付款闸 / 操作列依赖它）"
 
 
 # ---------------------------------------------------------------- 排序与空态
 
 
-def test_壳里金额列按数值排序而不是按字符串():
-    """旧页：金额列按**数值**排序（按字符串排 `"10,000.00" < "900.00"` 是错的）。
-    新壳：`applySorts` 先判**列类型**（`_colType`）再按类型比较（`_cmp`）—— 不是裸字符串比较；
-    合计行 / 草稿行走 pin 通道**钉表尾**、不参与排序（也不会被排序卷走）。
-    """
-    assert "const tp=_colType(vals);" in SHELL, "排序没先判列类型（金额列会按字符串排）"
-    assert "_cmp(a.v,b.v,tp,st.d)" in SHELL, "排序没按列类型比较"
-    assert "const _num=s=>{const t=String(s).replace(/[,¥%\\s]/g,'');" in SHELL, \
-        "千分位 / 货币符没有统一剥离出口（转数会拿到 NaN）"
-    # ⚠️ 2026-10-11（`TAIL-283`）**改形**：「合计行」的识别从"扫整行文本"收窄成
-    #   **`sumrow` 类 ＋ 只看首格** —— 扫整行会把**名称里带「合计」的普通数据行**也钉到表尾
-    #   （付款流水新上的「通知书名称」是自由文本，实测复现）。**判词一字未改**：
-    #   合计行 / 草稿行走同一条 pin 通道（钉表尾、不参与排序），数据行才进排序。
-    assert "if(/\\bdraftrow\\b/.test(openTag)||/\\bsumrow\\b/.test(openTag)" in SHELL, \
-        "草稿行 / 合计行没走 pin 通道（会被排序卷进数据行里）"
-    assert "/合计|总计|小计/.test(_plain(firstTd))" in SHELL, \
-        "合计行的文字识别没了（`sumRowOf` 产出的首格「合计」必须能钉住）"
-    assert "tdc<ths.length) pin.push(r); else data.push(r);" in SHELL, \
-        "跨列提示行没走 pin 通道"
 
 
-def test_表头排序实际行序_金额空值与合计草稿():
-    """调用真实HTML排序出口；金额按值排序，空值末尾，原序和固定行不丢。"""
-    node = shutil.which('node')
-    assert node, '行为判据需要Node运行真实排序出口'
-    kernel = '\n'.join(['let SORT={};', *[const_src(n) for n in
-                        ('NOSORT_COL', '_plain', '_num', '_date')],
-                        *[func_body(n) for n in ('_cellRaw', '_colType', '_cmp', 'applySorts')]])
-    script = kernel + r'''
-const row=(id,cell,cls='')=>`<tr data-row="${id}" class="${cls}"><td>${id}</td><td>${cell}</td></tr>`;
-const data=[row('万元','¥10,000.00'),row('空值',''),row('九百','900.00'),
-            row('零','0.00'),row('负值','-5.00'),row('输入','<input value="20">')];
-const html='<table data-sort data-sort-key="fixture"><thead><tr><th>行</th><th>金额</th></tr></thead><tbody>'
-            +row('合计','10,915.00')+data.join('')+row('草稿','1','draftrow')+'</tbody></table>';
-const out={};for(const [name,d] of [['升序',1],['降序',-1],['原序',0]]){
-  SORT.fixture={i:1,d};
-  out[name]=[...applySorts(html,'fixture').matchAll(/<tr data-row="([^"]+)"/g)].map(m=>m[1]);
-}
-console.log(JSON.stringify(out));
-'''
-    result = subprocess.run([node, '-e', script], capture_output=True, text=True,
-                            encoding='utf-8', timeout=15)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {
-        '升序': ['负值', '零', '输入', '九百', '万元', '空值', '合计', '草稿'],
-        '降序': ['万元', '九百', '输入', '零', '负值', '空值', '合计', '草稿'],
-        '原序': ['万元', '空值', '九百', '零', '负值', '输入', '合计', '草稿'],
-    }, '用户可见行序不符合金额升降序、空值末尾或固定行口径'
 
 
-def test_壳里空态行跨列数由表头派生且指出剔除行去哪看():
-    """旧页：空态提示行的 `colspan` 由表头列数**派生**，且提示里给出「去哪儿找剔除了的行」。
-    新壳同款：走**空态唯一出口** `EMPTYROW(thCount(NT_THEAD), …)`（跨列数由表头派生）＋ pill 里写明「切「分类 = 剔除」查看」。
-    """
-    assert "EMPTYROW(thCount(NT_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
-    assert "当前筛选条件下没有付款通知书" in SHELL, "空态文案丢了"
-    assert "（切「分类 = 剔除」查看）" in SHELL, "空态没告诉用户剔除了的行去哪儿找"
 
 
 # ---------------------------------------------------------------- 时间口径与数据纯度
@@ -255,58 +65,10 @@ def test_通知书默认全部时间且其他付款域默认月不变():
     """用户2026-10-13修订§9.2：通知书列表默认全部，抓取和其他付款域仍当月。"""
     from app.core.period import default_period
 
-    assert "let fNt={month:'全部'," in SHELL
-    assert "tmBtn('ntMonth',{scope:'nt',val:fNt.month," in SHELL
     assert default_period("notice") == date.today().strftime("%Y-%m"), "付款域默认月不是当月"
     assert default_period("notice") != default_period("process"), "付款域与材料报表类的默认月应当不同"
 
 
-def test_壳里勾选框与标签由渲染注入而不是数据带的():
-    """旧页：`/api/m03/notice-list` 的 items **不含 HTML**（勾选框是页面渲染时才注入的）。
-    新壳同款：勾选框（`data-act="pick"`）与行标签（`ntArchTag`）都在**渲染时**拼；
-    数据源是纯 JSON 接口 ⇒ 结构与数据分离这条没变。
-    """
-    assert '<input type="checkbox" class="chk" data-act="pick" data-id="${n.id}"' in SHELL, \
-        "勾选框不是渲染时注入的"
-    assert "ntArchTag(n)||" in SHELL, "分类列直接吃了数据里的 HTML（行标签应渲染时注入）"
-    assert "notices: () => API.get('/api/m03/notice-list?period=')" in SHELL, \
-        "数据源不是纯 JSON 接口"
 
 
 # ---------------------------------------------------------------- 绑定判据点（`ACC-PAY-LIST-001`）
-
-
-def test_壳里合计行只算非剔除行且无有效行时不给():
-    """`ACC-PAY-LIST-001/001-09`（**结构**判据）：表内**合计行** —— 用户口径「求和一律落在表内」。
-
-    ⚠️ 该用例原有 8 点**全是数据口径**、无一条讲页面结构 ⇒ 2026-09-17 补了这条结构判据
-    （同一口径不能只做一半：`m04`/`m05`/`m08` 都传了 `summary=`）。
-
-    新壳：`sumRows = list.filter(ntLive)`（**排除剔除行**）⇒ `sumRowOf(NT_THEAD, sumRows, …)`；
-    5 个金额列（下标 10…14）**逐列**有合计（与原型 `sumRowOf` 同款）；无有效行（含「分类 = 剔除」
-    的全剔除视图）⇒ `sumRows.length` 为 0 ⇒ **走空态行、不给合计**（不给一排 0 冒充"确实是 0"）。
-    """
-    reg = _nt_region()
-    assert "const sumRows=list.filter(ntLive);" in reg, "合计行没排除剔除行"
-    assert "sumRowOf(NT_THEAD,sumRows,{" in reg, "合计行不是由共用出口 `sumRowOf` 出的"
-    for i in (10, 11, 12, 13, 14):
-        assert f"{i}:rs=>N2(rs.reduce(" in reg, f"第 {i} 列（金额列）没有合计"
-    assert "当前筛选结果中「非剔除」行的合计 —— 剔除行不计入" in reg, "没讲清「剔除行不计入」"
-    assert "(sumRows.length?sumRowOf(NT_THEAD,sumRows,{" in reg, "无有效行时仍会给合计行"
-
-
-def test_壳里项目选择器走共用件且label只一层():
-    """`001-07`（加强）：项目选择器 = **全站共用件**（设计规则 §8.2 复用点：只有一个出口）。
-
-    实测（`tools/audit/ui_parity.py`）曾发现实现里 `pjwrap` **恒为 0**：`m03` 用 `<select multiple>`、
-    `m06`/`m07`/`m09` 各写一份 `.pjsel` ⇒ **7 页七个样**。新壳全部收敛到 `projPanel` 一个出口。
-    """
-    assert "const projPanel=c=>{" in SHELL, "全站共用的项目面板出口 `projPanel` 没了"
-    assert "const pjPanel=()=>projPanel({list:PROJ_LIST,selected:()=>fNt.projs," in SHELL, \
-        "本页没走共用件（自己又写了一份面板）"
-    reg = _nt_region()
-    assert '<div class="fi pjwrap"' in reg, "项目选择器没用原型类名（`.fi.pjwrap`）"
-    assert reg.count("<label>项目（可多选）</label>") == 1, "label 只该出现一次（套两层就重复）"
-    # ⭐ `#1`（2026-09-26）：展开态收进共用件注册表 `PJ_OPEN` ⇒ 判词不变、落点改成 `pjIsOpen(...)`
-    #    （⛔ 这一处**不许**退回 `pjOpen` 裸变量 —— 那正是"靠自觉"的形态）。
-    assert "${pjIsOpen('pj')?pjPanel():''}" in reg, "没渲染共用件面板（展开态该走 `PJ_OPEN`）"

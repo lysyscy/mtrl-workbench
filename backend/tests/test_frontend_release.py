@@ -38,15 +38,22 @@ def test_mixed_or_incomplete_release_fails_before_opening(tmp_path):
         install_frontend(FastAPI(),str(root),None,base='/app')
 
 
-def test_legacy_rollback_accepts_react_bookmarks_but_not_missing_assets(monkeypatch):
-    from app.core.config import get_settings
-    from app.main import create_app
-    monkeypatch.setenv('FRONTEND_APP_DIR','')
-    get_settings.cache_clear()
-    try:
-        with TestClient(create_app()) as client:
-            response=client.get('/app/fees',follow_redirects=False)
-            assert response.status_code==302 and response.headers['location']=='/app'
-            assert client.get('/app/fees').status_code==200
-            assert client.get('/app/assets/retired.js').status_code==404
-    finally:get_settings.cache_clear()
+def test_empty_app_configuration_has_no_legacy_fallback(monkeypatch):
+    from app import main
+    settings = main.get_settings().model_copy(update={'frontend_app_dir': '', 'frontend_preview_dir': ''})
+    monkeypatch.setattr(main, 'get_settings', lambda: settings)
+    with TestClient(main.create_app()) as client:
+        for path in ['/app', '/app/fees', '/app/assets/retired.js', '/static/shell/core.js']:
+            assert client.get(path, follow_redirects=False).status_code == 404
+        assert client.get('/healthz').status_code == 200
+
+
+def test_complete_release_uses_react_without_exposing_old_shell(tmp_path, monkeypatch):
+    from app import main
+    root = release(tmp_path)
+    settings = main.get_settings().model_copy(update={'frontend_app_dir': str(root), 'frontend_preview_dir': ''})
+    monkeypatch.setattr(main, 'get_settings', lambda: settings)
+    with TestClient(main.create_app()) as client:
+        assert client.get('/app/fees').content == (root/'index.html').read_bytes()
+        assert client.get('/static/shell/core.js').status_code == 404
+        assert client.get('/static/theme.css?surface=react').status_code == 200

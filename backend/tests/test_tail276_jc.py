@@ -16,7 +16,6 @@ from app.mod03_notice.notice_actions import apply_stat_change
 from app.mod05_flow import repository as flows
 from app.mod05_flow import service as flow_service
 from app.mod11_jc import repository as R, service as S
-from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def test_history_summary_and_dynamic_stat_payment(monkeypatch):
@@ -87,70 +86,3 @@ def test_history_summary_and_dynamic_stat_payment(monkeypatch):
         book = load_workbook(BytesIO(S.export_xlsx(s, ids=[c.id])), data_only=True)
         assert '历史项目测试' in str(list(book.active.values))
         s.rollback()
-
-
-def test_shell_create_history_and_dates(ui_page):
-    ui_page.evaluate("""() => {
-      window.created=null; window.reloads=0;
-      API.pjCreate=async b=>{window.created=b;return {id:2};};
-      API.projects=async()=>{window.reloads++;return [{id:2,project_type:'normal',name_full:'历史测试全名',disp:'历史测试全名',warehouse_name:'未建仓-9',status:'active',ord:2}];};
-      API.trails=async()=>[]; reloadPending=async()=>{};
-      VIEW='m01'; render();
-    }""")
-    ui_page.locator('[data-act="pjCreateOpen"]').click()
-    ui_page.locator('#pjCreateFull').fill('历史测试全名')
-    ui_page.locator('[data-act="pjCreateSave"]').click()
-    ui_page.wait_for_function('window.reloads===1 && document.querySelector("#view").textContent.includes("无仓库（历史项目）")')
-    assert ui_page.evaluate('window.created') == {'project_type': 'normal', 'name_full': '历史测试全名', 'disp': '历史测试全名'}
-    assert '无仓库（历史项目）' in ui_page.locator('#view').inner_text()
-    ui_page.evaluate("VIEW='m11';fJc.projs=['未建仓-9'];render();ACT.jcAdd();")
-    ui_page.locator('[data-act="jcNHistory"]').check()
-    assert ui_page.locator('#jcNMaterial').input_value() == '历史测试全名'
-    assert ui_page.locator('#jcNDate').input_value() == ''
-    ui_page.locator('#jcNCutoff').fill('2026-09-30')
-    ui_page.evaluate("""() => {
-      API.m11Add=async b=>{window.added=b;return {ok:true,id:9,tag:'纳入台账'};};
-      API.m11List=async()=>({rows:[{id:9,project_key:'未建仓-9',material:'历史测试全名',remark:JC_HISTORY_PREFIX+'2026-09-30；',tag:'纳入台账',inv_sum:'100000',pay_sum:'30000',settle:'100000',debt:'70000'}]});
-    }""")
-    ui_page.locator('[data-act="jcRowSave"]').click()
-    ui_page.wait_for_function('window.added && !jcNewOn')
-    added = ui_page.evaluate('window.added')
-    assert added['contract_date'] == '' and added['supplier'] == '' and added['trade_co'] is None
-    assert added['remark'] == '历史未结金额；核对截至日：2026-09-30；'
-    ui_page.evaluate("""async () => {
-      API.m11Detail=async()=>({data:{supplier_invoices:[{id:1,date:'2026-09-30',amount:'100000'}],payments:[{id:2,date:'2026-10-03',amount:'30000',source:'notice',notice_id:101}],payment_display_rows:[{id:2,date:'2026-10-03',amount:'30000',source:'notice',notice_id:101,display_kind:'flow'}]}});
-      await ACT.jcInvDlg({dataset:{id:'9'}});
-    }""")
-    assert '核对截至日' in ui_page.locator('#modalRoot').inner_text()
-    assert ui_page.locator('#modalRoot tbody tr').first.locator('td').nth(1).inner_text() == '2026-09-30'
-    ui_page.evaluate("ACT.jcPayDlg({dataset:{id:'9'}})")
-    assert '2026-10-03' in ui_page.locator('#modalRoot').inner_text()
-    assert '付款流水 · 通知书 DOC-101' in ui_page.locator('#modalRoot').inner_text()
-    assert ui_page.locator('#modalRoot [data-act="jcPayDel"]').count() == 0
-
-
-def test_warehouse_project_can_choose_history_or_normal_contract(ui_page):
-    ui_page.evaluate("VIEW='m11';fJc.projs=['测试仓库'];render();ACT.jcAdd();")
-    history = ui_page.locator('[data-act="jcNHistory"]')
-    assert not history.is_checked()
-    assert ui_page.locator('#jcNDate').input_value() == ui_page.evaluate('SYS_TODAY')
-    history.check()
-    assert ui_page.locator('#jcNMaterial').input_value() == '测试项目全名'
-    assert ui_page.locator('#jcNDate').input_value() == ''
-    assert ui_page.locator('#jcNSupplier').is_disabled()
-    history.uncheck()
-    assert ui_page.locator('#jcNDate').input_value() == ui_page.evaluate('SYS_TODAY')
-    assert ui_page.locator('#jcNSupplier').is_enabled()
-    history.check()
-    ui_page.locator('#jcNCutoff').fill('2026-09-30')
-    ui_page.evaluate("""() => {
-      API.m11Add=async b=>{window.warehouseAdded=b;return {ok:true,id:9,tag:'纳入台账'};};
-      API.m11List=async()=>({rows:[]});
-    }""")
-    ui_page.locator('[data-act="jcRowSave"]').click()
-    ui_page.wait_for_function('window.warehouseAdded && !jcNewOn')
-    added = ui_page.evaluate('window.warehouseAdded')
-    assert added['project_key'] == '测试仓库'
-    assert added['material_name'] == '测试项目全名'
-    assert added['contract_date'] == '' and added['supplier'] == ''
-    assert added['remark'] == '历史未结金额；核对截至日：2026-09-30；'

@@ -8,7 +8,6 @@ from app.core.errors import ExternalServiceError
 from app.mod11_jc import service as S, repository as R, api
 from app.mod02_i8.payable_source import fetch_payables
 from tests.test_acc_jc_pay_link import _project, _contract, _notice
-from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def source(no='CGHT1', amount='100.01'):
@@ -65,20 +64,3 @@ def test_source_pagination_and_money():
     class Broken:
         def post_json(self,*a,**kw):return {'Success':True,'totalRows':'3','Record':[]}
     with pytest.raises(ExternalServiceError):fetch_payables(Broken())
-
-
-def test_button_previews_before_batch_write(ui_page):
-    p=ui_page
-    p.evaluate("""() => {
-      window.autoWrites=[];
-      API.m11AutoLinkPreview=async b=>{window.previewIds=b.notice_ids;return {ok:true,rows:[{notice_id:101,code:'DOC-101',contract_id:2,contract_no:'CGHT1',amount:'12345.67',payable_codes:['CGYF1']}],ready:1};};
-      API.m11AutoLink=async b=>{autoWrites.push(b);return {ok:false,message:'隔离写出口'};};
-    }""")
-    p.get_by_role('button',name='一键关联集采合同',exact=True).click()
-    assert p.evaluate('previewIds')==[101]
-    assert p.evaluate('autoWrites.length')==0
-    assert 'CGYF1' in p.locator('#modalRoot').inner_text()
-    p.get_by_role('button',name='关联这 1 条',exact=True).click()
-    assert len(p.evaluate('autoWrites'))==1
-    assert p.evaluate('autoWrites[0].selections[0].contract_id')==2
-    assert p.evaluate('autoWrites[0].allow_kick') is True

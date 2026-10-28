@@ -24,7 +24,6 @@ from app.core.errors import MustReportError
 from app.mod03_notice import service as S
 from app.mod03_notice.print import ipp
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 class _Resp:
@@ -122,12 +121,3 @@ def test_已核实与真失败两态不受影响(monkeypatch):
 
 
 # ------------------------------------------------------------------ 壳侧回执
-
-
-def test_壳把已投递未核实单独说出来且不并进失败():
-    """⛔ 壳里不许把"已投递未核实"并进"失败"（那正是"假失败"的来源）。"""
-    body = SHELL[SHELL.index("async function m03RunBatch("):]
-    body = body[:body.index("async function m03PrinterOpen(")]
-    assert "x.ok && x.unverified" in body, "要单独认出『已投递未核实』"
-    assert "已投递但未核实" in body and "别重复打印" in body, "要单独说出来，并叫用户去看打印机"
-    assert "别重复" in body, "⛔ 不并进失败"

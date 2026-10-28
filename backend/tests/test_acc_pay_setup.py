@@ -39,11 +39,6 @@ def test_系统内提供可发现的修改入口():
     # ⭐ `TAIL-46`（2026-09-18）：**断言搬到新壳** —— 旧页 `mod03_notice/static/m03.html` 在
     #    「删旧渲染层」（§19）的删除范围内 ⇒ 判据**不动**（claim 还是"系统内提供可发现的修改入口"），
     #    但它钉的**形态**换成新壳：入口由 `BIND.m03` 渲染后注入，读写走上面那两个端点。
-    from tests.shell_src import SHELL as _shell  # noqa: F401  ← `P4`① 读取点收敛
-    assert "m03PrinterOpen" in _shell and "打印机设置" in _shell, \
-        "新壳里必须有**可发现**的打印机设置入口（旧页一删，这里就是唯一入口）"
-    assert "API.printerGet()" in _shell and "API.printerSet(" in _shell, \
-        "设置要真的读写后端（⛔ 不是只弹个提示）"
 
     # 端到端：入口可读到当前值
     res = TestClient(create_app()).get("/api/m03/settings/printer")

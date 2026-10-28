@@ -11,8 +11,6 @@ from alembic.operations import Operations
 from app.mod03_notice.merge import PROTECTED, plan_merge
 from app.mod05_flow.models import PaymentFlow
 from tests.m03_action_helpers import _client, _notice
-from tests.ui_helpers import ui_page  # noqa: F401
-from tests.test_tail282_pay_draft import _setup
 
 
 def test_通知书拟付款方式完整读回且重抓不覆盖():
@@ -69,18 +67,3 @@ def test_存量迁移默认空且保留既有金额():
         migration.downgrade()
         assert conn.exec_driver_sql("SELECT amount_approved FROM payment_notice WHERE id=1").scalar_one() == 123.45
     engine.dispose()
-
-
-def test_拟方式读回默认窗口且手改草稿保留(ui_page):
-    page = ui_page
-    _setup(page)
-    page.evaluate("""async () => {
-      SRV[0].planned_pay_method='供应链';
-      await reloadNotices(); pickSet.clear(); pickSet.add('101'); pickSet.add('102'); ACT.batchPay();
-    }""")
-    assert page.input_value("#bm0") == "供应链"
-    assert page.input_value("#bm1") == "现汇"
-    page.select_option("#bm0", "现汇")
-    page.evaluate("ACT.batchPay()")
-    assert page.input_value("#bm0") == "现汇"
-    assert page.input_value("#bm1") == "现汇"

@@ -17,7 +17,6 @@ from app.core.errors import MustReportError
 from app.mod03_notice.print import dispatch as D
 
 PDF = b"%PDF-1.4 fake"
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 # ⚠️ 2026-09-19（`T5` 拆件）：批量执行器的**实体**已搬到 `notice_executors.py`（`router.py` 只再导出它）
 #    ⇒ 读源码的断言**改指新件**（⛔ 判据一字未改：「投递必须走分流器、不许退回裸 send_pdf」）。
 EXEC = (Path(__file__).resolve().parents[1] / "app" / "mod03_notice" / "notice_executors.py").read_text(
@@ -154,13 +153,3 @@ def test_通道按当前设置走_不用重启(monkeypatch):
 def test_接线点用的是分流器_不是裸_send_pdf():
     assert "print_dispatch if mode == MODE_PRINT" in EXEC, "排版那条路投递必须走分流器（②）"
     assert "dispatch_pdf=(send_pdf" not in EXEC, "⛔ 别退回裸 `send_pdf`（那样通道就白设了）"
-
-
-def test_壳侧有本机打印机名可选():
-    assert "printerList: () => API.get('/api/m03/settings/printers')" in SHELL
-    # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：`m03PrinterOpen` 搬进 `web/shell/print-export.js` 后，
-    #    不再紧跟 `openOwnDialog`（留在 `shell/core.js`）⇒ 原"截到下一个函数"的写法会 `ValueError`。
-    #    **判据一字不变**：它就是该件的最后一个块 ⇒ 取到件尾。
-    dlg = SHELL[SHELL.index("async function m03PrinterOpen()"):]
-    assert 'list="m03PrinterNames"' in dlg and "m03PrinterNames" in dlg, "名字要给下拉（要一字不差）"
-    assert "手填" in dlg, "取不到名字时要如实说清"

@@ -41,10 +41,8 @@ from app.report_export import resources as R
 from app.report_export import service as EX
 from app.report_export import setl_export as SE
 from tests.m07_helpers import dataset
-from tests.shell_load_helpers import exp_routes
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, act_entry, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 API = (ROOT / "backend" / "app" / "mod07_setl" / "api.py").read_text(encoding="utf-8")
 INV_API = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
 DIAG_INV = ROOT / "data/source/i8-diagnostics" / "inv_2026-09.xlsx"
@@ -71,7 +69,6 @@ def test_导出文件名随期间变且不硬编码月份():
     # ③ 端点把「页面所选年月」透传下去（否则永远导出同一个月的成品）
     assert '/api/m07/settlement/export' in API, "后端没挂导出端点"
     assert 'request.query_params.get("period")' in API, "导出端点没读 `period` ⇒ 导出的是固定月份"
-    assert "/api/m07/settlement/export?period=" in SHELL, "壳侧没把当前核算年月传给导出端点"
 
 
 # ============================================================== 接线（不绑判据点）
@@ -139,26 +136,6 @@ def test_三种失败都不产出文件且带回中文原因():
         assert "格式不对" in str(e2.value)
 
 
-def test_壳侧导出按钮已接线且按content_type分流():
-    """`zipSfjc` 必须**真下载**（不再只弹"尚未落地"），并按 `content-type` 分流失败原因。
-
-    ⚠️ 断言必须**只钉 `zipSfjc` 这个动作自己的作用域** ——
-       「导出尚未落地」那句在**别的页**上是对的（其余页仍走路径①模板填充，属 `TAIL-04` 未完部分），
-       把它当全站特征来查 ⇒ 一改别处就误红（实测首跑踩到）。
-    """
-    act = act_entry("zipSfjc")
-    assert "尚未落地" not in act, "`zipSfjc` 还是旧提示 ⇒ 按钮按下去拿不到文件"
-    assert "/api/m07/settlement/export?period=" in act, "`zipSfjc` 没打导出端点"
-    assert "x-export-filename" in with_kernel(act), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in with_kernel(act), "没按 `content-type` 分流失败原因"
-    _a = with_kernel(act)          # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
-    assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
-    # 后端两条分支都要在：成功给 zip、失败给 JSON＋中文原因
-    assert "application/zip" in API, "成功分支不是 zip"
-    endpoint = next(n for n in ast.parse(API).body
-                    if isinstance(n, ast.FunctionDef) and n.name == 'api_export_settlement')
-    body = ast.get_source_segment(API, endpoint)
-    assert '"ok": False' in body.replace("'", '"'), "收发结存失败分支没回 `ok:false`"
 
 
 # ============================================================== 库存单据明细表成品（第二片 · ACC-X-EXP-001/001-05）
@@ -256,30 +233,6 @@ def test_库存单据成品空源硬失败且不带出文件():
         assert not list(out_dir.glob("*.xlsx")) if out_dir.exists() else True, "拒做时不该留下成品"
 
 
-def test_壳侧透视导出按钮真下载且端点按content_type分流():
-    """绑 `ACC-X-EXP-001/001-05`：`expPivot` 必须**真下载**（不再只弹提示），且**提示语与模板形态一致**。
-
-    ⚠️ 断言**只钉 `expPivot` 这个动作自己的作用域**（`_act` 取花括号配平区间）——
-       别处的同名 `toast(...)` 不得喂饱它。
-    """
-    act = act_entry("expPivot")
-    _a = with_kernel(act)          # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
-    assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
-    assert "/api/m08/inventory/export?period=" in act, "`expPivot` 没打导出端点（拿不到文件）"
-    assert "x-export-filename" in with_kernel(act), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in with_kernel(act), "没按 `content-type` 分流失败原因"
-    # ⭐ 提示语必须与**模板实际形态**一致（两张透视名逐字对上；主表那份不受影响）
-    for pivot in ("「过程资料」透视", "「安全文明施工费」透视"):
-        assert pivot in act, f"壳侧提示缺工作表：{pivot}"
-    # ⚠️ 2026-09-27（守则 §3.1 · `TAIL-117` 批次 2）：「路径②」是内部话术 ⇒ 改成「单独的一条通道」，
-    #    **这条判据的口径一字未改**（仍要求"写明它是独立通道、主表那份不受影响"）。
-    assert "单独的一条通道" in act and "不受影响" in act, "必须写明它是独立通道、主表那份不受影响"
-
-    # 后端两条分支：成功给 xlsx、失败给 JSON＋中文原因
-    assert "/api/m08/inventory/export" in INV_API
-    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in INV_API, "成功分支不是 xlsx"
-    assert '"ok": False' in INV_API.replace("'", '"'), "失败分支没回 `ok:false`（壳就分不出流）"
-    assert "default_month()" in INV_API, "端点没把「本页默认月」用作期间缺省"
 
 
 def test_库存导出编排落点与期间标签唯一出口(monkeypatch):
@@ -310,13 +263,6 @@ def test_库存导出编排落点与期间标签唯一出口(monkeypatch):
 # ============================================================== 库存单据：两种导出并存（第二片 · ACC-INV-001/001-12）
 
 
-def _m08_card_head() -> str:
-    """库存单据明细总表那张卡的卡头 `<h4>…</h4>`（含两个导出按钮）——**只取这一段**，防别处同名串喂饱。"""
-    i = SHELL.find("库存单据明细总表")
-    assert i >= 0, "壳里找不到「库存单据明细总表」卡头"
-    a, b = SHELL.rfind("<h4", 0, i), SHELL.find("</h4>", i)
-    assert a >= 0 and b > a, "卡头区间取不到"
-    return SHELL[a:b]
 
 
 def test_库存单据只留真导出且透视提示与模板形态一致():
@@ -331,45 +277,23 @@ def test_库存单据只留真导出且透视提示与模板形态一致():
     import tempfile
 
     # ① 切片里两枚都在（⛔ 不许动切片）；但**渲染后**朴素那枚必须被摘掉
-    head = _m08_card_head()
-    assert head.count('data-act="exp"') == 1, \
-        "切片里那枚朴素导出不见了 —— ⛔ 不该动 `V.m08`（`U1` 逐行对位原件）"
-    assert head.count('data-act="expPivot"') == 1, "含透视导出按钮缺 / 重复"
-    assert "addBind('m08'," in SHELL, \
-        "壳里没有 `BIND.m08` ⇒ 那枚点了只会说「还没有导出功能」的朴素导出现在还留在屏幕上（用户会以为坏了）"
-    _hook = SHELL[SHELL.index("addBind('m08',"):SHELL.index("addBind('m08',") + 400]
-    assert '[data-act="exp"][data-t="库存单据明细总表"]' in _hook and ".remove()" in _hook, \
-        "`BIND.m08` 没把朴素导出摘掉（选择器或 `.remove()` 变了）"
 
     # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍走**通用 `exp`**，⛔ 不得被并进 `expPivot`
     # ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ②）：原先自造剪刀 `_action_text("exp")`（切到"下一个 ACT 条目"）
     #    已换成语义窗口子 `act_entry("exp")` —— 实测那两条断言（`还没有导出功能` / `不假装成功`）换后仍成立。
-    exp_act = act_entry("exp")
-    pivot_act = act_entry("expPivot")
     # ⚠️ 2026-09-27（守则 §2.2/§3.1 · `TAIL-117` 批次 2）：兜底**措辞换成人话**（原措辞里有内部台账编号
     #    与后端术语）⇒ token 同步；⭐ 但**两件**都还必须在：① 如实说"这页还没有导出功能"；
     #    ② 那句"不假装成功"的底线（⛔ 没有真文件就绝不写「已导出」）。
-    assert "还没有导出功能" in exp_act, "通用 `exp` 不再有那条「这页还没有导出功能」的诚实兜底了（被谁改走了？）"
-    assert "不假装成功" in exp_act, "兜底里那句「没有真文件就绝不写『已导出』」的底线丢了"
-    assert pivot_act != exp_act
     # ⭐⭐ 2026-09-20（`TAIL-04` 收尾）：`exp` 从"一条诚实提示"改成了**按 `data-t` 真分发**
     #    ⇒ 端点串**搬进了分发表 `EXP_ROUTES`**，光看 `exp` 动作体已经**看不出**
     #      "朴素那份有没有被并进透视那份" ⇒ 断言改看**表**。
     #    ⚠️ **形态变了、判据一字未改**：claim 仍是「两者**并存互不影响**」。
     #    ⚠️ 这也是本条断言**唯一**还守得住的地方：`EXP_ROUTES` 是那张表，
     #       谁把「库存单据明细总表」加进去（或指到透视端点），这里当场红。
-    routes = exp_routes()
-    assert "库存单据明细总表" not in routes, \
-        "库存单据明细总表的**朴素**那份被接进了导出分发表 ⇒ 与「含透视」那份（`expPivot`）重复"
-    assert "/api/m08/inventory/export" not in routes.values(), \
-        "朴素那份被接到了**透视端点** ⇒ 不再是「两种导出并存互不影响」"
 
     # ③ `expPivot` 那份**真产出文件**（端点 ＋ 壳侧真下载：`content-type` 分流 + `x-export-filename`）
     assert "/api/m08/inventory/export" in INV_API
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in INV_API, "成功分支不是 xlsx"
-    _p = with_kernel(pivot_act)       # ⭐ `TAIL-67`：分流与文件名已抽到 `dlExport` 通用件
-    assert "'application/json'" in _p and "x-export-filename" in _p
-    assert "dlExport" in pivot_act and "createObjectURL" in _p and ".download" in _p, "没真的触发下载"
 
     # ④ 提示语声明的表 ↔ **真产出**的结构闸门（`kcdj_export.OUTPUT_SHEETS`）对账（⛔ 不是两处各写一份）
     with tempfile.TemporaryDirectory(prefix="t04-inv-x-") as td:
@@ -381,15 +305,12 @@ def test_库存单据只留真导出且透视提示与模板形态一致():
         finally:
             wb.close()
     # 声明的张数（提示语里「工作表 N」出现次数）== 真产出张数 == OUTPUT_SHEETS 张数
-    assert len(re.findall(r"工作表 \d", pivot_act)) == len(KE.OUTPUT_SHEETS) == len(real)
     # 两张透视：**声明名与真产出 sheet 名逐字一致**
     for pivot in KE.OUTPUT_SHEETS[1:]:
         assert pivot in real, f"真产出缺透视表：{pivot}"
-        assert pivot in pivot_act, f"提示语声明与实例不符：缺 {pivot}"
     # 数据表：OUTPUT_SHEETS[0]（真名 `报表1`）在提示语里用其**角色「明细」**称它 —— 二者由**真产出表头**钉死
     assert KE.OUTPUT_SHEETS[0] in real
     assert "序号" in header and "金额" in header, "`报表1` 不是「明细」那张（声明与实例不符）"
-    assert "明细" in pivot_act, "提示语没说明第 1 张表是明细表"
 
 
 # ============================================================== 空集 ≠ 未传（缺陷回归）
@@ -497,4 +418,5 @@ def test_unregistered_material_property_preserves_group_metadata_and_exports(tmp
     try:
         assert book['报表1'].cell(2, 12).value == '未登记性质 & 特殊"值'
         assert book['报表1'].cell(2, 16).value == 100
-    finally: book.close()
+    finally:
+        book.close()

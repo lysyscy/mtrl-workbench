@@ -68,7 +68,7 @@ def test_fastapi_build_assets_cookie_and_real_read(server, browser_page, real_pr
     assert assets and any(asset.endswith('.js') for asset in assets) and any(asset.endswith('.css') for asset in assets)
     assert all(httpx.get(server + asset).status_code == 200 for asset in assets)
     assert httpx.get(server + '/preview/assets/missing.js').status_code == 404
-    assert httpx.get(server + '/app').content == (ROOT / 'backend/app/web/index.html').read_bytes()
+    assert httpx.get(server + '/app').status_code == 404  # Preview deliberately leaves the formal React entry unconfigured.
     me = login(page, server)
     owner = real_preview[1]
     cookies = {c['name']:c for c in context.cookies()}

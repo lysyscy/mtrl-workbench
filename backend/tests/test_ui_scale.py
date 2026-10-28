@@ -21,7 +21,6 @@ from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import repository as R
 from app.mod15_user.api import UiScaleIn
-from tests.shell_src import SHELL
 
 
 # ------------------------------------------------------------ ① 档位清单（唯一真源）
@@ -94,54 +93,3 @@ def test_设置端点只收一个字段不接id():
 
 
 # ------------------------------------------------------------ ⑤ 壳侧两条形态
-
-
-def test_壳的档位清单来自后端_不写死映射():
-    assert "applyUiScale" in SHELL, "壳里没有应用界面大小的地方"
-    assert "--fscale" in SHELL, "壳没有把倍率写到 `--fscale` 上"
-    assert "UI_SCALES.map" in SHELL, "档位按钮没有照着后端给的清单画（那样加一档就得改壳）"
-    for bad in ("largest", "larger", "standard"):
-        assert bad not in SHELL, \
-            f"壳里出现了档位键字面量「{bad}」⇒ 档位映射被复制成了第二份真源"
-
-
-def test_启动那一路就应用界面大小():
-    """⚠️ 只把应用挂在「系统设置」页的取数上 = **只有进过那一页才生效** ——
-    那正是主题当年报过的毛病（`reloadTheme` 的注释里记着）。启动那一路是 `/api/m15/users` 的 `me`。"""
-    assert "me.ui_scale_css" in SHELL, "启动那一路（`applyWho`）没应用界面大小"
-
-
-def test_样式块与内联样式里都没有裸px字号_且默认倍率在():
-    """⭐ 方案 B 的全部效果 = "字号/间距都乘 `--fscale`" ⇒ 漏一处，那一处**放大时不动**。
-
-    ⭐ 2026-09-28（`P0-c` · `TAIL-148`）：原先**只查样式块** —— 可壳里还有 577 处**内联**
-    `style="…"`，其中一大批 `margin` / `padding` / `font-size` / `gap` 是**写死 px** 的
-    ⇒ 用户把「界面大小」调大时，**这一批一处都不动**（正是"半成品相"最扎眼的地方）。
-    ⇒ 判据扩到**内联**：这四类属性（**与样式块同一套口径**，⛔ 不新立一套）在内联里也不许有裸 px。
-
-    ⚠️ 四类之外**刻意不管**（颜色 / 边框 / `border-radius` / 宽高 / `top`·`left`）——
-        §5.11 要的是"**字号与间距**"跟着放大；1px 边框跟着放大会更难看的。
-    """
-    m = re.search(r"(?s)<style>(.*?)</style>", SHELL)
-    assert m, "取不到样式块"
-    css = m.group(1)
-    bare = re.findall(r"font-size:\s*[\d.]+px", css)
-    assert not bare, f"还有 {len(bare)} 处字号没走 `--fscale`（放大时它们不会变）：{bare[:4]}"
-    assert "var(--fscale)" in css, "没有任何一处用到倍率 ⇒ 这条方案没接上"
-    assert re.search(r"\{--fscale:\s*[\d.]+\}", css), \
-        "少了 `--fscale` 的**默认值** —— `var()` 取不到值时整个 `calc(...)` 失效，界面会散架"
-
-    # ---- ⭐ `P0-c`：内联 `style="…"` 里同样不许有裸 px（四类属性）----
-    prop_re = re.compile(r"(?:margin|padding|font-size|gap|row-gap|column-gap)"
-                         r"(?:-[a-z]+)?\s*:\s*([^;]*)", re.I)
-    px_re = re.compile(r"(?<![\w.])(-?\d+(?:\.\d+)?)px")
-    scaled = re.compile(r"calc\([^;]*var\(--fscale\)[^;]*\)")
-    bad_inline: list[str] = []
-    for one in re.findall(r'style="([^"]*)"', SHELL):
-        for val in prop_re.findall(one):
-            if px_re.search(scaled.sub("", val)):      # 先抹掉**已缩放**的 `calc(...)`，再看剩没剩裸 px
-                bad_inline.append(f"{one.strip()}")
-                break
-    assert not bad_inline, (
-        f"内联 `style=\"…\"` 里还有 {len(bad_inline)} 处该缩放的 px 没走 `--fscale`"
-        f"（放大时它们不会变）：{bad_inline[:3]}")

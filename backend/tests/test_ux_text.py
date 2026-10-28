@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import re
 
-from tests.shell_src import SHELL
 
 #: `(禁用整串, 它是谁 / 为什么不许上屏)` —— ⚠️ 只收**带上下文、只可能出现在界面上**的串
 TOMBSTONES: tuple[tuple[str, str], ...] = (
@@ -66,38 +65,8 @@ TOMBSTONES: tuple[tuple[str, str], ...] = (
 )
 
 
-def test_上屏文案里这些内部串不许回来():
-    """⭐ 逐条钉"这些**整串**不许出现在壳源码里"。
-
-    ⚠️ 每条都是**带上下文的整串**（含 `</button>` / 全角括号＋编号）⇒ **不会误伤注释**
-       （注释里写 `API-05` 是对的 —— 那是写给下一个人看的说明）。
-    ⚠️ **能证伪**：把任一条改回去（如按钮写回 `同步仓库名单（API-05）`）⇒ 本件必红。
-    ⚠️ 抓不到的东西（`DEV-*` / `ENT-*` / `OPEN-*` / 别的 `TAIL-*`）**大量出现在注释里**，
-       离线没法可靠区分 ⇒ 那部分交给**真机 ㉕**（扫 DOM 文本，所见即所得）。
-    """
-    bad = [f"{s!r} —— {why}" for s, why in TOMBSTONES if s in SHELL]
-    assert not bad, (
-        "这些**内部编号 / 开发话术**又回到界面上来了（守则 §2.5 / §3.1 / §3.3 / §3.6）：\n"
-        + "\n".join(bad))
 
 
-def test_导入页的域自报文案要渲染加粗_不许满屏星号():
-    """⭐ 守则 §3.1（技术标记不上屏）· `TAIL-105`（2026-09-28）。
-
-    **事实**：域自报的那几句说明（`note` / `keep_note` / `memory` / `rule_note` / `field_list_hint`）里
-    **本来就写着一堆 `**…**`**（= "这段最关键"的标记）；壳侧此前五处**一律 `esc`** ⇒ 用户在导入页看到的是
-    **满屏星号**（`lgMd` 早就有了 —— 回执 / 区块 / 结果卡都走它，只有这一页漏在外面）。
-
-    ⚠️ **能证伪**：把任一处改回 `esc(...)`（或删掉那个 `lgMd(...)`）⇒ 本件必红。
-    ⚠️ 判法 = **精确整串**（带变量名，不会误伤注释里提到这些字段的地方）。
-    """
-    for bad in ("esc(sch.note)", "esc(sch.keep_note)", "esc(IMP.memory)",
-                "esc(sch.rule_note)", "esc(hint)"):
-        assert bad not in SHELL, (
-            f"导入页的域自报文案又只 `esc` 了：{bad!r} ⇒ 用户会看到满屏 `**`（守则 §3.1）")
-    for good in ("lgMd(sch.note)", "lgMd(sch.keep_note)", "lgMd(IMP.memory)",
-                 "lgMd(sch.rule_note)", "lgMd(hint)"):
-        assert good in SHELL, f"找不到该走的渲染出口：{good!r}（它被改名 / 被删了？）"
 
 
 #: ⭐ 说明块（`class="tip"`）的估算字数上限（**剥掉 `${…}` 与标签之后**）——
@@ -110,64 +79,10 @@ _JSX = re.compile(r"\$\{[\s\S]{0,600}?\}")
 _DETAILS = re.compile(r"<details[\s\S]*?</details>")
 
 
-def _tip_len(s: str) -> int:
-    """**渲染后**的估算字数（与真机 ㉖ 逐字同口径）：剥 `${…}` · 剥折叠区 · 剥标签 · 剥 `**` · 空白不计。"""
-    return len(re.sub(r"\s+", "", _TAG.sub("", _DETAILS.sub("", _JSX.sub("…", s))).replace("**", "")))
 
 
-def _tip_blocks() -> list[tuple[str, int, int, str]]:
-    """壳里**每一个** `class="tip"` 块 ⇒ `(件名, 行号, 估算字数, 开头 40 字)`。
-
-    ⚠️ 三样都是刻意这么做的：
-      ① **边界 = 配对的 `</div>`**（数嵌套）—— ⛔ 不用"到本行末尾"那种近似（会把**后面那块**粘进来 ⇒ 估出假高，
-         我在量测阶段就踩过：`m07` 明明压过、却被粘上后一块估成 310 字）；
-      ② **剥 `${…}` 与标签** —— 模板里的 JS 表达式**不是给用户读的字**（`${a.map(...)}` 计进去会失真）；
-      ③ **逐件读源码**（`part_paths` / `parts_text`）—— 因此报出来的是**件名:行号**，拿着就能改。
-    """
-    from tools.audit.shell_source import parts_text
-
-    out: list[tuple[str, int, int, str]] = []
-    for name, text in parts_text():
-        for m in re.finditer(r'<div class="tip', text):
-            seg, depth, i = text[m.start():m.start() + 4000], 0, 0
-            while i < len(seg):
-                op, cl = seg.find("<div", i), seg.find("</div>", i)
-                if cl < 0:
-                    break
-                if 0 <= op < cl:
-                    depth += 1
-                    i = op + 4
-                else:
-                    depth -= 1
-                    i = cl + 6
-                    if depth == 0:
-                        seg = seg[:i]
-                        break
-            txt = re.sub(r"\s+", "", _TAG.sub("", _DETAILS.sub("", _JSX.sub("…", seg))))
-            out.append((name, text[:m.start()].count("\n") + 1, len(txt), txt[:40]))
-    return out
 
 
-def test_说明块都不超长_弹窗也在内():
-    """⭐ `TAIL-209`（2026-10-01）：**说明块的机器眼要罩住弹窗**（守则 §3.4 / §5.9）。
-
-    ⚠️ **为什么必须补这一条**：真机 `㉖`（`tools/probe/_shell_text.py`）的靶是
-       `#view .tip`（**页内**）—— 而**弹窗不在 `#view` 里** ⇒ 弹窗那 50 多处说明
-       **没有机器眼**（只会越写越长、且**没人会红**）。本仓同族的病犯过多次
-       （判据的靶没覆盖到的地方＝"悄悄长回去"）。⇒ 这里补上**离线**这一半。
-    ⚠️ **为什么不改真机**：真机要"逐个打开弹窗"才能看到它们 —— 50 多个弹窗按顺序点开，
-       既慢又脆（哪一处改了个 data-act，探针就瞎了）⇒ **离线兜住"越写越长"这个主要风险**
-       （判分口径：剥掉 `${…}` 与标签后 **> 200 字**）。
-    ⚠️ **审视角**（用户 2026-10-01 口径）：本页的读者是**已经清楚业务流程的人**（科室 2 人）
-       ⇒ 判"留还是删"只问一句：**这句是"系统特有的行为/后果"（指导），还是"业务常识"（干扰）？**
-       ⛔ 业务常识（如"欠款 = 其他支出金额 − 付款"）不必解释；⭐ 系统特有行为
-       （"重抓重导不覆盖手录值" / "有非法值则整批不写"）**必须留**。
-    ⚠️ 能证伪：把任一说明块写长（> 200 字）⇒ 本件必红。
-    """
-    over = [f"{n}:{ln} {c} 字 · {head}…" for n, ln, c, head in _tip_blocks() if c > TIP_LIMIT]
-    assert not over, (
-        f"这些说明块超过 {TIP_LIMIT} 字（剥标签与 `${{…}}` 后的估算）—— 页内的与弹窗的**同一条线**：\n  "
-        + "\n  ".join(over))
 
 
 def _literal_double_stars(text: str, *, html: bool = False) -> list[int]:
@@ -231,36 +146,6 @@ def test_加粗守卫只判字面量且保留模板嵌套():
     assert _literal_double_stars('<style>p::after{content:"**x**"}</style>', html=True)
 
 
-def test_壳源码里不许有双层星号_加粗标记():
-    """⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**壳自己拼的 HTML 里不许出现 `**`**（守则 §3.1）。
-
-    **为什么它算"上屏文字"**：`**X**` 在本仓**只有 `lgMd` 会渲染**（`legacy.js`，给**后端自报文案**用）；
-    壳自己拼的串走的是**直插** —— `modal({body})`（`base.js` 直接 `innerHTML`）· `toast(msg)`（`innerHTML`）
-    · 拼出来的卡片 HTML ⇒ 那些 `**` **原样上屏** = 用户看到满脸星号（守则 §3.1「技术标记不上屏」）。
-    实测：壳里曾有 **49 行 / 7 件**（计划 §13.6「修订 13」与审计件 §23 只记了 **6 处** ——
-    那是只扫 `class="tip` 块量出来的，漏了块外的：`<span>` / `title` / `placeholder` / `toast` / `esc()` 文案）。
-
-    ⚠️ **为什么这条敢做"源码扫查"**（本件头部刚说过"别再写通用词法扫查"，这不是自相矛盾）：
-      ① 靶是**一个字面标记**（`**`），不是"内部编号 / 黑话"那种**要判语义**的东西 ⇒ 没有判断成分；
-      ② 字符串、插值配平、注释与正则复用 `tools/audit/jslex.py`，位置回原源码取行号；
-      ③ 只检查字面量，BigInt 等合法指数运算放行；插值中的嵌套字符串仍不能夹带标记。
-    ⚠️ **能证伪**：往任一壳件里写一个 `**x**`（哪怕只在 `title` 属性里）⇒ 本件必红。
-    ⚠️ **真机那一半（㉙）兜不住这些**：它的靶是 `#view` 正文 ⇒ 弹窗、`title` 属性、`toast` 全在它视野外。
-    """
-    from tools.audit.shell_source import parts_text
-
-    bad = [
-        f"{name}:{text.count(chr(10), 0, offset) + 1}  {text.splitlines()[text.count(chr(10), 0, offset)].strip()[:110]}"
-        for name, text in parts_text()
-        for offset in _literal_double_stars(text, html=name.endswith(".html"))
-    ]
-    assert not bad, (
-        "壳源码里出现了 `**`（加粗标记）—— 壳自己拼的 HTML 是**直插上屏**的"
-        "（`modal` / `toast` / 卡片串），不会渲染成粗体 ⇒ 用户看到的是满脸星号（守则 §3.1）：\n  "
-        + "\n  ".join(bad)
-        + "\n⇒ HTML 串改成 `<b>…</b>`；`title=` / `placeholder=` 这类**属性值**、以及走 `esc()` 的文案，"
-          "只能**去掉星号**（`<b>` 在那些位置也原样显示）。"
-    )
 
 
 #: ⭐⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**"工程代号"不许出现在用户可见串里**（守则 §2.5 / §3.1）。
@@ -276,42 +161,6 @@ _CODE_SHAPES: tuple[tuple[str, str], ...] = (
 )
 
 
-def test_用户可见串里不许出现工程代号():
-    """⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**把"工程代号混进用户可见文字"这一类交给机器眼**。
-
-    ⚠️ **为什么必须机器判**：这一类的清理方式经历过**三轮"扫一个面就冒一批"** ——
-      弹窗说明块 → 按钮 / 弹窗内 `span` / 卡头 → …… ⛔ 每轮手工捞都只捞到当时那个面，
-      漏掉的面**照样上屏且没人会红**（守则 §3.1「技术实现细节不上屏」/ §2.5「用业务术语」）。
-      ⇒ 结论：**给它一把机器眼**，而不是继续一轮轮手工扫。
-
-    ⚠️ **为什么这次敢做源码扫查**（与 `**` 那条同理）：靶是**几种可枚举的字面形态**，
-      剥注释走**共用件** `tools/audit/shell_source.py::strip_comments`（保留换行 ⇒ 行号不错位）；
-      ⛔ 不做"黑话"那种**要判语义**的扫描（本件头部写着：那类假阳性会让人把判据关掉）。
-
-    ⚠️ **为什么不会误伤**（三条，都是实测过的）：
-      ① 注释**先被剥掉** —— 壳里 `DEV-*` / `链路 X` / `决策 N` 绝大多数**只活在注释里**（留痕用）；
-      ② 数据表那种写法（`{label:'库存单据明细表', api:'API-03'}`）**不带全角括号** ⇒ 不命中
-         （`API-0\\d` 那条特意要求全角括号；`MOD-xx` 侧栏编号是**用户 2026-09-28 裁定要留的**，⛔ 不在表里）；
-      ③ 壳里**没有** `a ** b` 这类幂运算，也没有别的正当写法会撞上这几种形态（改前实测 0 假阳性）。
-
-    ⚠️ **能证伪**：往任一壳件的**字符串**里写 `（R99）` ⇒ 本件必红（`tools/oneoff/_tail209_mark_proof.py` 证）。
-    """
-    from tools.audit.shell_source import parts_text, strip_comments
-
-    bad: list[str] = []
-    for name, text in parts_text():
-        clean = strip_comments(text, html=name.endswith(".html"))
-        for i, line in enumerate(clean.splitlines(), 1):
-            for pat, why in _CODE_SHAPES:
-                if re.search(pat, line):
-                    bad.append(f"{name}:{i}  [{why}]  {line.strip()[:100]}")
-                    break
-    assert not bad, (
-        "壳的用户可见文字里出现了**工程代号**（守则 §2.5 / §3.1：用户只认业务说法）：\n  "
-        + "\n  ".join(bad)
-        + "\n⇒ 直接删掉代号（⛔ 别改判据）；`§节号`（《说明书》节号，2026-09-27 裁定可留）与"
-          "侧栏的 `MOD-xx` 编号**不在此列**。"
-    )
 
 
 #: ⭐ 第二轮（2026-10-01 · 审计件 §四 批 9）：**悬停文案也要有上限**。
@@ -322,31 +171,6 @@ _TITLE_ATTR = re.compile(r'title="([^"$]{20,})"')
 _TITLE_JS = re.compile(r"\.title\s*=\s*'([^'$]{20,})'")
 
 
-def test_悬停文案也不超长():
-    """⭐ 第二轮（2026-10-01）：**悬停文案（`title`）的机器眼**（守则 §3.4 / §5.9）。
-
-    ⚠️ 为什么补它：第一轮守住了**说明块**（页内 ＋ 弹窗）与**域自报文案**，但**悬停文案没人守** ——
-       而它是"没有机器眼的面"里最大的一块（实测 **151 处 · 约 5,108 字**，最长 102 字）。
-       它与说明块**同一条口径**：默认不是"展开"的，但鼠标一放就读 ⇒ 太长同样是"同屏塞满"。
-    ⚠️ 口径与 ㉖ **逐字一致**：剥 `${…}` 与标签、剥 `**`、空白不计，上限 **200**（⛔ 不另立新数）。
-    ⚠️ **能证伪**：把任一 `title="…"` 写成 220 字 ⇒ 本件必红（自证见 `tools/oneoff/_tail209_mark_proof.py`）。
-    """
-    from tools.audit.shell_source import parts_text, strip_comments
-
-    over: list[str] = []
-    for name, text in parts_text():
-        for i, line in enumerate(strip_comments(text, html=name.endswith(".html")).splitlines(), 1):
-            for m in _TITLE_ATTR.finditer(line):
-                txt = _tip_len(m.group(1))
-                if txt > TIP_LIMIT:
-                    over.append(f"{name}:{i}  {txt} 字  {m.group(1)[:50]}…")
-            for m in _TITLE_JS.finditer(line):
-                txt = _tip_len(m.group(1))
-                if txt > TIP_LIMIT:
-                    over.append(f"{name}:{i}  {txt} 字  {m.group(1)[:50]}…")
-    assert not over, (
-        f"这些**悬停文案**超过 {TIP_LIMIT} 字（剥 `${{…}}` 与标签后的估算，与 ㉖ 同一条线）：\n  "
-        + "\n  ".join(over))
 
 
 #: ⭐ 第二轮（2026-10-01 · 批 9）：**工程侧的名字不许上屏**。
@@ -420,30 +244,6 @@ def test_后端的用户可见串里也不许出现工程代号():
     )
 
 
-def test_用户可见串里不许出现工程侧文件名():
-    """⭐ 第二轮（2026-10-01 · 批 9）：**内部的目录名 / 文档名不许上屏**（守则 §3.1 技术实现细节不上屏）。
-
-    **为什么**：真例（2026-10-01 审计挖出）—— 抓取回执里曾写着
-    「先怀疑**幂等**范围（**见 ops 实测结论**）」：`ops/` 是**我们工程侧底账的目录名**、`幂等`是开发术语，
-    而整句是**写给排障者的** ⇒ 用户拿到它**不知道该干什么**（守则 §3.7 要求"人话 ＋ 下一步"，它两条都不满足）。
-    ⚠️ 靶是**几个只可能属于我们自己的名字**（`ops/` · `.codebuddy` · `artifacts/` · `tools/` · `.md`）⇒
-       剥注释后**实测 0 假阳性**（壳里它们只活在注释里）。
-    ⚠️ **能证伪**：往任一壳件的字符串里写 `见 docs/guides/operations.md` ⇒ 本件必红。
-    """
-    from tools.audit.shell_source import parts_text, strip_comments
-
-    bad: list[str] = []
-    for name, text in parts_text():
-        clean = strip_comments(text, html=name.endswith(".html"))
-        for i, line in enumerate(clean.splitlines(), 1):
-            for pat, why in _DOC_SHAPES:
-                if re.search(pat, line):
-                    bad.append(f"{name}:{i}  [{why}]  {line.strip()[:100]}")
-                    break
-    assert not bad, (
-        "壳的用户可见文字里出现了**工程侧的文件 / 目录名**（守则 §3.1）：\n  " + "\n  ".join(bad)
-        + "\n⇒ 删掉它（要解释就写用户能懂的话 ＋ 下一步，⛔ 别把我们的文件名甩上去）。"
-    )
 
 
 #: ⭐ `TAIL-212`（2026-10-01）：**异常类名 / 原始报错串只许进运行日志**（守则 §3.1 / §3.7）。

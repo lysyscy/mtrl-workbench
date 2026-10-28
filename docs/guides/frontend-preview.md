@@ -4,7 +4,7 @@
 
 ## 先确定当前实例和数据用途
 
-除用户明确要求单独查看另一预览外，同一时间仅一个最新产品代码与真实数据库副本的预览，自动 HTTP 测试和换端口也适用。当前入口、进程、schema、修订、构建、读写及数据保留归唯一运行 owner；[当前证据](../../.scratch/frontend-vue-rewrite/evidence.md)只给来源指针。
+除用户明确要求单独查看另一预览外，同一时间仅一个最新产品代码与真实数据库副本的预览，自动 HTTP 测试和换端口也适用。当前入口、进程、schema、修订、构建、读写及数据保留归唯一运行 owner，以主检出登记指针及实际进程为准。
 
 统一入口为 `tools/dev/frontend_preview.py`，排他与进程身份实现为同目录 runtime 模块，完整应用装配为 server 模块。主检出 `var/state/react-writable-preview/current.json` 指向当前 run 的 `reports/real_owner.json`；锁覆盖同仓各工作树和端口，持锁服务PID直接运行uvicorn。异常退出由OS释放锁，残留记录仍核实际PID、创建时间和命令，不能只凭文件存在或旧stopped_at判断。
 

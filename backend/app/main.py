@@ -72,16 +72,7 @@ from app import core_bindings as _core_bindings                     # noqa: E402
 
 _core_bindings.register_all()
 
-# 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
 _APP_DIR = Path(__file__).resolve().parent
-# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 1**）：**m01 / m02 已删** —— 这两页的读全部走
-#    `/api/m01/*` · `/api/m02/*`（新壳 `WIRED` 已在用），**无独有能力** ⇒ 旧静态页整体删除
-#    （授权 `D18`：工作区删干净、不留档；git 历史保留）。
-# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 4**）：**最后一个静态页 `m03.html` 已删**（授权 `D18`）——
-#    它的「批量打印 / 只导出 PDF / 打印机设置」前置已于 2026-09-18 补齐（`TAIL-46`：新壳真调
-#    `POST /api/m03/batch` 与 `/api/m03/settings/printer`，**不再是模拟 toast**）⇒ 无独有能力。
-#    ⇒ 旧静态页托管机制（`_PAGES` ＋ 下面的 `add_api_route` 循环）**整体删除**。
-#    全站页面现在只有两条路：**新壳**（`/` ＝ `web/index.html`）与**模块路由的服务端渲染页**。
 
 
 def _client_ip(request: Request) -> str:
@@ -364,115 +355,10 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return _static_file(request, _APP_DIR / "web" / "fonts" / name, media[name])
 
-    # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。
-    #    ⚠️ 挂在 `/app`（**不抢 `/`**）：打样期间与旧服务端渲染页**并存** ⇒ 逐页切换、随时可停。
+    # 正式入口只挂载完整 React 发布包；空配置用于 API / 隔离预览，不恢复旧壳。
     if settings.frontend_app_dir:
         from app.core.frontend import install_frontend
         install_frontend(app, settings.frontend_app_dir, _static_file, base='/app')
-    else:
-        @app.get("/app", include_in_schema=False)
-        def web_shell(request: Request) -> Response:
-            return _static_file(request, _APP_DIR / "web" / "index.html", "text/html")
-
-        @app.get("/app/{path:path}", include_in_schema=False)
-        def legacy_deep_link(path: str) -> Response:
-            # React bookmarks still reach a working shell during interface rollback.
-            if path.startswith('assets/') or Path(path).suffix:
-                raise HTTPException(status_code=404)
-            return RedirectResponse('/app', status_code=302)
-
-    # ⭐ **壳的外链件**（`web/shell/*.js`）—— 壳的**接线层**都在这几件里（`P4`② 2026-09-19 起拆 · `P2-a` 2026-09-28 加件）。
-    #    ⚠️ **件清单的唯一出口 = `index.html` 的 `<script src>`**（`tools/audit/shell_source.py` 按它现读）
-    #       ⇒ ⛔ 别在此处写死件数或件名（会随拆件涨，写了必漂）。
-    #    ⚠️ 路由名与文件名**必须**是 `/static/shell/<name>.js`：`tools/shell_source.py`（读壳的**唯一出口**）
-    #       正是按这个形态反查文件的 ⇒ 换目录 / 换形态要**同批**改那里（否则测试读到的 ≠ 浏览器执行的）。
-    #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：件数很少、零路径穿越风险；加一件要**同时**改这里
-    #       与 `index.html` 的 `<script src>`（`syntax_audit` 会逐件 `node --check`，漏一件就红）。
-    #        ⭐ 2026-09-21（`§19` 四个暂留件收口）新增第 **4** 件 `legacy.js`。
-    def _shell_js(request: Request, name: str) -> Response:
-        return _static_file(request, _APP_DIR / "web" / "shell" / name, "application/javascript")
-
-    @app.get("/static/shell/actions.js", include_in_schema=False)
-    def shell_actions_js(request: Request) -> Response:
-        return _shell_js(request, "actions.js")
-
-    # ⭐ 2026-09-24 加件（`TAIL-48` §八.5 第 1 刀：`API` 切进 `api.js`）。
-    #    ⚠️ **拆件要两处登记**：① `index.html` 的 `<script src>`（读壳的唯一出口认这个）
-    #    ② **本文件的一条路由**（缺 ⇒ 浏览器 404 ⇒ `ReferenceError` 整支崩）
-    #    ⇒ 机器守 = `tests/test_shell_part_routes.py`（⛔ 别只改一处）。
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/base.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/base.js", include_in_schema=False)
-    def shell_base_js_js(request: Request) -> Response:
-        return _shell_js(request, "base.js")
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/view.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/view.js", include_in_schema=False)
-    def shell_view_js_js(request: Request) -> Response:
-        return _shell_js(request, "view.js")
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/ui.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/ui.js", include_in_schema=False)
-    def shell_ui_js_js(request: Request) -> Response:
-        return _shell_js(request, "ui.js")
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/proj.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/proj.js", include_in_schema=False)
-    def shell_proj_js_js(request: Request) -> Response:
-        return _shell_js(request, "proj.js")
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-a.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/pages-a.js", include_in_schema=False)
-    def shell_pages_a_js_js(request: Request) -> Response:
-        return _shell_js(request, "pages-a.js")
-
-    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-b.js`。
-    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
-    @app.get("/static/shell/pages-b.js", include_in_schema=False)
-    def shell_pages_b_js_js(request: Request) -> Response:
-        return _shell_js(request, "pages-b.js")
-    @app.get("/static/shell/api.js", include_in_schema=False)
-    def shell_api_js(request: Request) -> Response:
-        return _shell_js(request, "api.js")
-
-    @app.get("/static/shell/core.js", include_in_schema=False)
-    def shell_core_js(request: Request) -> Response:
-        return _shell_js(request, "core.js")
-
-    @app.get("/static/shell/history.js", include_in_schema=False)
-    def shell_history_js(request: Request) -> Response:
-        return _shell_js(request, "history.js")
-
-    @app.get("/static/shell/mechanical-workbench.js", include_in_schema=False)
-    def mechanical_workbench_js(request: Request) -> Response:
-        return _shell_js(request, "mechanical-workbench.js")
-
-    @app.get("/static/shell/mechanical-integration.js", include_in_schema=False)
-    def mechanical_integration_js(request: Request) -> Response:
-        return _shell_js(request, "mechanical-integration.js")
-
-    @app.get("/static/shell/mechanical-workbench.css", include_in_schema=False)
-    def mechanical_workbench_css(request: Request) -> Response:
-        return _static_file(request, _APP_DIR / "web" / "shell" / "mechanical-workbench.css", "text/css")
-
-    @app.get("/static/shell/print-export.js", include_in_schema=False)
-    def shell_print_export_js(request: Request) -> Response:
-        return _shell_js(request, "print-export.js")
-
-    # ⭐ `§19`「四个暂留件收口」（2026-09-21）：设置 ＋ 三个历史导入的**壳内实现**（接线层加件）。
-    @app.get("/static/shell/legacy.js", include_in_schema=False)
-    def shell_legacy_js(request: Request) -> Response:
-        return _shell_js(request, "legacy.js")
-
-    # ⚠️ 2026-09-19（`§19` 批 4）：原先这里按 `_PAGES` 逐个托管**旧静态页**（切片 MVP）——
-    #    最后一个（`m03`）已删 ⇒ **整段移除**（连同上面的 `_PAGES` 定义）。
-    #    ⛔ 别再注册"按名字托管的静态页"：新页面要么进**新壳**（`web/index.html`），
-    #    要么走**模块路由的服务端渲染** —— 两条路都留了断言，加第三种会绕开它们。
 
     # ⚠️ 根路径 `/` 已由 `home_router` 接管（**302 → `/app`** —— 看板已进壳），**别再注册第二个 `/`** ——
     #    FastAPI 按注册顺序匹配（先注册的赢），多注册一个会让人以为是它在生效。

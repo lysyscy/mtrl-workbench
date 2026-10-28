@@ -138,7 +138,6 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
     import re
 
     from app.mod15_user import api as API
-    from tests.shell_src import SHELL, with_tbl
 
     # ---------- ① 后端：软删之后**仍带出来**，且计数是真数 ----------
     with session_scope() as s:
@@ -166,20 +165,7 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
         s.rollback()
 
     # ---------- ② 壳：搬 DOM 的机制在，且壳里没有第二份"哪些算已删"的判据 ----------
-    m = re.search(r"function m15Trash\(\)\s*\{(.*?)\n\}", SHELL, re.S)
-    assert m, "找不到 `m15Trash` —— 回收站没实现（或改了名）"
     # ⚠️ **先把注释剥掉**再查（本仓的既有教训：注释里会举反例、也会写选择器名 ⇒ 会喂饱/绊倒断言）
-    code = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
-    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
-    assert re.search(r"addBind\('m15',\s*m15Trash\)", SHELL), (
-        "回收站没挂到渲染后钩子 `BIND.m15` 上 ⇒ **它根本不会被调用**"
-        "（`render()` 里只有 `runBind(VIEW)` 调用）")
-    assert """querySelectorAll('[data-act="userRestore"]')""" in code, (
-        "搬行没有按**已删除行的唯一特征**（操作列那个 `userRestore` 按钮）来选 —— "
-        "它是切片 `V.m15` 里判「这一行已删」的**同一处依据**")
-    assert "status" not in code, (
-        "回收站里又按 `status` 判了一遍「哪些算已删」—— ⛔ 切片 `V.m15` 已经判过 ⇒ 两份必漂；"
-        "用 `userRestore` 按钮当选择器就**天然对齐**（那正是切片按同一条件渲染出来的）")
     # ⭐ 2026-09-24（`TAIL-64` P1b）：**判据从「钉字面」改成「钉意图」** ——
     #   原写法断言壳全文里有 `${USERS.map(u=>` 字面；表外壳抽进统一件 `TBL` 之后，那段变成
     #   `...USERS.map(u=>`（进了 `rows:[…]`）⇒ **当场假红**。⛔ 反例：为省事把判据退回钉字面
@@ -187,16 +173,6 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
     #   ⇒ 现在断三件事：① 切片**委托 `TBL`**；② rows 仍来自**全量 `USERS`**；③ **`TBL` 内核真把 rows
     #     拼进 `tbody`**（`shell_src.with_tbl()` 把两段拼起来看 —— 照 `test_wired_m09.py` 的 P0 范式）。
     #   自证 = `tools/mut/_mut_tbl.py`（去掉委托 / 掏空内核 ⇒ 必须红）。
-    i = SHELL.find("\nV.m15=()=>{")
-    j = SHELL.find("\n};", i) if i >= 0 else -1
-    m15 = SHELL[i:j] if i >= 0 and j > i else ""
-    assert m15, "壳里找不到 `V.m15` 切片"
-    assert "TBL({" in m15, "本页主表没走统一出口 `TBL`（`TAIL-64` P1b）"
-    assert "USERS.map(u=>" in m15, (
-        "`V.m15` 的切片被改了（主表不再从全量 `USERS` 渲染）—— 回收站**必须**靠搬 DOM 实现，"
-        "管理页入口缺失；按MOD-15及正式壳的当前接线核对")
-    assert "rows.join('')" in with_tbl(m15), (
-        "`TBL` 内核没有把 rows 拼进 `tbody` ⇒ 表被掏空了（判据的两段拼接：切片委托 ＋ 内核真做事）")
 
 
 def test_转让管理员后恒只有一个在用管理员():
@@ -395,7 +371,7 @@ def test_密码无长度限制可清空且建号改密同一规则():
 
         R.set_password = _spy
         try:
-            u2 = R.create(s, account="__自检_同规则__", password="走出口的密码")
+            u2 = R.create(s, account='__自检_同规则__', password='走出口的密码')
         finally:
             R.set_password = real
         assert calls == ["走出口的密码"], (

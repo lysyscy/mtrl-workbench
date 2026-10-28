@@ -23,8 +23,6 @@ from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
-from tests.shell_src import func_body        # ⭐ ⑤⑥ 要读 `boot()` 的函数体（`TAIL-219` 批 2：改走语义口径）
-from tests.shell_src import SHELL                # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 
 def _me(s):
@@ -90,14 +88,7 @@ def test_当前登录用户是管理员且管理员恒一个(monkeypatch):
 
     # ④ 壳：**"没有身份"**与**"取数失败"**必须分得开 —— ⛔ 别把取数失败说成"你没登录"（那是假话，
     #    而且用户会照着去登录、白折腾）；同时"没身份"时要说清**怎么办**（按钮全是禁用的）。
-    from tests.shell_src import SHELL
 
-    assert "WHO_STATE = me.id ? 'in' : 'none';" in SHELL, (
-        "壳没有把「后端答了但没身份」记下来 —— 顶栏就没法区分「未登录」与「取数失败」")
-    assert "WHO_STATE==='none'" in SHELL, (
-        "顶栏没按 `WHO_STATE` 分叉 ⇒ 两种情形会显示同一句话（必有一句是假话）")
-    assert 'href="/login"' in SHELL, (
-        "「没身份」时没有**去登录**的出口 —— 用户只会看到按钮全灰、以为页面坏了")
 
 
 def test_登出入口与登出动作齐备():
@@ -205,10 +196,9 @@ def test_会话票可验签_长期有效且篡改不认(monkeypatch):
     tok2 = SESS.make(u)
     _S.secret = lambda: b"another-secret"                  # type: ignore[assignment]
     try:
-        assert SESS.read(tok2) is None, (
-            "换掉密钥后旧票**仍然有效** ⇒ 密钥没真正参与签名（任何人都能伪造登录态）")
+        assert SESS.read(tok2) is None, '换掉密钥后旧票**仍然有效** ⇒ 密钥没真正参与签名（任何人都能伪造登录态）'
     finally:
-        _S.secret = real                                   # type: ignore[assignment]
+        _S.secret = real
     # ⑥ ⭐ 账号名**含 `.`**（§1.5.1：账号名不限制字符）也要能往返
     for weird in ("a.b.c", "...", "张.伟"):
         assert SESS.read(SESS.make(weird)) == weird, (
@@ -341,10 +331,9 @@ def test_当前登录用户是唯一出口且不得写死人名():
     #       断任何一环，"留痕里的人名"就悄悄退回 `.env` / 占位 —— **界面上一模一样**。
     SESS.set_current_name("张伟")
     try:
-        assert ID.current_operator() == "张伟", (
-            "登录态进了上下文，但 `current_operator()` 没取它 ⇒ 留痕里记的还是兜底那个名字")
+        assert ID.current_operator() == '张伟', '登录态进了上下文，但 `current_operator()` 没取它 ⇒ 留痕里记的还是兜底那个名字'
     finally:
-        SESS.set_current_name("")                       # ⚠️ 必须清（`ContextVar` 会串到下一个用例）
+        SESS.set_current_name('')
     # 清空后要**回落**（⛔ 不是继续返回上一个人 —— 那是"上一个请求的名字留在了这里"）
     assert ID.current_operator() != "张伟", (
         "清了登录态却仍返回上一个人 ⇒ 不带 cookie 的路径（定时任务 / 测试）会把留痕写成别人的名字")
@@ -353,23 +342,11 @@ def test_当前登录用户是唯一出口且不得写死人名():
     #    ⚠️ 实测踩到：壳里 `CUR` 的初值写着 `{id:'U01',acc:'zhangwei',name:'张伟',role:'admin'}`
     #       —— 而库里根本没有这个账号 ⇒ **顶栏首屏显示的是假人名**，进过一次「用户管理」才变真名。
     #       用户看到的是"**同一个人两个名字**"，而且**全程没有任何报错** ⇒ 只有这条断言拦得住。
-    m_cur = re.search(r"let CUR\s*=\s*\{([^}]*)\}", SHELL)
-    assert m_cur, "壳里找不到 `CUR`（当前登录用户）的声明 —— 顶栏身份没了着落"
     # ⚠️ 正则用**三引号原始串**写：它里面要出现引号字符，普通原始串会被转义写法搞乱
     #    （2026-09-21 实测：那种写法让字符串**提前闭合** ⇒ 报一处莫名其妙的 `unmatched ')'`）。
-    quoted_identity = re.search(r"""(?:id|acc|name|role)\s*:\s*["'][^"']+["']""", m_cur.group(1))
-    assert not quoted_identity, (
-        "壳里 `CUR` 的初值带着**写死的身份**（人名 / 账号 / id / 角色）—— 那是**假值**："
-        f"实际命中 {quoted_identity.group(0) if quoted_identity else m_cur.group(0)}"
-        "  ⇒ 首屏顶栏会先说一个假名字、进过「用户管理」才变真名（必须留空，由后端填）")
 
     # ⑥ ⭐ **首屏就得是真身份**：`boot()` 里必须去取它
     #    （⛔ 不是"等用户点进用户管理页才取" —— 那样顶栏第一帧必然是假的或空的）。
-    boot = func_body("boot")
-    assert "soft('当前登录用户', reloadWho)" in boot, (
-        "`boot()` 没有（逐路容错地）取当前登录用户 ⇒ 顶栏第一帧是空的/假的"
-        "（必须走 `soft('当前登录用户', reloadWho)` —— ⛔ 也不许让它把首屏拖成串行等待）")
-    assert "esc(CUR.name" in SHELL, "顶栏身份没从 `CUR.name` 渲染（那取的是哪儿）"
 
 
 

@@ -103,19 +103,10 @@ def test_恢复剔除必须先勾选():
         A.restore_excluded([{"id": 1, "exclude_source": "manual"}], [])
     assert "必须先勾选" in err.value.message
 
-    from tests.shell_src import SHELL  # noqa: PLC0415  ← `P4`① 读取点收敛
 
-    assert "const ntSelectable=n=>ntPayCand(n)||!!n.excl;" in SHELL, \
-        "剔除行勾不上 ⇒ 「恢复剔除」这条路根本走不通（勾选框的可勾口径丢了）"
-    assert "${ntSelectable(n)?'':'disabled'}" in SHELL, "勾选框没走可勾选出口"
     # ⚠️⚠️ **逐处**断言，⛔ 不能写成 `"ntHit(fNt).filter(ntSelectable)" in SHELL` ——
     #     `pickAll` 与 `BIND.m03` **各有一处**，只改坏其中一处时全文查找照样命中另一处 ⇒ **假绿**
     #     （反向灵敏度第 3/4 条实测抓到过；这两条正是"全选框永久卡半选态"的成因）。
-    assert "pickAll:t=>{ const ids=ntHit(fNt).filter(ntSelectable).map(n=>n.id);" in SHELL, \
-        "全选没走可勾选出口 ⇒ 点「全选」漏掉剔除行"
-    assert ("const rows=ntHit(fNt), vis=rows.filter(ntSelectable).map(n=>n.id), "
-            "hit=vis.filter(i=>pickSet.has(i)).length;") in SHELL, \
-        "全选框回显与勾选框走了**两个**出口 ⇒ 全选框会永久卡在半选态（勾满了还是个半选框）"
 
 
 # ============================================================ 能力 4 · 手动新增行

@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.mod03_notice.notice_pay_actions import default_pay_method
-from tests.shell_src import SHELL
 
 
 def test_plan_page_import_and_write_routes_retire_audit_api_stays():
@@ -16,9 +15,6 @@ def test_plan_page_import_and_write_routes_retire_audit_api_stays():
     assert '/api/m03/plan-audit/methods' in paths
     client=TestClient(app)
     assert client.get('/api/imp/domains').status_code == 404
-    assert 'V.m04=' not in SHELL and 'data-act="planPick"' not in SHELL
-    assert "['m04','付款计划','MOD-04']" not in SHELL
-    assert 'API.plans(' not in SHELL and 'PLs.find(' not in SHELL
     assert default_pay_method('供应链')=='供应链'
     assert default_pay_method('')=='现汇'
     source=Path(__file__).parents[1]/'app/mod03_notice/notice_pay_actions.py'

@@ -83,7 +83,7 @@ class StagedAuditTests(unittest.TestCase):
     def test_unrelated_text_does_not_compile_worktree_or_require_node(self):
         self.put('README.md', b'fixture\n')
         self.put('tools/broken.py', b'value = (\n', stage=False)
-        with patch.object(syntax, 'iter_py', side_effect=AssertionError('must not full scan')), patch.object(syntax.shutil, 'which', return_value=None):
+        with patch.object(syntax, 'iter_py', side_effect=AssertionError('must not full scan')):
             self.assertEqual(syntax.main(['--staged']), 0)
         self.assertEqual(guard.main(['--staged']), 0)
 
@@ -92,19 +92,6 @@ class StagedAuditTests(unittest.TestCase):
             with patch.object(syntax, 'ROOT', Path(outside)), patch.object(guard, 'ROOT', Path(outside)):
                 self.assertEqual(syntax.main(['--staged']), 1)
                 self.assertEqual(guard.main(['--staged']), 1)
-
-    def test_shell_index_manifest_and_scripts_ignore_unstaged_repairs(self):
-        self.put('backend/app/web/index.html', b'<script>const inline = 1;</script><script src="/static/shell/a.js"></script>')
-        path = self.put('backend/app/web/shell/a.js', b'const value = ;\n')
-        path.write_bytes(b'const value = 1;\n')
-        self.assertEqual(syntax.main(['--staged']), 1)
-        self.git('add', '--', 'backend/app/web/shell/a.js')
-        (self.root/'backend/app/web/index.html').write_bytes(b'not the index manifest')
-        path.write_bytes(b'const value = ;\n')
-        self.assertEqual(syntax.main(['--staged']), 0)
-        self.commit(); path.write_bytes(b'const value = 1;\n')
-        self.git('rm', '--', 'backend/app/web/shell/a.js')
-        self.assertEqual(syntax.main(['--staged']), 1)
 
 
 if __name__ == '__main__':

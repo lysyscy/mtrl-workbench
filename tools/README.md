@@ -9,7 +9,6 @@
 | React 验看与失败截图 | dev/frontend_capture.py；对已存在预览页采集截图和身份JSON；React失败自动截图与按需截图fixture共用，不创建服务或写业务数据。 |
 | React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
 | 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用；--staged只检查Git index，显式无参数保全量模式，Git失败非零 |
-| 旧壳源码与语义读取 | audit/shell_source.py、shell_api.py；共享读取不因index拆件失效 |
 | 运行输出与生命周期 | audit/workspace_paths.py、audit_work.py；只处理本任务拥有产物 |
 | 开、关、列票 | oneoff/_tail_open.py、_tail_close.py、_list_tails.py；协议见docs/agents/issue-tracker.md，默认干跑 |
 | 疑似未调用公共定义 | audit/wiring_audit.py，只保W2候选提示，不自动判缺陷或删代码 |

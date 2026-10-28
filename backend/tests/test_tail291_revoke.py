@@ -12,8 +12,6 @@ from app.mod05_flow import repository as flows, router as api
 from app.mod05_flow.models import FlowRevokeLog
 from app.mod11_jc import repository as jc, service as jcs
 from tests.test_acc_jc_pay_link import _project
-from tests.ui_helpers import ui_page  # noqa: F401
-from tests.test_tail282_pay_draft import _setup, _over
 
 
 @pytest.fixture
@@ -115,32 +113,6 @@ def test_invalid_and_duplicate_atomic(sample,monkeypatch):
         assert facts(s,n,b)==done
 
 
-@pytest.mark.parametrize('entry',['flow','notice'])
-def test_both_ui_entries_failure_and_drafts(ui_page,entry):
-    p=ui_page;_setup(p)
-    p.evaluate("""() => {
-      ACT.editss({dataset:{id:'101',k:'pay'},value:'300'});
-      ACT.editss({dataset:{id:'102',k:'pay'},value:'120'});
-      FLs=[{id:'31',nid:'101',flowNo:'FL291',amt:200,date:'2026-10-02',voided:false}];
-      API.flowRevokeInfo=async()=>({ok:true,manual:true,expected:'snapshot'});
-      API.flows=async()=>({rows:[{id:31,notice_id:101,amount:'200',status:'effective'}]});
-      window.writes=[]; API.flowRevoke=async(...args)=>{writes.push(args);return {ok:false,message:'并发变化'};};
-    }""")
-    p.evaluate("async entry=>{if(entry==='flow')await ACT.revDlg({dataset:{fid:'31'}});else await ACT.ntRevoke({dataset:{id:'101'}});}",entry)
-    assert p.locator('input[name="revStat"]').count()==2
-    p.fill('#rReason','291撤销')
-    p.click('[data-act="revOk"]')
-    assert p.evaluate('writes.length')==0
-    p.check('input[name="revStat"][value="auto"]')
-    p.click('[data-act="revOk"]')
-    p.wait_for_function('writes.length===1')
-    assert p.evaluate('writes[0]')==['31','291撤销','auto','snapshot']
-    assert _over(p,'101') and _over(p,'102')
-    assert p.locator('#rReason').is_visible() and p.locator('[data-act="revOk"]').is_enabled()
-    p.evaluate("() => {API.flowRevoke=async()=>({ok:true,notice_id:101,jc_effect:null});API.notices=async()=>{throw Error('刷新失败');};reloadM05=async()=>{throw Error('刷新失败');};}")
-    p.click('[data-act="revOk"]')
-    p.wait_for_function("!document.querySelector('#rReason')")
-    assert not _over(p,'101') and _over(p,'102')
 
 
 def test_concurrent_edit_rejects_stale_snapshot():
@@ -157,33 +129,42 @@ def test_concurrent_edit_rejects_stale_snapshot():
         b=flows.create_flow(s,notice_id=nid,project_id=None,amount=200);fid=b.id
         apply_stat_change(s,notice_id=nid,field='stat_paid',value='450',changed_by='并发测试')
     try:
-        expected=api.api_revoke_info(fid)['expected']
-        locked=Event();release=Event();started=Event()
+        expected = api.api_revoke_info(fid)['expected']
+        locked = Event()
+        release = Event()
+        started = Event()
+
         def editor():
             with session_scope() as s:
-                f=flows.get_flow(s,fid,for_update=True);f.amount=210;s.flush()
+                f = flows.get_flow(s, fid, for_update=True)
+                f.amount = 210
+                s.flush()
                 locked.set()
                 assert release.wait(15)
+
         def revoker():
             started.set()
-            return api.api_revoke(fid,reason='并发撤销',stat_choice='auto',expected=expected)
+            return api.api_revoke(fid, reason='并发撤销', stat_choice='auto', expected=expected)
         with ThreadPoolExecutor(max_workers=2) as pool:
-            edit=pool.submit(editor)
+            edit = pool.submit(editor)
             assert locked.wait(15)
-            rev=pool.submit(revoker)
+            rev = pool.submit(revoker)
             assert started.wait(15)
-            release.set();edit.result(timeout=15)
-            with pytest.raises(MustReportError,match='已变化'): rev.result(timeout=15)
+            release.set()
+            edit.result(timeout=15)
+            with pytest.raises(MustReportError, match='已变化'):
+                rev.result(timeout=15)
         with session_scope() as s:
-            n=s.get(PaymentNotice,nid);b=flows.get_flow(s,fid)
-            assert b.amount==210 and b.status=='effective' and n.stat_paid==450
-            assert flows.effective_total_of(s,nid)==510
-            assert [t.field for t in notices.list_stat_traces(s,nid)]==[D.F_STAT_PAID]
-            assert not s.execute(select(FlowRevokeLog).where(FlowRevokeLog.flow_id==fid)).scalars().all()
+            n = s.get(PaymentNotice, nid)
+            b = flows.get_flow(s, fid)
+            assert b.amount == 210 and b.status == 'effective' and (n.stat_paid == 450)
+            assert flows.effective_total_of(s, nid) == 510
+            assert [t.field for t in notices.list_stat_traces(s, nid)] == [D.F_STAT_PAID]
+            assert not s.execute(select(FlowRevokeLog).where(FlowRevokeLog.flow_id == fid)).scalars().all()
     finally:
         with session_scope() as s:
-            ids=select(PaymentFlow.id).where(PaymentFlow.notice_id==nid)
+            ids = select(PaymentFlow.id).where(PaymentFlow.notice_id == nid)
             s.execute(delete(FlowRevokeLog).where(FlowRevokeLog.flow_id.in_(ids)))
-            s.execute(delete(NoticeStatLog).where(NoticeStatLog.notice_id==nid))
-            s.execute(delete(PaymentFlow).where(PaymentFlow.notice_id==nid))
-            s.execute(delete(PaymentNotice).where(PaymentNotice.id==nid))
+            s.execute(delete(NoticeStatLog).where(NoticeStatLog.notice_id == nid))
+            s.execute(delete(PaymentFlow).where(PaymentFlow.notice_id == nid))
+            s.execute(delete(PaymentNotice).where(PaymentNotice.id == nid))

@@ -6,7 +6,6 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 from app.home import service as S
 
@@ -23,137 +22,35 @@ DEST = {"ownership": "m03",
 #    `KEYS` 逐项核对，多余的键不会生效；下次动本件时顺手清掉即可。
 
 
-def _home() -> str:
-    """`V.home` 的**推导段**（口径表达式 ＋ 各瓦片，**个数以 `KEYS` 为准**）—— 到 `return \\`` 为止。"""
-    i = SHELL.find("V.home=()=>{")
-    assert i >= 0, "壳里找不到 `V.home`"
-    j = SHELL.find("  return `", i)
-    assert j > i, "找不到 `V.home` 推导段的终点（`  return \\``）"
-    return SHELL[i:j]
 
 
-def _calls(block: str) -> dict[str, str]:
-    """9 个瓦片调用的**实参串**：`{把手: "键,数,色,标题,显示值,说明,去向,链接文字"}`。
-
-    ⚠️ 按行取（每个瓦片调用都独占一行、以 `),` 收尾）；⚠️ 实参里**不含逗号**
-       （说明文字里用的都是 `、` / `·`）⇒ 直接 `split(',')` 就是 8 段 ——
-       谁哪天往说明里塞了个逗号，本函数**当场报错**（⛔ 不静默错位）。
-    """
-    out: dict[str, str] = {}
-    for m in re.finditer(r"^\s*(?:run)?[Tt]ile\('(\w+)',(.+)\),?\s*$", block, re.M):
-        key, args = m.group(1), f"'{m.group(1)}',{m.group(2)}"
-        parts = args.split(",")
-        assert len(parts) == 8, f"{key} 的实参切成了 {len(parts)} 段（应为 8）：{args[:90]}"
-        out[key] = args
-    return out
 
 
 # ================================================================ A 段 · 壳（`V.home`）
 
 
 # ----------------------------------------------------------------- 001-01
-def test_待办把手齐全不重不漏():
-    """⭐ 把手集合固定、**顺序即契约**（`TAIL-97` 撤掉 `jcPending`；2026-09-28 看板清账又撤 4 项）。
-
-    ⚠️ 数量**以 `KEYS` 为准** —— ⛔ 别把个数写死在断言里：用户增减待办项是常态，
-       写死个数会让"用户删一个无用的待办"变成一串假红（本会话实测踩到）。
-    """
-    block = _home()
-    got = [m.group(1) for m in re.finditer(r"(?:run)?[Tt]ile\('(\w+)',", block)]
-    assert got == list(KEYS), f"页面把手 = {got}"
-    assert len(set(got)) == len(KEYS), "把手有重复"
-    assert set(_calls(block)) == set(KEYS)
 
 
 # ----------------------------------------------------------------- 001-02
-def test_每项数字都来自数据源不得写死():
-    """⭐ 数字 = **对应数据域的出口**（⛔ 不写死、⛔ 不拿本页自己自证）。
-
-    ⚠️ 断言方式：逐项钉住「**把手 → 用来算它的那个表达式**」。
-       把数字改成字面量、或把口径改到别处 ⇒ **当场变红**。
-    """
-    block = _home()
-    calls = _calls(block)
-    # ①–⑥ 与 ⑤ 的表达式名（每一行都是**该域的出口**，不是本页另算的中间量）
-    # ⚠️ 2026-09-28（看板清账）：`ntUnapproved` / `dfPending` 两个瓦片已删 ⇒ 从本表去掉；
-    #    claim 不变：**留下的每一项**都取自本域出口（⛔ 不许本页另算中间量）。
-    want_expr = {
-        "ownership": "nOwn",
-        "jcUnlinked": "nNoLink", "voidJoint": "nVoidJ",
-    }
-    for key, expr in want_expr.items():
-        assert calls[key].split(",")[1] == expr, f"{key} 的数不是取自 {expr}：{calls[key][:70]}"
-    # ⭐ 逐条钉住**口径表达式本身**（谁把口径改了/换成写死的数 ⇒ 红）
-    for line in (
-        "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;",
-        # ⭐ 2026-09-28 新增两项：口径**必须**走本域唯一出口（`ntJcUnlinked` / `ntVoidJoint`），
-        #    ⛔ 不许本页另写判定（改口径 ⇒ 本行必红）。
-        # ⚠️ 变量名**刻意不含 `nJc`** —— 001-09 那条旧墓碑写着"看板不许再数 `nJc`（集采待确认，TAIL-97 已撤）"，
-        #    命名撞子串会让它**假红**（本次实测踩到）⇒ 这里用 `nNoLink`。
-        "const nNoLink=NO.filter(ntJcPending).length;",
-        "const nVoidJ=NO.filter(ntVoidJoint).length;",
-    ):
-        assert line in block, f"口径表达式的唯一出口不见了：{line}"
-    # ⚠️ 反向：这些瓦片的数字**不得**出现字面量写法（`tile('x',3,` 这种）
-    for key, args in calls.items():
-        assert not re.fullmatch(r"\d+", args.split(",")[1]), f"{key} 的数字像是写死的：{args[:60]}"
 
 
 # ----------------------------------------------------------------- 001-03
-def test_八项都可点击跳到对应页():
-    """⭐ 每一项都能**点进去处理**（不是只读展示）＋ 键盘可达（R13 无障碍）。"""
-    block = _home()
-    calls = _calls(block)
-    for key in KEYS:
-        pg = calls[key].split(",")[6]
-        assert pg == f"'{DEST[key]}'", f"{key} 的去向 = {pg}（应为 'm{DEST[key][1:]}'）"
-    # 瓦片出口必须**自带**可点三件套（否则 9 个瓦片全是死块）
-    tmpl = block[block.find("const tile=(k,n,cls,t,v,s,pg,tx)=>"):]
-    for bit in ('<button class="text-link"', "homeJcUnlinked", 'data-k="\'+pg+\'"'):
-        assert bit in tmpl[:600], f"瓦片出口缺少原生按钮或导航动作：{bit}"
 
 
 # ----------------------------------------------------------------- 001-06
-def test_未审批只计有效且未审批():
-    """⭐ 「未审批」= **有效且未审批**（撤单 / 剔除行不计）—— 出口是 `ntLive`（唯一判据）。"""
-    assert "ntUnapproved" not in _calls(_home())
 
 
 # ----------------------------------------------------------------- 001-07
-def test_归属待判定计壳且未定具体小微():
-    """⭐ 「归属待判定」= 壳全名 且 **尚未指定具体小微**（`isShellFull` ＋ `ntProjKey`）。"""
-    assert "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;" in _home()
 
 
 # ----------------------------------------------------------------- 001-08
 
 
 # ----------------------------------------------------------------- 001-09
-def test_集采与差异各取本域出口且不臆造不隐藏():
-    """⭐ 2026-09-21 重写口径：两项**都已实现**，各自取本域出口；⛔ 不臆造、⛔ 不把项藏起来。
-
-    ⚠️ 原文写的是「该域**未实现时**记 0 并标注」—— 那个条件现在**不成立**了：
-       · 「集采待确认」自 `M5` 起就是**真数**（`JCs` 三态，`m11` 已接线）；
-       · 「差异」自 `MOD-12` 撤页后**载体 = 库存单据的调整单**（§5.8.3）⇒ 数 = 有调整单的行数。
-       ⛔ 别退回"恒 0 ＋ 该域未实现"（那会让看板去谎报一个不存在的待办）。
-    """
-    block = _home()
-    assert "dfPending" not in _calls(block)
-    # ⭐ `TAIL-97`：`jcPending`（集采待确认）**已撤** ⇒ ④ 号那条口径出口**不许再出现**
-    assert "nJc" not in block, "看板又数起了「集采待确认」（该待办已撤）"
-    # ⛔ **已撤页的数据源不许长回来**（`DFs` 是 m12 的留痕残留、恒空 ⇒ 拿它当"待核对"就是谎报）
-    assert "DFs" not in block, "看板又读起了 `DFs`（那是已撤的 `m12` 的残片，恒空）"
-    assert "待核对" not in block, "看板又写起了「差异待核对」（该状态已无载体）"
-    # ⚠️ 2026-09-28（看板清账）：`dfPending` 瓦片已删（用户判无用）⇒ 原「两项都在」不再适用；
-    #    claim 改成**反向**保留：已撤的东西⛔ 不许长回来（下面那条 `jcPending` 就是同款）。
-    calls = _calls(block)
-    assert "jcPending" not in calls, "看板的「集采待确认」瓦片已撤（TAIL-97）"
 
 
 # ----------------------------------------------------------------- 001-10
-def test_占位行按占位前缀计():
-    """⭐ 「占位行」= 仓库名以占位前缀开头（`未建仓-`）的档案行数。"""
-    assert "placeholder" not in _calls(_home())
 
 
 # ================================================================ B 段 · 后端（记账端点）
@@ -214,8 +111,6 @@ def test_抓取到期与失败取自执行记录(monkeypatch):
     assert out2["counts"]["fetchDue"] == 0
 
     # 记账端点保持兼容，看板不再展示或请求运行状态。
-    assert 'homeRunCounts:' not in SHELL
-    assert "home: ['付款通知书', '项目档案', '集采台账']," in SHELL
     # ⚠️ **补盲区**：上面两条用的是 `_Sess` 桩件，而桩件的 `execute()` **直接返一个数**
     #    ⇒ 那句 SQL（按 run_type / status / **本月**筛）在桩件下**永远是对的**。
     #    这里按结构再钉一遍：三个条件一个都不能少（去掉「本月」那句 ⇒ 看板会拿旧月份报"已抓"）。
@@ -277,14 +172,3 @@ def test_旧看板渲染层不得复活():
     home_dir = Path(__file__).resolve().parents[1] / "app" / "home"
     assert not (home_dir / "view.py").exists(), "旧看板渲染页 `view.py` 又回来了"
     assert not (home_dir / "domain.py").exists(), "旧看板的 8 项口径出口 `domain.py` 又回来了"
-
-
-def test_看板只保留待办():
-    """用户 2026-10-08 撤掉三块说明，防止后续恢复干扰内容。"""
-    from tests.shell_src import page_slice
-    page = page_slice('home')
-    for text in ('怎么看这一页', '只列「需要你处理的事」', '状态一览'):
-        assert text not in page, f'看板又出现已撤掉内容：{text}'
-    for text in ('取数状态', '本月抓取', '占位行待扶正'):
-        assert text not in page
-    assert 'todoTiles.join' in page and 'todo-grid' in page

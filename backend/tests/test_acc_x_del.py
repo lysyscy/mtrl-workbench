@@ -44,21 +44,13 @@ from app.mod03_notice import notice_manual_actions as NA
 from app.mod03_notice import rules_repository as RR
 from app.mod08_inv import domain as I
 
-from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取点收敛
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
 #    已**整把删掉**，取段改走壳的语义口径（这里要的是 `ACT` 的一条 ⇒ `act_entry`）。⛔ 别写回来。
 
 
-def _rows() -> list[dict]:
-    """三行计划行（形状按 `delete_impact` 读的键给：`id` / `year_month`）。"""
-    return [{"id": 11, "year_month": "2026-08", "doc_no": "P001"},
-            {"id": 12, "year_month": "2026-08", "doc_no": "P002"},
-            {"id": 13, "year_month": "2026-09", "doc_no": "P003"}]
 
 
-def _results() -> dict:
-    return {11: "完全匹配", 12: "金额不符", 13: "完全匹配"}
 
 
 # ---------------------------------------------------------- `001-01` 影响范围
@@ -72,7 +64,6 @@ def test_删除前列出真实影响范围而不是占位():
     assert impact['notice_id'] == 11 and impact['label'] == 'M11'
     assert impact['project_name'] == '项目甲' and impact['stat_paid'] == '70.00'
     assert '70.00' in impact['message'] and not fake.deleted
-    assert 'API.manualDeleteImpact(' in act_entry('ntDel')
 
 
 
@@ -166,10 +157,6 @@ def test_手动行删除只删该行且清归属与勾选():
     NA.assert_manual_editable({"ph_id": "MANUAL-abc123", "bill_no": ""})   # 手动行放行
 
     # ③ 壳侧：删完把 id 从勾选集里退出来；⛔ 且不许本地 splice 冒充删除
-    ok = act_entry("ntDelOk")
-    assert "pickSet.delete(id)" in ok, "删完没退出勾选集（汇总条会继续算一个不存在的行）"
-    assert "splice" not in ok, "⛔ 壳里还在本地 splice 冒充落库"
-    assert "API.manualDelete(" in ok, "删除没走后端端点"
 
 
 # ---------------------------------------------------------- `001-06` 只删选中行
@@ -180,8 +167,6 @@ def test_只删选中行且未确认就拒():
     from app.mod03_notice.models import PaymentNotice
     a, b = _notice(11, is_manual=True, ph_id="MANUAL-11"), _notice(12)
     client, fake = _client([a, b])
-    assert 'API.manualDelete(' not in act_entry('ntDel')
-    assert 'API.manualDelete(' in act_entry('ntDelOk')
     row, message = NA.apply_manual_delete(fake, 11)
     assert row is a and fake.deleted == [a]
     assert fake.by_model[PaymentNotice] == [b] and b.bill_no == 'B12'

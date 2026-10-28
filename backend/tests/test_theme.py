@@ -37,22 +37,10 @@ _HEX_RE = re.compile(r"(?<!&)#[0-9a-fA-F]{6}\b")   # ⚠️ 前面不是 `&` —
 _VAR_DEF_RE = re.compile(r"(--[a-z0-9-]+):")
 _VAR_USE_RE = re.compile(r"var\((--[a-z0-9-]+)\)")
 
-# ⭐ 2026-09-19（`§19` 性能 · **主题②**）：**前端壳也是主题真源的消费者**（第三路，经 `/static/theme.css`）
-#    ⇒ 它同样受「颜色只经变量出口 / 引用的变量必须有定义」这两条管。
-#    ⚠️ 壳用**更严**的正则：3~8 位（否则 `#fff9`、`#0f172a26` 这类短写法／带 alpha 的**溜过去**）。
-from tests.shell_src import SHELL, parts_text  # noqa: F401  ← `P4`① 读取点收敛
-SHELL_THEME_LINK = '<link rel="stylesheet" href="/static/theme.css">'
-_HEX_RE_ANY = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b")
 
 
 def _theme_vars() -> dict[str, str]:
     return dict(re.findall(r"(--[a-z0-9-]+):\s*([^;\n]+);", page.THEME_CSS))
-
-
-def _iter_html():
-    """壳的**每一件**，产出 `(相对路径, 文本)` —— `P4`① 之后壳是多件（`index.html` ＋ `web/shell/*.js`），
-    ⚠️ 只扫 `index.html` 会**静默漏掉接线层**（那正是色值最容易溜进去的一段）。"""
-    return parts_text()
 
 
 def _iter_app_py():
@@ -85,22 +73,11 @@ def test_状态色一律四档成组():
 
 
 def test_全工程引用的变量都有定义_引用了没定义会静默失效():
-    """⭐ 2026-09-27（`TAIL-129` 界面大小）：**"定义处"有两个** ——
-      ① **主题真源**（`page.THEME_CSS`，全是**颜色**）；② **壳自己的样式块**（**非颜色**的尺寸/倍率，
-         如界面大小的 `--fscale`，它的默认值必须写在壳里 —— 那是"JS 没跑时也不散架"的兜底）。
-    ⚠️ 本条守的是「**引用必有定义**（否则 `var()` 取不到值 ⇒ 整条声明静默失效）」，不是
-       「只能在主题真源里定义」⇒ 放开这一处**不会**削弱颜色那半：
-       颜色另有更严的守卫（壳不许自带 `:root` / 硬编码色清零 / `ACC-UI-THEME-001` 那几条）。
-    """
+    """共享 Python CSS 与 React 主题引用的变量必须有定义。"""
     defined = set(_theme_vars()) | set(_VAR_DEF_RE.findall(theme_react.render_react_theme(page.DEFAULT_THEME)))
-    for _name, text in _iter_html():
-        defined |= set(_VAR_DEF_RE.findall(text))       # ⭐ 壳自己定义的（`html{--fscale:1}` 这种）
     used: set[str] = set()
     for f in _iter_app_py():
         used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))
-    # ⭐ 2026-09-19（主题②）：壳（HTML）也在这条口径里 —— 它引用的变量同样必须由真源定义
-    for _name, text in _iter_html():
-        used |= set(_VAR_USE_RE.findall(text))
     assert used, "全工程居然一个主题变量都没用？"
     assert not (used - defined), f"引用了但未定义（会静默失效）：{sorted(used - defined)}"
 
@@ -133,9 +110,6 @@ def test_除主题表本身外_全工程CSS不再出现色值字面量():
             text = before + after
         for hit in _HEX_RE.findall(text):
             seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
-    for _name, text in _iter_html():
-        for hit in _HEX_RE_ANY.findall(text):
-            seen.append(f"{_name}: {hit}")
     assert not seen, "CSS 里又出现色值字面量了（应改走 var(--…)）：\n  " + "\n  ".join(seen)
 
 
@@ -247,37 +221,21 @@ def test_mut与sm是唯一真源_不许页级再抄一份():
 #    （它是 `@acc()` **未绑定**的守卫，不是判据点 ✓）。下面的 `001-05` 是**绑定**判据，一字未动。
 
 
-def test_服务端渲染页与静态页拿到的是同一份变量():
-    """**三路同源**：`<link>` 的端点 = 服务端页内联的常量 = 前端壳 `<link>` 的那一份 = `page.THEME_CSS`。
-
-    ⭐ 2026-09-19（`§19` 性能 · **主题②**）：加上**壳**这一路。壳先前自带一份同名 `:root`
-    （16 个取值全与真源不同）⇒ 它是**第二份真源**；现改为只 `<link>` 真源、本地零定义。
-    """
+def test_主题端点使用共享变量与React主题():
     from fastapi.testclient import TestClient
-
     from app.main import create_app
 
-    client = TestClient(create_app())
-    served = client.get("/static/theme.css")
-    assert served.status_code == 200
-    assert served.headers["content-type"].startswith("text/css")
-    assert served.text == page.THEME_CSS          # 端点返回的就是那一份，不是副本
-    # ⚠️ 2026-09-18（`§19` 批 2）：`/m04` 已随旧渲染层删除（授权 `D18`）⇒ 从这一组里去掉。
-    # ⚠️ 2026-09-19（`§19` 批 3）：`/m05` **也已删** ⇒ 换成本模块**暂留的导入页** `/m05/import`；
-    # ⚠️ 2026-09-19（`§19` 批 4 · S4⑤）：`/m03/notices` **也已删**（m03 的服务端渲染页全清）。
-    # ⭐ 2026-09-21（`§19` 四个暂留件收口）：**最后三个服务端渲染页也搬进了新壳**
-    #    （`/m05/import*` · `/m06/import*` · `/m08/import*` ＋ `/m14/settings`）⇒ **服务端渲染层清零**，
-    #    原来那三条「页内联的就是那一份真源」**已无对象可指** ⇒ 换成**结构性断言**：
-    #    那几个路由必须**真的不在了**（⛔ 别留幽灵页），主题真源的消费者只剩两个出口 ——
-    #    **本端点**（上面已逐字比过全文相等）＋ **壳的 `<link>`**（下面）。
-    paths = set(create_app().openapi()["paths"])
-    for gone in ("/m05/import", "/m06/import", "/m08/import", "/m14/settings"):
-        assert gone not in paths, f"{gone} 应已随「四个暂留件收口」删除（服务端渲染层应清零）"
-    # ⭐ 第三路 = **前端壳**：它必须 `<link>` 到同一个端点，且**不得自带 `:root`**
-    #    （同特异度下文档里靠后的那份胜 ⇒ 自带一份就等于第二份真源，换主题必然漂）。
-    shell = SHELL
-    assert SHELL_THEME_LINK in shell, "壳没接主题真源（缺 `<link href=/static/theme.css>`）"
-    assert ":root{" not in shell, "壳又自带 `:root` 了（那是第二份真源 ⇒ 换主题会漂）"
+    with TestClient(create_app()) as client:
+        served = client.get('/static/theme.css')
+        assert served.status_code == 200
+        assert served.headers['content-type'].startswith('text/css')
+        assert served.text == page.THEME_CSS
+        react = client.get('/static/theme.css?surface=react')
+        assert react.status_code == 200
+        assert react.text == theme_react.render_react_theme(page.DEFAULT_THEME)
+    paths = set(create_app().openapi()['paths'])
+    for gone in ('/m05/import', '/m06/import', '/m08/import', '/m14/settings'):
+        assert gone not in paths
 
 
 # ---------------------------------------------------------------- 多主题（《说明书》§7.7 · 2026-09-20）
@@ -458,34 +416,3 @@ def test_每套主题的关键配对都过对比度AA():
     assert not bad, (
         "这些主题/配对**读不清**（阈值：文字 4.5 / 装饰 1.15）—— ⛔ 别调低阈值，去调 `_derive`／种子：\n  "
         + "\n  ".join(bad) + "\n\n全部实测：\n  " + "\n  ".join(rows))
-
-
-def test_侧栏不借用与本角色无关的变量():
-    """⛔ **侧栏文字不许借 `--on` / `--in`**（2026-09-21 修的正是这个）：
-    `--on` 的语义是「**主色之上**的前景」（深色套里它是**黑**），`--in` 是**状态档的中性色** ——
-    两者都与"深色面板上的文字"无关。借用的后果实测过：深色套的侧栏品牌名/悬停项变**黑字压深面板**。
-
-    ⚠️ 唯一合法的 `--on` 用法 = **选中项**（那一项的背景就是主色 `--sb-on`）——
-    所以断言按"**选择器行**"判，⛔ 不是全文件搜一遍（那样连注释都会算进去）。
-    """
-    css = SHELL
-    i = css.find(".sb-brand{")
-    j = css.find(".sb-foot{")
-    assert i > 0 and j > i, "找不到侧栏那段 CSS —— 选择器改名了？本断言要跟着改"
-    block = css[i:j]
-    # 逐行看：带 `.sb` 选择器的行里，除了 `.sb-i.on`，不许出现 `--on` / `--in`
-    for ln in block.splitlines():
-        s = ln.strip()
-        if not s.startswith(".sb"):
-            continue
-        if ".sb-i.on" in s:
-            continue
-        for role in ("var(--on)", "var(--in)"):
-            assert role not in s, (
-                f"侧栏样式借了与本角色无关的变量：{role}\n  行：{s}\n"
-                "  ⛔ 侧栏三档文字用 `--sb-hd` / `--sb-tx` / `--sb-mut`；"
-                "`--on` 只许出现在**选中项**（它的底就是主色）")
-    for need in (".sb-brand b{display:block;color:var(--sb-hd)",
-                 ".sb-i:hover{background:var(--sb-hover);color:var(--sb-hd)"):
-        assert need in block, f"侧栏缺了这条（三档文字规范）：`{need}`"
-

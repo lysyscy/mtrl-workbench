@@ -16,7 +16,6 @@ from app.mod03_notice.notice_api_router import _api_item
 from app.mod05_flow import repository as flows, router as flow_api
 from app.mod11_jc import repository as R, service as S, api as jc_api
 from tests.test_acc_jc_pay_link import _project
-from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def test_display_and_revoke_receipt(monkeypatch, rollback_db):
@@ -71,80 +70,3 @@ def test_notice_only_revoked_flow():
     row = NoticeRow(notice_id=1, flows=({'status': 'revoked', 'amount': 10},))
     payload = _api_item({'_row': row})
     assert payload['has_any_flow'] and not payload['has_effective_flow']
-
-
-def test_browser_flow_dialogs_and_virtual_jump(ui_page):
-    p = ui_page
-    from app.mod03_notice.page import render_theme
-    p.add_style_tag(content=render_theme('默认'))
-    p.evaluate('''() => {
-      window.flowReads=0;
-      API.flows=async()=>{flowReads++;return {rows:[{id:31,notice_id:101,pay_date:'2026-10-02',amount:'300',status:'effective',pay_method:'现汇'},
-        {id:32,notice_id:101,pay_date:'2026-10-03',amount:'200',status:'revoked',revoke_reason:'误付'}]};};
-      API.m11List=async()=>({rows:[{id:11,date:'2026-10-01',material:'281材料',supplier:'供应商',project_key:'测试仓库',
-        contract_amt:'1000',settle:'800',pay_sum:'450',debt:'350',method:'现汇',arch:'已存档',remark:'合同备注',notice_ids:[101]}]});
-      NO[0].hasAnyFlow=true;render();
-    }''')
-    assert p.locator('[data-act="ntFlows"]').count() == 1
-    p.click('[data-act="ntFlows"]')
-    p.wait_for_selector('.mask')
-    assert '误付' in p.inner_text('.mask') and '集采合同' not in p.inner_text('.mask')
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261011-281-flows.png', kind='screenshots')))
-    table = p.locator('.mask table').inner_html()
-    p.click('[data-act="closeModal"]')
-    p.evaluate("ACT.ntTrace({dataset:{id:'101'}})")
-    p.wait_for_selector('.mask')
-    assert '合同备注' in p.inner_text('.mask') and '450.00' in p.inner_text('.mask')
-    assert p.locator('.mask table.dt').last.inner_html() == table
-    p.evaluate("document.documentElement.style.setProperty('--fscale','1.25')")
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261011-281-contract.png', kind='screenshots')))
-    p.evaluate("document.documentElement.style.setProperty('--fscale','1')")
-    p.click('[data-act="closeModal"]')
-    p.evaluate('''() => {
-      const saved=NO; NO=[];window.noticeReads=0;
-      reloadNotices=async()=>{noticeReads++;NO=saved;render();};
-      API.m11Detail=async()=>({ok:true,data:{payment_display_rows:[{id:55,source:'notice',notice_id:101,date:'2026-10-02',amount:'450',display_kind:'stat',mismatch:true}]}});
-    }''')
-    p.evaluate("ACT.jcPayDlg({dataset:{id:'11'}})")
-    p.wait_for_selector('.jc-pay-ref')
-    assert p.evaluate('noticeReads') == 1
-    assert 'DOC-101' in p.inner_text('.mask')
-    p.click('[data-act="closeModal"]')
-    p.evaluate('''() => {
-      const base=NO[0]; NO=Array.from({length:550},(_,i)=>({...base,id:String(1000+i),code:'DOC-'+i,hasAnyFlow:false}));
-      reloadNotices=async()=>{}; fNt.month='全部';fNt.stat='全部';fNt.q=''; VIEW='m03';render();
-      window.sourceWasVirtual=VS_TS.length>0;
-      fNt.month='2020-01';fNt.stat='未付清';fNt.q='找不到';
-      API.m11Detail=async()=>({ok:true,data:{supplier_invoices:[],trade_invoices:[],payments:[],
-        payment_display_rows:[{id:55,source:'notice',notice_id:1520,date:'2026-10-02',amount:'450',display_kind:'stat',mismatch:true}]}});
-      VIEW='m11';render();
-    }''')
-    p.evaluate("ACT.jcPayDlg({dataset:{id:'11'}})")
-    p.wait_for_selector('.jc-pay-ref')
-    assert p.evaluate('sourceWasVirtual')
-    assert '与实付不一致' in p.inner_text('.mask')
-    assert p.locator('.mask [data-act="jcPayDel"]').count() == 0
-    p.click('.jc-pay-ref [data-act="jcPayNotice"]')
-    p.wait_for_timeout(500)
-    assert p.locator('tr.nt-focus').count(), p.evaluate("({view:VIEW,focus:ntFocusId,vs:VS_TS.length,body:document.body.innerText.slice(-1000)})")
-    assert p.evaluate('VIEW') == 'm03'
-    assert p.locator('tr.nt-focus').get_attribute('data-notice-id') == '1520'
-    assert p.evaluate('fNt.q') == 'DOC-520'
-    assert p.evaluate('ntHit(fNt).length') == 1
-    box = p.locator('tr.nt-focus').bounding_box()
-    assert box and 0 <= box['y'] <= 1000
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261011-281-jump.png', kind='screenshots')))
-    p.evaluate('''() => {
-      FLs=[{id:'31',nid:'1520',date:'2026-10-02',amt:300,method:'现汇',voided:false}];
-      reloadM05=async()=>{throw {message:'付款域刷新失败'};};
-      API.flowRevokeInfo=async()=>({ok:true,manual:true,expected:'snapshot'});
-      API.flowRevoke=async()=>({flow_id:31,status:'revoked',jc_effect:{contract_id:11,before:'450.00',after:'450.00',protected:true}});
-      ACT.revDlg({dataset:{fid:'31'}});
-    }''')
-    p.fill('#rReason', '撤销测试')
-    p.check('input[name="revStat"][value="keep"]')
-    p.click('[data-act="revOk"]')
-    p.wait_for_function("document.body.innerText.includes('本次保留人工值')")
-    p.wait_for_function("document.body.innerText.includes('部分页面刷新失败')")
-    assert '450.00 → 450.00' in p.inner_text('body')
-    assert '没能改成' not in p.inner_text('body')

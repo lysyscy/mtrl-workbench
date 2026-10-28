@@ -5,7 +5,6 @@ import openpyxl
 from app.core.db import session_scope
 from app.mod11_jc import repository as R, service as S, domain as D
 from tests.test_acc_jc_pay_link import _project
-from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def dataset():
@@ -39,53 +38,3 @@ def dataset():
 
 def test_project_sequence_and_xlsx():
     dataset()
-
-
-def test_browser_sequence_columns_and_export(ui_page):
-    data=dataset()
-    # ⭐ `TAIL-298`：表头由**后端列清单**现生成 ⇒ 本用例替身也必须把列清单放进去
-    #   （⛔ 别在测试里另抄一份 20 列 —— 那正是本票要治的第二份口径；直接取域内核那张）。
-    cols=[{k:c[k] for k in ('key','label','type')} for c in D.JC_COLUMNS]
-    p=ui_page
-    from app.mod03_notice.page import render_theme
-    p.add_style_tag(content=render_theme('默认'))
-    p.evaluate('''arg=>{JC_COLUMNS.splice(0,JC_COLUMNS.length,...arg.cols);JC_SUM_KEYS.splice(0,JC_SUM_KEYS.length,...arg.sum_keys);JCs.splice(0,JCs.length,...arg.rows.map(adaptJc));VIEW='m11';fJc.tag='全部';fJc.arch='全部';fJc.sup='';render();}''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
-    print(p.evaluate('({filter:fJc,rows:jcVisible().map(j=>j.projectSeq)})'))
-    assert p.locator('table[data-sort-key="m11:jc"] th').count()==len(D.JC_COLUMNS)+1
-    assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_hidden()
-    p.click('#jcTradeBtn')
-    assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_visible()
-    p.evaluate("render()")
-    assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_visible()
-    p.evaluate("fJc.sup='供应商2';render()")
-    assert p.locator('table[data-sort-key="m11:jc"] tbody tr').first.locator('td').nth(1).inner_text()=='3'
-    assert p.locator('table[data-sort-key="m11:jc"] tbody tr').first.locator('td').nth(4).inner_text()=='00CGHT前导'
-    p.evaluate("SORT['m11:jc']={i:1,d:-1};render()")
-    assert p.locator('table[data-sort-key="m11:jc"] tbody tr').first.locator('td').nth(1).inner_text()=='3'
-    print('Browser PASS: filter/sort/redraw=3, contractNo exact; default hidden/toggle retained')
-    p.evaluate("() => {fJc.sup='';SORT['m11:jc']={i:1,d:-1};render();API.m11Export=async b=>{window.exportIds=b.ids;return {ok:false,message:'隔离出口'};};}")
-    expected=p.locator('table[data-sort-key="m11:jc"] [data-act="jcPick"]').evaluate_all('(els)=>els.map(x=>Number(x.dataset.id))')
-    p.evaluate('ACT.jcExport()')
-    assert p.evaluate('exportIds')==expected
-    p.evaluate('''arg=>{
-      window.contractRows=arg.rows;
-      const r=arg.rows.find(x=>x.contract_no==='00CGHT前导');
-      r.notice_ids=[101];
-      JCs.splice(0,JCs.length,...arg.rows.map(adaptJc));
-      PJs.splice(0,PJs.length,{id:'1',type:'normal',name:r.project_key,disp:'测试项目',full:'测试项目全名',status:'在建',phid:'1',kw:''});
-      NO[0].sup=r.supplier;
-      API.m11Detail=async()=>({ok:true,data:{}});
-      API.m11LinkRecommendations=async()=>({ok:true,notice_amount:'12345.67',project_key:r.project_key,rows:contractRows.filter(c=>c.project_key===r.project_key&&c.supplier===r.supplier)});
-      API.m11List=async()=>({rows:contractRows,columns:arg.cols,sum_keys:arg.sum_keys});
-      API.flows=async()=>({rows:[]});
-    }''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
-    identity=p.evaluate("JCs.find(j=>j.contractNo==='00CGHT前导').id")
-    for act in ['jcInvDlg','jcTInvDlg','jcPayDlg']:
-        p.evaluate('(args)=>ACT[args.act]({dataset:{id:args.id}})',{'act':act,'id':identity})
-        assert '序号 3 · 合同编号 00CGHT前导' in p.locator('#modalRoot h3').inner_text()
-        p.evaluate('closeModal()')
-    p.evaluate("ACT.jcLink({dataset:{id:'101'}})")
-    assert '序号 3 · 合同编号 00CGHT前导' in p.locator('#jcLinkCandidates').inner_text()
-    p.evaluate('closeModal()')
-    p.evaluate("ACT.ntTrace({dataset:{id:'101'}})")
-    assert '项目内序号' in p.locator('.mb').inner_text() and '00CGHT前导' in p.locator('.mb').inner_text()

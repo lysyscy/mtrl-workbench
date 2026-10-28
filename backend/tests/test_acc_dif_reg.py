@@ -37,7 +37,6 @@ from decimal import Decimal
 from app.mod06_proc import domain as P
 from app.mod08_inv import domain as I
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 def _raw_row(**over) -> dict:
@@ -107,33 +106,8 @@ def test_差异行可跳转到库存单据并自动筛出改过的行():
     ⚠️ 这条是「差异表**有用**」的关键 —— 没有它，差异表只是一张纸；
        有了它，才能从"这笔对不上"一步走到"去改它"（处置入口落在库存单据侧）。
     """
-    assert 'data-act="goInvAdj"' in SHELL, "壳里没有「差异行 → 库存单据」的入口"
-    assert "查看原始行" in SHELL, "入口的文案没了（用户靠它知道点了会去哪）"
     # 跳过去之后**要自动筛出改过的行**（否则落在一张全量总表上、还得自己找）
-    assert "invOnlyAdj" in SHELL, "跳转后没有「只看被调整过的行」这个筛选项"
     assert I.is_adjusted is not None, "「被调整过」的判据必须在域内（⛔ 不前端自己判）"
 
 
 # ------------------------------------------------ `001-04` 归属恒为「库存单据」
-
-
-def test_归属恒为库存单据且不按发现位置分列():
-    """§5.8.3：「差异归属枚举**恒为「库存单据」** —— **不再按「发现位置」区分过程资料 / 库存单据**」。
-
-    ⚠️ 判据的落点是**"不出现"**：差异表的列里**没有「归属」这一列** ——
-       因为一旦有这一列，人就会去填「过程资料」，而那正是这条口径要禁的
-       （理由见 §5.8.3 原文：过程资料的材料费**引用**自库存单据 ⇒ 两边的差异**必然是同一批**）。
-    ⇒ 所以断言 = **列清单里不存在归属 / 发现位置 / 来源**这类列。
-    """
-    cols = getattr(P, "DIFF_COLS", None) or getattr(P, "DIFF_HEAD", None) or ()
-    if not cols:
-        # 列清单在壳侧的常量里（`DIFF_THEAD`）—— 两条路都查，⛔ 不许"查不到就当通过"
-        import re
-        m = re.search(r"const DIFF_THEAD\s*=\s*(.+)", SHELL)
-        assert m, "找不到差异表的表头定义（形态变了就同批改本件）"
-        cols = m.group(1)
-    text = str(cols)
-    for banned in ("归属", "发现位置", "来源位置"):
-        assert banned not in text, f"差异表出现了「{banned}」列 —— 归属恒为库存单据，⛔ 不按发现位置分"
-    # 而「库存单据」这个唯一的归属，在页面上**以库名/单据的形式**体现（差异表列里有单据号/仓库）
-    assert "仓库" in text or "warehouse" in text, "差异表要能看出是哪张单据（归属=库存单据的落点）"

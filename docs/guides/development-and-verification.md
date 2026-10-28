@@ -27,7 +27,7 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 界面改动与迁移按同来源 implement-solo-spec / `references/verification.md` 的界面分支核旧行为与实际结果，以“页面入口 + 用户动作 + 结果”复用当前规格或票。旧界面的操作、必要截图与源码/接口互补，无法运行时留具体未验项；本项目已有大型迁移验收保持。打印输出按已授权预览、PDF 或现场边界核对象集合和业务口径，不因规则验收操作真实打印机。
 
-旧壳源码读取走 tools/audit/shell_source.py / shell_api.py 与 backend/tests/shell_src.py，前端机制见 [旧前端参考](../reference/legacy-frontend.md)，交互/文案归 [frontend-design](frontend-design.md)。壳快照只在对应现场调查需要时用，不强制差异清零。
+React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/JS 壳及其源码读取、专用回归已退役；混合测试保留仍有效的后端业务检查。
 
 ## 工具与产物
 

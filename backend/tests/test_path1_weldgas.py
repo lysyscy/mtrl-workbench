@@ -48,7 +48,6 @@ from tests.m07_helpers import (
 
 CASE = "ACC-X-EXP-001"
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, act_entry, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_act`（`SHELL.find` ＋ 花括号配平）——
 #    已**整把删掉**，取动作条改走壳的语义口径 `act_entry`（定义 = `tools/audit/shell_api.py`）。⛔ 别写回来。
@@ -67,8 +66,7 @@ def _sheet(path, name: str) -> list[list]:
     wb = openpyxl.load_workbook(str(path), data_only=True)
     try:
         ws = wb[name]
-        return [[ws.cell(row=r, column=c).value for c in range(1, ws.max_column + 1)]
-                for r in range(1, ws.max_row + 1)]
+        return [[ws.cell(row=r, column=c).value for c in range(1, ws.max_column + 1)] for r in range(1, ws.max_row + 1)]
     finally:
         wb.close()
 
@@ -85,17 +83,13 @@ def test_成品形态与模板登记一致(tmp_path):
 
     wb = openpyxl.load_workbook(out)
     try:
-        assert list(wb.sheetnames) == ["焊材", "气"], f"工作表不对：{wb.sheetnames}"
-        for sheet in ("焊材", "气"):
+        assert list(wb.sheetnames) == ['焊材', '气'], f'工作表不对：{wb.sheetnames}'
+        for sheet in ('焊材', '气'):
             ws = wb[sheet]
-            # 表头**照模板保留**（⛔ 不改用户的外观）：结余 ＋ 1月…12月 ＋ 合计
             head = [ws.cell(row=1, column=c).value for c in range(1, 16)]
-            assert head[1] == "2025-11及之前" and head[2:14] == [f"{m}月" for m in range(1, 13)] \
-                and head[14] == "合计", f"[{sheet}] 表头与模板不符：{head}"
-            assert ws.max_column == 15, f"[{sheet}] 列数 ≠ 15：{ws.max_column}"
-            # 数据区首行 = 标记文字所在行（模板 A2）—— 标记本身**不许留在产物里**
-            assert ws.cell(row=2, column=1).value not in (None, "", tpl_fill.MARKER), \
-                f"[{sheet}] A2 还是占位文字：{ws.cell(row=2, column=1).value!r}"
+            assert head[1] == '2025-11及之前' and head[2:14] == [f'{m}月' for m in range(1, 13)] and (head[14] == '合计'), f'[{sheet}] 表头与模板不符：{head}'
+            assert ws.max_column == 15, f'[{sheet}] 列数 ≠ 15：{ws.max_column}'
+            assert ws.cell(row=2, column=1).value not in (None, '', tpl_fill.MARKER), f'[{sheet}] A2 还是占位文字：{ws.cell(row=2, column=1).value!r}'
     finally:
         wb.close()
 
@@ -191,18 +185,17 @@ def test_模板自带的示例值一格不留(tmp_path):
     tpl = openpyxl.load_workbook(R.WELD_TEMPLATE, data_only=True)
     try:
         samples: dict[str, set] = {}
-        for sheet in ("焊材", "气"):
+        for sheet in ('焊材', '气'):
             ws = tpl[sheet]
             area = tpl_fill.locate_data_area(ws, marker=tpl_fill.MARKER)
-            names = {str(ws.cell(row=r, column=1).value or "").strip()
-                     for r in range(area["data_start"], area["data_end"] + 1)}
+            names = {str(ws.cell(row=r, column=1).value or '').strip() for r in range(area['data_start'], area['data_end'] + 1)}
             nums = set()
-            for r in range(area["data_start"], area["data_end"] + 1):
+            for r in range(area['data_start'], area['data_end'] + 1):
                 for c in range(2, area and ws.max_column + 1):
                     v = ws.cell(row=r, column=c).value
                     if isinstance(v, (int, float)):
                         nums.add(round(float(v), 2))
-            samples[sheet] = (names - {""}, nums)
+            samples[sheet] = (names - {''}, nums)
     finally:
         tpl.close()
     assert any(s[0] for s in samples.values()), "模板数据区里没读到项目名（取证前提不成立）"
@@ -212,16 +205,13 @@ def test_模板自带的示例值一格不留(tmp_path):
     try:
         for sheet, (names, nums) in samples.items():
             ws = wb[sheet]
-            got_names, got_nums = set(), set()
+            got_names, got_nums = (set(), set())
             for row in ws.iter_rows(min_row=2, values_only=True):
-                got_names.add(str(row[0] or "").strip())
-                got_nums |= {round(float(v), 2) for v in row[1:]
-                             if isinstance(v, (int, float))}
-            assert not (names & got_names), \
-                f"[{sheet}] 模板示例项目名残留：{sorted(names & got_names)}"
-            # ⚠️ 0 不算残留：合计列就是 `=SUM(B:N)`，空数据的总和本来就是 0（模板同表现）
+                got_names.add(str(row[0] or '').strip())
+                got_nums |= {round(float(v), 2) for v in row[1:] if isinstance(v, (int, float))}
+            assert not names & got_names, f'[{sheet}] 模板示例项目名残留：{sorted(names & got_names)}'
             residue = (nums & got_nums) - {0.0}
-            assert not residue, f"[{sheet}] 模板示例数字残留：{sorted(residue)}"
+            assert not residue, f'[{sheet}] 模板示例数字残留：{sorted(residue)}'
     finally:
         wb.close()
 
@@ -233,15 +223,15 @@ def test_数据区起点认标记文字而不是抄坐标():
     """
     wb = openpyxl.load_workbook(R.WELD_TEMPLATE)
     try:
-        ws = wb["焊材"]
-        assert tpl_fill.locate_data_area(ws)["data_start"] == 2, "本模板的标记该在 A2"
-        ws["A3"] = tpl_fill.MARKER                       # 把标记整体下移一行
-        ws["A2"] = "某项目"
-        assert tpl_fill.locate_data_area(ws)["data_start"] == 3, "定位没跟着标记走（抄了坐标）"
-        ws["A4"] = tpl_fill.MARKER                       # 两处标记 ⇒ 起点不唯一 ⇒ 必须报错
+        ws = wb['焊材']
+        assert tpl_fill.locate_data_area(ws)['data_start'] == 2, '本模板的标记该在 A2'
+        ws['A3'] = tpl_fill.MARKER
+        ws['A2'] = '某项目'
+        assert tpl_fill.locate_data_area(ws)['data_start'] == 3, '定位没跟着标记走（抄了坐标）'
+        ws['A4'] = tpl_fill.MARKER
         with pytest.raises(ValueError) as e:
             tpl_fill.locate_data_area(ws)
-        assert "不唯一" in str(e.value), f"没给中文原因：{e.value}"
+        assert '不唯一' in str(e.value), f'没给中文原因：{e.value}'
     finally:
         wb.close()
 
@@ -334,23 +324,6 @@ def test_报告月口径_单月跨月年与全部():
 # ============================================================ 壳侧（两个页面都要有真保存）
 
 
-def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
-    """绑 `001-05`：壳里的 `expExt` / `saveExt` 必须**真下载**，且提示语 = **模板的实际形态**。
-
-    ⚠️ 断言只钉这两个动作**自己的作用域**（花括号配平区间）—— 别处的同名串不得喂饱它。
-    """
-    dialog = act_entry("expExt")
-    save = act_entry("saveExt")
-    _a = with_kernel(save)         # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
-    assert "dlExport" in save and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
-    assert "/api/m07/extract/export?status=" in save, "`saveExt` 没打导出端点"
-    assert "x-export-filename" in with_kernel(save), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in with_kernel(save), "没按 `content-type` 分流失败原因"
-    assert "fExt.status" in save and "fExt.year" in save, "筛选没带给后端（会导出成别的集合）"
-    # ⭐ 提示语必须与模板实际形态一致：2 个工作表（焊材 / 气）＋ 列 = 项目|结余|1月…12月|合计
-    for token in ("年度汇总", "当前筛选", "2025-11及之前", "合计"):
-        assert token in dialog, f"提示缺导出范围和原模板含义：{token}"
-    assert "extBlock('焊材')" in dialog and "extBlock('气体')" in dialog
 
 
 # ⚠️ 2026-09-19（`§19` 批 2）：原先这里有一条「**旧服务端页**的收发结存 zip 弹窗也补了真保存」

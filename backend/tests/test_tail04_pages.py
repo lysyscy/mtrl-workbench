@@ -30,8 +30,6 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import get_session
 from app.report_export import fl_export, nt_export
 from tests.m03_action_helpers import FakeWriteSession, _notice
-from tests.shell_load_helpers import exp_routes
-from tests.shell_src import SHELL, const_src  # noqa: F401  ← `P4`① 读取点收敛
 
 #: 壳里的 `data-act="exp"` 按钮的 `data-t`（**真源 = `index.html`**，本表只在测试里对账用）。
 #: ⚠️ 2026-09-21：`i8 接口清单` 的卡片已随「接口清单删除」裁定移除（m02 清单卡）⇒ 从本表摘除。
@@ -43,14 +41,6 @@ BUTTON_T = (
 )
 
 
-def _th_labels(name: str) -> list[str]:
-    """从壳的 `<th>` 串（`NT_THEAD` / `PL_THEAD`）抽**列名** —— 去掉 HTML 标签与 JS 注释。
-
-    ⭐ 2026-10-03（`TAIL-219` 批 2b）：取句改走壳的语义口径 `const_src`（⛔ 别在本件再写正则）。
-    """
-    raw = re.sub(r"/\*.*?\*/", "", const_src(name), flags=re.S)
-    return [re.sub(r"<[^>]+>", "", t).strip()
-            for t in re.findall(r"<th\b[^>]*>(.*?)</th>", raw, re.S)]
 
 
 def _export_labels(columns) -> list[str]:
@@ -74,45 +64,6 @@ def _row_by_first(rows: list[tuple], first) -> tuple:
 # ============================================================== 001-01 · 逐页都有导出入口
 
 
-def test_四个列表页的导出按钮都已真分发():
-    """claim：「**逐页**都有导出入口」—— ⚠️ 本件补的是**"入口真的通到后端"**那一半。
-
-    ⚠️ 「有个按钮」不等于「有导出入口」：改之前 4 个按钮按下去只弹「尚未落地」
-       （`test_acc_x_exp.py` 那条按 claim 的字面只验"按钮在不在页面上"，
-        它**看不见**按钮通到哪儿 —— 这正是本件存在的理由）。
-
-    ⚠️ 断言**两端都要**：① 页面上有按钮（`data-t` 在）；② 分发表里那一条**指向本模块的端点**
-       （`U4` 的同款精神：⛔ 光有 `url` 字段、指到别处也算没接）。
-    """
-    routes = exp_routes()
-    # ① 页面上那 9 个 `data-t` 与测试里登记的名单**双向**钉住（冒出新的 / 少了一个都红）
-    on_page = set(re.findall(r'data-act="exp" data-t="([^"]+)"', SHELL))
-    assert on_page == set(BUTTON_T), (
-        f"壳里的 `data-act=\"exp\"` 按钮名单变了：{sorted(on_page ^ set(BUTTON_T))} —— "
-        "⚠️ 这不是「名单过期」，是**有页新增 / 删除了导出按钮** "
-        "⇒ 同步本名单，并想清楚那一页接不接后端（不接就得走兜底说实话）")
-
-    # ② 接上的那 4 页：端点必须是**本模块**的（⛔ 别指到别的页去）
-    want = {
-        "项目档案": "/api/m01/projects/export",
-        "付款流水": "/api/m05/flows/export",
-        "付款通知书台账": "/api/m03/notices/export",
-    }
-    assert routes == want, (
-        "`EXP_ROUTES` 与登记不符：\n"
-        f"  壳里  = {routes}\n  期望 = {want}\n"
-        "⇒ 要么新增页没登记，要么有人把某页接到了**别的**端点（那种错页面上看不出来）")
-
-    # ③ 没接的页**必须在页面上说实话**（⛔ 不许静默：那 5 个按钮的落点逐个都要有交代）
-    for t in set(BUTTON_T) - set(routes):
-        assert t not in routes, t
-    # ⚠️ 2026-09-27（守则 §2.2/§3.1 · `TAIL-117` 批次 2）：「尚未落地」换成人话「还没有导出功能」
-    #    （原措辞带内部台账编号与后端术语）⇒ token 同步，**"必须诚实兜底"这条口径一字未改**。
-    # ⚠️ 2026-09-28（`TAIL-124`）：`m13` 那枚「演示导出」按钮**已删**（它本来就是"点了只弹兜底提示"的
-    #    假按钮）⇒ 它**不再是**这条兜底的消费者；⛔ 别据此以为兜底可以删 —— 上面那几页仍在。
-    assert "还没有导出功能" in SHELL, (
-        "兜底那句「这一页还没有导出功能」不见了 —— 没落点的页（i8 接口清单 / 库存单据朴素那份 / "
-        "过程资料朴素那份 / 已取消的差异清单）就只剩沉默或假成功")
 
 
 def test_两个新端点都挂上了():
@@ -139,16 +90,8 @@ def test_导出列就是页面表头去掉勾选与操作():
     ⚠️ `✎`（`付款金额 ✎` 那三列）**必须留着** —— 它是页面表头原文，
        洗净了表头就对不上屏幕（口径见 `nt_export` 模块头）。
     """
-    nt_page = _th_labels("NT_THEAD")
-    assert nt_page[0] == "" and nt_page[-1] == "操作", f"`NT_THEAD` 首/末列不是预期：{nt_page}"
-    assert _export_labels(nt_export.COLUMNS) == nt_page[1:-1], (
-        "`nt_export.COLUMNS` 与 `NT_THEAD`（去掉勾选 / 操作）不一致 —— 表与屏幕对不上号了")
 
     # 页面省略流水号，Excel按现行契约保留它供核对（fl_export模块头）。
-    fl_page = _th_labels("FL_THEAD")
-    assert fl_page[-1] == "操作" and fl_page[0] == "单据编码", f"`FL_THEAD` 首/末列不是预期：{fl_page}"
-    assert _export_labels(fl_export.COLUMNS) == ["流水号", *fl_page[:-1]], (
-        "`fl_export.COLUMNS` 与 `FL_THEAD`（去掉操作）不一致 —— 表与屏幕对不上号了")
 
     # ⭐⭐ 2026-10-11（`TAIL-298`）：`m11` 的**屏幕表头已不住壳里** —— 它 = 域内核那张列清单
     #   （`domain.JC_COLUMNS`，`V.m11` 的表头就是拿它生成的）⇒ 本件按同一条口径对账：
@@ -162,11 +105,6 @@ def test_导出列就是页面表头去掉勾选与操作():
     # ⛔ 壳里不许再长回那张 20 列字面量（有 ⇒ 又是两份列清单，`TAIL-298` 治的就是它）。
     #   ⚠️ 判"字面量退场"要认**声明**与**表头串**，⛔ 别拿标识符当判据 —— 注释里提 `JC_THEAD`
     #      （说"那个字面量已删"）是正常的，按标识符判会当场假红。
-    assert "const JC_THEAD" not in SHELL, "m11 的表头字面量又回来了 —— 列清单的唯一主人是 `domain.JC_COLUMNS`"
-    for frag in ("<th>贸易公司合同金额</th>", "<th>结算金额<b class=\"mut\">（自动）</b></th>"):
-        assert frag not in SHELL, f"壳里又写死了 m11 的表头片段：{frag}"
-    assert "TBL({head:jcThead(),key:'m11:jc'," in SHELL, \
-        "m11 的表头必须按列清单现生成（`pages-b.js::jcThead()`）"
 
 
 def test_朴素导出其余四页的列键都在该页行字典里(monkeypatch):
@@ -353,41 +291,3 @@ def test_付款通知书端点按传入id顺序出行且合计只算有效行():
 
 
 # ============================================================== 壳侧：pjVisible ⇄ V.m01
-
-
-def _strip_js_comments(seg: str) -> str:
-    """去掉 JS 注释 —— ⚠️ **必须先去掉**：`pjVisible` 上面那段注释里**逐字引了**这三件套
-    （「`const TYPE=…; const q=…; const rows=pjSort(PJs.filter(p=>…));`（逐字见下）」），
-    不去掉就会先匹配到**注释里那一份**，得到恒等的假绿。"""
-    seg = re.sub(r"/\*.*?\*/", "", seg, flags=re.S)
-    return re.sub(r"//[^\n]*", "", seg)
-
-
-def _filter_bits(text: str) -> tuple[str, str, str]:
-    """从一段 JS 里抽「筛选三件套」：`TYPE` 映射 / `q` / `PJs.filter(...)` —— 去注释、**归一化空白**。"""
-    t = re.sub(r"\s+", "", _strip_js_comments(text))
-    type_m = re.search(r"constTYPE=(\{[^{}]*\})\[fPj\.type\]\|\|'';", t)
-    q_m = re.search(r"constq=fPj\.q\.trim\(\);", t)
-    filt = re.search(r"PJs\.filter\(p=>.*?\);", t)
-    assert type_m and q_m and filt, f"筛选三件套抽不出来（形态变了就同批改本件）：{t[:200]}"
-    return type_m.group(1), q_m.group(0), filt.group(0)
-
-
-def test_项目档案的可见行出口与V_m01的筛选逐字一致():
-    """⭐ `pjVisible()`（导出用）与 `V.m01` 里那段内联筛选**必须逐字一致**。
-
-    ⚠️⚠️ **这是"故意存在的第二份"** —— 为什么不把 `V.m01` 改成调 `pjVisible()`：`V.` 切片是
-       `ui_parity` 的 `U1` 逐行比对的**原件**，配对的原型在「面」；改一处要同改另一处，
-       还会连带原型导读的逐页「行号区间 + 行数」表、`_smoke` 四检、追溯表、验收基线
-       （理由与出处见 `core.js` 里 `pjVisible` 上面那段注释）。
-    ⇒ 于是**用这条测试当保险**：谁只改一处，这里当场点名。
-       ⛔ 别把它当"重复代码告警"删掉 —— 删了之后，导出会**静默地**按另一套筛选出行，
-          而页面上**一点看不出来**（正是本项目最贵的那类错）。
-    """
-    i = SHELL.index("V.m01=()=>{")
-    v_body = SHELL[i:SHELL.index("const typeTag=", i)]
-    j = SHELL.index("const pjVisible = () => {")
-    p_body = SHELL[j:SHELL.index("function adaptProject(", j)]
-    assert _filter_bits(v_body) == _filter_bits(p_body), (
-        "`pjVisible()` 与 `V.m01` 的筛选条件**不一致**了 —— 两处必须一起改：\n"
-        f"  V.m01    = {_filter_bits(v_body)}\n  pjVisible = {_filter_bits(p_body)}")

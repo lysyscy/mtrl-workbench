@@ -12,15 +12,20 @@ from app import main
 @pytest.fixture
 def static_client(tmp_path, monkeypatch):
     web = tmp_path / "web"
-    (web / "shell").mkdir(parents=True)
-    for path in (web / "index.html", web / "shell" / "core.js"):
-        path.write_bytes(b"/* isolated static fixture */" * 100)
+    (web / "fonts").mkdir(parents=True)
+    (web / "fonts/MiSans-Regular.woff2").write_bytes(b"isolated font" * 100)
+    release = tmp_path / "release"
+    (release / "assets").mkdir(parents=True)
+    (release / "assets/main.js").write_bytes(b"/* isolated release */" * 100)
+    (release / "index.html").write_text('<script src="/app/assets/main.js"></script>', encoding='utf-8')
     monkeypatch.setattr(main, "_APP_DIR", tmp_path)
+    settings = main.get_settings().model_copy(update={'frontend_app_dir': str(release), 'frontend_preview_dir': ''})
+    monkeypatch.setattr(main, 'get_settings', lambda: settings)
     with TestClient(main.create_app(), client=("127.0.0.1", 50123)) as client:
-        yield client, web
+        yield client, tmp_path
 
 
-@pytest.mark.parametrize("path", ["/app", "/static/shell/core.js"])
+@pytest.mark.parametrize("path", ["/app", "/static/fonts/MiSans-Regular.woff2"])
 @pytest.mark.parametrize("encoding", ["gzip", "identity"])
 def test_conditional_get_precedence_and_headers(static_client, path, encoding):
     client, _ = static_client
@@ -62,7 +67,7 @@ def test_conditional_get_precedence_and_headers(static_client, path, encoding):
     assert other.content == first.content and other.headers["etag"] == etag
 
 
-@pytest.mark.parametrize("path,filename", [("/app", "index.html"), ("/static/shell/core.js", "shell/core.js")])
+@pytest.mark.parametrize("path,filename", [("/app", "release/index.html"), ("/static/fonts/MiSans-Regular.woff2", "web/fonts/MiSans-Regular.woff2")])
 def test_file_changes_and_missing_file_never_304(static_client, path, filename):
     client, web = static_client
     first = client.get(path)
@@ -87,6 +92,6 @@ def test_static_validators_do_not_bypass_gates(static_client, monkeypatch):
     monkeypatch.setattr(main, "get_settings", lambda: settings)
     with TestClient(main.create_app(), client=("203.0.113.1", 50123)) as blocked:
         assert blocked.get("/app", headers={"If-None-Match": "*"}).status_code == 403
-    assert client.get("/static/shell/unknown.js", headers={"If-None-Match": "*"}).status_code == 404
+    assert client.get("/static/fonts/unknown.woff2", headers={"If-None-Match": "*"}).status_code == 404
     theme = client.get("/static/theme.css", headers={"If-None-Match": "*"})
     assert theme.status_code == 200 and "etag" not in theme.headers

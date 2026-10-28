@@ -21,8 +21,6 @@ from tests.m03_action_helpers import FakeWriteSession, _notice
 APPROVED = Decimal("10000.00")
 
 
-def _rows(*rows) -> list[list]:
-    return [list(r) for r in rows]
 
 
 def _session(notices, flows=(), traces=()) -> FakeWriteSession:
@@ -105,11 +103,7 @@ def _assert_overpay_reminder() -> None:
     assert _api_item({"notice_id": 1, "_row": row})["is_overpaid"] is True, \
         "API 没把「超付」交给壳 ⇒ 界面上永远没有那个提醒"
 
-    from tests.shell_src import SHELL  # noqa: PLC0415  ← `P4`① 读取点收敛
 
-    assert "over: !!x.is_overpaid," in SHELL, "壳没接后端的超付标志（或自己另算了一份）"
-    assert "${n.over?" in SHELL and ">超付</span>" in SHELL, \
-        "「超付」标记没挂在通知书行上 ⇒ claim 的「该单挂提醒」没有落点"
 
 
 # ============================================================ ACC-PAY-AMT-001

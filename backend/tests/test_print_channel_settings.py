@@ -18,7 +18,6 @@ import pytest
 from app.core.errors import MustReportError
 from app.mod03_notice import settings_store as SS
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 def _env(tmp_path: Path) -> Path:
@@ -91,20 +90,3 @@ def test_端点三项进三项出(tmp_path, monkeypatch):
 
 
 # ------------------------------------------------------------------ 壳侧
-
-
-def test_壳弹窗三项齐且判定全在后端():
-    # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：`m03PrinterOpen` 已搬进 `web/shell/print-export.js`，
-    #    它**不再**紧跟 `openOwnDialog`（那句留在 `shell/core.js`）⇒ 原"截到下一个函数"的写法会 `ValueError`。
-    #    **判据一字不变**（就要这个函数的本体）：它现在是该件的**最后一个块** ⇒ 取到件尾即可。
-    #    ⚠️ 若以后在本件末尾再追加函数，这里要改成"截到下一个顶层块"。
-    open_fn = SHELL[SHELL.index("async function m03PrinterOpen()"):]
-    for f in ('id="m03PrinterUrl"', 'id="m03PrintMode"', 'id="m03PrinterName"'):
-        assert f in open_fn, f"弹窗少了 {f}"
-    for m in ("自动（推荐）", "系统驱动", "RAW 9100"):
-        assert m in open_fn, f"通道说明里要有「{m}」"
-    assert "乱码" in open_fn, "要讲清「打不出纸 / 乱码」时怎么办（这是这条设置存在的理由）"
-    save = SHELL[SHELL.index(" m03PrinterSave:async"):]
-    save = save[:save.index("/* —— MOD-06")]
-    assert "API.printerSet(url, mode, nm)" in save, "三项一起提交"
-    assert "validate" not in save, "⛔ 壳里不许自己校验（那是后端唯一出口的活）"
