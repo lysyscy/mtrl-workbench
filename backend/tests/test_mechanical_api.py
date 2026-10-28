@@ -84,7 +84,7 @@ def draft(**changes):
                       'rate': '103.00', 'qty': '1', 'date': '1日至3日', 'plate': ''}], **changes}
 
 
-def test_get_post_public_contract_and_persisted_confirmation(api):
+def test_get_post_public_contract_and_persisted_detail_totals(api):
     response = api.client.get('/api/m06/workbench', params={'ym': '2026-09'})
     assert response.status_code == 200
     initial = response.json()
@@ -97,12 +97,7 @@ def test_get_post_public_contract_and_persisted_confirmation(api):
     assert saved.json()['totals'] == {'gross': '103.00', 'net': '100.00'}
     state = api.client.get('/api/m06/workbench', params={'ym': '2026-09'}).json()
     assert state['details'][0]['rows'][0]['date'] == '1日至3日'
-    assert next(r for r in state['effective'] if r['warehouse'] == '甲')['values']['mech_2'] is None
-    confirmed = api.client.post('/api/m06/workbench/amounts-confirm', json={
-        'warehouse': '甲', 'ym': '2026-09', 'category': 'zero', 'revision': saved.json()['revision'],
-        'effective_signature': effective['signature']})
-    assert confirmed.status_code == 200
-    assert confirmed.json()['values']['mech_2'] == '103.00'
+    assert next(r for r in state['effective'] if r['warehouse'] == '甲')['values']['mech_2'] == '103.00'
     with api.factory() as session:
         assert str(session.scalar(select(ProcMechManual)).mech_4) == '100.00'
 
@@ -131,44 +126,8 @@ def test_route_failure_rolls_back_already_flushed_changes(api, monkeypatch):
     assert api.tracker['rollbacks'] == 1
     with api.factory() as session:
         assert list(session.scalars(select(MechanicalWorkbenchRecord))) == []
-    assert api.client.get('/api/m06/workbench').json()['details'] == []
-
-
-def test_json_import_confirmation_failure_rolls_back_every_batch_and_can_retry(api, monkeypatch):
-    from tests.test_mechanical_workbench import row
-
-    batches = [{'warehouse': '甲', 'ym': '2026-09', 'category': category,
-                'source': {'file': '合成原件'}, 'rows': [row(id=category)]}
-               for category in ('zero', 'monthly')]
-    response = api.client.post('/api/m06/workbench/import-preview',
-                               json={'request_id': 'atomic-failure', 'batches': batches})
-    assert response.status_code == 200
-    preview_id = response.json()['preview_id']
-    payload = {'preview_id': preview_id, 'confirm_amounts': True}
-    original = workbench.confirm_amounts
-    confirmed = []
-
-    def fail_on_second_batch(session, data, operator=''):
-        result = original(session, data, operator)
-        confirmed.append(data['category'])
-        if len(confirmed) == 2:
-            raise MustReportError('第二类确认失败')
-        return result
-
-    with monkeypatch.context() as scoped:
-        scoped.setattr(workbench, 'confirm_amounts', fail_on_second_batch)
-        failed = api.client.post('/api/m06/workbench/import-confirm', json=payload)
-    assert failed.status_code == 400 and confirmed == ['zero', 'monthly']
-    with api.factory() as session:
-        assert list(session.scalars(select(MechanicalWorkbenchRecord))) == []
         assert list(session.scalars(select(ProcMechManual))) == []
-        assert session.get(MechanicalWorkbenchPreview, preview_id).result is None
-    retried = api.client.post('/api/m06/workbench/import-confirm', json=payload)
-    assert retried.status_code == 200
-    with api.factory() as session:
-        values = workbench.effective(session, '甲', '2026-09')['values']
-        assert values['mech_2'] == values['mech_3'] == '103.00'
-        assert values['mech_4'] == values['mech_5'] == '100.00'
+    assert api.client.get('/api/m06/workbench').json()['details'] == []
 
 
 def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
@@ -180,7 +139,7 @@ def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
     assert preview.status_code == 200
     snapshot = preview.json()['snapshot']
     assert snapshot['details'][0]['rows'][0]['amount'] == '103.00'
-    assert snapshot['effective'][0]['values']['mech_2'] is None
+    assert snapshot['effective'][0]['values']['mech_2'] == '103.00'
     first = api.client.get('/api/m06/workbench/export', params=params)
     assert first.status_code == 200
     assert json.loads(first.content)['details'][0]['rows'][0]['amount'] == '103.00'

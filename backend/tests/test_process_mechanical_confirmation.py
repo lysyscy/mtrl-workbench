@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from app.core.errors import MustReportError
 from app.mod06_proc import workbench as W, repository as R
-from tests.test_mechanical_source_protection import session, confirm
+from tests.test_mechanical_source_protection import session, save_detail
 
 
 def details(s, category='monthly', ym='2026-09'):
@@ -21,7 +21,7 @@ def test_any_saved_details_require_confirmation_across_all_six_columns(session, 
     details(session, 'monthly' if column in ('mech_2','mech_4') else 'zero')
     with pytest.raises(MustReportError, match='明细'):
         save(session,column)
-    assert R.mech_row(session,'甲','2026-09') is None
+    assert getattr(R.mech_row(session,'甲','2026-09'),column) != Decimal('77')
 
 
 def test_other_month_does_not_require_confirmation(session):
@@ -31,7 +31,7 @@ def test_other_month_does_not_require_confirmation(session):
 
 
 def test_confirmed_save_changes_one_cell_atomically_and_keeps_details_and_basis(session):
-    state,_=confirm(session)
+    state,_=save_detail(session)
     original=deepcopy(W.read(session,W.key('details','甲','2026-09','zero')))
     detail_signature=W.detail_signatures(session)['甲']['2026-09']
     save(session, confirmed=True,effective_signature=state['signature'],detail_signature=detail_signature,operator='实际操作者')
@@ -50,7 +50,7 @@ def test_confirmed_save_changes_one_cell_atomically_and_keeps_details_and_basis(
 
 @pytest.mark.parametrize('stale',['effective','details'])
 def test_stale_confirmation_never_switches_source_or_writes_amount(session,stale):
-    state,_=confirm(session)
+    state,_=save_detail(session)
     signature=W.detail_signatures(session)['甲']['2026-09']
     before=deepcopy(W.effective(session,'甲','2026-09'))
     with pytest.raises(MustReportError,match='变化'):
@@ -72,7 +72,7 @@ def test_postgresql_process_cell_api_keeps_legacy_contract_and_requires_new_conf
             'rows':[{'id':'row','device':'升降车','amount':'103','tax':'3%专'}]});s.commit()
         req=router.MechSaveRequest(warehouse=wh,ym='2026-09',values={'mech_0':'77'})
         with pytest.raises(MustReportError,match='明细'):router.api_mech_cell_save(req)
-        assert R.mech_row(s,wh,'2026-09') is None
+        assert R.mech_row(s,wh,'2026-09').mech_0 is None
         router.api_mech_save(req)
         fetched=router.api_mech()
         assert fetched['effective_values'][wh]['2026-09']['mech_0']=='77.00'
@@ -87,7 +87,7 @@ def test_postgresql_process_cell_api_keeps_legacy_contract_and_requires_new_conf
 
 
 
-def test_json_detail_import_holds_same_month_lock_as_process_amount_save(rollback_db):
+def test_skill_recording_holds_same_month_lock_as_process_amount_save(rollback_db):
     from uuid import uuid4
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
@@ -97,9 +97,8 @@ def test_json_detail_import_holds_same_month_lock_as_process_amount_save(rollbac
     wh='明细串行-'+uuid4().hex
     with db.get_session_factory()() as s:
         s.add(Project(warehouse_name=wh));s.commit()
-        preview=W.import_preview(s,{'batches':[{'warehouse':wh,'ym':'2026-09','category':'monthly',
+        W.record_details(s,{'request_id':wh,'batches':[{'warehouse':wh,'ym':'2026-09','category':'monthly','revision':0,
             'source':{'file':'测试原报'},'rows':[{'id':'row','device':'升降车','amount':'103','tax':'3%专'}]}]})
-        W.import_confirm(s,{'preview_id':preview['preview_id'],'confirm_amounts':False})
         with Session(rollback_db.engine) as other:
             other.execute(text("SET LOCAL lock_timeout='150ms'"))
             with pytest.raises(OperationalError):R.lock_mech_month(other,wh,'2026-09')

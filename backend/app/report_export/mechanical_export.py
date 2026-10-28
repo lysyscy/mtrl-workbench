@@ -68,7 +68,7 @@ def cumulative(data, wh, column, ym):
 
 
 def annual_values(data, wh, hist, source, category):
-    """Map reliable historical columns to actual months, then overlay adopted month values."""
+    """Map historical months, then overlay effective values and explicit clears."""
     cells = source.get('cells', {})
     if not cells:
         source_year = None
@@ -95,18 +95,24 @@ def annual_values(data, wh, hist, source, category):
                 if values.get(month) is None and fields.get(column) is not None:
                     values[month] = fields[column]
         for row in data.get('annual_effective', data['effective']):
-            if row['warehouse'] == wh and row['values'].get(column) is not None:
-                values[row['ym']] = row['values'][column]
+            if row['warehouse'] != wh:
+                continue
+            value = row['values'].get(column)
+            basis = row.get('sources', {}).get(column, {}).get('basis', {})
+            if value is not None or ('amount' in basis and basis['amount'] is None):
+                values[row['ym']] = value
     return {month: numeric(value) for month, value in values.items()
             if month <= data['ym'] and value is not None}
 
 
-def sum_formula(sheet, row, col, rows, *, empty_zero=False):
+def sum_formula(sheet, row, col, rows, *, empty_zero=False, require_complete=False):
     rows = list(rows)
     cells = [sheet.cell(r, col) for r in rows]
     values = [c.value.result if isinstance(c.value, Formula) else numeric(c.value) for c in cells]
     result = sum((v for v in values if v is not None), Decimal(0))
     if not empty_zero and not any(v is not None for v in values):
+        result = None
+    if require_complete and any(v is None for v in values):
         result = None
     if not rows:
         set_formula(sheet.cell(row, col), Formula('=0' if empty_zero else '=""', result))
@@ -117,7 +123,9 @@ def sum_formula(sheet, row, col, rows, *, empty_zero=False):
         refs = ','.join(c.coordinate for c in cells) or '0'
     expression = f'SUM({refs})'
     set_formula(sheet.cell(row, col), Formula(
-        f'={expression}' if empty_zero else f'=IF(COUNT({refs})=0,"",{expression})', result))
+        f'={expression}' if empty_zero else
+        f'=IF(COUNT({refs})<{len(values)},"",{expression})' if require_complete else
+        f'=IF(COUNT({refs})=0,"",{expression})', result))
     return result
 
 
@@ -167,6 +175,7 @@ def build(data, *, project_rows=None):
         sheet = wb.worksheets[sheet_index]
         row_no = 5
         groups = []
+        net_groups = []
         for group_no, project in enumerate(data['projects'], 1):
             wh = project['warehouse']
             detail = next((r for r in data['details'] if r['warehouse'] == wh and r['category'] == category), None)
@@ -176,6 +185,8 @@ def build(data, *, project_rows=None):
             group_row = row_no
             mark_project(sheet, wh, group_row)
             groups.append(group_row)
+            if gross is not None:
+                net_groups.append(group_row)
             append_row(sheet, row_no, [None] * len(styles[sheet_index][5]), styles[sheet_index][5])
             put(sheet, row_no, 1, group_no, number=True)
             put(sheet, row_no, 2, project['name'])
@@ -203,7 +214,9 @@ def build(data, *, project_rows=None):
                     sheet.cell(row_no, 10).number_format = '@'
                 row_no += 1
             for col in (total_col, net_col):
-                sum_formula(sheet, group_row, col, range(group_row + 1, row_no),
+                included = [group_row + index + 1 for index, item in enumerate(rows)
+                            if item.get('amount') is not None] if col == net_col else range(group_row + 1, row_no)
+                sum_formula(sheet, group_row, col, included, require_complete=col == net_col,
                             empty_zero=bool(detail and not rows and numeric(detail['totals'].get('gross')) == 0))
             effective = amount(data, wh, ym, CATEGORY_COLUMNS[category])
             if (detail and effective is not None and numeric(effective) == numeric(gross)
@@ -215,7 +228,8 @@ def build(data, *, project_rows=None):
         put(sheet, row_no, 1, '合计')
         sheet.merge_cells(start_row=row_no, start_column=1, end_row=row_no, end_column=6)
         for col in (total_col, net_col):
-            sum_formula(sheet, row_no, col, groups)
+            sum_formula(sheet, row_no, col, net_groups if col == net_col else groups,
+                        require_complete=col == net_col)
     annual = wb.worksheets[3]
     annual.page_setup.orientation = 'landscape'
     annual.page_setup.paperSize = '8'

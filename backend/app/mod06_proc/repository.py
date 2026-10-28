@@ -70,7 +70,7 @@ def writable_mech_values(row, values):
     sources, writable = mech_sources(row), {}
     for column, value in values.items():
         if sources[column]['mode'] == 'detail':
-            if to_money(getattr(row, column)) != to_money(value):
+            if getattr(row, column) is None or to_money(getattr(row, column)) != to_money(value):
                 label = MECH_COLUMNS[int(column.removeprefix('mech_'))]
                 raise MustReportError(f'{label}金额已由明细确认，请先明确切换为手填')
         else:
@@ -91,19 +91,19 @@ def load_mech(s: Session) -> list[dict]:
 
 def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None,
               detail_sources: dict | None = None):
-    """Write submitted cells; detail confirmation is the only source that can adopt details."""
+    """Manual writes respect sources; saved detail totals may be unknown or cleared."""
     from app.core.money import require_non_negative
     from app.mod06_proc.domain import normalize_ym
 
     ym = normalize_ym(ym)
     if not ym:
         raise ValueError("核算月认不出，请写 YYYY-MM")
-    parsed = {key: require_non_negative(value, field=key) for key, value in values.items()
+    derived = detail_sources or {}
+    parsed = {key: None if value is None and key in derived else require_non_negative(value, field=key) for key, value in values.items()
               if key in MECH_KEYS}
     found = mech_row(s, warehouse, ym)
-    confirmed = detail_sources or {}
-    guarded = writable_mech_values(found, {k: v for k, v in parsed.items() if k not in confirmed})
-    parsed = {k: v for k, v in parsed.items() if k in guarded or k in confirmed}
+    guarded = writable_mech_values(found, {k: v for k, v in parsed.items() if k not in derived})
+    parsed = {k: v for k, v in parsed.items() if k in guarded or k in derived}
     if not parsed:
         return found
     if found is None:
@@ -111,17 +111,17 @@ def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: 
         s.add(found)
     origins = deepcopy(found.source_batches or {})
     sources = origins.get('__detail_sources', {})
-    if set(parsed) - set(confirmed):
+    if set(parsed) - set(derived):
         origins['__manual'] = 'manual'
     for column, value in parsed.items():
         setattr(found, column, value)
         origins.pop(column, None)
-        if column in confirmed:
+        if column in derived:
             previous = sources.get(column, {})
             history = previous.get('history', [])
             if previous:
                 history = [*history, {k: v for k, v in previous.items() if k != 'history'}]
-            sources[column] = {'mode': 'detail', 'basis': deepcopy(confirmed[column]), 'history': history}
+            sources[column] = {'mode': 'detail', 'basis': deepcopy(derived[column]), 'history': history}
     if sources:
         origins['__detail_sources'] = sources
     found.source_batches = origins

@@ -2,7 +2,7 @@ import { ApiError, record } from './api';
 
 export type Category = 'zero' | 'monthly';
 export interface DetailRow { id: string; [field: string]: unknown }
-export interface Detail { warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[]; totals: { gross: string | null; net: string | null }; issues: { id: string; fields: string[] }[]; blocked_columns: Record<string, { id: string; fields: string[] }[]> }
+export interface Detail { warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[]; totals: { gross: string | null; net: string | null }; issues: { id: string; fields: string[] }[] }
 export interface Effective { warehouse: string; ym: string; signature: string; values: Record<string, string | null>; sources: Record<string, { mode: string }> }
 export interface SourceRow { id: string; bill?: string; periodName?: string; periodKey?: string; amount?: string | null; approval?: string | null }
 export interface Relation { warehouse: string; relation: string; left: string | null; right: string | null; pending: string | null; raw: string | null; ignored: string; revision: number; i8_revision: number; i6: string | null; fetched_at?: string }
@@ -15,7 +15,7 @@ export interface I8Preview { preview_id: string; projects: I8Project[]; unmapped
 export interface WorkbenchSummary { warehouse:string; ym:string; cumulative:Record<string,string|null>; note?:string }
 export interface Workbench { months: string[]; shown: string[]; warehouses: string[]; details: Detail[]; effective: Effective[]; relations: Relation[]; billDifferences: BillDifference[]; discoveries: Discovery[]; matters: Matter[]; i8: I8Snapshot[]; histories: Record<string,unknown>[]; summary:WorkbenchSummary[]; settings: { revision: number; plate_keywords: string[] } }
 export function readDetail(value: unknown): Detail {
-  if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !record(value.blocked_columns)) throw invalid();
+  if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !nullableAmount(value.totals.gross) || !nullableAmount(value.totals.net)) throw invalid();
   return value as unknown as Detail;
 }
 export interface ReportCell { value: string; rowspan: number; colspan: number; column: number }

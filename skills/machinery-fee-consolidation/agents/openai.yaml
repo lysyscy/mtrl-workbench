@@ -1,7 +1,7 @@
 interface:
   display_name: "机械费报表归集"
-  short_description: "按月份目录整理明细并生成系统录入文件，可选输出四页Excel"
-  default_prompt: "使用 $机械费报表归集 整理月份目录中的机械费报表，按输出开关生成录入预览文件，先核实来源，等待我确认后再写系统。"
+  short_description: "按月份目录核对原报并直接录入材料工作台，可选输出四页Excel"
+  default_prompt: "使用 $机械费报表归集 核实月份目录中的原报，直接录入本批机械费并回读报告；归属或金额有具体疑义再问我。"
 
 policy:
   allow_implicit_invocation: false

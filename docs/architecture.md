@@ -26,7 +26,7 @@ React公共网络/金额工具归`apps/frontend/src/api.ts`，域API保逐端点
 
 过程资料、月度会大表与历史结余的单格提交共用`cell-save.ts`的快照/串行/结果分类/未知锁机制，`use-cell-save.ts`接React生命周期与history guard。各域保留草稿身份、来源预检、确认写入后如何续接后续草稿及可靠读回；明确拒绝、未知结果、已写成后重读失败分开，放弃草稿不解除未知锁。台账的版本令牌和原月份续接、费用新增记录恢复及机械批次确认保持专有实现。
 
-React过程资料机械逐格保存使用/api/m06/mech-cell，兼容API /api/m06/mech保既有手填协议；原金额与签名取同次机械有效值读取。机械明细编辑、JSON导入与有效月值决策按项目/月持事务锁，导入多月按稳定次序先锁后验版本；确认通过后在同事务切来源并保存金额，其他格、明细与依据保留。
+React过程资料机械逐格保存使用/api/m06/mech-cell，兼容API /api/m06/mech保既有手填协议；原金额与签名取同次机械有效值读取。明细编辑保存同事务更新对应月金额；技能经本地业务入口直接录入，多范围按稳定次序取得项目/月事务锁并核版本，保三方修订比较、请求幂等及整批回滚。过程资料确认手填在同事务切来源并保存所编辑格，其他格及原明细保留。
 
 过程资料历史材料的手填值以项目、月份和列独立保存，读表与导出在有效历史快照之上逐格应用；保存核对原显示值并串行化，同月库存存在时拒绝写入。项目删除关联检查与操作历史包含该载体。
 
@@ -42,7 +42,7 @@ core/history 在业务 session_scope 内观察变更，history_bindings 装配�
 
 配置有效值沿 core/app_settings.py 的 effective 链，页面库值与 .env 职责见 [部署](guides/deployment.md)。PDF 使用 headless Chromium，服务账户必须能访问浏览器及字体；render.py 为避挂死保留的回收方式在改变生命周期前要核实际服务环境。打印版式来自 i8，IPP 接收不等于纸面完成。
 
-共享Excel读表与单元格解析保留在import_kit/workbook、readers、parse；React425移除通用API/域映射向导及旧两域专属编排，不移除模型、历史批次/来源读取或机械JSON链。mod06_proc/mech_report的只读报表解析仍用于真实导出回读验证；模板生成及透视缓存回 [模板](reference/template-export.md)。真实资产由 report_export/resources.py 和文件字节定义，delivery 只作第三方来源，不能反推业务。有效分层、隔离、金额、撤销及模板测试保留；已退出文档机器链不再影响运行配置。
+共享Excel读表与单元格解析保留在import_kit/workbook、readers、parse；通用API/域映射向导及旧两域专属编排已退出，既有模型及历史批次/来源读取保持。机械费的网页JSON导入、明细汇总确认和一次性历史接续写入链已退出；历史参考继续供累计计算。mod06_proc/mech_report的只读报表解析仍用于真实导出回读验证；模板生成及透视缓存回 [模板](reference/template-export.md)。真实资产由 report_export/resources.py 和文件字节定义，delivery 只作第三方来源，不能反推业务。有效分层、隔离、金额、撤销及模板测试保留；已退出文档机器链不再影响运行配置。
 
 过程资料的库存读取仍经mod08数据主人；`load_process_rows`只投影所需九列并附同一调整痕迹，保原金额Decimal、ID行序和两次批量查询。普通库存规范行、原单/调整单及其他消费者保持原出口。库存扩展调整保存在旁路JSON中，旧amount-only记录原样兼容；core.money负责最终联算与舍入，React使用Decimal.js只预览。保存/撤销在原单行锁下验证源值与当前调整令牌，不修改导入原字段；调整后物料性质用于过程归类，多字段差异留痕随同一批量投影读取。
 

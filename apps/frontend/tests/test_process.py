@@ -9,6 +9,25 @@ LABELS=['租分公司设备','内租设备','外租零租含税','外租包月�
 KEYS=[d+'_'+name for d in ['in','out'] for name in ['主辅材','工具','劳保','周转材料','临时设施']]+['mech_'+str(i) for i in range(6)]
 
 
+def test_real_process_enter_saves_without_clicking_elsewhere(server,browser_page,api,projects,disposable):
+    data=get(api,'/api/m06/matrix');mechanical=get(api,'/api/m06/mech')
+    candidates=[(project,data['matrices'][project['warehouse_name']]['adjusted'][0])
+        for project in projects if project['warehouse_name'] in data['matrices']
+        and data['matrices'][project['warehouse_name']]['adjusted']
+        and data['matrices'][project['warehouse_name']]['adjusted'][0]['ym']
+        not in mechanical['detail_signatures'].get(project['warehouse_name'],{})]
+    assert candidates,'真实副本没有不需明细确认的过程机械格'
+    project,row=candidates[0];page,_=browser_page
+    open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    field=page.get_by_label(row['ym']+' '+LABELS[0],exact=True)
+    value=Decimal(str(row['mech_0'] or 0))+Decimal('1.25')
+    field.fill(str(value));field.press('Enter')
+    expect(field.locator('..').locator('small')).to_have_count(0)
+    expect(field).to_have_value(str(value))
+    fresh=get(api,'/api/m06/mech')['effective_values'][project['warehouse_name']][row['ym']]
+    assert Decimal(fresh['mech_0'])==value
+
+
 def sample(api,projects):
     data=get(api,'/api/m06/matrix')
     for project in projects:

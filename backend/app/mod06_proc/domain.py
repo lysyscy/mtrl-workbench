@@ -197,19 +197,20 @@ def material_by_month(
     return {ym: {k: to_money(v) for k, v in kv.items()} for ym, kv in out.items()}
 
 
-def mech_by_month(manual_rows: list[dict], *, warehouse: str) -> dict[str, list[Decimal]]:
+def mech_by_month(manual_rows: list[dict], *, warehouse: str) -> dict[str, list[Decimal | None]]:
     """机械 6 列的**手录值**（旁路表）：`{核算月: [6 个金额]}` —— ⭐ **只服务正式段**（见模块头）。
 
     ⚠️ 历史段的机械费**不走这里**（那是导入的快照值）—— 按段取数是 `build_matrix` 的事。
     """
-    out: dict[str, list[Decimal]] = {}
+    out: dict[str, list[Decimal | None]] = {}
     for row in manual_rows or ():
         if str(row.get("warehouse") or "") != warehouse:
             continue
         ym = str(row.get("ym") or "")
         if not ym:
             continue
-        out[ym] = [to_money(row.get(f"mech_{i}") or 0) for i in range(len(MECH_COLUMNS))]
+        out[ym] = [None if row.get(f"mech_{i}") is None else to_money(row[f"mech_{i}"])
+                   for i in range(len(MECH_COLUMNS))]
     return out
 
 

@@ -267,7 +267,9 @@ def mechanical_settlements(s: Session) -> dict[int, dict[str, Decimal]]:
     for row in proc.load_mech(s):
         pid = index.get(row.get("warehouse"))
         if pid is not None and row.get("ym"):
-            totals.setdefault(pid, {})[str(row["ym"])] = sum_money([row.get("mech_2"), row.get("mech_3")])
+            amounts = [row[column] for column in ("mech_2", "mech_3") if row.get(column) is not None]
+            if amounts:
+                totals.setdefault(pid, {})[str(row["ym"])] = sum_money(amounts)
     return totals
 
 

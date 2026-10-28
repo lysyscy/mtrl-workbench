@@ -35,7 +35,7 @@ function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
   const label=mechLabels[mechKeys.indexOf(column)]!,key=keyOf(cells.warehouse,data.ym,column),draft=cells.drafts[key];
   return <div className={`process-cell${draft?' process-dirty':''}`}><Input className="record-value" htmlSize={1} aria-label={`${data.ym} ${label}`} value={draft?.value??data[column]??''} disabled={cells.disabled}
     status={draft?.error?'error':''} title={draft?.error||(draft?'未保存':cells.source(data.ym,column)?'明细确认金额；修改后须确认，原明细保留':'手填；清空按 0 保存')} onChange={e=>cells.change(data.ym,column,e.target.value)} onBlur={()=>cells.save(key)}
-    onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);}}} />{draft?<small>{draft.error?'未保存':'待保存'}</small>:cells.source(data.ym,column)&&<small>明细确认</small>}</div>;
+    onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);e.currentTarget.blur();}}} />{draft?<small>{draft.error?'未保存':'待保存'}</small>:cells.source(data.ym,column)&&<small>明细确认</small>}</div>;
 }
 function MaterialCell({data,column,label}:{data:ProcessRow;column:string;label:string}) {
   const cells=useContext(ProcessCells)!;

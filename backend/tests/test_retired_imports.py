@@ -1,4 +1,4 @@
-"""通用导入不可用；付款、集采、过程资料与机械JSON路由继续存在。"""
+"""通用导入不可用；付款、集采与过程资料现行路由继续存在。"""
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

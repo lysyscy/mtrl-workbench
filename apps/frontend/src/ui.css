@@ -43,7 +43,6 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .project-status .ant-tag{margin-inline-end:0}
 .notice-category-select{width:100%;min-width:0}
 .notice-category-select .ant-tag{margin-inline-end:0;padding-inline:.25em}
-.mechanical-import-table .ant-select{min-width:10em;width:100%}
 .notice-pay-table .ant-select{min-width:7em;width:100%}
 .contract-form-grid .ant-picker,.contract-field>.ant-picker,.subtable-draft .ant-picker{width:100%;min-width:0}
 .business-date-picker{font-size:calc(12px * var(--fscale))}

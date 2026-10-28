@@ -13,6 +13,7 @@ export interface TextGridColumn<T> {
   className?: string;
   render?: (row: T, pinned: boolean) => ReactNode;
   signature?: (row: T, pinned: boolean) => string;
+  span?: (row: T, pinned: boolean) => number;
 }
 
 // React/AG treats a replacement renderer definition as a new component even if
@@ -108,8 +109,10 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
         const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
         function cellKey(row: T, column: TextGridColumn<T>, pinned: boolean) {
-          const width = widthById.get(column.id)!, weight = pinned ? '600' : '400', text = column.text(row, pinned);
-          return { key: `${column.id}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
+          const start = displayed.findIndex(col=>col.getColId()===column.id);
+          const span = Math.max(1, Math.floor(column.span?.(row,pinned) ?? 1));
+          const width = plannedWidths.slice(start,start+span).reduce((sum,value)=>sum+value,0), weight = pinned ? '600' : '400', text = column.text(row, pinned);
+          return { key: `${column.id}\0${width}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
         }
         // Compute each domain text/signature once; applying measured heights must
         // not repeat formatter work across every row and wrapping column.

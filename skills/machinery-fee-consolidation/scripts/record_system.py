@@ -1,4 +1,4 @@
-"""Build the existing workbench detail-import JSON from reviewed extraction rows."""
+"""Read the workbench or record reviewed reports directly through its transaction service."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 
 FIELDS = {'equipment': 'device', 'specification': 'spec', 'unit': 'unit',
           'quantity': 'qty', 'planned_months': 'plan', 'elapsed_months': 'used',
@@ -102,31 +103,62 @@ def build(extraction, review, state):
         if removed - approved:
             raise ValueError('系统已有行未对应：复用原id，或明确记录删行依据')
         output.append({'warehouse': warehouse, 'ym': period, 'category': category, 'rows': rows,
+                       'revision': current.get('revision', 0),
                        'source': {'file': '；'.join(s['path'] for s in evidence[(warehouse, category)]),
                                   'sources': deepcopy(evidence[(warehouse, category)]), 'review': deepcopy(review)}})
     if not output:
         raise ValueError('没有可录入的外租明细')
     payload = {'batches': output}
-    signature = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    return {'detail_import': {'request_id': 'mechanical-' + signature, **payload}}
+    identity = {'batches': [{k: v for k, v in batch.items() if k != 'revision'} for batch in output]}
+    signature = hashlib.sha256(json.dumps(identity, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    return {'request_id': 'mechanical-' + signature, **payload,
+            'resolutions': deepcopy(review.get('conflict_resolutions', {}))}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('extraction', 'review', 'state', 'output'):
-        parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--project-root', type=Path, required=True)
+    commands = parser.add_subparsers(dest='command', required=True)
+    read = commands.add_parser('state', help='只读当前项目与明细，供本批关联')
+    read.add_argument('--output', type=Path, required=True)
+    write = commands.add_parser('write', help='获准后直接录入明细并回读')
+    for name in ('extraction', 'review', 'receipt'):
+        write.add_argument('--' + name, type=Path, required=True)
+    write.add_argument('--operator', required=True)
     args = parser.parse_args()
-    load = lambda path: json.loads(path.read_text(encoding='utf-8-sig'))
-    extraction = load(args.extraction)
-    target = args.output.resolve()
-    if any(target.is_relative_to(Path(s['path']).resolve().parent) for s in extraction['sources']):
-        raise ValueError('录入文件须输出到原报目录之外')
-    result = build(extraction, load(args.review), load(args.state))
+    target = (args.output if args.command == 'state' else args.receipt).resolve()
+    if target.exists():
+        raise FileExistsError('请选择新的输出路径：' + str(target))
+    root = args.project_root.resolve(strict=True)
+    if not (root / 'backend/app/mod06_proc/workbench.py').is_file():
+        raise ValueError('请选择材料工作台维护项目根目录')
+    sys.path.insert(0, str(root / 'backend'))
+    from app.core.db import session_scope
+    from app.mod06_proc import workbench
+    if args.command == 'state':
+        with session_scope() as session:
+            result = workbench.state(session)
+    else:
+        load = lambda path: json.loads(path.read_text(encoding='utf-8-sig'))
+        extraction = load(args.extraction)
+        if any(target.is_relative_to(Path(s['path']).resolve().parent) for s in extraction['sources']):
+            raise ValueError('录入回执须保存到原报目录之外')
+        # Read current revisions, validate the source and write in one transaction.
+        with session_scope() as session:
+            payload = build(extraction, load(args.review), workbench.state(session))
+            result = workbench.record_details(session, payload, args.operator)
+        # A new transaction verifies persisted data, rather than echoing the write payload.
+        with session_scope() as session:
+            result['readback'] = [workbench.detail_view(session, *workbench.read(session,
+                workbench.key('details', batch['warehouse'], batch['ym'], batch['category'])))
+                for batch in payload['batches']]
+            result['effective'] = [workbench.effective(session, batch['warehouse'], batch['ym'])
+                                   for batch in payload['batches']]
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open('x', encoding='utf-8') as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2, allow_nan=False)
-    print(json.dumps({'output': str(target), 'batches': len(result['detail_import']['batches']),
-                      'rows': sum(len(b['rows']) for b in result['detail_import']['batches'])}, ensure_ascii=False))
+    print(json.dumps({'output': str(target), 'command': args.command,
+                      'batches': len(result.get('batches', []))}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

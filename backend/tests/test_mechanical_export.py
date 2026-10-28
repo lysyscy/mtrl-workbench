@@ -79,6 +79,18 @@ def test_monthly_hidden_net_column_survives_empty_template_cells():
     wb.close()
 
 
+def test_unknown_net_does_not_export_a_partial_project_or_sheet_total():
+    data=sample()
+    data['details'][0]['rows'].append({'device':'待补税率设备','amount':'50.00','net':None})
+    data['details'][0]['totals']={'gross':'149.00','net':None}
+    wb=export.build(data)
+    zero=wb.worksheets[1]
+    assert zero['G5'].value.result==Decimal('149.00')
+    assert zero['I5'].value.result is None
+    assert zero.cell(zero.max_row,9).value.result is None
+    wb.close()
+
+
 def annual_sample(year):
     data = sample()
     data['ym'] = f'{year}-01'
@@ -137,3 +149,14 @@ def test_missing_big_table_start_date_does_not_fall_back_to_history():
     wb = export.build(data)
     assert wb.worksheets[0]['C6'].value == '' and wb.worksheets[0]['D6'].value == ''
     wb.close()
+
+
+def test_explicit_clear_overrides_history_but_absent_category_keeps_reference():
+    data=sample()
+    hist=data['histories'][0]
+    hist['reference_months']={'2026-09':{'mech_2':'103','mech_3':'206'}}
+    effective=data['annual_effective'][0]
+    effective['values']={'mech_2':None,'mech_3':None}
+    effective['sources']={'mech_2':{'mode':'manual','basis':{'amount':None}}}
+    assert export.annual_values(data,'甲',hist,{},'zero')=={}
+    assert export.annual_values(data,'甲',hist,{},'monthly')=={'2026-09':Decimal('206')}

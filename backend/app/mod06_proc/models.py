@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, JSON, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,12 +40,12 @@ class ProcMechManual(Base):
     warehouse_name: Mapped[str] = mapped_column(String(128), index=True, default="")
 
     # 机械 6 列（顺序照 `domain.MECH_COLUMNS`）
-    mech_0: Mapped[float] = mapped_column(MONEY, default=0)   # 租分公司设备
-    mech_1: Mapped[float] = mapped_column(MONEY, default=0)   # 内租设备
-    mech_2: Mapped[float] = mapped_column(MONEY, default=0)   # 外租零租含税
-    mech_3: Mapped[float] = mapped_column(MONEY, default=0)   # 外租包月含税
-    mech_4: Mapped[float] = mapped_column(MONEY, default=0)   # 外租零租不含税
-    mech_5: Mapped[float] = mapped_column(MONEY, default=0)   # 外租包月不含税
+    mech_0: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 租分公司设备
+    mech_1: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 内租设备
+    mech_2: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 外租零租含税
+    mech_3: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 外租包月含税
+    mech_4: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 外租零租不含税
+    mech_5: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)   # 外租包月不含税
 
     source_batches: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'::json"))
 

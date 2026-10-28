@@ -1,11 +1,11 @@
 /* Mechanical report surfaces share the account theme and the standard grid geometry. */
 .mechanical-card{overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .mechanical-card .card-head{flex-wrap:wrap}
-.mechanical-toolbar,.mechanical-tabs,.mechanical-detail-head,.mechanical-detail-totals,.mechanical-edit-tools,.mechanical-project-tools,.mechanical-preview-entry{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
+.mechanical-toolbar,.mechanical-tabs,.mechanical-detail-head,.mechanical-detail-totals,.mechanical-edit-tools,.mechanical-project-tools,.mechanical-project-entry{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
 .mechanical-toolbar,.mechanical-edit-tools{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .mechanical-toolbar{gap:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .mechanical-toolbar .mechanical-tabs,.mechanical-toolbar .filters{padding:0;margin:0;border:0}
-.mechanical-toolbar .mechanical-preview-entry{margin-left:auto}
+.mechanical-toolbar .mechanical-project-entry{margin-left:auto}
 .mechanical-toolbar .business-project-picker{min-width:calc(180px * var(--fscale));max-width:min(calc(320px * var(--fscale)),100%)}
 .mechanical-toolbar .business-period-trigger{min-height:calc(32px * var(--fscale))}
 .mechanical-toolbar .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
@@ -47,7 +47,6 @@
 .business-modal .mechanical-project-dialog{width:min(calc(600px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-plate-dialog{width:min(calc(520px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-discard-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px))}
-.business-modal .mechanical-import-dialog{width:min(calc(1160px * var(--fscale)),calc(100vw - 24px))}
 .mechanical-dialog>div:not([hidden]):not(.dialog-discard){display:flex;flex-direction:column;max-height:calc(84dvh - 40px * var(--fscale));min-height:0}
 .mechanical-dialog .dialog-close-heading{flex:none;margin-bottom:calc(12px * var(--fscale))}
 .mechanical-dialog .ant-btn.dialog-close-button{width:calc(28px * var(--fscale));height:calc(28px * var(--fscale));min-height:0;padding:calc(5px * var(--fscale))}
@@ -60,15 +59,10 @@
 .mechanical-dialog li button{margin-left:calc(8px * var(--fscale))}
 .mechanical-dialog label{display:block}
 .mechanical-dialog label>select{display:block;margin-block:.5em}
-.mechanical-dialog input[type=file]{display:block;max-width:100%;margin-top:calc(8px * var(--fscale));font:inherit;border-radius:var(--radius-input)}
-.mechanical-dialog input[type=file]::file-selector-button{font:inherit;color:var(--tx);background:var(--sf2);border:1px solid var(--bd);border-radius:var(--radius-pill);padding:calc(5px * var(--fscale)) calc(12px * var(--fscale));margin-right:calc(12px * var(--fscale));cursor:pointer}
 .mechanical-dialog details{margin:calc(12px * var(--fscale)) 0;border:1px solid var(--bd2);border-radius:var(--radius-inner);padding:calc(12px * var(--fscale))}
 .mechanical-dialog summary{cursor:pointer;font-weight:500;line-height:1.6}
-.mechanical-import-table{overflow-x:auto;max-width:100%;scrollbar-color:var(--bd3) var(--sf2)}
-.mechanical-import-source{overflow-wrap:anywhere;color:var(--tx2)}
-.mechanical-import-table .ant-select{min-width:calc(136px * var(--fscale));width:100%}
 .mechanical-work-table{overflow:auto;padding:1rem}
-@media(max-width:740px){.mechanical-toolbar .mechanical-preview-entry{margin-left:0}.mechanical-toolbar .filters{max-width:100%}.mechanical-locate label{max-width:100%;flex-wrap:wrap}.business-modal .mechanical-dialog{padding:calc(16px * var(--fscale))}.mechanical-detail-totals{align-items:flex-start;flex-direction:column}}
+@media(max-width:740px){.mechanical-toolbar .mechanical-project-entry{margin-left:0}.mechanical-toolbar .filters{max-width:100%}.mechanical-locate label{max-width:100%;flex-wrap:wrap}.business-modal .mechanical-dialog{padding:calc(16px * var(--fscale))}.mechanical-detail-totals{align-items:flex-start;flex-direction:column}}
 
 .mechanical-work-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:calc(8px * var(--fscale)); margin-block:calc(8px * var(--fscale)); }
 .mechanical-work-tools > div { display:flex; flex-wrap:wrap; gap:calc(6px * var(--fscale)); }
@@ -78,9 +72,9 @@
 .mechanical-work-table button { white-space:nowrap; }
 .mechanical-i8-review { min-width:calc(1080px * var(--fscale)); }
 .mechanical-difference { color:var(--dg-d); }
+.mechanical-card .notice.mechanical-success,.mechanical-dialog .notice.mechanical-success{color:var(--ok-d);background:var(--ok-l);border-color:var(--ok-bd)}
 .mechanical-reduction { color:var(--wn-d); font-weight:600; }
 .mechanical-reduction-fields { display:grid; gap:calc(8px * var(--fscale)); margin-top:calc(12px * var(--fscale)); }
-.mechanical-dialog pre { max-height:40vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 
 .mechanical-work{padding:.65rem 1rem}.mechanical-work-table .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.mechanical-work-tools button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri)}
 

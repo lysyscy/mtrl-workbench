@@ -58,15 +58,11 @@ def test_manual_switch_rejects_invalid_column_payload(session, columns):
                                           'confirmed': True}, '宿主操作者')
 
 
-def confirm(s, *, columns=None, tax='3%专', amount='103.00', ym='2026-09', operator='审核人'):
+def save_detail(s, *, tax='3%专', amount='103.00', ym='2026-09', operator='审核人'):
     saved = W.save_details(s, {'warehouse': '甲', 'ym': ym, 'category': 'zero', 'revision': 0,
                               'rows': [{'id': 'row-1', 'device': '升降车', 'amount': amount,
-                                        'tax': tax, 'plate': ''}]})
-    request = {'warehouse': '甲', 'ym': ym, 'category': 'zero', 'revision': saved['revision'],
-               'effective_signature': W.effective(s, '甲', ym)['signature']}
-    if columns is not None:
-        request['columns'] = columns
-    return W.action(s, 'amounts-confirm', request, operator), request
+                                        'tax': tax, 'plate': ''}]}, operator)
+    return W.effective(s, '甲', ym), saved
 
 
 def to_manual(s, state, columns, *, operator='宿主操作者', **extra):
@@ -74,24 +70,8 @@ def to_manual(s, state, columns, *, operator='宿主操作者', **extra):
                                        'effective_signature': state['signature'], 'confirmed': True, **extra}, operator)
 
 
-def test_gross_and_net_have_independent_confirmation_and_validation(session):
-    state, _ = confirm(session, columns=['mech_2'], tax='')
-    assert state['sources']['mech_2']['mode'] == 'detail'
-    assert state['sources']['mech_4']['mode'] == 'manual'
-    detail, revision = W.read(session, W.key('details', '甲', '2026-09', 'zero'))
-    view = W.detail_view(session, detail, revision)
-    assert not view['blocked_columns']['mech_2']
-    assert view['blocked_columns']['mech_4'] == [{'id': 'row-1', 'fields': ['票种／税率']}]
-    with pytest.raises(MustReportError, match='字段待补'):
-        W.confirm_amounts(session, {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero',
-                                   'columns': ['mech_4'], 'revision': revision,
-                                   'effective_signature': state['signature']})
-    R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_4': '99.00'})
-    assert W.effective(session, '甲', '2026-09')['values']['mech_4'] == '99.00'
-
-
 def test_same_value_save_retains_signature_source_and_timestamp(session):
-    state, _ = confirm(session)
+    state, _ = save_detail(session)
     row = R.mech_row(session, '甲', '2026-09')
     stamp, origins = row.updated_at, deepcopy(row.source_batches)
     R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_2': '103.00', 'mech_4': '100.00'})
@@ -100,7 +80,7 @@ def test_same_value_save_retains_signature_source_and_timestamp(session):
 
 
 def test_explicit_manual_switch_preserves_evidence_and_does_not_replay_confirmation(session):
-    state, request = confirm(session)
+    state, request = save_detail(session)
     adopted = W.read(session, W.key('adoption', '甲', '2026-09'))
     with pytest.raises(MustReportError, match='明确确认'):
         to_manual(session, state, ['mech_2'], confirmed=False)
@@ -115,24 +95,9 @@ def test_explicit_manual_switch_preserves_evidence_and_does_not_replay_confirmat
     assert W.read(session, W.key('adoption', '甲', '2026-09')) == adopted
     with pytest.raises(MustReportError, match='已变化'):
         to_manual(session, state, ['mech_4'])
-    with pytest.raises(MustReportError, match='已变化'):
-        W.confirm_amounts(session, request)
     R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_2': '104.00'})
     with pytest.raises(MustReportError, match='明细'):
         R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_4': '101.00'})
-
-
-def test_history_incoming_decision_cannot_override_detail_mode(session):
-    state, _ = confirm(session, columns=['mech_2'])
-    p = W.history_preview(session, {'projects': [{'warehouse': '甲', 'history': {'source': {'file': '原表'}},
-                                                  'months': [{'ym': '2026-08', 'values': {'mech_2': '5'}},
-                                                             {'ym': '2026-09', 'values': {'mech_2': '999'}}]}]})
-    with pytest.raises(MustReportError, match='明细'):
-        W.history_confirm(session, {'preview_id': p['preview_id'],
-                                    'resolutions': {'甲|2026-09|mech_2': 'incoming'}})
-    assert R.mech_row(session, '甲', '2026-08') is None
-    assert not W.read(session, W.key('history', '甲'))[0]
-    assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
 def test_detail_confirmation_preserves_original_historical_provenance_even_when_zero(session):
@@ -144,7 +109,7 @@ def test_detail_confirmation_preserves_original_historical_provenance_even_when_
     row = R.save_mech(session, warehouse='甲', ym='2026-09', values={'mech_2': '10'})
     row.source_batches = {'mech_2': 'old'}
     session.flush()
-    confirm(session, columns=['mech_2'], amount='0.00')
+    save_detail(session, amount='0.00')
     assert row.mech_2 == 0 and R.mech_sources(row)['mech_2']['mode'] == 'detail'
     assert snapshot.mech_2 == Decimal('10') and batch.status == 'active'
     assert session.get(ProcMechImportChange, change.id).before_amount == 0
@@ -157,7 +122,7 @@ def test_process_get_exposes_same_source_and_signature_as_workbench(session, mon
     def scope():
         yield session
     monkeypatch.setattr(router, 'session_scope', scope)
-    state, _ = confirm(session, columns=['mech_2'])
+    state, _ = save_detail(session)
     data = router.api_mech()
     assert data['sources']['甲']['2026-09'] == state['sources']
     assert data['effective_signatures']['甲']['2026-09'] == state['signature']
@@ -180,12 +145,7 @@ def test_postgresql_action_api_sources_switch_and_independent_net(rollback_db):
         s.commit()
         draft = W.action(s, 'details-save', {'warehouse': warehouse, 'ym': '2026-09', 'category': 'zero',
                           'revision': 0, 'rows': [{'id': 'pg-row', 'device': '升降车', 'amount': '103.00', 'tax': '3%专'}]})
-        state = W.action(s, 'amounts-confirm', {'warehouse': warehouse, 'ym': '2026-09', 'category': 'zero',
-                          'revision': draft['revision'], 'columns': ['mech_2'],
-                          'effective_signature': W.effective(s, warehouse, '2026-09')['signature']}, 'PG审核人')
-        detail, revision = W.read(s, W.key('details', warehouse, '2026-09', 'zero'))
-        state = W.action(s, 'amounts-confirm', {'warehouse': warehouse, 'ym': '2026-09', 'category': 'zero',
-                          'revision': revision, 'columns': ['mech_4'], 'effective_signature': state['signature']}, 'PG审核人')
+        state = W.effective(s, warehouse, '2026-09')
         s.commit()
         fetched = router.api_mech()
         assert fetched['sources'][warehouse]['2026-09']['mech_2']['mode'] == 'detail'

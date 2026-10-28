@@ -49,34 +49,28 @@ def save(s, rows=None, revision=0, cat='zero', ym='2026-09'):
                                       'revision': revision, 'rows': [row()] if rows is None else rows})
 
 
-def test_draft_confirm_history_and_unique_effective_source(session):
+def test_saved_details_and_unique_effective_source_roundtrip(session):
     saved = save(session)
-    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] is None
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] == '103.00'
     assert saved['totals'] == {'gross': '103.00', 'net': '100.00'}
-    current = W.effective(session, '甲', '2026-09')
-    result = W.action(session, 'amounts-confirm', {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero',
-                         'revision': saved['revision'], 'effective_signature': current['signature']})
+    result = W.effective(session, '甲', '2026-09')
     assert result['values']['mech_2'] == '103.00'
     assert result['values']['mech_4'] == '100.00'
     assert session.scalar(select(ProcMechManual)).mech_2 == Decimal('103.00')
-    s = save(session, [row(amount='206.00')], revision=2)
+    s = save(session, [row(amount='206.00')], revision=1)
     assert s['totals']['gross'] == '206.00'
-    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] == '103.00'
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] == '206.00'
     session.commit()
     with Session(session.bind, join_transaction_mode='create_savepoint') as reopened:
         assert W.state(reopened)['details'][0]['rows'][0]['date'] == '1日至3日'
-        assert W.state(reopened)['effective'][0]['values']['mech_2'] == '103.00'
+        assert W.state(reopened)['effective'][0]['values']['mech_2'] == '206.00'
 
 
-def test_revision_and_manual_effective_changes_block_stale_confirm(session):
+def test_stale_detail_revision_never_overwrites_effective_amount(session):
     saved = save(session)
     with pytest.raises(MustReportError, match='其他操作'):
         save(session, revision=0)
-    before = W.effective(session, '甲', '2026-09')
-    W.repo.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_2': Decimal('5000')})
-    with pytest.raises(MustReportError, match='有效月值已变化'):
-        W.confirm_amounts(session, {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero',
-                                   'revision': saved['revision'], 'effective_signature': before['signature']})
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] == '103.00'
 
 
 def test_plate_shared_keywords_clear_and_legacy_monthly(session):
@@ -98,25 +92,23 @@ def test_invalid_amount_never_saved(session, value):
     assert not W.state(session)['details']
 
 
-def test_three_way_conflicts_and_idempotent_confirmation(session):
+def test_three_way_source_conflicts_and_idempotent_recording(session):
     source = {'file': 'source.xlsx', 'sha256': 'x', 'sheet': '表2', 'row': 5}
-    def preview(rows, rid):
-        return W.import_preview(session, {'request_id': rid, 'batches': [{'warehouse': '甲', 'ym': '2026-08',
-                                          'category': 'zero', 'rows': rows, 'source': source}]})
-    first = preview([row(tax='3%专', plate='错')], 'one')
-    W.import_confirm(session, {'preview_id': first['preview_id']})
+    def record(rows, rid, **extra):
+        revision = W.read(session, W.key('details', '甲', '2026-08', 'zero'))[1]
+        return W.record_details(session, {'request_id': rid, 'batches': [{'warehouse': '甲', 'ym': '2026-08',
+                    'category': 'zero', 'revision': revision, 'rows': rows, 'source': source}], **extra})
+    record([row(tax='3%专', plate='错')], 'one')
     W.save_details(session, {'warehouse': '甲', 'ym': '2026-08', 'category': 'zero', 'revision': 1,
                              'rows': [row(tax='普票', plate='错')]})
-    updated = preview([row(tax='3%专', plate='苏A12345')], 'two')
-    assert updated['batches'][0]['rows'][0]['tax'] == '普票'
-    assert updated['batches'][0]['rows'][0]['plate'] == '苏A12345'
-    result = W.import_confirm(session, {'preview_id': updated['preview_id']})
-    assert W.import_confirm(session, {'preview_id': updated['preview_id']}) == result
-    conflict = preview([row(tax='6%专', plate='苏A12345')], 'three')
-    assert len(conflict['batches'][0]['conflicts']) == 1
-    with pytest.raises(MustReportError, match='逐项确认'):
-        W.import_confirm(session, {'preview_id': conflict['preview_id']})
-    W.import_confirm(session, {'preview_id': conflict['preview_id'], 'resolutions': {'a:tax': 'current'}})
+    result = record([row(tax='3%专', plate='苏A12345')], 'two')
+    saved = W.read(session, W.key('details', '甲', '2026-08', 'zero'))[0]
+    assert saved['rows'][0]['tax'] == '普票'
+    assert saved['rows'][0]['plate'] == '苏A12345'
+    assert record([row(tax='3%专', plate='苏A12345')], 'two') == result
+    with pytest.raises(MustReportError, match='修订冲突'):
+        record([row(tax='6%专', plate='苏A12345')], 'three')
+    record([row(tax='6%专', plate='苏A12345')], 'three', resolutions={'a:tax': 'current'})
     assert W.state(session)['details'][0]['rows'][0]['tax'] == '普票'
 
 
@@ -127,15 +119,6 @@ def test_source_precision_cached_net_and_invoice_text(session):
     assert saved['totals'] == {'gross': '0.67', 'net': '0.65'}
     assert saved['rows'][0]['sourceNet'] == '0.32524'
     assert W.row_net(row(tax='1%普票，不含油')) == '103.00'
-
-
-def test_exact_confirmation_retry_is_idempotent(session):
-    detail = save(session)
-    request = {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero', 'revision': detail['revision'],
-               'effective_signature': W.effective(session, '甲', '2026-09')['signature']}
-    first = W.confirm_amounts(session, request)
-    assert W.confirm_amounts(session, request) == first
-    assert session.scalar(select(ProcMechManual)).mech_2 == Decimal('103.00')
 
 
 def test_unapproved_unknown_document_is_retained_outside_approved_total(session):
@@ -199,18 +182,15 @@ def test_missing_incomplete_unknown_and_reduction_are_protected(session):
     assert W.reconciliations(session, ['甲'])[0][1]['raw'] is None
 
 
-def test_history_conflict_protection_and_delta_is_replacement(session):
+def test_existing_history_delta_is_replacement_and_matter_does_not_change_amount(session):
     W.repo.save_mech(session, ym='2026-08', warehouse='甲', values={'mech_1': Decimal('14000'), 'mech_2': Decimal('5000')})
-    data = {'request_id': 'history', 'projects': [{'warehouse': '甲', 'history': {
+    history = {
         'base_month': '2026-09', 'report_total': '20000.00', 'i6': '1000.00', 'source': {'file': '表4'},
-        'reference_months': {'2026-08': {'mech_1': '14000.00', 'mech_2': '5000.00', 'mech_3': '0.00'}}},
-        'months': [{'ym': '2026-08', 'values': {'mech_1': '0', 'mech_2': '4500'}}],
-        'matters': [{'id': 'guofeng', 'text': '下月少做500，未执行', 'metadata': {'original': '4500', 'adopted': '5000'}}]}]}
-    p = W.history_preview(session, data)
-    with pytest.raises(MustReportError, match='逐格确认'):
-        W.history_confirm(session, {'preview_id': p['preview_id']})
-    result = W.history_confirm(session, {'preview_id': p['preview_id'], 'resolutions': {'甲|2026-08|mech_1': 'current', '甲|2026-08|mech_2': 'current'}})
-    assert W.history_confirm(session, {'preview_id': p['preview_id']}) == result
+        'reference_months': {'2026-08': {'mech_1': '14000.00', 'mech_2': '5000.00', 'mech_3': '0.00'}},
+        'effective_base': {'2026-08':W.effective(session,'甲','2026-08')['values']}}
+    W.write(session,W.key('history','甲'),{'warehouse':'甲',**history},0)
+    W.matter_save(session,{'id':'guofeng','warehouse':'甲','revision':0,'text':'下月少做500，未执行',
+                          'metadata':{'original':'4500','adopted':'5000'}})
     assert W.report_total(session, '甲') == '20000.00'
     current = W.effective(session, '甲', '2026-08')
     W.internal_save(session, {'warehouse': '甲', 'ym': '2026-08', 'values': {'mech_1': '14500'}, 'effective_signature': current['signature']})
@@ -224,12 +204,12 @@ def test_history_conflict_protection_and_delta_is_replacement(session):
 
 
 def test_initial_monthly_annual_conflict_does_not_rewrite_cumulative(session):
-    p = W.history_preview(session, {'projects': [{'warehouse': '甲', 'history': {
+    W.repo.save_mech(session,ym='2026-02',warehouse='甲',values={'mech_2':Decimal('0.00')})
+    W.write(session,W.key('history','甲'),{'warehouse':'甲',
         'source': {'file': 'history'}, 'base_month': '2026-09', 'report_total': '4850.00', 'i6': '0.00',
         'reference_months': {'2026-02': {'mech_2': '4850.00'}},
-        'cumulative_at': {'2026-09': {'zero': '4850.00'}}},
-        'months': [{'ym': '2026-02', 'values': {'mech_2': '0.00'}}]}]})
-    W.history_confirm(session, {'preview_id': p['preview_id']})
+        'cumulative_at': {'2026-09': {'zero': '4850.00'}},
+        'effective_base':{'2026-02':W.effective(session,'甲','2026-02')['values']}},0)
     assert W.report_total(session, '甲') == '4850.00'
     assert W.cumulative(session, '甲', '2026-09')['zero'] == '4850.00'
     W.repo.save_mech(session, ym='2026-02', warehouse='甲', values={'mech_2': Decimal('5000')})
@@ -273,11 +253,10 @@ def test_same_amount_changed_document_is_discovered_but_order_is_not(session):
     assert preview['projects'][0]['missing'] == ['usage:u2']
 
 
-def test_import_two_categories_confirms_one_atomic_month(session):
+def test_direct_recording_two_categories_updates_one_month(session):
     batches = [{'warehouse': '甲', 'ym': '2026-09', 'category': cat, 'source': {'file': '原件'},
-                'rows': [row(id=cat)]} for cat in ('zero', 'monthly')]
-    preview = W.import_preview(session, {'request_id': 'both', 'batches': batches})
-    W.import_confirm(session, {'preview_id': preview['preview_id'], 'confirm_amounts': True})
+                'rows': [row(id=cat)], 'revision':0} for cat in ('zero', 'monthly')]
+    W.record_details(session, {'request_id': 'both', 'batches': batches})
     values = W.effective(session, '甲', '2026-09')['values']
     assert values['mech_2'] == values['mech_3'] == '103.00'
     assert values['mech_4'] == values['mech_5'] == '100.00'
@@ -439,16 +418,11 @@ def test_resolved_discovery_reopens_only_after_another_observed_fact(session):
 
 
 def test_confirm_old_company_month_replaces_historical_component(session):
-    from tests.test_mechanical_history import sample
-    from app.mod06_proc.workbench_history import build_history_payload
-
-    args = sample()
-    args[0]['data']['records']['0|2026-02']['company'] = 10000
-    args[0]['data']['cumulativeAt']['2026-02'][0]['company'] = 10000
-    payload = build_history_payload(*args, mappings={'已配项目': '甲'})
-    project = payload['history_import']['projects'][0]
-    preview = W.history_preview(session, {'projects': [project]})
-    W.history_confirm(session, {'preview_id': preview['preview_id']})
+    W.repo.save_mech(session,ym='2026-02',warehouse='甲',values={'mech_0':Decimal('100')})
+    W.write(session,W.key('history','甲'),{'warehouse':'甲','base_month':'2026-09',
+        'cumulative_at':{'2026-02':{'company':'100'}},
+        'original_months':{'2026-02':{'mech_0':'100'}},
+        'effective_base':{'2026-02':W.effective(session,'甲','2026-02')['values']}},0)
     current = W.effective(session, '甲', '2026-02')
     assert W.cumulative(session, '甲', '2026-02')['company'] == '100.00'
     W.internal_save(session, {'warehouse': '甲', 'ym': '2026-02', 'values': {'mech_0': '150.00'},
@@ -459,10 +433,9 @@ def test_confirm_old_company_month_replaces_historical_component(session):
 def test_postgresql_effective_and_preview_queries_acquire_row_share_locks(session):
     assert session.bind.dialect.name == 'postgresql'
     W.repo.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_2': Decimal('103.00')})
-    preview = W.import_preview(session, {'batches': [{'warehouse': '甲', 'ym': '2026-09', 'category': 'zero',
-                          'rows': [row()], 'source': {'file': '原报'}}]})
+    preview = W.i8_preview(session, {'projects':[i8_project()]})
     W.effective(session, '甲', '2026-09', lock=True)
-    W.get_preview(session, {'preview_id': preview['preview_id']}, 'import')
+    W.get_preview(session, {'preview_id': preview['preview_id']}, 'i8')
     locks = set(session.execute(text("SELECT relation::regclass::text FROM pg_locks "
                                     "WHERE pid=pg_backend_pid() AND mode='RowShareLock' AND granted")).scalars())
     assert {'proc_mech_manual', 'mechanical_workbench_preview'} <= locks
