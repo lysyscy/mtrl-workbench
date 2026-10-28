@@ -32,13 +32,13 @@
 | P2：同请求读事实复用，静态重复确证、收益待量化 | mod05_flow/router.py约48–64、service.py opening_views/build_debt_live/total_debt_rows：调用展开5次notice_debt_views、2次机械有效值、2次集采build_list；这是调用数，非实测SQL轮次/性能。复用本请求一次组装与SQLAlchemy现有查询，不加全局缓存/DataLoader | 同一输入原JSON逐值相等，含负/零/空、历史覆盖、待归属、集采标签和跳过、机械来源；查询/装配次数证明净收益，不声称跨表严格快照。导出与页面仍同口径；差异不清即停止 |
 | P3：剩余读模型边界，弱形状静态确证 | apps/frontend/src/flow.tsx约40–44 Debt把缺金额转String；约57–60 Stats只验外壳后强转，金额/数组可能到render才报错。合同/Flow已用Valibot1.5.0纯schema+v.is，可按端点复用，不扩付款/撤销写命令 | 每次仅一个读端点，先正常实际形状及独立坏输入反例；保金额字符串/null/0/日期/额外字段、错误可重试与原输入。类型由schema推导并退出旧强转；真实形状未核或需修改业务含义则停止 |
 | P4：纯工具装配，维护收益待实证 | backend/tests/test_bytes_guard.py、test_syntax_audit_exit.py、test_tail_tools.py、test_backend_verify.py前段为离线工具，但父conftest先装应用/DB。复用pytest目录作用域，仅收窄已确认四件的装配；新C1已有独立stdlib unittest，不混同其已完成 | 无配置/无数据库子进程可跑纯工具，证明不import app.main/不建engine或迁移；保原业务guard拒错库与rollback集成保护。test_workspace_paths含真实app分支，不按文件名全移；无净收益则保留 |
-| P4：旧工具退役，已失效声明、执行前复核消费者 | tools/probe/_m14_parity.py、tools/oneoff/_prune_ghosts.py、_prune_ui_expected.py仍引用已退出U1/U5/expected接口，共255行；已知有效引用为backend/tests/shell_scissors.py约47自引用ALLOW，test_shell_api.py约332验证其不过期。复用Git历史恢复，退出死职责 | 先核当前tracked/真实消费者；只删除这三件与准确ALLOW，跑相关剪刀/引用检查，不执行失效脚本或新建历史归档；ui_parity/shell_verify/jslex仍有消费者不顺带删 |
+| 已退出：旧壳工具 | 424按实际消费者移除旧壳读码、语义检查及专用工具/反例；混合测试保留后端业务部分，来源提交3e41e9f0及后续收尾提交 | 本项已随旧版退役退出，后续不再执行旧剪刀/壳检查；其余架构候选保持原裁定状态 |
 | 低优先：所选付款预览范围下推，量级收益未测 | mod03_notice/notice_api_router.py约501传selected IDs，list_view.py约187–195/246–278仍载全流水/关联/留痕；现有flows_of_notices、links_by_notice可复用，但前者升序而旧全量倒序 | 先以实际量级证明收益；保None=全量、[]=空、已撤销流水及旧行序。不能只换函数造成排序/遗漏；非前端启用前置 |
 
 ## 保留/暂缓不是必改欠账
 
 - OpenAPI生成：openapi-typescript7.13.0+隔离TS5.9.3生成、应用TS7消费技术可行已实证；本夜优先现有端点schema的净收益，未接入完整生成链。未来端点覆盖/维护收益或兼容版本有实据才重开，不把peer边界改成强制降TS/忽略peer。HeyAPI当时同有TS7启动问题，不按营销或main manifest推发布支持。
-- jslex仍服务旧/app、shell_api与60个测试消费者；合法if后regex的内存反例被截断，但未发现当前壳真实使用。若424直接退役旧壳及其消费者，随责任退出比新上AST便宜；若仍长期维护且真实语法缺口触发，再核现有/成熟parser差额，不盲搬TS7不稳定compiler API。
+- jslex的最后消费者为test_ux_text中的旧壳标记自检，已随旧壳退役；后端错误消息检查保留。原旧JS解析反例不再作为待实施事项。
 - 六声明patch保留。picker1.14.0虽有相应上游修正，但AntD6.6.7只接受~1.12.2且有ESM变化；没有兼容证据不override或大升依赖来换“零patch”。
 - 既有ReactRouter/Query、保存队列、草稿/unknown、业务撤销/金额/归属、字体/富控件测量、账号隔离、i8协议、Excel模板/透视缓存是已审视保留差额；Activity、全站ErrorBoundary、认证格式替换或统一平台没有当前净收益/兼容依据，不重新塞成待办。
 

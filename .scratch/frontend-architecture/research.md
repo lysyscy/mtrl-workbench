@@ -227,12 +227,12 @@ C4另有具体适配边界：`grid-render-layout.ts:22–32`测量仅提供data/
 
 本批run为`.artifacts/active/frontend-architecture/inventory-ready-20261027/`：reports/browser.xml、readonly-extra.json、data-before.json、data-after.json及version.json绑定本次结果；logs含正式typecheck/build与启动日志；recovery保原owner/version；work/verified-build当前被8065引用，必须保留。首次未登记重复work/build与临时pnpm shim已退出。当前预览供后续视觉整改及用户查看，保持运行；旧产品构建仍是恢复点，不清理他人资源。
 
-库存最小批至此完成技术验收；没有改共享就绪算法/CSS/grid/列宽/API/保存。采用现有通路退出了库存首次显示对全账号fetching的依赖，其余未迁页保留现状。没有运行机械测试，不冒报既有夹具已修。随后视觉首批已按父任务派发实施，四字号/八主题及独立复验边界回[当前视觉证据](../frontend-vue-rewrite/evidence.md#共享控件与重点弹层视觉首批2026-10-28)；不借库存或视觉首批通过宣称全站完成。
+库存最小批至此完成技术验收；没有改共享就绪算法/CSS/grid/列宽/API/保存。采用现有通路退出了库存首次显示对全账号fetching的依赖，其余未迁页保留现状。没有运行机械测试，不冒报既有夹具已修。随后视觉首批已按父任务派发实施，四字号/八主题及独立复验边界回[当前视觉证据](https://github.com/lysyscy/mtrl-workbench/blob/c19a3f3fbca4a9d8653ac0d17121f8869702bc85/.scratch/frontend-vue-rewrite/evidence.md#共享控件与重点弹层视觉首批2026-10-28)；不借库存或视觉首批通过宣称全站完成。
 
 
 ## 11. 视觉第二批的共享边界与机械试验复核
 
-Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一产品写权。只读字段淡化、1280过程金额拆行、项目展示名列过窄均有真实截图与DOM尺寸依据；通知书勾选疑点已撤回，不作为整改项。第二批沿既有主题、AntD和浏览器自动表格布局：已有记录字段显式选择record-value，单独恢复disabled/readOnly文字；按钮、选择框、新建表单和权限判断不跟随覆盖。项目字段给10em内容下限，过程money单元格声明nowrap；公共BoundedTable、AG列宽及保存契约不改。运行证据和覆盖缺口统一回[视觉证据](../frontend-vue-rewrite/evidence.md#记录可读性与窄窗表格第二批2026-10-28)，不另建视觉或架构报告。
+Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一产品写权。只读字段淡化、1280过程金额拆行、项目展示名列过窄均有真实截图与DOM尺寸依据；通知书勾选疑点已撤回，不作为整改项。第二批沿既有主题、AntD和浏览器自动表格布局：已有记录字段显式选择record-value，单独恢复disabled/readOnly文字；按钮、选择框、新建表单和权限判断不跟随覆盖。项目字段给10em内容下限，过程money单元格声明nowrap；公共BoundedTable、AG列宽及保存契约不改。运行证据和覆盖缺口统一回[视觉证据](https://github.com/lysyscy/mtrl-workbench/blob/c19a3f3fbca4a9d8653ac0d17121f8869702bc85/.scratch/frontend-vue-rewrite/evidence.md#记录可读性与窄窗表格第二批2026-10-28)，不另建视觉或架构报告。
 
 **成熟能力及保留项。** 已核安装AntD6.6.7的Input variants实现：disabled颜色来自colorTextDisabled，opacity为1；因此局部已有记录语义选择足够，不必全局修改token或把disabled改成可编辑。[官方Input](https://ant.design/components/input/)、[disabled语义](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/disabled)。原生自动表格已有内容最小宽度与滚动能力，数字不可拆行和项目输入的内容下限由CSS表达；不新增测量、比例或余宽算法。[CSS自动表格布局](https://www.w3.org/TR/CSS22/tables.html#auto-table-layout)、[white-space](https://developer.mozilla.org/en-US/docs/Web/CSS/white-space)。金额、只读权限、未知回执、输入焦点/IME、原列宽任务成果继续保留。
 
@@ -284,7 +284,7 @@ Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一
 
 第12节页面批已实施：72421297使projects/home/i8复用现有independent，项目表体复用BoundedTable字体边界，退出这三页对无关全账号GET的首显等待。原4个失败已red→green；额外冷字体用例定位并修复main中已完成身份/主题核验仍被字体I/O延后释放API门的耦合，保原字体可见门及身份世代。最终8case一起通过，另字体失败恢复与当前focus契约通过。公共PageSurface后备仍服务ledger/contracts/rules/users四页，不宣称全部退出。库存初批不重做。
 
-视觉983c3712及用例契约de3a16b5与页面批串行保存；原数据保全、运行身份、隔离费用/历史结余/库存状态和独立验收入口回[第三批证据](../frontend-vue-rewrite/evidence.md#局部就绪与操作反馈第三批2026-10-28)。新P2为费用自然高短表最后行删除按钮下沿被原生横条覆盖，已有稳定帧和几何证据，尚未修；机械抓取UTC快照时间虽已核来源，完整时间显示无现成契约，原值保留。两者不是API生成或机械身份试验已完成，后续优先处理具体可见问题再用12节的限定试验窗口。未加新依赖/SDK/状态机，未推送。
+视觉983c3712及用例契约de3a16b5与页面批串行保存；原数据保全、运行身份、隔离费用/历史结余/库存状态和独立验收入口回[第三批证据](https://github.com/lysyscy/mtrl-workbench/blob/c19a3f3fbca4a9d8653ac0d17121f8869702bc85/.scratch/frontend-vue-rewrite/evidence.md#局部就绪与操作反馈第三批2026-10-28)。新P2为费用自然高短表最后行删除按钮下沿被原生横条覆盖，已有稳定帧和几何证据，尚未修；机械抓取UTC快照时间虽已核来源，完整时间显示无现成契约，原值保留。两者不是API生成或机械身份试验已完成，后续优先处理具体可见问题再用12节的限定试验窗口。未加新依赖/SDK/状态机，未推送。
 
 
 ## 14. API消费者实证通过，原项目直接接入暂缓
@@ -302,14 +302,14 @@ Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一
 
 ## 15. 费用滚条差额已实施
 
-第14节费用候选在隔离副本证实：position:relative仍会应用原生inline bottom而可能覆盖合计；position:static使native高度自动入流且忽略偏移。9d86f46a仅局部fees.css两行，六组行增删/字号布局与真实横向wheel通过，末行按钮下缘和合计均无覆盖；原8065恢复及40非账号表保全回[费用修复证据](../frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)。不使用padding魔数或改列宽。API实证必要schema/锁/编译日志保在.artifacts/archive/frontend-architecture/api-types-20261028/reports；临时安装/源码副本已删除，正式直接接入因TS peer边界暂缓，HTTP形状尚未比对。
+第14节费用候选在隔离副本证实：position:relative仍会应用原生inline bottom而可能覆盖合计；position:static使native高度自动入流且忽略偏移。9d86f46a仅局部fees.css两行，六组行增删/字号布局与真实横向wheel通过，末行按钮下缘和合计均无覆盖；原8065恢复及40非账号表保全回[费用修复证据](https://github.com/lysyscy/mtrl-workbench/blob/c19a3f3fbca4a9d8653ac0d17121f8869702bc85/.scratch/frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)。不使用padding魔数或改列宽。API实证必要schema/锁/编译日志保在.artifacts/archive/frontend-architecture/api-types-20261028/reports；临时安装/源码副本已删除，正式直接接入因TS peer边界暂缓，HTTP形状尚未比对。
 
 
 ## 16. 机械稳定引用和UTC展示已实施
 
 452a7dc1仅稳定两类公司汇总renderer，以原有内部编辑ref和最新明细callback保持语义；没有全面memo化、改defaultColDef/行键/rows测宽依赖、原生列宽或保存链。AG36.2实际行结构已核：旧center-cols-container选择器产生零样本，已作废并加非零断言。最终实证统计7行的28个真实金额按钮/输入，排除portal、pinned总计、权限切换及切页卸载；同值GET、输入中GET均0替换。仅在可丢弃副本通过真实matter-save更新事项备注、保持Summary挂载再读回，非输入态控件替换28→0，金额/列宽/非空业务行键不变。输入态与草稿/焦点保留；后续两次草稿取消及c9零租/c10包月明细导航通过。现有汇总金额/合计/表头/滚动/聚焦草稿用例通过；未宣称测得现场INP或保存未知组合已穷举。
 
-9e557fd4局部用原生Date.toISOString呈现快照UTC日期和时分秒，时分秒UTC不可拆组；后端workbench_i8.py的fetched_at明确由datetime.now(timezone.utc).isoformat生成。现有业务月/日帮助函数使用Asia/Shanghai，职责不同，未借其转换；无新库/全站时间抽象。time的datetime/title保完整微秒与偏移，复制核查摘要仍保原值，空值/未知格式继续原显示。实际6条时间跨Pacific/Honolulu与Asia/Shanghai完全相同；1280/900、深色1.4×已实看，依据窗Esc回焦点通过。原8065正常更新，全部原业务表/结构不变，临时schema均退出。具体版本/后图与有限保留证据回既有[机械本轮证据](../frontend-vue-rewrite/evidence.md#机械稳定引用与utc展示2026-10-28)。
+9e557fd4局部用原生Date.toISOString呈现快照UTC日期和时分秒，时分秒UTC不可拆组；后端workbench_i8.py的fetched_at明确由datetime.now(timezone.utc).isoformat生成。现有业务月/日帮助函数使用Asia/Shanghai，职责不同，未借其转换；无新库/全站时间抽象。time的datetime/title保完整微秒与偏移，复制核查摘要仍保原值，空值/未知格式继续原显示。实际6条时间跨Pacific/Honolulu与Asia/Shanghai完全相同；1280/900、深色1.4×已实看，依据窗Esc回焦点通过。原8065正常更新，全部原业务表/结构不变，临时schema均退出。具体版本/后图与有限保留证据回既有[机械本轮证据](https://github.com/lysyscy/mtrl-workbench/blob/c19a3f3fbca4a9d8653ac0d17121f8869702bc85/.scratch/frontend-vue-rewrite/evidence.md#机械稳定引用与utc展示2026-10-28)。
 
 
 ## 17. 剩余四页局部就绪与旧路径退出

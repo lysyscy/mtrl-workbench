@@ -1,12 +1,12 @@
 # 当前活动工作
 
-## React重写已验收，旧壳退役收尾中
+## React重写已验收，旧壳已退役
 
 用户2026-10-28明确签收当前已上线React重写；[TAIL-423](../.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md)为done，后续具体问题按正常缺陷处理。AG Grid全量迁移继续由451独立推进和验收。
 
-[TAIL-424](../.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)为in-progress：旧壳16件、入口与静态路由已退出源码，混合测试保留有效后端检查，必要本机资料和证据保全后退出两棵冻结工作树。退役源码独立提交推送，正式加载由AG Grid任务完成验收后统一一次；当前8065和在途改动仍由该任务持有。
+[TAIL-424](../.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)为done：旧壳16件、入口与静态路由已退出源码并完成正式加载，混合测试保留有效后端检查，两棵冻结工作树在必要本机资料和证据保全后退出。原重写活动材料及已关闭任务票按Git追溯，423/424保留切换与退役回执。
 
-当前正式8000 `/app`沿已核aa9cc766，数据库为`mtrl_workbench.public / invadj261027`；初次切换的备份、业务保全与后续修复依据回423。退役版本只提供React界面，界面回退使用上一套完整React资源并保持当前后端与数据库，配置与加载方法回[部署](guides/deployment.md)。
+当前正式8000 `/app`为已核41e2a11b，包含独立提交的旧壳退役和AG Grid迁移；数据库仍为`mtrl_workbench.public / invadj261027`。15个深链、31份构建资源、登录、主题和字体已核，旧壳静态入口404；初次切换依据回423，退役结果回424。界面回退使用上一套完整React资源并保持当前后端与数据库，配置与加载方法回[部署](guides/deployment.md)。
 
 ## 后续工作
 
@@ -14,7 +14,6 @@
 
 用户2026-10-28批准按[AG Grid实施规格](../.scratch/ag-grid-unification/spec.md)推进：先验证四类代表，再分B1—B6迁移34处原生业务声明，复用11处既有AG业务声明；动态复用不等于实例数。Excel/PDF保留原模板，测试通过后提交推送，本次允许正式重启加载。当前TAIL-451的34处迁移、累计105项浏览器覆盖和独立双轴审查已完成，正在提交及正式加载收尾，不扩大450其余候选。
 
-迁移前的范围、决定与技术证据按需查[共同规格](../.scratch/frontend-vue-rewrite/spec.md)、[问题与确认](../.scratch/frontend-vue-rewrite/questions.md)、[前端证据](../.scratch/frontend-vue-rewrite/evidence.md)及[架构深化证据](../.scratch/frontend-architecture/evidence.md)。这些材料中的原8065版本、PID和当时阶段状态属于历史快照；当前正式运行与用户验收以本页顶部及正式master的423/424为准。
 
 ## Mini App 付款原表核对台（暂缓）
 
