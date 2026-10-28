@@ -1,5 +1,6 @@
 """Real-copy detail autosave, later drafts, first entry and last-row removal."""
 from decimal import Decimal
+import pytest
 from playwright.sync_api import expect
 from test_preview import server,browser_page
 from live_data import get,open_page
@@ -100,3 +101,99 @@ def test_lost_detail_receipt_can_reread_and_resume_without_another_write(server,
     saved=next(d for d in get(api,'/api/m06/workbench')['details']
                if d['warehouse']==group['warehouse'] and d['ym']==group['ym'] and d['category']=='zero')
     assert Decimal(saved['rows'][0]['amount'])==value
+
+
+def test_settings_mouse_close_and_navigation_keep_only_effective_drafts(server,browser_page,api,disposable):
+    page,_=browser_page;open_page(page,server,'mechanical','机械费')
+    page.get_by_role('button',name='表2 零租明细',exact=True).click()
+    page.get_by_role('button',name='车牌规则',exact=True).click()
+    dialog=page.get_by_role('dialog',name='无需车牌设备关键词',exact=True)
+    field=dialog.get_by_label('无需车牌设备关键词',exact=True);original=field.input_value()
+    # Whitespace and duplicate lines do not change the settings accepted by the server.
+    field.fill(original+'\n\n'+original.split('\n')[0])
+    dialog.get_by_role('button',name='取消',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='车牌规则',exact=True).click();field.fill(original+'\n夜间草稿检查')
+    page.go_back();expect(page.locator('#page-title')).to_have_text('项目档案')
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.go_forward();expect(field).to_have_value(original+'\n夜间草稿检查')
+    dialog.get_by_role('button',name='取消',exact=True).click()
+    confirmation=page.get_by_role('dialog',name='放弃未保存的修改？',exact=True)
+    confirmation.get_by_role('button',name='继续编辑',exact=True).click()
+    expect(field).to_have_value(original+'\n夜间草稿检查')
+    dialog.get_by_role('button',name='关闭弹窗',exact=True).click()
+    confirmation.get_by_role('button',name='放弃并关闭',exact=True).click()
+    assert get(api,'/api/m06/workbench')['settings']['plate_keywords']==[word for word in original.split('\n') if word]
+
+    page.get_by_role('button',name='显示项目',exact=True).click()
+    picker=page.get_by_role('dialog',name='选择显示项目及顺序',exact=True)
+    picker.get_by_role('button',name='全不选',exact=True).click()
+    boxes=picker.get_by_role('checkbox');assert boxes.count()>2
+    boxes.nth(0).check();boxes.nth(1).check()
+    picker.get_by_role('button',name='应用项目选择',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='显示项目',exact=True).click()
+    # Reordering an unselected project changes no effective display setting.
+    picker.locator('li').nth(2).get_by_role('button',name='下移',exact=True).click()
+    picker.get_by_role('button',name='取消',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='显示项目',exact=True).click()
+    boxes.nth(0).uncheck();picker.get_by_role('button',name='取消',exact=True).click()
+    confirmation.get_by_role('button',name='继续编辑',exact=True).click()
+    expect(boxes.nth(0)).not_to_be_checked();boxes.nth(0).check()
+    picker.get_by_role('button',name='取消',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='显示项目',exact=True).click()
+    picker.locator('li').first.get_by_role('button',name='下移',exact=True).click()
+    picker.get_by_role('button',name='关闭弹窗',exact=True).click()
+    confirmation.get_by_role('button',name='放弃并关闭',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+
+
+@pytest.mark.parametrize('kind,receipt',[('plate','lost'),('plate','stale'),('projects','mismatch')])
+def test_unknown_settings_receipt_keeps_input_and_rereads_without_repeat_write(server,browser_page,api,disposable,kind,receipt):
+    page,_=browser_page;open_page(page,server,'mechanical','机械费')
+    if kind=='plate':
+        page.get_by_role('button',name='表2 零租明细',exact=True).click()
+        page.get_by_role('button',name='车牌规则',exact=True).click()
+        dialog=page.get_by_role('dialog',name='无需车牌设备关键词',exact=True)
+        field=dialog.get_by_label('无需车牌设备关键词',exact=True)
+        draft=field.input_value()+'\n夜间回执检查'+receipt;field.fill(draft)
+        save=dialog.get_by_role('button',name='保存规则',exact=True)
+    else:
+        page.get_by_role('button',name='显示项目',exact=True).click()
+        dialog=page.get_by_role('dialog',name='选择显示项目及顺序',exact=True)
+        box=dialog.get_by_role('checkbox').first;checked=not box.is_checked();box.set_checked(checked)
+        save=dialog.get_by_role('button',name='应用项目选择',exact=True)
+    writes=[]
+    def lose_receipt(route):
+        response=route.fetch();assert response.ok;writes.append(route.request.post_data_json)
+        if receipt=='lost':route.abort('failed')
+        else:
+            result=response.json()
+            if receipt=='stale':result['revision']-=1
+            else:result['shown_projects']=[]
+            route.fulfill(json=result)
+    page.route('**/api/m06/workbench/settings',lose_receipt)
+    save.click()
+    expect(dialog.get_by_role('alert')).to_contain_text('保存结果待核实')
+    expect(save).to_be_disabled()
+    if kind=='plate':expect(field).to_have_value(draft)
+    else:expect(box).to_be_checked(checked=checked)
+    # Recovery remains available after leaving and returning to the retained page.
+    page.go_back();expect(page.locator('#page-title')).to_have_text('项目档案')
+    page.go_forward();expect(dialog.get_by_role('button',name='重新读取',exact=True)).to_be_visible()
+    if receipt=='mismatch':
+        page.route('**/api/m06/workbench?*',lambda route:route.abort('failed'))
+        dialog.get_by_role('button',name='重新读取',exact=True).click()
+        expect(dialog.get_by_role('alert')).to_contain_text('待核实')
+        expect(dialog.get_by_role('alert')).not_to_contain_text('修改已保存')
+        expect(save).to_be_disabled();assert len(writes)==1
+        page.unroute('**/api/m06/workbench?*')
+    dialog.get_by_role('button',name='重新读取',exact=True).click()
+    expect(save).to_be_enabled();assert len(writes)==1
+    actual=get(api,'/api/m06/workbench')['settings']
+    key='plate_keywords' if kind=='plate' else 'shown_projects'
+    assert actual[key]==writes[0][key]
+    dialog.get_by_role('button',name='取消',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
