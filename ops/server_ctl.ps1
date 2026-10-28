@@ -7,9 +7,11 @@
 #
 # 用法（普通窗口即可；只有 start/stop/restart 需要管理员）：
 #     powershell -NoProfile -ExecutionPolicy Bypass -File ops\server_ctl.ps1 -Action status
-#   -Action 可选：status | start | stop | restart | log | port | pg | all
+#   -Action 可选：status | start | stop | restart | publish | log | port | pg | all
 #     status   服务状态 + 端口 + /app 探活（默认）
-#     start/stop/restart  起停重启（restart = stop → start → 探活）
+#     start/stop         直接起停（管理员）
+#     restart/publish    统一版本核验与标准UAC；publish先构建完整/app资源
+#   -CheckOnly           restart/publish只做准备核验，publish包含离线构建
 #     log      打印 var\log\server.err.log 与 server.out.log 的尾部
 #     port     占用 8000 的进程与其命令行（诊断"是不是旧进程"）
 #     pg       PostgreSQL 服务状态
@@ -19,17 +21,19 @@
 # ============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('status','start','stop','restart','log','port','pg','all')]
+    [ValidateSet('status','start','stop','restart','publish','log','port','pg','all')]
     [string] $Action = 'status',
     [string] $ServiceName = 'mtrl-workbench-server',
     [string] $RepoRoot    = '',      # ⚠️ 留空 ⇒ 本脚本所在目录的上一级（⛔ 别在 param 默认值里用 $PSScriptRoot：PS 5.1 下它有时为空）
     [int]    $Tail     = 200,
-    [int]    $WaitSec  = 20
+    [ValidateRange(1,120)] [int] $WaitSec = 20,
+    [switch] $CheckOnly
 )
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $LogsDir = Join-Path $RepoRoot 'var/log'
+if ($CheckOnly -and $Action -notin @('publish','restart')) { throw 'CheckOnly仅用于publish或restart' }
 
 function Line([string] $m) { Write-Host $m }
 
@@ -45,7 +49,7 @@ function Show-Service {
 
 function Show-Port {
     $c = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
-    if (-not $c) { Line '端口 8000：无人监听'; return }
+    if (-not $c) { Line '端口 8000：未取得监听进程，继续核对 HTTP 探活'; return }
     foreach ($p in ($c | Select-Object -ExpandProperty OwningProcess -Unique)) {
         $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$p" -ErrorAction SilentlyContinue).CommandLine
         $start = (Get-Process -Id $p -ErrorAction SilentlyContinue).StartTime
@@ -59,24 +63,26 @@ function Show-Probe {
         $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/app' -UseBasicParsing -TimeoutSec 5
         Line ("探活 GET /app = {0} {1}" -f $r.StatusCode, $r.StatusDescription)
     } catch {
-        Line ("探活 GET /app = 失败（{0}）" -f $_.Exception.Message)
+        throw ("探活 GET /app = 失败（{0}）" -f $_.Exception.Message)
     }
 }
 
 function Do-Start {
     Assert-Admin
     $s = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if (-not $s) { Line "服务 $ServiceName 不存在 —— 先跑 ops\nssm_install.ps1"; return }
+    if (-not $s) { throw "服务 $ServiceName 不存在 —— 先跑 ops\nssm_install.ps1" }
     if ($s.Status -eq 'Running') { Line '已经是 Running，跳过'; return }
     Start-Service -Name $ServiceName
+    $s.WaitForStatus('Running', [TimeSpan]::FromSeconds($WaitSec))
     Line '已发出启动指令'
 }
 
 function Do-Stop {
     Assert-Admin
     $s = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if (-not $s) { Line "服务 $ServiceName 不存在（改用计划任务？Stop-ScheduledTask -TaskName $ServiceName）"; return }
-    Stop-Service -Name $ServiceName -Force
+    if (-not $s) { throw "服务 $ServiceName 不存在" }
+    Stop-Service -Name $ServiceName
+    $s.WaitForStatus('Stopped', [TimeSpan]::FromSeconds($WaitSec))
     Line '已停'
 }
 
@@ -87,20 +93,12 @@ function Assert-Admin {
 }
 
 function Do-Restart {
-    Line '--- stop ---'
-    Do-Stop
-    Start-Sleep -Seconds 2
-    Line '--- start ---'
-    Do-Start
-    for ($i = 0; $i -lt $WaitSec; $i++) {
-        Start-Sleep -Seconds 1
-        try {
-            $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/app' -UseBasicParsing -TimeoutSec 3
-            if ($r.StatusCode -eq 200) { Line ("重启成功：/{0} 秒后 /app = 200" -f ($i + 1)); return }
-        } catch { }
-    }
-    Line ('⚠️ {0} 秒内没探活成功 —— 看日志：' -f $WaitSec)
-    Show-Log
+    $python = Join-Path $RepoRoot 'backend/.venv/Scripts/python.exe'
+    $entry = Join-Path $RepoRoot 'ops/frontend_release.py'
+    $arguments = @('-B','-X','utf8',$entry,$Action,'--service-name',$ServiceName,'--wait-sec',"$WaitSec")
+    if ($CheckOnly) { $arguments += '--check-only' }
+    & $python @arguments
+    exit $LASTEXITCODE
 }
 
 function Show-Log {
@@ -123,6 +121,7 @@ switch ($Action) {
     'start'   { Do-Start }
     'stop'    { Do-Stop }
     'restart' { Do-Restart }
+    'publish' { Do-Restart }
     'log'     { Show-Log }
     'port'    { Show-Port }
     'pg'      { Show-Pg }

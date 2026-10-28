@@ -4,9 +4,21 @@
 
 ## 只读定位与有权操作
 
-从仓根运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action status`，按症状选 log/port/pg。这些分支查服务/进程/日志/GET /app，不启停或写库。start/stop/restart 须当次明确授权及管理员权限，结束再核 PID、探活与受影响行为。服务没有 --reload，Python 改动可能需加载，但这不构成重启授权。
+从仓根运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action status`，按症状选 log/port/pg。这些分支查服务/进程/日志/GET /app，不启停或写库；系统未提供监听进程信息时保留未知，结合HTTP结果判断。start/stop/restart/publish须当次明确授权；start/stop要求管理员令牌，restart/publish由统一编排调用标准UAC。失败返回非零，结束再核实际服务、资源与受影响行为。服务没有 --reload，Python改动可能需加载，但这不构成重启授权。
 
 ops/nssm_install.ps1 注册 mtrl-workbench-server，nssm_uninstall.ps1 退出注册，不能同时让旧计划任务抢应用端口。脚本中的当前命令、依赖服务名、路径与端口优先于历史机器记录。NSSM 二进制按 .gitignore 不入 Git；服务操作用 NSSM/PowerShell cmdlet，计划任务用 ScheduledTask cmdlet。
+
+正式发布与重启继续从同一入口调用，编排实现在`ops/frontend_release.py`：
+
+```text
+powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action publish -CheckOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action publish
+powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action restart
+```
+
+publish沿预览运行时的同一输入声明检查已跟踪增删改及实际未跟踪输入，包含根锁文件和构建工具；全部提交后用锁定Corepack/pnpm生成完整`/app/`构建，核源码与文件散列后按提交存到稳定发布目录，再停止原服务、只切换根`.env`的FRONTEND_APP_DIR、启动并核实际索引/公开资源、缺资源404及8000监听进程归属。restart核当前完整资源与前端源码一致后重启；前端输入已变则提示使用publish。两者校验服务注册模板、账号及相关环境覆盖，发布锁只覆盖实际切换与重启；NSSM管道按真实UTF-16解码。`-CheckOnly`执行只读核对，publish还构建核候选，随后释放临时构建；不进入服务操作。报告、日志和失败退出沿workspace_paths，默认运行结束后给出实际归档路径。
+
+切换或探活失败会返回非零，并尝试恢复上一前端字段和原服务，重新核旧资源；其他配置的并发修改保留，前端字段已被他人改动则明确报告恢复失败，保留现场。私有配置仅在内存保留必要旧值，不复制到证据；在用发布与上一套完整资源按回退用途保留。
 
 ## 配置主人
 

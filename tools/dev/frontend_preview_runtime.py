@@ -95,12 +95,18 @@ def exclusive_preview():
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-def product_sources(*, frontend_only=False):
+def product_inputs(*, frontend_only=False):
+    """Declared input paths, including currently absent files and tracked deletions."""
     roots = ["apps/frontend/src", "apps/frontend/public"]
     files = ["apps/frontend/index.html", "apps/frontend/package.json", "pnpm-lock.yaml", "apps/frontend/pnpm-lock.yaml", "apps/frontend/vite.config.ts", "apps/frontend/tsconfig.json"]
     if not frontend_only:
         roots += ["backend/app", "backend/alembic"]
         files += ["tools/dev/frontend_preview.py", "tools/dev/frontend_preview_copy.py", "tools/dev/frontend_preview_runtime.py", "tools/dev/frontend_preview_server.py", "backend/pyproject.toml", "backend/uv.lock"]
+    return roots, files
+
+
+def product_sources(*, frontend_only=False):
+    roots, files = product_inputs(frontend_only=frontend_only)
     paths = {ROOT / name for name in files if (ROOT / name).is_file()}
     for name in roots:
         paths.update(p for p in (ROOT / name).rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.suffix not in {".pyc", ".pyo"})

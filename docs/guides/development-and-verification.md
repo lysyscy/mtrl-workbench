@@ -38,6 +38,8 @@ React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/
 
 暂存语法/字节审计的`--staged`读取Git stage-0内容，部分暂存以index为准；删除不读工作区、重命名按目标检查，Git读取失败返回非零。无参数仍为全量检查。纯Git输入回归用`backend/.venv/Scripts/python.exe -B -X utf8 -m unittest discover -s backend/tests -p test_staged_audits.py -v`，只创建临时Git仓、不装配应用/数据库。
 
+发布恢复与布局判定的纯工具回归分别用上述unittest入口的`-p test_frontend_operations.py`、`-p test_frontend_layout.py`。前者以临时私有配置/资源和隔离服务边界验证失败码、恢复及资源核验；后者用独立静态DOM和真实Chromium几何验证就绪、空结果及溢出。它们不启停正式服务、不装配业务库；实际布局采集另按预览指南，在已核可丢弃副本执行。临时目录可由本轮`MTRL_TEST_WORK`指定，均由测试退出时清理。
+
 ## React 浏览器与预览工具验证
 
 构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；React browser_page在失败或捕获运行错误时、关闭页面前保存截图，按需验看使用preview_screenshot(label)；两者经tools/dev/frontend_capture.py写入本轮screenshots及同名JSON，记录实际预览身份、页面、视口和图像散列，身份核验失败明确标记，不冒称最新页面已验。共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`；上述React自动浏览器回归不运行浏览器业务seed或自造业务回包。

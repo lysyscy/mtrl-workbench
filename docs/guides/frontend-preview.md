@@ -51,6 +51,17 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --sour
 
 停止仍用统一CLI `--stop`。它按当前owner的真实进程和HTTP身份请求正常退出，不依赖可能已替换的待用version清单；停止后核端口及拥有者状态。用户试用schema和私有状态保留，可丢弃验证schema由创建者清理。需要临时写验证时先停并保留试用实例，验证后恢复原试用入口；试用修改不作为测试重置材料。
 
+## 布局采集
+
+`tools/dev/frontend_layout.py`只附着指定run且与当前登记一致的最新可丢弃真实副本，使用其本地验看账号和新浏览器context。先按本任务授权把临时账号设为目标字号；采集器核实际字号，保留账号设置。
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_layout.py --preview-run <本任务run> --width 1920 --height 1080 --scale 1.12
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_layout.py --preview-run <本任务run> --route /contracts --route /inventory
+```
+
+页面从实际侧栏导航枚举，`--route`只选择其中的入口。采集等待页面、数据与当前展开网格就绪，记录视口、字号、列、行数、页面横向溢出、单元格及其内容容器的横竖溢出和实际可见横向条；关闭的details不参与。无可验网格、零可见数据行或明确空结果、页面错误或超时分别记录且返回非零，不能当作布局通过；整数测量1px取整差与0高隐藏横向条区分。失败截图沿frontend_capture带预览身份；JSON绑定采集器散列和实际预览身份，运行前后核相同实例/产品输入。产物按workspace_paths退出，默认结束给出实际归档报告路径。此检查覆盖所选主视图，额外明细、弹窗和交互按本次变化选测。
+
 ## 性能测量
 
 `tools/dev/frontend_measure.py`只消费已存在的只读真实副本，保留owner、读写身份、schema、版本与构建保护。当前可写业务预览不能冒充冻结性能条件；采集器集成检查也不等于重跑性能基线。

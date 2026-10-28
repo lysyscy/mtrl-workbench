@@ -4,7 +4,7 @@
 
 | 动作 | 入口 |
 |---|---|
-| 只读查服务、端口、日志与数据库状态 | `ops/server_ctl.ps1`，先读部署指南的权限与分支说明 |
+| 服务状态、发布与重启 | `ops/server_ctl.ps1`；restart/publish复用frontend_release.py，CheckOnly只做准备核验；先读部署指南权限与分支说明 |
 | 首次空库安装与只读环境核对 | `ops/deploy_restore.ps1`、`ops/selfcheck.ps1` |
 | 服务注册 | `ops/nssm_install.ps1`，实际安装须当前授权 |
 | 初始化定义 | `ops/init_db.sql`；凭据风险及数据库写入边界回部署指南 |

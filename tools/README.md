@@ -7,6 +7,7 @@
 | React 性能测量/原件口径检查 | dev/frontend_measure.py；小样筛查后完整84组，复用在用只读预览；见docs/guides/frontend-preview.md的性能测量入口 |
 | 后端隔离pytest | dev/backend_verify.py；明确来源配置及backend内测试节点，独占临时schema、退出码/清理日志；见开发与验证指南 |
 | React 验看与失败截图 | dev/frontend_capture.py；对已存在预览页采集截图和身份JSON；React失败自动截图与按需截图fixture共用，不创建服务或写业务数据。 |
+| React布局采集 | dev/frontend_layout.py；指定本任务run并核唯一最新可丢弃副本，从真实导航采目标视口/字号与可见网格，未就绪/空样本/溢出非零；见预览指南布局入口。 |
 | React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
 | 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用；--staged只检查Git index，显式无参数保全量模式，Git失败非零 |
 | 运行输出与生命周期 | audit/workspace_paths.py、audit_work.py；只处理本任务拥有产物 |
