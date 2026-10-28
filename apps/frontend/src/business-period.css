@@ -1,15 +1,15 @@
 .business-period-trigger{width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left;font-variant-numeric:tabular-nums}
-.business-period-trigger svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;color:var(--tx2)}
-.business-period-popover .ant-popover-container{padding:12px;border-radius:6px}
-.business-period-panel{width:284px;max-width:calc(100vw - 64px);font-family:var(--fs);font-size:14px;color:var(--tx)}
-.business-period-year{display:flex;align-items:center;justify-content:space-between;margin:8px 0}.business-period-year strong{font-weight:500;font-variant-numeric:tabular-nums}
+.business-period-trigger svg{width:calc(14px * var(--fscale));height:calc(14px * var(--fscale));flex:none;fill:none;stroke:currentColor;stroke-width:1.5;color:var(--tx2)}
+.business-period-popover .ant-popover-container{padding:calc(12px * var(--fscale));border-radius:6px}
+.business-period-panel{width:calc(284px * var(--fscale));max-width:calc(100vw - 48px);max-height:calc(100dvh - 80px);overflow:auto;overscroll-behavior:contain;font-family:var(--fs);font-size:calc(14px * var(--fscale));color:var(--tx)}
+.business-period-year{display:flex;align-items:center;justify-content:space-between;margin:calc(8px * var(--fscale)) 0}.business-period-year strong{font-weight:500;font-variant-numeric:tabular-nums}
 .business-period-panel .ant-picker-calendar{background:transparent}.business-period-panel .ant-picker-panel{border:0;background:transparent}.business-period-panel .ant-picker-body{padding:0}
-.business-period-panel .ant-picker-cell{padding:3px 0}.business-period-panel .ant-picker-cell-selected .ant-picker-cell-inner{background:transparent}
-.business-period-month{height:36px;display:grid;place-items:center;margin:0 4px;border-radius:4px;color:var(--tx);cursor:pointer}
+.business-period-panel .ant-picker-cell{padding:calc(3px * var(--fscale)) 0}.business-period-panel .ant-picker-cell-selected .ant-picker-cell-inner{background:transparent}
+.business-period-month{height:calc(36px * var(--fscale));display:grid;place-items:center;margin:0 calc(4px * var(--fscale));border-radius:4px;color:var(--tx);cursor:pointer}
 .business-period-month:hover{background:var(--sf2)}.business-period-month.in-range{background:var(--pri-l);color:var(--pri-d)}.business-period-month.is-selected{background:var(--pri);color:var(--on)}
-.business-period-years{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 0 12px}.business-period-years .ant-btn{height:36px}
-.business-period-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--bd);padding-top:8px;margin-top:8px;gap:8px;font-size:12px;color:var(--tx2)}.business-period-footer .ant-btn{padding-inline:4px}
+.business-period-years{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(8px * var(--fscale));padding:calc(4px * var(--fscale)) 0 calc(12px * var(--fscale))}.business-period-years .ant-btn{height:calc(36px * var(--fscale))}
+.business-period-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--bd);padding-top:calc(8px * var(--fscale));margin-top:calc(8px * var(--fscale));gap:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));color:var(--tx2)}.business-period-footer .ant-btn{padding-inline:calc(4px * var(--fscale))}
 
-.business-period-panel table{table-layout:fixed;width:100%;font-size:14px}.business-period-panel td{padding:2px 0;min-width:0!important;max-width:none;border:0;vertical-align:middle;white-space:nowrap}.business-period-panel tbody tr:hover{background:transparent}
+.business-period-panel table{table-layout:fixed;width:100%;font-size:inherit}.business-period-panel td{padding:calc(2px * var(--fscale)) 0;min-width:0!important;max-width:none;border:0;vertical-align:middle;white-space:nowrap}.business-period-panel tbody tr:hover{background:transparent}
 
-.business-period-panel .business-period-month.ant-btn{width:calc(100% - 8px);height:36px;padding:0;border:0;box-shadow:none;font-size:14px}.business-period-panel .business-period-month.is-selected{background:var(--pri);color:var(--on)}.business-period-month:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.business-period-panel .business-period-month.ant-btn{width:calc(100% - 8px * var(--fscale));height:calc(36px * var(--fscale));padding:0;border:0;box-shadow:none;font-size:inherit}.business-period-panel .business-period-month.is-selected{background:var(--pri);color:var(--on)}.business-period-month:focus-visible{outline:2px solid var(--pri);outline-offset:1px}

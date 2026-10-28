@@ -30,7 +30,7 @@
 .project-row-actions{flex-wrap:nowrap;white-space:nowrap}
 .project-row-actions .ant-btn{flex:none}
 
-.project-table .project-field{min-width:10em;position:relative}
+.project-table .project-field{min-width:0;width:100%;position:relative}
 .project-table .project-field .ant-input{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));width:100%;font:inherit;border-color:transparent;background:transparent;padding-inline:calc(6px * var(--fscale));text-overflow:ellipsis}
 .project-table .project-field .ant-input:not(:disabled):hover{border-color:var(--bd3);background:var(--sf)}
 .project-table .project-field .ant-input:focus{border-color:var(--pri);background:var(--sf)}
