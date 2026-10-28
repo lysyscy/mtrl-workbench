@@ -5,8 +5,11 @@ import Tag from 'antd/es/tag';
 import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { BusinessGrid, ReadGrid } from './business-grid';
+import { ProjectDragImage } from './project-drag-image';
+import { contentWidth, fixedWidth, fullTextWidth } from './grid';
+import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, readProjects, record, requestJson, uncertainWrite } from './api';
@@ -77,10 +80,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [statusEdit, setStatusEdit] = useState<{ id: number; value: Project['status'] } | null>(null), [statusErrors, setStatusErrors] = useState<Record<number,string>>({});
   const [drafts, setDrafts] = useState<Record<string, ProjectDraft>>({});
   const [inlineSaving, setInlineSaving] = useState(0), [dragged, setDragged] = useState<number | null>(null), [previewOrder, setPreviewOrder] = useState<number[] | null>(null);
-  const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null);
-  const rowElements = useRef(new Map<number, HTMLTableRowElement>()), rowTops = useRef(new Map<number, number>());
-  const rowAnimations = useRef(new Map<number, Animation>());
-  useEffect(() => () => { rowAnimations.current.forEach(animation => animation.cancel()); rowAnimations.current.clear(); }, []);
+  const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null), dragOrder = useRef<number[]|null>(null), gridApi = useRef<GridApi<ArchiveProject> | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
   const pending = useQuery({ queryKey: ['project-promote-pending'], enabled: !blocked, queryFn: async ({ signal }) => object<PendingList>(await requestJson('/api/m01/promote-pending', { signal }), x => Array.isArray(x.items) && record(x.source)) });
@@ -91,25 +91,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const rows = ordered.filter(p => (status === 'all' || p.status === status) && (type === 'all' || p.project_type === type) && [p.disp, p.name_full, p.warehouse_name ?? ''].some(text => text.includes(keyword.trim())));
   const cellValue = (p: ArchiveProject, key: string) => key === 'project_type' ? typeNames[p.project_type] : key === 'status' ? (p.status === 'active' ? '在建' : '归档') : key === 'parent' ? all.find(item => item.id === p.parent_shell_id)?.name_full ?? '' : key === 'keywords' ? p.match_keywords.join('、') : String(p[key as keyof ArchiveProject] ?? '');
   if (sort) rows.sort((a, b) => Number(a.status === 'archived') - Number(b.status === 'archived') || cellValue(a, sort.key).localeCompare(cellValue(b, sort.key), 'zh', { numeric: true }) * (sort.descending ? -1 : 1));
-  const rowOrder = rows.map(p => p.id).join(',');
-  useLayoutEffect(() => {
-    const next = new Map<number, number>();
-    rowElements.current.forEach((element, id) => {
-      const running = rowAnimations.current.get(id), before = rowTops.current.get(id);
-      const offset = running ? new DOMMatrixReadOnly(getComputedStyle(element).transform).m42 : 0;
-      running?.cancel(); rowAnimations.current.delete(id);
-      const top = element.getBoundingClientRect().top; next.set(id, top);
-      // A new drag target continues from the visible position instead of stacking transforms.
-      const delta = before === undefined ? 0 : before + offset - top;
-      if (delta && dragged !== null && id !== dragged && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        const animation = element.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 140, easing: 'cubic-bezier(.2,.8,.2,1)' });
-        rowAnimations.current.set(id, animation);
-        animation.onfinish = () => { if (rowAnimations.current.get(id) === animation) rowAnimations.current.delete(id); };
-      }
-    });
-    rowTops.current = next;
-  }, [rowOrder, dragged]);
-  const heading = (key: string, text: string) => <th aria-sort={sort?.key === key ? sort.descending ? 'descending' : 'ascending' : 'none'}><Button htmlType="submit" className="project-sort" onClick={() => setSort(sort?.key === key ? sort.descending ? null : { key, descending: true } : { key, descending: false })}>{text} {sort?.key === key ? sort.descending ? '↓' : '↑' : '↕'}</Button></th>;
+  useEffect(()=>{if(!sort&&gridApi.current&&!gridApi.current.isDestroyed())gridApi.current.applyColumnState({defaultState:{sort:null}});},[sort]);
   useHistoryGuard('projects', () => busy || lock.current || inlineSaving > 0 ? '项目档案正在保存，请稍候。' : Object.values(drafts).some(draft => draft.uncertain) ? '项目保存结果待核实，请先重读核对。' : Object.keys(drafts).length ? '请先保存或取消项目格内的修改。' : '');
   const editableDisabled = blocked || !me || busy || projects.isError || projects.isPending;
   const unavailable = editableDisabled || inlineSaving > 0;
@@ -161,7 +143,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     } finally { if (mounted.current) setInlineSaving(count => count - 1); }
   }
   const fieldInput = (project: ArchiveProject, field: EditableField) => <ProjectField project={project} field={field} disabled={editableDisabled} readDisabled={blocked || !me || busy} draft={drafts[fieldKey(project.id, field)]} changeDraft={draft => changeDraft(project.id, field, draft)} save={saveField} reread={rereadField} />;
-  function endDrag() { dragging.current = null; setDragged(null); setPreviewOrder(null); }
+  function endDrag() { dragging.current = null; dragOrder.current=null; setDragged(null); setPreviewOrder(null); }
   async function changeStatus(project: ArchiveProject, value: Project['status']) {
     if (unavailable || lock.current || value === project.status) return;
     lock.current = true; setBusy(true); setStatusEdit({ id: project.id, value });
@@ -185,7 +167,9 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     return ok ? saved : null;
   }
   async function exportRows() {
-    const ids = rows.map(p => p.id);
+    const ids:number[]=[];
+    gridApi.current?.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});
+    if(!ids.length){setFeedback('项目列表尚未准备好，请稍候。');return;}
     await run(async () => {
       const result = object<{ content_b64: string; filename: string }>(await requestJson('/api/m01/projects/export', { method: 'POST', ...body({ ids }) }), x => typeof x.content_b64 === 'string' && typeof x.filename === 'string' && !/[\\/:]/.test(x.filename));
       if (!mounted.current) return;
@@ -193,27 +177,40 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, `已按显示顺序导出 ${ids.length} 个项目。`);
   }
+  const scale=Number(me?.ui_scale_css)||1;
+  const gridState=useRef({all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal});
+  gridState.current={all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal};
+  useEffect(()=>{gridApi.current?.refreshCells({force:true});},[drafts,statusEdit,statusErrors,unavailable,editableDisabled]);
+  const phidWidth=fullTextWidth(all.map(p=>p.phid||'—'),scale).minWidth;
+  const columns=useMemo<ColDef<ArchiveProject>[]>(()=>[
+    {colId:'sequence',headerName:'序号',...fixedWidth(220,scale),rowDrag:()=>!gridState.current.unavailable,cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,inGroup=state.all.filter(item=>item.status===p.status),at=inGroup.findIndex(item=>item.id===p.id);return <div className="project-order"><OrderInput project={p} disabled={state.unavailable} move={state.move}/><Button aria-label={`上移：${label(p)}`} disabled={state.unavailable||at===0} onClick={()=>void state.move(p.id,'up')}>↑</Button><Button aria-label={`下移：${label(p)}`} disabled={state.unavailable||at===inGroup.length-1} onClick={()=>void state.move(p.id,'down')}>↓</Button></div>;}},
+    ...[['project_type','项目类型'],['disp','展示名'],['warehouse_name','仓库名'],['name_full','项目全名'],['phid','信息化编号'],['status','状态'],['parent','父壳'],['keywords','关键词']].map(([key,title]):ColDef<ArchiveProject>=>({colId:key!,headerName:title!,sortable:true,...contentWidth(key==='phid'?phidWidth/scale:key==='status'?110:140,key==='name_full'?400:320,scale,key==='name_full'?2:key==='disp'?1:0),
+      valueGetter:({data:p})=>p?key==='project_type'?typeNames[p.project_type]:key==='status'?p.status==='active'?'在建':'归档':key==='parent'?gridState.current.all.find(item=>item.id===p.parent_shell_id)?.name_full??'':key==='keywords'?p.match_keywords.join('、'):String(p[key as keyof ArchiveProject]??''):'',
+      comparator:(a,b)=>String(a??'').localeCompare(String(b??''),'zh',{numeric:true}),
+      cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current;
+        if(key==='project_type')return <Tag className={`enum-tag project-type project-type-${p.project_type}`}>{typeNames[p.project_type]}</Tag>;
+        if(key==='disp')return p.project_type==='shell'?'—':state.fieldInput(p,'disp');
+        if(key==='name_full')return p.parent_shell_id?<span title="具体小微借壳全名，不可单独修改">{p.name_full}</span>:state.fieldInput(p,'name_full');
+        if(key==='warehouse_name')return <><span>{p.warehouse_name||'—'}</span>{p.is_placeholder&&<span className="project-placeholder-label">无仓库（历史项目）</span>}</>;
+        if(key==='status')return <><Select className="project-status" aria-label={`状态：${label(p)}`} aria-describedby={state.statusErrors[p.id]?`project-status-error-${p.id}`:undefined} disabled={state.unavailable} value={state.statusEdit?.id===p.id?state.statusEdit.value:p.status} onChange={value=>void state.changeStatus(p,value)} options={[{value:'active',label:'在建'},{value:'archived',label:'归档'}]} labelRender={option=><Tag className={`status-tag ${option.value==='active'?'status-info':'status-neutral'}`}>{option.label}</Tag>}/>{state.statusEdit?.id===p.id&&<span role="status">正在保存…</span>}{state.statusErrors[p.id]&&<p id={`project-status-error-${p.id}`} role="alert">{state.statusErrors[p.id]}</p>}</>;
+        if(key==='keywords')return p.project_type==='small'?state.fieldInput(p,'match_keywords'):p.match_keywords.join('、')||'—';
+        if(key==='parent')return state.all.find(item=>item.id===p.parent_shell_id)?.name_full||'—';
+        return p.phid||'—';
+      }})),
+    {colId:'actions',headerName:'操作',...contentWidth(96,160,scale),cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,match=state.pending?.items.find(item=>item.candidates?.some(c=>c.id===p.id&&c.is_placeholder));return <div className="project-row-actions">{p.is_placeholder&&match&&<Button disabled={state.unavailable} onClick={()=>state.setModal({kind:'promote',item:match})}>扶正</Button>}<Button danger disabled={state.unavailable} onClick={()=>state.setModal({kind:'delete',project:p})}>删除</Button></div>;}}
+  ],[scale,phidWidth]);
   return <section data-page-chrome className="projects-page" aria-labelledby="page-title">{params.get('bill') && <p><Link to={`/notices?notice=${encodeURIComponent(params.get('notice')??'')}`}>返回通知书 {params.get('bill')} 继续核对</Link></p>}
     <div className="project-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'create' })}>＋ 手工建档</Button><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'warehouses' })}>同步仓库名单</Button><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'common-projects' })}>同步常用项目列表</Button><Button htmlType="submit" className="primary" disabled={unavailable || !rows.length} onClick={() => void exportRows()}>导出 Excel</Button></div>
     {!me && <p className="state">登录后可维护项目和导出。</p>}
     <form className="filters" onSubmit={e => e.preventDefault()}><label>状态<Select aria-label="项目状态筛选" value={status} onChange={setStatus} options={[{value:'active',label:'在建'},{value:'archived',label:'归档'},{value:'all',label:'全部'}]}/></label><label>项目类型<Select aria-label="项目类型筛选" value={type} onChange={setType} options={[{value:'all',label:'全部'},...Object.entries(typeNames).map(([value,label])=>({value,label}))]}/></label><label className="search">项目<Input aria-label="项目搜索" type="search" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="全名、仓库名或展示名" /></label><Button htmlType="submit" onClick={() => { setStatus('active'); setType('all'); setKeyword(''); setSort(null); }}>重置</Button></form>
     {feedback && <p className="notice project-feedback" role="alert">{feedback}</p>}{busy && <p className="state" role="status">正在处理，请稍候…</p>}
     {[pending, archive].map((query, index) => query.isError ? <p className="notice" key={index} role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读待办</Button></p> : query.data && (query.data.items.length > 0 || query.data.dropped_items?.length) ? <div className="project-pending" key={index}><h2>{index === 0 ? '待人工指认' : '待人工建档'}</h2><p className="project-source">{query.data.source.target}，{query.data.source.at}</p>{query.data.items.map((item, i) => <div className="project-task" key={`${item.full_name}:${item.warehouse_name ?? i}`}><span>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</span><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: index === 0 ? 'promote' : 'archive', item })}>{index === 0 ? '选择档案扶正' : '选择仓库建档'}</Button></div>)}{query.data.dropped_items?.length ? <details><summary>已不属当前待办的项目</summary>{query.data.dropped_items.map((item, i) => <p key={i}>{item.full_name}：{item.why_text}</p>)}</details> : null}</div> : null)}
-    {projects.isError && projects.data && <p className="notice" role="alert">项目更新失败，保留上次结果。{projects.error.message}<Button htmlType="submit" onClick={() => void projects.refetch()}>重读项目</Button></p>}{projects.isPending ? <p role="status" className="state">正在读取项目…</p> : projects.isError && !projects.data ? <p className="notice" role="alert">{projects.error.message}<Button htmlType="submit" onClick={() => void projects.refetch()}>重读项目</Button></p> : <><p className="result">共 {rows.length} 个项目{projects.isFetching ? '，正在更新…' : ''}</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <div className="table-scroll project-table" tabIndex={0} role="region" aria-label="项目列表"><BoundedTable prepareFonts><thead><tr><th>序号</th>{heading('project_type', '项目类型')}{heading('disp', '展示名')}{heading('warehouse_name', '仓库名')}{heading('name_full', '项目全名')}{heading('phid', '信息化编号')}{heading('status', '状态')}{heading('parent', '父壳')}{heading('keywords', '关键词')}<th>操作</th></tr></thead><tbody>{rows.map((p, i) => {
-      const previous = rows[i - 1]; const inGroup = all.filter(item => item.status === p.status), at = inGroup.findIndex(item => item.id === p.id);
-      const match = pending.data?.items.find(item => item.candidates?.some(c => c.id === p.id && c.is_placeholder));
-      return <tr key={p.id} ref={element => { if (element) rowElements.current.set(p.id, element); else rowElements.current.delete(p.id); }} className={`${p.is_placeholder ? 'project-placeholder ' : ''}${dragged === p.id ? 'project-dragging' : ''}`} onDragOver={e => {
-        const source = all.find(item => item.id === dragging.current);
-        if (!source || source.status !== p.status || unavailable) return;
-        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-        if (source.id === p.id) return;
-        setPreviewOrder(current => { const ids = current ?? all.map(item => item.id), from = ids.indexOf(source.id), to = ids.indexOf(p.id); const next = [...ids]; next.splice(from, 1); next.splice(to, 0, source.id); return next; });
-      }} onDrop={e => { e.preventDefault(); const id = dragging.current; const source = all.find(item => item.id === id); if (id && source?.status === p.status && !unavailable) { const position = (previewOrder ?? all.map(item => item.id)).indexOf(id) + 1; dragging.current = null; setDragged(null); void move(id, position).finally(() => setPreviewOrder(null)); } else endDrag(); }}>
-        <td>{status === 'all' && p.status === 'archived' && previous?.status !== 'archived' && <span className="archive-divider">归档</span>}<div className="project-order"><Button htmlType="submit" draggable={!unavailable} disabled={unavailable} title="拖动调整全局顺序；也可填序号或用上移、下移" aria-label={`拖动排序：${label(p)}`} onDragStart={e => { dragging.current = p.id; setSort(null); setDragged(p.id); setPreviewOrder(all.map(item => item.id)); const row = e.currentTarget.closest('tr'); if (row) { const rect = row.getBoundingClientRect(); e.dataTransfer.setDragImage(row, e.clientX - rect.left, e.clientY - rect.top); } e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(p.id)); }} onDragEnd={() => { if (dragging.current !== null) endDrag(); }}>⠿</Button><OrderInput project={p} disabled={unavailable} move={move} /><Button htmlType="submit" aria-label={`上移：${label(p)}`} disabled={unavailable || at === 0} onClick={() => void move(p.id, 'up')}>↑</Button><Button htmlType="submit" aria-label={`下移：${label(p)}`} disabled={unavailable || at === inGroup.length - 1} onClick={() => void move(p.id, 'down')}>↓</Button></div></td>
-        <td><Tag className={`enum-tag project-type project-type-${p.project_type}`}>{typeNames[p.project_type]}</Tag></td><td>{p.project_type === 'shell' ? '—' : fieldInput(p, 'disp')}</td><td><span className="project-name" title={p.warehouse_name || ''}>{p.warehouse_name || '—'}</span>{p.is_placeholder && <span className="project-placeholder-label">无仓库（历史项目）</span>}</td><td>{p.parent_shell_id ? <span className="project-name" title="具体小微借壳全名，不可单独修改">{p.name_full}</span> : fieldInput(p, 'name_full')}</td><td className="project-phid">{p.phid || '—'}</td><td><Select className="project-status" aria-label={`状态：${label(p)}`} aria-describedby={statusErrors[p.id] ? `project-status-error-${p.id}` : undefined} disabled={unavailable} value={statusEdit?.id === p.id ? statusEdit.value : p.status} onChange={value => void changeStatus(p, value)} options={[{value:'active',label:'在建'},{value:'archived',label:'归档'}]} labelRender={option=><Tag className={`status-tag ${option.value==='active'?'status-info':'status-neutral'}`}>{option.label}</Tag>}/>{statusEdit?.id === p.id && <span role="status">正在保存…</span>}{statusErrors[p.id] && <p id={`project-status-error-${p.id}`} className="notice" role="alert">{statusErrors[p.id]}</p>}</td><td><span className="project-name" title={all.find(item => item.id === p.parent_shell_id)?.name_full}>{all.find(item => item.id === p.parent_shell_id)?.name_full || '—'}</span></td><td>{p.project_type === 'small' ? fieldInput(p, 'match_keywords') : <span className="project-name" title={p.match_keywords.join('、')}>{p.match_keywords.join('、') || '—'}</span>}</td><td><div className="project-row-actions">{p.is_placeholder && match && <Button htmlType="submit" className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'promote', item: match })}>扶正</Button>}<Button htmlType="submit" className="project-link danger" disabled={unavailable} onClick={() => setModal({ kind: 'delete', project: p })}>删除</Button></div></td>
-      </tr>;
-    })}</tbody></BoundedTable></div>}</>}
-    {trails.isError ? <p className="notice" role="alert">{trails.error.message}<Button htmlType="submit" onClick={() => void trails.refetch()}>重读留痕</Button></p> : trails.data?.length ? <details className="project-trails" open><summary>修改留痕（全名 / 状态）</summary><div className="table-scroll"><BoundedTable prepareFonts><thead><tr><th>时间</th><th>项目</th><th>字段</th><th>改前值</th><th>改后值</th><th>改动人</th></tr></thead><tbody>{trails.data.map((t, i) => <tr key={i}><td>{t.at}</td><td>{t.project}</td><td>{t.field_label}</td><td>{trailValue(t, t.before)}</td><td>{trailValue(t, t.after)}</td><td>{t.by}</td></tr>)}</tbody></BoundedTable></div></details> : null}
+    {projects.isError && projects.data && <p className="notice" role="alert">项目更新失败，保留上次结果。{projects.error.message}<Button htmlType="submit" onClick={() => void projects.refetch()}>重读项目</Button></p>}{projects.isPending ? <p role="status" className="state">正在读取项目…</p> : projects.isError && !projects.data ? <p className="notice" role="alert">{projects.error.message}<Button htmlType="submit" onClick={() => void projects.refetch()}>重读项目</Button></p> : <><p className="result">共 {rows.length} 个项目{projects.isFetching ? '，正在更新…' : ''}</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" style={{height:'65dvh'}} grid={{onGridReady:e=>{gridApi.current=e.api;},dragAndDropImageComponent:ProjectDragImage,isRowValidDropPosition:p=>({allowed:!unavailable&&p.source.data?.status===p.overNode?.data?.status,highlight:true}),animateRows:dragged!==null&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches,postSortRows:e=>{e.nodes.sort((a,b)=>Number(a.data?.status==='archived')-Number(b.data?.status==='archived'));},onSortChanged:e=>{const column=e.api.getColumnState().find(c=>c.sort);setSort(column?{key:column.colId,descending:column.sort==='desc'}:null);},onRowDragEnter:e=>{if(unavailable)return;dragging.current=e.node.data?.id??null;setDragged(dragging.current);dragOrder.current=all.map(p=>p.id);setPreviewOrder(dragOrder.current);},onRowDragMove:e=>{const source=all.find(p=>p.id===dragging.current),target=e.overNode?.data;if(unavailable||!source||!target||source.status!==target.status||source.id===target.id)return;const ids=all.map(p=>p.id),from=ids.indexOf(source.id),to=ids.indexOf(target.id);ids.splice(from,1);ids.splice(to,0,source.id);dragOrder.current=ids;setPreviewOrder(ids);},onRowDragEnd:e=>{const id=dragging.current,source=all.find(p=>p.id===id);if(id&&source&&e.overNode?.data?.status===source.status&&!unavailable){const position=(dragOrder.current??all.map(p=>p.id)).indexOf(id)+1;dragging.current=null;setDragged(null);void move(id,position).finally(()=>setPreviewOrder(null));}else endDrag();},onRowDragCancel:endDrag,onRowDragLeave:endDrag,getRowClass:p=>(p.data?.is_placeholder?'project-placeholder ':'')+(p.data?.id===dragged?'project-dragging':''),rowDragText:p=>p.rowNode?.data?label(p.rowNode.data):'项目'}} />}</>}
+    {trails.isError ? <p className="notice" role="alert">{trails.error.message}<Button htmlType="submit" onClick={() => void trails.refetch()}>重读留痕</Button></p> : trails.data?.length ? <details className="project-trails" open><summary>修改留痕（全名 / 状态）</summary><ReadGrid table="project-trails" label="修改留痕" domLayout="autoHeight" rows={trails.data} rowId={(_row)=>String(trails.data!.indexOf(_row))} columns={[
+      {field:'at',headerName:'时间'}, {field:'project',headerName:'项目'}, {field:'field_label',headerName:'字段'},
+      {colId:'before',headerName:'改前值',valueGetter:p=>trailValue(p.data!,p.data!.before)},
+      {colId:'after',headerName:'改后值',valueGetter:p=>trailValue(p.data!,p.data!.after)}, {field:'by',headerName:'改动人'},
+    ]}/></details> : null}
     {modal && <ProjectDialog state={modal} me={me} blocked={blocked} close={() => setModal(null)} refresh={refresh} announce={text => { void message.success(text); }} />}
   </section>;
 }

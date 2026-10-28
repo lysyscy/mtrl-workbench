@@ -1,10 +1,11 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
-import { Fragment } from 'react';
-import { useId } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { BusinessModal } from './business-modal';
-import { numberColumnWidth } from './grid';
+import { numberColumnWidth, contentWidth, fixedWidth } from './grid';
+import { BusinessGrid } from './business-grid';
 import { mechanicalMoney as money, detailNet, detailProblems, detailSum, editDetailRow } from './mechanical-api';
 import type { Category, Detail, DetailRow } from './mechanical-api';
 
@@ -21,24 +22,41 @@ export const fields: Record<Category, [string,string][]> = {
 };
 const aliases: Record<string,string> = { use:'usage', vendor:'lessor', memo:'note' };
 interface DetailGroup { warehouse:string; name:string; saved:Detail|undefined; draft:Draft|undefined }
+interface DetailDisplay { id:string; kind:'group'|'detail'|'empty'; warehouse:string; name:string; rows:DetailRow[]; row?:DetailRow; index:number; shown:number; draft:boolean; gross:unknown; net:unknown; missing:number }
+function DetailInput({value,change,...props}:Omit<React.ComponentProps<typeof Input>,'value'|'onChange'>&{value:string;change:(value:string)=>void}) {
+  const [text,setText]=useState(value);
+  useEffect(()=>setText(value),[value]);
+  return <Input {...props} value={text} onChange={e=>{setText(e.target.value);change(e.target.value);}}/>;
+}
 export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,writable,change }: {
   scale:number;groups:DetailGroup[];category:Category;ym:string;keywords:string[];problemsOnly:boolean;writable:boolean;change:(warehouse:string,rows:DetailRow[])=>void;
 }) {
   const labels=fields[category],grossIndex=labels.findIndex(([field])=>field==='amount');
-  const widths=labels.map(([field])=>numericFields.includes(field)?numberColumnWidth(groups.flatMap(group=>{const rows=group.draft?.rows??group.saved?.rows??[];return [...rows.map(row=>field==='net'?money(detailNet(row)):row[field]??''),field==='amount'?money(detailSum(rows.map(row=>row.amount))):field==='net'?money(detailSum(rows.map(detailNet))):''];}),scale,true).minWidth/scale:['unit','tax'].includes(field)?64:field==='memo'?160:120);
-  let count=0;
-  return <><div className="mechanical-detail-table" role="region" aria-label={category==='zero'?'零租明细':'包月明细'}><table><colgroup><col style={{width:48*scale}}/>{labels.map(([field],index)=><col key={field} style={{width:widths[index]!*scale}}/>) }<col style={{width:80*scale}}/></colgroup>
-    <thead><tr><th>序号</th>{labels.map(([field,label])=><th key={field}>{label}</th>)}<th className="mechanical-detail-actions">操作</th></tr></thead><tbody>{groups.map(group=>{
-      const rows=group.draft?.rows??group.saved?.rows??[],shown=rows.map((row,index)=>({row,index})).filter(({row})=>!problemsOnly||detailProblems(row,category,ym,keywords).length);
-      const gross=group.draft?detailSum(rows.map(row=>row.amount)):group.saved?.totals.gross,net=group.draft?detailSum(rows.map(detailNet)):group.saved?.totals.net,missing=rows.filter(row=>detailNet(row)===null).length;count+=shown.length;
-      return <Fragment key={group.warehouse}><tr className="mechanical-detail-group-row"><th colSpan={grossIndex+1}><strong>{group.name}</strong><span>，{shown.length}条{group.draft?'，待保存（草稿参考）':''}</span></th>{labels.slice(grossIndex).map(([field])=><td key={field} className={field==='amount'||field==='net'?'money':''}>{field==='amount'?money(gross):field==='net'?<>{money(net)}{missing>0&&<small>（{missing}条待补）</small>}</>:null}</td>)}<td className="mechanical-detail-actions"><Button size="small" disabled={!writable} onClick={()=>{const row={id:crypto.randomUUID(),device:'',unit:'台班',amount:'',tax:''};change(group.warehouse,[...rows,row]);requestAnimationFrame(()=>document.getElementById('mechanical-device-'+row.id)?.focus());}}>增行</Button></td></tr>
-        {shown.map(({row,index})=><tr key={row.id}><td>{index+1}</td>{labels.map(([field,label])=>{
-          const exempt=field==='plate'&&((category==='monthly'&&ym<'2026-06')||keywords.some(word=>String(row.device??'').includes(word)))&&!row.plate;
-          return <td key={field} className={field==='net'?'money':''}>{field==='net'?(detailNet(row)===null?'待补税率':money(detailNet(row))):exempt?<span className="muted">无需车牌</span>:<Input id={field==='device'?'mechanical-device-'+row.id:undefined} aria-label={`${group.name} 第${index+1}行 ${label}`} inputMode={numericFields.includes(field)?'decimal':'text'} className={numericFields.includes(field)?'money':''} value={String(row[field]??row[aliases[field]??'']??'')} disabled={!writable} maxLength={4000} onChange={e=>change(group.warehouse,rows.map(item=>item.id===row.id?editDetailRow(item,field,e.target.value,category):item))}/>}</td>;
-        })}<td className="mechanical-detail-actions"><Button danger size="small" disabled={!writable} onClick={()=>change(group.warehouse,rows.filter(item=>item.id!==row.id))}>移除</Button></td></tr>)}
-        {!shown.length&&<tr><td className="state" colSpan={labels.length+2}>{problemsOnly?'此项目没有待补字段。':'尚无明细；在项目右侧“增行”录入。有效月值保留。'}</td></tr>}
-      </Fragment>;
-    })}{!groups.length&&<tr><td className="state" colSpan={labels.length+2}>尚未选择显示项目。用“显示项目”选入已有项目后增行。</td></tr>}</tbody></table></div><p className="mechanical-feedback">当前显示 {count} 条，项目合计见合价、不含税价列</p></>;
+  const focus=useRef('');
+  const current=useRef({groups,change,writable,category,ym,keywords,problemsOnly});current.current={groups,change,writable,category,ym,keywords,problemsOnly};
+  const display:DetailDisplay[]=groups.flatMap(group=>{
+    const rows=group.draft?.rows??group.saved?.rows??[],shown=rows.map((row,index)=>({row,index})).filter(({row})=>!problemsOnly||detailProblems(row,category,ym,keywords).length);
+    const base={warehouse:group.warehouse,name:group.name,rows,shown:shown.length,draft:Boolean(group.draft),gross:group.draft?detailSum(rows.map(row=>row.amount)):group.saved?.totals.gross,net:group.draft?detailSum(rows.map(detailNet)):group.saved?.totals.net,missing:rows.filter(row=>detailNet(row)===null).length};
+    return [{...base,id:'group:'+group.warehouse,kind:'group',index:-1},...shown.map(({row,index})=>({...base,id:group.warehouse+':'+row.id,kind:'detail' as const,row,index})),...(!shown.length?[{...base,id:'empty:'+group.warehouse,kind:'empty' as const,index:-1}]:[])] as DetailDisplay[];
+  });
+  const fullValues=groups.flatMap(group=>group.draft?.rows??group.saved?.rows??[]);
+  const signature=JSON.stringify(labels.map(([field])=>numericFields.includes(field)?numberColumnWidth([...fullValues.map(row=>field==='net'?money(detailNet(row)):row[field]??''),...display.filter(row=>row.kind==='group').map(row=>field==='amount'?money(row.gross as string):field==='net'?money(row.net as string):'')],scale,true).minWidth:0));
+  const columns=useMemo<ColDef<DetailDisplay>[]>(()=>[
+    {colId:'sequence',headerName:'序号',...contentWidth(48,64,scale),colSpan:p=>p.data?.kind==='group'?grossIndex+1:p.data?.kind==='empty'?labels.length+1:1,
+      cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d?null:d.kind==='group'?<><strong>{d.name}</strong>，{d.shown}条{d.draft?'，待保存（草稿参考）':''}</>:d.kind==='empty'?(current.current.problemsOnly?'此项目没有待补字段。':'尚无明细；在项目右侧“增行”录入。有效月值保留。'):d.index+1},
+    ...labels.map(([field,label]):ColDef<DetailDisplay>=>({colId:field,headerName:label,...(numericFields.includes(field)?numberColumnWidth([...fullValues.map(row=>field==='net'?money(detailNet(row)):row[field]??''),...display.filter(row=>row.kind==='group').map(row=>field==='amount'?money(row.gross as string):field==='net'?money(row.net as string):'')],scale,true):contentWidth(['unit','tax'].includes(field)?64:field==='memo'?160:120,400,scale)),
+      cellClass:numericFields.includes(field)?'money':'',valueGetter:p=>p.data?.kind==='group'?field==='amount'?p.data.gross:field==='net'?p.data.net:'':field==='net'&&p.data?.row?detailNet(p.data.row):p.data?.row?.[field]??p.data?.row?.[aliases[field]??'']??'',
+      cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>{
+        if(!d||d.kind==='empty')return null;
+        if(d.kind==='group')return field==='amount'?money(d.gross as string):field==='net'?<>{money(d.net as string)}{d.missing>0&&<small>（{d.missing}条待补）</small>}</>:null;
+        const row=d.row!,state=current.current,exempt=field==='plate'&&((state.category==='monthly'&&state.ym<'2026-06')||state.keywords.some(word=>String(row.device??'').includes(word)))&&!row.plate;
+        return field==='net'?(detailNet(row)===null?'待补税率':money(detailNet(row))):exempt?<span className="muted">无需车牌</span>:<DetailInput id={field==='device'?'mechanical-device-'+row.id:undefined} aria-label={`${d.name} 第${d.index+1}行 ${label}`} inputMode={numericFields.includes(field)?'decimal':'text'} className={numericFields.includes(field)?'money':''} value={String(row[field]??row[aliases[field]??'']??'')} disabled={!state.writable} maxLength={4000} change={value=>{const latest=current.current,g=latest.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];latest.change(d.warehouse,rows.map(item=>item.id===row.id?editDetailRow(item,field,value,latest.category):item));}}/>;
+      }})),
+    {colId:'actions',headerName:'操作',pinned:'right',...fixedWidth(80,scale),cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d||d.kind==='empty'?null:<Button danger={d.kind==='detail'} size="small" disabled={!current.current.writable} onClick={()=>{const state=current.current,g=state.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];if(d.kind==='group'){const row={id:crypto.randomUUID(),device:'',unit:'台班',amount:'',tax:''};focus.current=row.id;state.change(d.warehouse,[...rows,row]);}else state.change(d.warehouse,rows.filter(row=>row.id!==d.row!.id));}}>{d.kind==='group'?'增行':'移除'}</Button>},
+  // Numeric bounds update after editing; handlers read the current draft rather than a retained closure.
+  ],[category,scale,signature]);
+  const count=display.filter(row=>row.kind==='detail').length;
+  return <><BusinessGrid table={'mechanical-details-'+category} className="mechanical-detail-table" label={category==='zero'?'零租明细':'包月明细'} rows={display} columns={columns} rowId={row=>row.id} scale={scale} scope={category+':'+ym} domLayout="normal" style={{height:`min(65dvh, ${Math.max(116,(display.length*36+48)*scale)}px)`}} grid={{onRowDataUpdated:e=>{if(!focus.current)return;const id=focus.current;focus.current='';e.api.ensureNodeVisible(node=>node.data?.row?.id===id,'middle');requestAnimationFrame(()=>document.getElementById('mechanical-device-'+id)?.focus());},getRowClass:p=>p.data?.kind==='group'?'mechanical-detail-group-row':'',overlayNoRowsTemplate:'尚未选择显示项目。用“显示项目”选入已有项目后增行。'}}/><p className="mechanical-feedback">当前显示 {count} 条，项目合计见合价、不含税价列</p></>;
 }
 
 export function MechanicalDialog({ title, close, busy, dirty = false, paused = false, className = '', children }: { className?: string; title: string; close: () => void; busy: boolean; dirty?: boolean; paused?: boolean; children: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode) }) {

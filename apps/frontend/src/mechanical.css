@@ -46,28 +46,17 @@
 .mechanical-preview-tools{margin:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .mechanical-preview-tools [role=group]{display:flex;flex-wrap:wrap;gap:calc(4px * var(--fscale));flex:1}
 .mechanical-sheet{overflow:auto;max-height:65dvh;scrollbar-color:var(--bd3) var(--sf2)}
-.mechanical-sheet table{width:max-content;min-width:100%;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));table-layout:fixed}
-.mechanical-sheet caption{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));text-align:left;font-weight:600}
-.mechanical-sheet thead{position:sticky;top:0;z-index:2;background:var(--sf2)}
-.mechanical-sheet th{position:static;font-size:calc(12px * var(--fscale));font-weight:500}
-.mechanical-sheet th,.mechanical-sheet td{min-width:0;max-width:none;padding:calc(9px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);vertical-align:middle;white-space:pre-wrap;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;line-height:1.55}
-.mechanical-sheet tbody tr:last-child{position:sticky;bottom:0;background:var(--sf2);font-weight:600}
-.mechanical-sheet .mechanical-frozen{position:sticky;z-index:1;background:var(--sf)}
-.mechanical-sheet thead .mechanical-frozen,.mechanical-sheet tbody tr:last-child .mechanical-frozen{background:var(--sf2)}
+.mechanical-sheet .ag-row.mechanical-report-total{font-weight:600;background:var(--sf2)}
+.mechanical-sheet .ag-row.mechanical-report-subtotal{font-weight:600}
 .business-modal .mechanical-dialog{width:min(calc(940px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .business-modal .mechanical-project-dialog{width:min(calc(600px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-plate-dialog{width:min(calc(520px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-discard-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-import-dialog{width:min(calc(1160px * var(--fscale)),calc(100vw - 24px))}
-.business-modal .mechanical-import-dialog:not(:has(table)){width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
 .mechanical-dialog>div:not([hidden]):not(.dialog-discard){display:flex;flex-direction:column;max-height:calc(84dvh - 40px * var(--fscale));min-height:0}
 .mechanical-dialog .dialog-close-heading{flex:none;margin-bottom:calc(12px * var(--fscale))}
 .mechanical-dialog .ant-btn.dialog-close-button{width:calc(28px * var(--fscale));height:calc(28px * var(--fscale));min-height:0;padding:calc(5px * var(--fscale))}
 .mechanical-dialog-body{min-height:0;overflow:auto;scrollbar-color:var(--bd3) var(--sf2);overscroll-behavior:contain}
-.mechanical-dialog table{width:100%;border-collapse:collapse;margin:calc(12px * var(--fscale)) 0;font-size:inherit}
-.mechanical-dialog td,.mechanical-dialog th{min-width:0;max-width:none;padding:calc(10px * var(--fscale)) calc(8px * var(--fscale));text-align:left;border-bottom:1px solid var(--bd2);white-space:normal;line-height:1.55;vertical-align:middle}
-.mechanical-dialog th{font-size:calc(12px * var(--fscale));font-weight:500;position:static}
-.mechanical-dialog thead{position:sticky;top:0;z-index:1;background:var(--sf2)}
 .mechanical-dialog .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mechanical-dialog textarea{width:100%;min-height:12em;margin:calc(12px * var(--fscale)) 0;border-radius:var(--radius-input);font:inherit}
 .mechanical-dialog footer{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:calc(8px * var(--fscale));margin-top:calc(16px * var(--fscale));padding-block:calc(12px * var(--fscale)) 0;border-top:1px solid var(--bd2);background:var(--sf)}
@@ -81,14 +70,9 @@
 .mechanical-dialog details{margin:calc(12px * var(--fscale)) 0;border:1px solid var(--bd2);border-radius:var(--radius-inner);padding:calc(12px * var(--fscale))}
 .mechanical-dialog summary{cursor:pointer;font-weight:500;line-height:1.6}
 .mechanical-import-table{overflow-x:auto;max-width:100%;scrollbar-color:var(--bd3) var(--sf2)}
-.mechanical-import-table table{min-width:calc(780px * var(--fscale))}
 .mechanical-import-source{overflow-wrap:anywhere;color:var(--tx2)}
 .mechanical-import-table .ant-select{min-width:calc(136px * var(--fscale));width:100%}
-.mechanical-dialog details .mechanical-import-table table{min-width:calc(1020px * var(--fscale))}
-.mechanical-dialog details .mechanical-import-table td{min-width:calc(80px * var(--fscale));overflow-wrap:anywhere}
 .mechanical-work-table{overflow:auto;padding:1rem}
-.mechanical-work-table table{width:100%;min-width:650px}
-.mechanical-work-table th,.mechanical-work-table td{padding:.65em;text-align:left;border-bottom:1px solid var(--bd2)}
 @media(max-width:740px){.mechanical-toolbar .mechanical-preview-entry{margin-left:0}.mechanical-toolbar .filters{max-width:100%}.mechanical-locate label{max-width:100%;flex-wrap:wrap}.business-modal .mechanical-dialog{padding:calc(16px * var(--fscale))}.mechanical-detail-totals{align-items:flex-start;flex-direction:column}}
 
 .mechanical-work-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:calc(8px * var(--fscale)); margin-block:calc(8px * var(--fscale)); }
@@ -96,9 +80,6 @@
 .mechanical-work-table { overflow:auto; max-width:100%; }
 .mechanical-check-table { min-width:calc(1340px * var(--fscale)); }
 .mechanical-work small,.mechanical-dialog small { display:block; color:var(--tx2); font-weight:400; white-space:normal; }
-.mechanical-work td > button,.mechanical-work th > button { display:block; margin-top:calc(4px * var(--fscale)); }
-.mechanical-check-table td:nth-child(4),.mechanical-check-table td:nth-child(7),.mechanical-check-table td:nth-child(8),.mechanical-check-table td:nth-child(9) { border-right:1px solid var(--bd); }
-.mechanical-work-table td,.mechanical-work-table th { vertical-align:top; }
 .mechanical-work-table button { white-space:nowrap; }
 .mechanical-i8-review { min-width:calc(1080px * var(--fscale)); }
 .mechanical-difference { color:var(--dg-d); }
@@ -108,28 +89,23 @@
 
 .mechanical-work{padding:.65rem 1rem}.mechanical-work-table .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.mechanical-work-tools button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri)}
 
-.mechanical-check-table,.mechanical-i8-review{table-layout:fixed}.mechanical-work-table td{min-width:0}.business-modal .mechanical-dialog:has(.mechanical-i8-review){width:min(1450px,94vw)}.mechanical-work-table th{position:static;white-space:normal}.mechanical-work-table thead{background:var(--sf2)}.mechanical-work-table textarea{min-height:6em}.mechanical-check-table th:nth-child(2),.mechanical-check-table th:nth-child(3){border-right:1px solid var(--bd)}.mechanical-work-table .mechanical-link{white-space:normal}.mechanical-work-table .money>.ant-btn.mechanical-link{width:max-content;max-width:none;min-height:calc(28px * var(--fscale));padding:calc(2px * var(--fscale)) calc(8px * var(--fscale));line-height:1.4;white-space:nowrap;text-decoration:none}
+.mechanical-check-table,.mechanical-i8-review{table-layout:fixed}.business-modal .mechanical-dialog:has(.mechanical-i8-review){width:min(1450px,94vw)}.mechanical-work-table textarea{min-height:6em}.mechanical-work-table .mechanical-link{white-space:normal}.mechanical-work-table .money>.ant-btn.mechanical-link{width:max-content;max-width:none;min-height:calc(28px * var(--fscale));padding:calc(2px * var(--fscale)) calc(8px * var(--fscale));line-height:1.4;white-space:nowrap;text-decoration:none}
 
 /* Keep the legacy work order while consuming the shared C theme. */
 .mechanical-month,.mechanical-summary-tools{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
 .mechanical-summary-tools{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .mechanical-summary-tools .mechanical-project-tools,.mechanical-tools-spacer{margin-left:auto}
 .mechanical-picker-list{padding:0;list-style:none}.mechanical-picker-list li{display:flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))}.mechanical-picker-list li>span{white-space:nowrap}
-.mechanical-continuous-preview{display:flex;flex-direction:column;gap:calc(20px * var(--fscale))}.mechanical-continuous-preview .mechanical-sheet{max-height:none}.mechanical-continuous-preview .mechanical-sheet tbody tr:last-child{position:static}
+.mechanical-continuous-preview{display:flex;flex-direction:column;gap:calc(20px * var(--fscale))}.mechanical-continuous-preview .mechanical-sheet{max-height:none}
 .mechanical-detail-table{overflow:auto;max-height:65dvh;max-width:100%;scrollbar-color:var(--bd3) var(--sf2)}
-.mechanical-detail-table table{width:max-content;min-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0}
-.mechanical-detail-table th,.mechanical-detail-table td{padding:calc(4px * var(--fscale));border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);vertical-align:middle;line-height:1.55;overflow-wrap:anywhere}
-.mechanical-detail-table thead{position:sticky;top:0;z-index:2;background:var(--sf2)}.mechanical-detail-table thead th{font-weight:500;font-size:calc(12px * var(--fscale))}
 .mechanical-detail-table .money{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}.mechanical-detail-table .ant-input{width:100%;min-width:0;height:calc(28px * var(--fscale));font:inherit;padding-inline:calc(4px * var(--fscale))}
-.mechanical-detail-group-row{background:var(--sf2)}.mechanical-detail-group-row th{text-align:left}.mechanical-detail-group-row span,.mechanical-detail-group-row small{font-weight:400;color:var(--tx2)}.mechanical-detail-group-row small{display:block}
+.mechanical-detail-group-row{background:var(--sf2)}.mechanical-detail-group-row span,.mechanical-detail-group-row small{font-weight:400;color:var(--tx2)}.mechanical-detail-group-row small{display:block}
 .mechanical-detail-table .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
 
 .mechanical-note-dialog label>.ant-select{display:block;width:100%;margin-block:calc(8px * var(--fscale))}.mechanical-note-dialog label+label{margin-top:calc(12px * var(--fscale))}.mechanical-note-dialog .ant-input{margin-top:calc(8px * var(--fscale))}
 
-.mechanical-detail-table .mechanical-detail-actions{position:sticky;right:0;z-index:1;background:var(--sf);border-left:1px solid var(--bd2);text-align:center}.mechanical-detail-table thead .mechanical-detail-actions{z-index:3;background:var(--sf2)}.mechanical-detail-table .mechanical-detail-group-row .mechanical-detail-actions{background:var(--sf2)}
-
-.mechanical-detail-table td.state{text-align:left;position:static;white-space:normal}
+.mechanical-detail-table .mechanical-detail-actions{position:sticky;right:0;z-index:1;background:var(--sf);border-left:1px solid var(--bd2);text-align:center}.mechanical-detail-table .mechanical-detail-group-row .mechanical-detail-actions{background:var(--sf2)}
 
 .mechanical-work-table .mechanical-check-table,.mechanical-work-table .mechanical-i8-review{table-layout:auto}
 
-.mechanical-work-table .mechanical-check-table{min-width:calc(1340px * var(--fscale))}.mechanical-check-table tbody th,.mechanical-i8-review tbody th{min-width:calc(140px * var(--fscale))}
+.mechanical-work-table .mechanical-check-table{min-width:calc(1340px * var(--fscale))}

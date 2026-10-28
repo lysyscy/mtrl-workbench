@@ -5,6 +5,7 @@ import { ApiError, record, requestJson } from './api';
 import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
+import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '');
@@ -71,29 +72,19 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
       {query.isError && !data && <div className="notice" role="alert"><span>{query.error instanceof Error ? query.error.message : '账号列表读取失败，请重试。'}</span><Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></div>}
       {query.isPending ? <p role="status">正在读取账号列表…</p> : data && <>
         <Feedback receipt={receipt} error={error} />
-        <div className="table-scroll users-table" role="region" aria-label="账号列表" tabIndex={0}><table>
-          <thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>i8 绑定</th><th>操作</th></tr></thead>
-          <tbody>{data.users.map(user => {
-            const self = current?.id === user.id;
-            const deleted = user.state === '已删除';
-            return <tr key={user.id} className={user.state === '在用' ? '' : 'users-inactive'}>
-              <td>{user.account}</td>
-              <td>{user.name}{self && <span className="muted">（当前登录）</span>}</td>
-              <td>{user.role === 'admin' ? <span className="status-tag status-info">管理员</span> : <span className="status-tag status-neutral">普通用户</span>}</td>
-              <td>{user.state === '在用' ? <span className="status-tag status-positive">在用</span> : user.state === '已停用' ? <span className="status-tag status-pending">已停用</span> : <span className="status-tag status-negative">已删除</span>}</td>
-              <td>{user.lastLogin || <span className="muted">从未登录</span>}</td>
-              <td>{user.i8User || <span className="muted">未绑定</span>}</td>
-              <td className="users-actions">{deleted
-                ? <Button htmlType="submit" disabled={!isAdmin} title={isAdmin ? '恢复软删的账号；恢复不改停用状态' : '只有管理员能恢复账号'} onClick={() => void run(() => requestJson('/api/m15/actions/restore', { method: 'POST', ...body({ id: user.id }) }), '已恢复')}>恢复</Button>
-                : <>
-                  <Button htmlType="submit" disabled={!writable || !(isAdmin || self)} title={self ? '改自己的密码和 i8 绑定（不用找管理员）' : isAdmin ? '' : '改别人的密码要管理员；自己的密码在自己那一行'} onClick={() => { setDialog({ kind: 'password', row: user }); setError(''); }}>改密</Button>
-                  <Button htmlType="submit" disabled={!isAdmin} title={isAdmin ? '' : '查看明文密码要管理员'} onClick={() => void viewPassword(user)}>看密码</Button>
-                  <Button htmlType="submit" disabled={!isAdmin || lockAdmin(user)} title={!isAdmin ? '只有管理员可启停账号' : lockAdmin(user) ? '不能停用最后一个管理员（请先转让）' : ''} onClick={() => void run(() => requestJson('/api/m15/actions/status', { method: 'POST', ...body({ id: user.id, status: user.state === '在用' ? '已停用' : '在用' }) }), '已切换状态')}>{user.state === '在用' ? '停用' : '启用'}</Button>
-                  {!self && <Button htmlType="submit" className="danger" disabled={!isAdmin || lockAdmin(user)} title={!isAdmin ? '只有管理员可删除账号' : lockAdmin(user) ? '不能删除最后一个管理员（防锁死）' : ''} onClick={() => { setDialog({ kind: 'delete', row: user }); setError(''); }}>删除</Button>}
-                </>}</td>
-            </tr>;
-          })}</tbody>
-        </table></div>
+        <ReadGrid table="users" className="users-table" label="账号列表" domLayout="autoHeight" rows={data.users} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
+          {field:'account',headerName:'登录账号'},
+          {field:'name',headerName:'姓名',cellRenderer:({data:user}:{data:UserRow})=><>{user.name}{current?.id===user.id&&<span className="muted">（当前登录）</span>}</>},
+          {field:'role',headerName:'角色',cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.role==='admin'?'status-info':'status-neutral')}>{user.role==='admin'?'管理员':'普通用户'}</span>},
+          {field:'state',headerName:'状态',cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.state==='在用'?'status-positive':user.state==='已停用'?'status-pending':'status-negative')}>{user.state}</span>},
+          {field:'lastLogin',headerName:'最近登录',valueFormatter:p=>p.value||'从未登录'},
+          {field:'i8User',headerName:'i8 绑定',valueFormatter:p=>p.value||'未绑定'},
+          {colId:'actions',headerName:'操作',minWidth:300,initialFlex:2,cellRenderer:({data:user}:{data:UserRow})=>{const self=current?.id===user.id;return <div className="users-actions">{user.state==='已删除'?<Button disabled={!isAdmin} title={isAdmin?'恢复软删的账号；恢复不改停用状态':'只有管理员能恢复账号'} onClick={()=>void run(()=>requestJson('/api/m15/actions/restore',{method:'POST',...body({id:user.id})}),'已恢复')}>恢复</Button>:<>
+            <Button disabled={!writable||!(isAdmin||self)} title={self?'改自己的密码和 i8 绑定（不用找管理员）':isAdmin?'':'改别人的密码要管理员；自己的密码在自己那一行'} onClick={()=>{setDialog({kind:'password',row:user});setError('');}}>改密</Button>
+            <Button disabled={!isAdmin} title={isAdmin?'':'查看明文密码要管理员'} onClick={()=>void viewPassword(user)}>看密码</Button>
+            <Button disabled={!isAdmin||lockAdmin(user)} title={!isAdmin?'只有管理员可启停账号':lockAdmin(user)?'不能停用最后一个管理员（请先转让）':''} onClick={()=>void run(()=>requestJson('/api/m15/actions/status',{method:'POST',...body({id:user.id,status:user.state==='在用'?'已停用':'在用'})}),'已切换状态')}>{user.state==='在用'?'停用':'启用'}</Button>
+            {!self&&<Button danger disabled={!isAdmin||lockAdmin(user)} title={!isAdmin?'只有管理员可删除账号':lockAdmin(user)?'不能删除最后一个管理员（防锁死）':''} onClick={()=>{setDialog({kind:'delete',row:user});setError('');}}>删除</Button>}</>}</div>;}},
+        ]}/>
         <p className="muted users-note">停用 = 暂不可登录，可再启用；删除为软删，账号名与已有留痕保留、可恢复。密码与 i8 绑定按账号各存一份。</p>
       </>}
     </div>

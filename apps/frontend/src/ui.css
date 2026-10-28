@@ -11,8 +11,21 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .business-time-picker .ant-picker{min-width:0;max-width:100%}
 .business-time-picker .ant-select{min-width:5em}
 .ag-custom-component-popup{font-family:var(--fs)}
-.grid-width-tools{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));padding:calc(4px * var(--fscale)) 0;flex:none}
-.grid-width-tools [role=status]{color:var(--tx2);font-size:calc(12px * var(--fscale))}
+.grid-width-header{display:flex;align-items:center;gap:calc(4px * var(--fscale));width:100%;min-width:0}
+.grid-width-header>span:first-child{min-width:0}
+.grid-width-tools{display:inline-flex;align-items:center;flex:none;margin-inline-start:auto}
+.grid-width-tools .ant-btn{width:calc(24px * var(--fscale));height:calc(24px * var(--fscale));min-height:0;padding:0;font-size:calc(18px * var(--fscale));line-height:1}
+.grid-width-tools .sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.business-grid-view{min-width:0;max-width:100%}
+.business-grid{width:100%;min-width:0}
+.business-grid .ag-cell{line-height:1.55;display:flex;align-items:center}
+.business-grid :is(.ag-cell-wrapper,.ag-cell-value){min-width:0;width:100%;overflow-wrap:anywhere}
+.business-grid .ag-cell.money{text-align:right;justify-content:flex-end;white-space:nowrap;font-variant-numeric:tabular-nums}
+.business-grid .ag-cell.money .ag-cell-value{text-align:right}
+.business-grid .ag-cell.money.wrap-note{white-space:normal}
+.business-grid .ag-input-field-input,.business-grid .ant-input{font:inherit}
+.business-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
+.business-grid .ag-cell .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale))}
 .ant-btn{font-variant-numeric:tabular-nums}
 .ant-btn.dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
 .ant-btn.dialog-close-button svg{width:1.1rem;height:1.1rem;fill:none;stroke:currentColor;stroke-width:1.8}
@@ -47,7 +60,6 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0}
 .workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}
 .workspace .page-view .contracts-grid .ant-btn{padding-block:0}
-.workspace .page-view :is(.projects-page .project-table,.i8-latest,.i8-records,.mechanical-work-table,.mechanical-sheet) :is(th,td){padding-block:calc(4px * var(--fscale))}
 
 /* Fill the page's remaining space instead of leaving a fixed 62dvh table above unused space. */
 .workspace .page-view :is(.process-page,.inventory-page,.notices-page){display:flex;flex-direction:column;height:100%;min-height:min-content}

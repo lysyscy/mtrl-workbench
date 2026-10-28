@@ -1,10 +1,12 @@
 import Button from 'antd/es/button';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ColDef } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
 import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
+import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 
 const NO_RECOMPUTE = '规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。';
@@ -119,18 +121,12 @@ function ExclusionRules({ enabled, writable, blocked }: { enabled: boolean; writ
     {query.isError && data && <ReadFailed message={`规则更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
     {query.isPending ? <p role="status">正在读取剔除规则…</p> : data && <>
       <Feedback receipt={receipt} error={error} />
-      <div className="table-scroll rules-table" role="region" aria-label="剔除规则列表" tabIndex={0}><table>
-        <thead><tr><th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th></tr></thead>
-        <tbody>{data.rules.map(rule => <tr key={rule.id}>
-          <td className="rules-kind">{rule.kindLabel}</td>
-          <td><div className="rules-values">{splitValues(rule.values).map(value => <span key={value}>{value}</span>)}</div></td>
-          <td className="rules-meaning">{rule.meaning || '—'}</td>
-          <td className="rules-actions">
-            <Button htmlType="submit" disabled={!writable || busy || deleteBusy} onClick={() => { setForm({ id: rule.id, kind: rule.kind, values: rule.values, meaning: rule.meaning }); setFormError(''); }}>编辑</Button>
-            <Button htmlType="submit" className="danger" disabled={!writable || busy || deleteBusy} onClick={() => setDeleting(rule)}>删除</Button>
-          </td>
-        </tr>)}</tbody>
-      </table></div>
+      <ReadGrid table="exclusion-rules" className="rules-table" label="剔除规则列表" domLayout="autoHeight" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
+        {field:'kindLabel',headerName:'规则类别'},
+        {field:'values',headerName:'命中值（多个用 ｜ 分隔）',cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
+        {field:'meaning',headerName:'剔除的业务含义',valueFormatter:p=>p.value||'—'},
+        {colId:'actions',headerName:'操作',minWidth:140,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={!writable||busy||deleteBusy} onClick={()=>{setForm({id:rule.id,kind:rule.kind,values:rule.values,meaning:rule.meaning});setFormError('');}}>编辑</Button><Button danger disabled={!writable||busy||deleteBusy} onClick={()=>setDeleting(rule)}>删除</Button></div>},
+      ]}/>
       <p className="rules-note muted">{NO_RECOMPUTE}</p>
       <p className="rules-warning">剔除规则中不得配置「收款单位 = 资产处集中采购」：集采不走剔除，而是参与分类。</p>
     </>}
@@ -191,19 +187,12 @@ function JcIgnore({ enabled, writable }: { enabled: boolean; writable: boolean }
     {query.isError && rows && <ReadFailed message={`名单更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
     {query.isPending ? <p role="status">正在读取集采项目剔除名单…</p> : rows && <>
       <Feedback receipt={receipt} error={error} />
-      {rows.length === 0 ? <p className="state">集采项目剔除名单为空；需要排除项目时，在下方加入项目全名。</p> : <div className="table-scroll rules-table" role="region" aria-label="集采项目剔除名单" tabIndex={0}><table>
-        <thead><tr><th>项目全名</th><th>加入理由</th><th>操作人</th><th>加入时间</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody>{rows.map(row => <tr key={row.id} className={row.active ? '' : 'rules-inactive'}>
-          <td>{row.nameFull}</td>
-          <td className="rules-meaning">{row.reason || '—'}</td>
-          <td className="rules-nowrap">{row.operator || '—'}</td>
-          <td className="rules-nowrap">{row.createdAt || '—'}</td>
-          <td className="rules-nowrap">{row.active ? <span className="status-tag status-neutral">在用</span> : '已停用'}</td>
-          <td className="rules-actions">{row.active
-            ? <Button htmlType="submit" className="danger" disabled={!writable || busy} onClick={() => void setActive(row, false)}>停用</Button>
-            : <Button htmlType="submit" disabled={!writable || busy} onClick={() => void setActive(row, true)}>恢复</Button>}</td>
-        </tr>)}</tbody>
-      </table></div>}
+      {rows.length === 0 ? <p className="state">集采项目剔除名单为空；需要排除项目时，在下方加入项目全名。</p> : <ReadGrid table="jc-ignore-rules" className="rules-table" label="集采项目剔除名单" domLayout="autoHeight" rows={rows} rowId={row=>String(row.id)} grid={{getRowClass:p=>p.data?.active?'':'rules-inactive'}} columns={[
+        {field:'nameFull',headerName:'项目全名'}, {field:'reason',headerName:'加入理由',valueFormatter:p=>p.value||'—'},
+        {field:'operator',headerName:'操作人',valueFormatter:p=>p.value||'—'}, {field:'createdAt',headerName:'加入时间',valueFormatter:p=>p.value||'—'},
+        {colId:'state',headerName:'状态',cellRenderer:({data:row}:{data:JcIgnoreRow})=>row.active?<span className="status-tag status-neutral">在用</span>:'已停用'},
+        {colId:'actions',headerName:'操作',cellRenderer:({data:row}:{data:JcIgnoreRow})=><Button danger={row.active} disabled={!writable||busy} onClick={()=>void setActive(row,!row.active)}>{row.active?'停用':'恢复'}</Button>},
+      ]}/>}
       <div className="rules-form">
         <label>加入一项（粘贴项目全名）<input aria-label="项目全名" value={name} placeholder="例：某某项目安装工程" disabled={!writable || busy} onChange={event => setName(event.target.value)} /></label>
         <label>理由（可选）<input aria-label="加入理由" value={reason} placeholder="例：老项目，款已付清" disabled={!writable || busy} onChange={event => setReason(event.target.value)} /></label>
@@ -214,6 +203,11 @@ function JcIgnore({ enabled, writable }: { enabled: boolean; writable: boolean }
   </div>;
 }
 
+type AliasEditing={text:(row:MechRuleRow)=>string;disabled:boolean;change:(warehouse:string,value:string)=>void;save:(row:MechRuleRow)=>void;errors:Record<string,string>};
+const AliasContext=createContext<AliasEditing>(null!);
+function AliasInput({data:row}:{data:MechRuleRow}){const edit=useContext(AliasContext);return <input className="rules-alias-input" aria-label={row.display+'的报表项目名'} value={edit.text(row)} disabled={edit.disabled} onChange={e=>edit.change(row.warehouse,e.target.value)}/>;}
+function AliasActions({data:row}:{data:MechRuleRow}){const edit=useContext(AliasContext);return <><Button disabled={edit.disabled} onClick={()=>edit.save(row)}>保存</Button>{edit.errors[row.warehouse]&&<p className="notice" role="alert">{edit.errors[row.warehouse]}</p>}</>;}
+const aliasColumns:ColDef<MechRuleRow>[]=[{field:'display',headerName:'项目'},{colId:'aliases',headerName:'报表项目名（多个用 ｜ 分隔）',initialFlex:2,minWidth:240,cellRenderer:AliasInput},{colId:'actions',headerName:'操作',cellRenderer:AliasActions}];
 function MechMatch({ enabled, writable }: { enabled: boolean; writable: boolean }) {
   const query = useQuery({ queryKey: ['rules', 'mech-match'], enabled, queryFn: async ({ signal }) => readMechRules(await requestJson('/api/m14/mech-match', { signal })) });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -240,17 +234,7 @@ function MechMatch({ enabled, writable }: { enabled: boolean; writable: boolean 
     {query.isError && rows && <ReadFailed message={`匹配规则更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
     {query.isPending ? <p role="status">正在读取机械报表项目匹配…</p> : rows && <>
       <Feedback receipt={receipt} error="" />
-      {rows.length === 0 ? <p className="state">还没有机械报表项目匹配规则。</p> : <div className="table-scroll rules-table" role="region" aria-label="机械报表项目匹配" tabIndex={0}><table>
-        <thead><tr><th>项目</th><th>报表项目名（多个用 ｜ 分隔）</th><th>操作</th></tr></thead>
-        <tbody>{rows.map(row => <tr key={row.warehouse}>
-          <td>{row.display}</td>
-          <td><input className="rules-alias-input" aria-label={`${row.display}的报表项目名`} value={text(row)} disabled={!writable || busyRow !== ''} onChange={event => setDrafts(old => ({ ...old, [row.warehouse]: event.target.value }))} /></td>
-          <td className="rules-actions">
-            <Button htmlType="submit" disabled={!writable || busyRow !== ''} onClick={() => void save(row)}>保存</Button>
-            {errors[row.warehouse] && <p className="notice" role="alert">{errors[row.warehouse]}</p>}
-          </td>
-        </tr>)}</tbody>
-      </table></div>}
+      {rows.length === 0 ? <p className="state">还没有机械报表项目匹配规则。</p> : <AliasContext.Provider value={{text,disabled:!writable||busyRow!=='',change:(warehouse,value)=>setDrafts(old=>({...old,[warehouse]:value})),save:row=>void save(row),errors}}><ReadGrid table="mechanical-match-rules" className="rules-table" label="机械报表项目匹配" domLayout="autoHeight" rows={rows} rowId={row=>row.warehouse} columns={aliasColumns}/></AliasContext.Provider>}
       <p className="rules-note muted">机械报表按这里的项目名对应到档案项目；两个项目用同一个名字会让报表混写，保存时后端会拒绝。</p>
     </>}
   </div>;

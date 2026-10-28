@@ -1,6 +1,7 @@
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
+import { numberColumnWidth, fullTextWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ApiError, record, requestFile, requestJson } from './api';
@@ -44,7 +45,11 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
   }
   return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="notice-print-title" closing={closing}>
     <p>本批 {rows.length} 条通知书（含搜索隐藏行）。</p>
-    <div className="notice-print-list"><BoundedTable><thead><tr><th>单据编码</th><th>付款项目</th><th>审批金额（元）</th></tr></thead><tbody>{rows.map(row=><tr key={row.notice_id}><td>{row.bill_no||'—'}</td><td>{row.project_display}</td><td>{money(row.amount_approved)}</td></tr>)}</tbody></BoundedTable></div>
+    <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
+      {field:'bill_no',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no||'—')),wrapText:false,valueFormatter:p=>p.value||'—'},
+      {field:'project_display',headerName:'付款项目'},
+      {field:'amount_approved',headerName:'审批金额（元）',...numberColumnWidth(rows.map(row=>money(row.amount_approved))),cellClass:'money',valueFormatter:p=>money(p.value)},
+    ]}/>
     {busy&&<p role="status">正在{title}，请勿重复操作…</p>}
     {result&&<section aria-label="执行回执"><p role="status">{mode==='pdf'?'已生成':'已投递'} {result.success} / 共 {result.total} 条，失败 {result.failed} 条。</p>
       {result.unprinted_bill_nos.length>0&&<p className="notice" role="alert">未产出的单号：{result.unprinted_bill_nos.join('、')}</p>}

@@ -1,6 +1,6 @@
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
 import { useRef, useState } from 'react';
 import { ApiError, record, requestJson } from './api';
 import { body, money } from './notices-api';
@@ -27,5 +27,9 @@ export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[
     }catch(failure){setError(`${saved?'操作已完成，读取尚待核对，勿重复确认。':''}${failure instanceof Error?failure.message:'操作失败，请重试。'}`);}
     finally{setBusy(false);lock.current=false;}
   }
-  return <BusinessModal open={!blocked} className="project-dialog notice-dialog notice-contract-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。读取可能重新登录 i8，并使该账号其他会话下线。</p>{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><div className="table-scroll"><BoundedTable><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>{rows.map(r=><tr key={r.notice_id}><td>{r.code}</td><td>{r.contract_no||r.reason}{r.amount&&<div>{money(r.amount)} 元</div>}{r.contract_no&&<p>{r.reason}</p>}</td><td>{r.payable_codes?.join('、')}</td></tr>)}</tbody></BoundedTable></div></>}{error&&<p className="notice" role="alert">{error}</p>}{busy&&<p role="status">正在核对…</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>{done?'关闭':'取消'}</Button>{!done&&<Button htmlType="submit" className="primary" disabled={blocked||busy||!ids.length||rows!==null&&!ready} onClick={()=>void run(rows!==null)}>{rows===null?'确认读取并预览':`关联这 ${ready} 条`}</Button>}</div></DialogContents></BusinessModal>;
+  return <BusinessModal open={!blocked} className="project-dialog notice-dialog notice-contract-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。读取可能重新登录 i8，并使该账号其他会话下线。</p>{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><ReadGrid table="notice-auto-link" label="关联预览与结果" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
+      {field:'code',headerName:'通知书'},
+      {colId:'result',headerName:'合同／处理结果',cellRenderer:({data:r}:{data:AutoRow})=><>{r.contract_no||r.reason}{r.amount&&<div>{money(r.amount)} 元</div>}{r.contract_no&&<p>{r.reason}</p>}</>},
+      {colId:'basis',headerName:'采购应付依据',valueGetter:p=>p.data?.payable_codes?.join('、')??''},
+    ]}/></>}{error&&<p className="notice" role="alert">{error}</p>}{busy&&<p role="status">正在核对…</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>{done?'关闭':'取消'}</Button>{!done&&<Button htmlType="submit" className="primary" disabled={blocked||busy||!ids.length||rows!==null&&!ready} onClick={()=>void run(rows!==null)}>{rows===null?'确认读取并预览':`关联这 ${ready} 条`}</Button>}</div></DialogContents></BusinessModal>;
 }

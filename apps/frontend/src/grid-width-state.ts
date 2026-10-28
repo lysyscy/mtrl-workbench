@@ -2,6 +2,8 @@ import type { ColumnResizedEvent, GridApi } from 'ag-grid-community';
 
 type Widths = Record<string, number>;
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem' | 'removeItem'>;
+type Channel = { widths: Widths; error: string; listeners: Set<(reset: boolean) => void> };
+const channels = new Map<string, Channel>();
 export function gridWidthKey(owner: string, table: string) {
   return `mtrl:grid-widths:v1:${JSON.stringify([owner, table])}`;
 }
@@ -19,21 +21,28 @@ export function bindGridWidths(api: GridApi, options: {
   changed: (custom: boolean, error: string) => void;
 }) {
   const key = gridWidthKey(options.owner, options.table);
-  let widths: Widths = {}, error = '';
-  try { widths = readGridWidths(options.storage(), key); }
-  catch { error = '浏览器未能读取列宽设置，当前使用自动列宽。'; }
-  const notify = () => options.changed(Object.keys(widths).length > 0, error);
+  let channel = channels.get(key);
+  if (!channel) {
+    channel = {widths: {}, error: '', listeners: new Set()};
+    try { channel.widths = readGridWidths(options.storage(), key); }
+    catch { channel.error = '浏览器未能读取列宽设置，当前使用自动列宽。'; }
+    channels.set(key, channel);
+  }
+  const shared = channel;
+  const notify = () => options.changed(Object.keys(shared.widths).length > 0, shared.error);
+  const publish = (reset = false, origin?: (reset:boolean)=>void) => queueMicrotask(()=>[...shared.listeners].forEach(listener => {
+    if (shared.listeners.has(listener)) { if(listener===origin)notify();else listener(reset); }
+  }));
   const save = () => {
     try {
-      if (Object.keys(widths).length) options.storage().setItem(key, JSON.stringify({version: 1, widths}));
+      if (Object.keys(shared.widths).length) options.storage().setItem(key, JSON.stringify({version: 1, widths: shared.widths}));
       else options.storage().removeItem(key);
-      error = '';
-    } catch { error = Object.keys(widths).length ? '列宽仅本次有效，浏览器未能保存。' : '已恢复自动列宽，但浏览器未能清除旧设置，刷新后可能恢复旧列宽。'; }
-    notify();
+      shared.error = '';
+    } catch { shared.error = Object.keys(shared.widths).length ? '列宽仅本次有效，浏览器未能保存。' : '已恢复自动列宽，但浏览器未能清除旧设置，刷新后可能恢复旧列宽。'; }
   };
   const apply = () => {
     if (api.isDestroyed()) return;
-    const state = Object.entries(widths).flatMap(([colId, width]) => {
+    const state = Object.entries(shared.widths).flatMap(([colId, width]) => {
       const column = api.getColumn(colId), definition = column?.getColDef();
       if (!column || !definition || definition.minWidth === definition.maxWidth && definition.minWidth !== undefined) return [];
       return [{colId, width: Math.max(definition.minWidth ?? 20, Math.min(definition.maxWidth ?? Infinity, width * options.scale())), flex: null}];
@@ -45,29 +54,33 @@ export function bindGridWidths(api: GridApi, options: {
     for (const column of event.columns ?? (event.column ? [event.column] : [])) {
       const definition = column.getColDef();
       if (definition.minWidth === definition.maxWidth && definition.minWidth !== undefined) continue;
-      widths[column.getColId()] = column.getActualWidth() / options.scale();
+      shared.widths[column.getColId()] = column.getActualWidth() / options.scale();
     }
     save();
+    publish(false,receive);
   };
   const fit = () => {
     if (api.isDestroyed()) return;
-    const columns = api.getAllDisplayedColumns().filter(column => !Object.hasOwn(widths, column.getColId()) && !column.getFlex() && !column.getColDef().suppressAutoSize);
+    const columns = api.getAllDisplayedColumns().filter(column => !Object.hasOwn(shared.widths, column.getColId()) && !column.getFlex() && !column.getColDef().suppressAutoSize);
     if (columns.length) api.autoSizeColumns(columns, true);
   };
-  const reset = () => {
+  const resetNative = () => {
     if (api.isDestroyed()) return;
     // Native reset releases user width ownership. Restore every other column attribute.
     const state = api.getColumnState().map(({width: _width, flex: _flex, ...rest}) => rest);
-    widths = {};
     api.resetColumnState();
     api.applyColumnState({state, applyOrder: true});
-    save();
     fit();
   };
+  const reset = () => { shared.widths = {}; save(); publish(true); };
+  const receive = (reset: boolean) => { if (reset) resetNative(); else apply(); notify(); };
+  shared.listeners.add(receive);
   api.addEventListener('columnResized', resized);
   api.addEventListener('newColumnsLoaded', apply);
   apply(); notify();
   return {apply, fit, reset, dispose: () => {
+    shared.listeners.delete(receive);
+    if (!shared.listeners.size) channels.delete(key);
     if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', apply); }
   }};
 }

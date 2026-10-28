@@ -1,11 +1,11 @@
-import Select from 'antd/es/select';
 import Input from 'antd/es/input';
-import Tag from 'antd/es/tag';
 import type { Project } from './api';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
+import { PaymentGrid } from './notice-payment-grid';
+import { numberColumnWidth,fullTextWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
@@ -144,7 +144,12 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       {message && <p role="status" className="notice-feedback">{message}</p>}
       {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
       {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
-      {phase === 'saved' ? flows.length > 0 && <div className="notice-pay-table"><BoundedTable><thead><tr>{['单据编码','付款流水号','付款日期','方式','实付金额','备注'].map(t => <th key={t}>{t}</th>)}</tr></thead><tbody>{flows.map(flow => <tr key={flow.flow_no}><td>{rows.find(row => row.notice_id===flow.notice_id)?.bill_no}</td><td>{flow.flow_no}</td><td>{flow.pay_date}</td><td>{flow.pay_method}</td><td className="money">{money(flow.amount)}</td><td>{flow.remark || '—'}</td></tr>)}</tbody></BoundedTable></div> : <div className="notice-pay-table"><BoundedTable><thead><tr>{['单据编码','付款项目','审批状态','审批金额','已付金额','本次应付','实际付款方式','本次付款金额','不可付原因','操作'].map(t => <th key={t}>{t}</th>)}</tr></thead><tbody>{targets.map(row => <tr key={row.notice_id} className={shownContext?.rows.some(item => item.notice_id === row.notice_id && item.term_warning) ? 'payment-term-warning' : undefined}><td>{row.bill_no}</td><td title={row.project_name}>{row.project_display}</td><td><Tag className={`status-tag ${row.approve_status==='已批'?'status-positive':'status-pending'}`}>{row.approve_status||'未批'}</Tag></td><td className="money">{money(row.amount_approved)}</td><td className="money">{money(row.amount_paid)}</td><td className="money">{money(paymentValue(row,overrides))}</td><td><Select aria-label={`${row.bill_no}实际付款方式`} disabled={!editable||blocked||Boolean(reason(row))||!context.data&&context.isPending} value={draft(row).pay_method} onChange={value => update(row,'pay_method',value)} options={(query.data?.methods??[]).map(value=>({value,label:value}))}/></td><td><input aria-label={`${row.bill_no}本次付款金额`} inputMode="decimal" disabled={!editable||blocked||Boolean(reason(row))||!context.data&&context.isPending} value={draft(row).amount} onChange={e => update(row,'amount',e.target.value)} /></td><td>{reason(row) ? <span className="notice-tag rule">{reason(row)}</span> : '—'}</td><td><Button htmlType="submit" disabled={!editable||blocked} onClick={() => removeRow(row.notice_id)}>移出</Button></td></tr>)}</tbody><tfoot><tr><th colSpan={5}>合计（元）</th><td className="money">{money(decimal(targets.reduce((sum,row) => sum+cents(paymentValue(row,overrides)),0n)))}</td><td></td><td className="money">{targets.every(row => amount(draft(row).amount)!==null) ? money(decimal(targets.reduce((sum,row) => sum+cents(amount(draft(row).amount)!),0n))) : '待核对'}</td><td></td><td></td></tr></tfoot></BoundedTable></div>}
+      {phase === 'saved' ? flows.length > 0 && <ReadGrid table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" domLayout="autoHeight" rows={flows} rowId={flow=>flow.flow_no} columns={[
+        {colId:'bill',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no)),wrapText:false,valueGetter:p=>rows.find(row=>row.notice_id===p.data!.notice_id)?.bill_no??''},
+        {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
+        {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
+        {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
+      ]}/> : <PaymentGrid rows={targets} due={row=>paymentValue(row,overrides)} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??[]} normalize={amount} warningIds={shownContext?.rows.filter(item=>item.term_warning).map(item=>item.notice_id)??[]} />}
       {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
       {editable && context.isFetching && <p role="status">正在核对合同账期…</p>}
       {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}

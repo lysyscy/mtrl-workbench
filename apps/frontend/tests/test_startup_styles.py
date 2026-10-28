@@ -114,9 +114,16 @@ def test_debt_tables_publish_without_waiting_for_the_other_side(server, browser_
     expect(project).to_be_focused()
     page.keyboard.press('Escape')
     before = mechanical.bounding_box()
+    page.evaluate("""()=>{window.__sideFrames=[];function sample(){const e=document.querySelector('[data-ledger-side=mechanical] .ledger-grid');
+      if(e&&getComputedStyle(e).visibility==='visible')window.__sideFrames.push(e.getBoundingClientRect().height);
+      if(window.__sideFrames.length<4)requestAnimationFrame(sample);}sample();}""")
     page.evaluate('window.__releaseSideFont()')
     expect(mechanical).to_be_visible()
-    assert mechanical.bounding_box() == before, 'Revealing the side changed its allocated table box'
+    after=mechanical.bounding_box()
+    assert all(after[key]==before[key] for key in ('x','y','width')), 'Revealing the side changed its allocated position or width'
+    page.wait_for_function('window.__sideFrames.length>=4')
+    frames=page.evaluate('window.__sideFrames')
+    assert max(frames)-min(frames)<1, '首个可见帧后表高仍在变化'
     field = mechanical.locator('[col-id=remark] input').first
     field.click()
     expect(field).to_be_focused()

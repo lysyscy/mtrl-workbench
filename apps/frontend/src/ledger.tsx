@@ -1,6 +1,6 @@
 import Button from 'antd/es/button';
 import { readHistory, useHistoryState } from './history';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -98,7 +98,7 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
   ], [side.category, scale, upto]);
   const measurement = useMemo(() => ({signature:(row:LedgerRow,id:string,pinned:boolean)=>JSON.stringify([pinned,row[id as keyof LedgerRow],row.row_kind,row.editable,writable])}), [writable]);
   const presentation = useGridPresentation({table: `ledger-${side.category}`, root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
-  useEffect(() => { if (presentation.state === 'ready') sizeTable(); }, [presentation.state, visible, total, scale]);
+  useLayoutEffect(() => { if (presentation.state === 'ready') sizeTable(); }, [presentation.state, visible, total, scale]);
   useEffect(() => {
     if (!focusRecord || !api.current) return;
     const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);

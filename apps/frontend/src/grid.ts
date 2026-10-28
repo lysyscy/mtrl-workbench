@@ -3,14 +3,14 @@ import {
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule,
-  ModuleRegistry, provideGlobalGridOptions, themeQuartz,
+  ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule,
 } from 'ag-grid-community';
 
 // Register adopted public modules; their dependencies supply the grid defaults.
 ModuleRegistry.registerModules([
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
-  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule,
+  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule,
 ]);
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
 // Native drag selection/copy is shared by every grid; retain virtualisation.
@@ -35,7 +35,7 @@ export function contentWidth(min: number, max: number, scale = 1, stretch = 0) {
 }
 
 // Size complete values and totals, rather than imposing the same wide floor on every number.
-export function numberColumnWidth(values: readonly unknown[], scale = 1, editable = false, stretch = 0) {
+export function numberColumnWidth(values: readonly unknown[], scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1, editable = false, stretch = 0) {
   const css = getComputedStyle(document.documentElement), fontSize = Number(css.getPropertyValue('--font-ui-size')) || 13.5;
   const context = document.createElement('canvas').getContext('2d')!;
   context.font = `600 ${fontSize * scale}px ${css.fontFamily}`;
@@ -46,7 +46,7 @@ export function numberColumnWidth(values: readonly unknown[], scale = 1, editabl
 }
 
 // Auto-size sees rendered rows; full identifiers also protect offscreen values.
-export function fullTextWidth(values:readonly string[],scale=1) {
+export function fullTextWidth(values:readonly string[],scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1) {
   const css=getComputedStyle(document.documentElement),context=document.createElement('canvas').getContext('2d')!;
   context.font=`500 ${(Number(css.getPropertyValue('--font-ui-size'))||13.5)*scale}px ${css.fontFamily}`;
   const min=Math.ceil(Math.max(0,...[...new Set(values)].map(value=>context.measureText(value).width))/scale+20);

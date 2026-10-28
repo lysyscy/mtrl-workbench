@@ -49,9 +49,7 @@
 .contract-linked>div{display:flex;flex-direction:column;gap:8px}
 .contract-field{margin:16px 0}
 .contract-settings-table{max-height:48dvh;overflow:auto;border:1px solid var(--bd);border-radius:var(--radius-input)}
-.contract-settings-table thead{position:sticky;top:0;background:var(--sf2);z-index:1}
 .contract-settings-table .ant-select{width:100%;min-width:calc(110px * var(--fscale))}
-.contract-settings-table th{font-size:calc(12px * var(--fscale));font-weight:500}
 .contract-ignore-add{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:16px;margin-top:24px}
 .contract-fetch-summary{display:flex;gap:16px;flex-wrap:wrap;padding:16px 0}
 .contract-unmatched{max-height:32dvh;overflow:auto}

@@ -1,12 +1,12 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Checkbox from 'antd/es/checkbox';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, record, requestFile, requestJson } from './api';
 import type { Identity } from './api';
-import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, fullTextWidth, gridTheme } from './grid';
 import { detailSum, mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { MechanicalImport } from './mechanical-import';
@@ -18,6 +18,9 @@ import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { ReadGrid } from './business-grid';
+import { reportGrid } from './mechanical-report-grid';
+import type { ReportDisplayRow } from './mechanical-report-grid';
 const summaryRowId = (row: SummaryRow) => row.id;
 
 interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
@@ -27,6 +30,12 @@ function InternalCell({ id, column, value, label, editing, epoch }: { id: string
   return <Input aria-label={label} inputMode="decimal" className="mechanical-internal-input money" value={text} onChange={event=>{setText(event.target.value);editing.current.change(id,column,event.target.value);}} />;
 }
 interface SummaryRow { id: string; [column: string]: string }
+type Confirmation = { name: string; detail: Detail; effective: Effective; columns: string[] };
+const ConfirmationControls=createContext<{disabled:boolean;picked:(index:number,column:string)=>boolean;toggle:(index:number,column:string,checked:boolean)=>void}>(null!);
+function ConfirmationChoice({data:row}:{data:{item:Confirmation;index:number;column:string;offset:number}}) {
+  const controls=useContext(ConfirmationControls);
+  return <Checkbox aria-label={'采用'+row.item.name+(row.offset?'不含税':'含税')+'明细金额'} disabled={!row.item.detail.rows.length||Boolean(row.item.detail.blocked_columns[row.column]?.length)||controls.disabled} checked={controls.picked(row.index,row.column)} onChange={e=>controls.toggle(row.index,row.column,e.target.checked)}/>;
+}
 const groupLabels = ['零租', '包月', '周材', '内租（租赁公司）', '内租（工程公司）'];
 function Summary({ scale, report, projectIds, detail, internal, data, warehouses, active }: { active: boolean; scale: number; data:Workbench; warehouses:string[]; internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
@@ -95,24 +104,31 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
         event.api.addEventListener('gridPreDestroyed', () => { observer.disconnect(); visibility.disconnect(); });
       }}} />;
 }
-function Sheet({ sheet, index, target }: { sheet: ReportSheet; index: number; target: string }) {
-  const root = useRef<HTMLDivElement>(null);
-  const headers = index === 0 ? 5 : index === 3 ? 1 : 4;
-  useEffect(() => {
-    if (!target) return;
-    const row = root.current?.querySelector<HTMLTableRowElement>(`tr[data-project="${CSS.escape(target)}"]`);
-    row?.scrollIntoView({ block: 'center' });
-  }, [sheet, target]);
-  const firstWidth = index === 3 ? 210 : 60;
-  const secondWidth = index === 3 ? 120 : 210;
-  const columns = Math.max(...sheet.rows.flatMap(row => row.map(cell => cell.column + cell.colspan - 1)));
-  const projectRows = new Map(sheet.project_rows.map(group => [group.row, group.warehouse]));
-  function renderRow(cells: ReportSheet['rows'][number], row: number, head: boolean) {
-    return <tr key={row} data-project={projectRows.get(row + (head ? 1 : headers + 1))}>{cells.map(cell => { const Tag = head ? 'th' : 'td'; return <Tag key={cell.column} className={cell.column + cell.colspan - 1 <= 2 ? 'mechanical-frozen' : ''} style={cell.column + cell.colspan - 1 <= 2 ? { left: cell.column === 1 ? 0 : `calc(${firstWidth}px * var(--fscale))` } : undefined} rowSpan={cell.rowspan} colSpan={cell.colspan}>{cell.value}</Tag>; })}</tr>;
-  }
-  return <div ref={root} className="mechanical-sheet" tabIndex={0} role="region" aria-label={sheet.name}><table><caption>{sheet.name}</caption><colgroup>{Array.from({ length: columns }, (_, column) => <col key={column} style={{ width: `calc(${column === 0 ? firstWidth : column === 1 ? secondWidth : 120}px * var(--fscale))` }} />)}</colgroup><thead>{sheet.rows.slice(0, headers).map((cells, row) => renderRow(cells, row, true))}</thead><tbody>{sheet.rows.slice(headers).map((cells, row) => renderRow(cells, row, false))}</tbody></table></div>;
+function MechanicalSheetGrid({sheet,index,target}:{sheet:ReportSheet;index:number;target:string}) {
+  const root=useRef<HTMLDivElement>(null),api=useRef<GridApi<ReportDisplayRow>|null>(null);
+  const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
+  const model=useMemo(()=>reportGrid(sheet,index),[sheet,index]);
+  const columns=useMemo<(ColDef<ReportDisplayRow>|ColGroupDef<ReportDisplayRow>)[]>(()=>{
+    const result:(ColDef<ReportDisplayRow>|ColGroupDef<ReportDisplayRow>)[]=[];
+    for(const {id,path,column,numeric:isNumeric} of model.columns){
+      const title=path.at(-1)||`列${column}`;
+      const numeric=mechanicalNumberWidth(model.rows.map(row=>row.values[id]??''),scale);
+      const size=title==='序号'?fixedWidth(60,scale):title==='年份'?fixedWidth(76,scale):title==='月份'?fixedWidth(60,scale):column<=2?contentWidth(column===1?160:180,320,scale,1):!isNumeric?contentWidth(title==='单位'?68:120,320,scale,title.includes('备注')?1:0):{...numeric,minWidth:Math.max(numeric.minWidth,Math.min(fullTextWidth([title],scale).minWidth,120*scale))};
+      const definition:ColDef<ReportDisplayRow>={colId:id,headerName:path.at(-1)||`列${column}`,pinned:column<=2?'left':null,
+        ...size,
+        valueGetter:p=>p.data?.values[id]??'',cellClass:isNumeric?'money':'',wrapText:!isNumeric};
+      if(path.length>1){const name=path.slice(0,-1).join('／'),last=result.at(-1);if(last&&'children'in last&&last.headerName===name)last.children.push(definition);else result.push({headerName:name,children:[definition]});}
+      else result.push(definition);
+    }
+    return result;
+  },[model,scale]);
+  const locate=()=>{if(!target)return;const row=model.rows.find(row=>row.project===target);if(!row)return;api.current?.ensureNodeVisible(node=>node.data?.id===row.id,'middle');requestAnimationFrame(()=>root.current?.querySelector(`[row-id="${CSS.escape(row.id)}"]`)?.scrollIntoView({block:'center'}));};
+  useEffect(locate,[model,target]);
+  return <div ref={root} className="mechanical-sheet"><h3>{sheet.name}</h3><ReadGrid table={`mechanical-report-${index}`} label={sheet.name} rows={model.rows} columns={columns} rowId={row=>row.id} domLayout="autoHeight" scale={scale} grid={{onGridReady:e=>{api.current=e.api;},onFirstDataRendered:locate,getRowClass:p=>p.data?.total?'mechanical-report-total':p.data?.values.category==='合计'?'mechanical-report-subtotal':''}}/></div>;
 }
+function Sheet({sheet,index,target}:{sheet:ReportSheet;index:number;target:string}) { return <MechanicalSheetGrid sheet={sheet} index={index} target={target}/>; }
 export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Identity | null; blocked: boolean; exportGuard: string; active: boolean }) {
+  const scale=Number(me?.ui_scale_css)||1;
   const client = useQueryClient();
   const [month, setMonth] = useState(()=>{const [year,month]=currentMonth().split('-');return new Date(Date.UTC(Number(year),Number(month)-2,15)).toISOString().slice(0,7);}); const [ids, setIds] = useState<number[] | null>(null);
   const [sheet, setSheet] = useState<number | null>(null); const [exportIds,setExportIds]=useState<number[]|null>(null); const [pickerIds,setPickerIds]=useState<number[]>([]); const [pickerOrder,setPickerOrder]=useState<number[]>([]); const [target, setTarget] = useState('');
@@ -149,7 +165,6 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const drafts = useRef(new Map<string,Draft>()); const grids = useRef(new Map<string,GridApi<import('./mechanical-api').DetailRow>>());
   const [,render] = useState(0); const [writing,setWriting] = useState(false); const writeLock = useRef(false);
   const [needsRead,setNeedsRead] = useState(false);
-  type Confirmation = { name: string; detail: Detail; effective: Effective; columns: string[] };
   const [confirmation,setConfirmation] = useState<Confirmation[] | null>(null);
   const [dialog,setDialog] = useState<'discard' | 'plate' | 'projects' | 'export' | null>(null); const [keywords,setKeywords] = useState('');
   const internalDrafts=useRef(new Map<string,{warehouse:string;ym:string;values:Record<string,string>}>());
@@ -253,12 +268,21 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
       <footer><Button disabled={writing} onClick={()=>setDialog(null)}>取消</Button><Button type="primary" disabled={dialog==='projects'?!writable:blocked||writing||!pickerIds.length} onClick={()=>{const next=pickerOrder.filter(id=>pickerIds.includes(id));if(dialog==='export'){setExportIds(next);setTemporary('');setSheet(0);setTarget('');setDialog(null);}else void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,shown_projects:next.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[])})});setIds(next);setTemporary('');setDialog(null);if(await refresh())setMessage('显示项目及顺序已保存。');});}}>{dialog==='projects'?'应用项目选择':'生成报送预览'}</Button></footer>
     </MechanicalDialog>}
 
-    {internalConfirmation&&<MechanicalDialog title="确认内租填数" close={()=>setInternalConfirmation(null)} busy={writing}><table><thead><tr><th>项目／月份</th><th>类别</th><th>原有效值</th><th>拟采用值</th></tr></thead><tbody>{internalConfirmation.flatMap(d=>Object.entries(d.values).map(([column,value])=><tr key={d.warehouse+d.ym+column}><td>{label(d.warehouse)}／{d.ym}</td><td>{column==='mech_0'?'工程公司内租':'租赁公司内租'}</td><td className="money">{money(d.effective.values[column])}</td><td className="money">{money(value)}{Number(value)<Number(d.effective.values[column])?'，金额减少，请核实':''}</td></tr>))}</tbody></table><footer><Button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</Button><Button type="primary" disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())setMessage('内租有效月值已确认。');})}>确认更新内租</Button></footer></MechanicalDialog>}
+    {internalConfirmation&&<MechanicalDialog title="确认内租填数" close={()=>setInternalConfirmation(null)} busy={writing}><ReadGrid table="mechanical-internal-confirm" label="内租确认清单" domLayout="autoHeight" rows={internalConfirmation.flatMap(d=>Object.entries(d.values).map(([column,value])=>({id:JSON.stringify([d.warehouse,d.ym,column]),d,column,value})))} rowId={row=>row.id} columns={[
+        {colId:'project',headerName:'项目／月份',valueGetter:p=>label(p.data!.d.warehouse)+'／'+p.data!.d.ym},
+        {colId:'category',headerName:'类别',valueGetter:p=>p.data!.column==='mech_0'?'工程公司内租':'租赁公司内租'},
+        {colId:'old',headerName:'原有效值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.keys(d.values).map(column=>money(d.effective.values[column]))),scale),cellClass:'money',valueGetter:p=>money(p.data!.d.effective.values[p.data!.column])},
+        {colId:'next',headerName:'拟采用值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.values(d.values).map(money)),scale),cellClass:'money wrap-note',valueGetter:p=>money(p.data!.value)+(Number(p.data!.value)<Number(p.data!.d.effective.values[p.data!.column])?'，金额减少，请核实':'')},
+      ]}/><footer><Button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</Button><Button type="primary" disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())setMessage('内租有效月值已确认。');})}>确认更新内租</Button></footer></MechanicalDialog>}
     {confirmation && <MechanicalDialog title="确认有效月值" close={()=>setConfirmation(null)} busy={writing}>
-      <p>含税、不含税分别勾选；原人工采用额默认保留。确认后，该格在过程资料中只读。</p><table><thead><tr><th>项目／月份</th><th>金额</th><th>原有效值</th><th>明细汇总</th><th>采用明细</th><th>状态</th></tr></thead><tbody>{confirmation.flatMap((item,index)=>(item.detail.category==='zero'?['mech_2','mech_4']:['mech_3','mech_5']).map((column,offset)=>{
-        const total=item.detail.totals[offset?'net':'gross'],old=item.effective.values[column],blocked=!item.detail.rows.length||Boolean(item.detail.blocked_columns[column]?.length),manual=old!=null&&item.effective.sources[column]?.mode!=='detail';
-        return <tr key={index+column}><td>{item.name}／{item.detail.ym}</td><td>{offset?'不含税':'含税'}</td><td className="money">{money(old)}</td><td className="money">{money(total)}</td><td><Checkbox aria-label={`采用${item.name}${offset?'不含税':'含税'}明细金额`} disabled={blocked||writing||!writable} checked={item.columns.includes(column)} onChange={e=>setConfirmation(previous=>previous?.map((entry,i)=>i===index?{...entry,columns:e.target.checked?[...entry.columns,column]:entry.columns.filter(c=>c!==column)}:entry)??null)} /></td><td>{blocked?'缺明细或字段待补，保留原值':manual?'人工采用值，勾选后替换':'可确认'}{!blocked&&old!=null&&total!=null&&Number(total)<Number(old)?'，金额减少，请核实':''}</td></tr>;
-      }))}</tbody></table><footer><Button disabled={writing} onClick={()=>setConfirmation(null)}>返回</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void operate(confirmAmounts)}>确认勾选金额</Button></footer>
+      <p>含税、不含税分别勾选；原人工采用额默认保留。确认后，该格在过程资料中只读。</p><ConfirmationControls.Provider value={{disabled:writing||!writable,picked:(index,column)=>Boolean(confirmation[index]?.columns.includes(column)),toggle:(index,column,checked)=>setConfirmation(previous=>previous?.map((entry,i)=>i===index?{...entry,columns:checked?[...new Set([...entry.columns,column])]:entry.columns.filter(c=>c!==column)}:entry)??null)}}><ReadGrid table="mechanical-detail-confirm" label="有效月值确认清单" domLayout="autoHeight" rows={confirmation.flatMap((item,index)=>(item.detail.category==='zero'?['mech_2','mech_4']:['mech_3','mech_5']).map((column,offset)=>({id:item.detail.warehouse+':'+column,item,index,column,offset})))} rowId={row=>row.id} columns={[
+        {colId:'project',headerName:'项目／月份',valueGetter:p=>p.data!.item.name+'／'+p.data!.item.detail.ym},
+        {colId:'kind',headerName:'金额',valueGetter:p=>p.data!.offset?'不含税':'含税'},
+        {colId:'old',headerName:'原有效值',...mechanicalNumberWidth(confirmation.flatMap(item=>Object.values(item.effective.values).map(money)),scale),cellClass:'money',valueGetter:p=>money(p.data!.item.effective.values[p.data!.column])},
+        {colId:'total',headerName:'明细汇总',...mechanicalNumberWidth(confirmation.flatMap(item=>[money(item.detail.totals.net),money(item.detail.totals.gross)]),scale),cellClass:'money',valueGetter:p=>money(p.data!.item.detail.totals[p.data!.offset?'net':'gross'])},
+        {colId:'choose',headerName:'采用明细',cellRenderer:ConfirmationChoice},
+        {colId:'status',headerName:'状态',valueGetter:p=>{const {item,column,offset}=p.data!,total=item.detail.totals[offset?'net':'gross'],old=item.effective.values[column],blocked=!item.detail.rows.length||Boolean(item.detail.blocked_columns[column]?.length),manual=old!=null&&item.effective.sources[column]?.mode!=='detail';return (blocked?'缺明细或字段待补，保留原值':manual?'人工采用值，勾选后替换':'可确认')+(!blocked&&old!=null&&total!=null&&Number(total)<Number(old)?'，金额减少，请核实':'');}},
+      ]}/></ConfirmationControls.Provider><footer><Button disabled={writing} onClick={()=>setConfirmation(null)}>返回</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void operate(confirmAmounts)}>确认勾选金额</Button></footer>
     </MechanicalDialog>}
     {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{for(const [key,d] of drafts.current)if(d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse))drafts.current.delete(key);render(n=>n+1);setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
     {dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing}><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label><footer><Button disabled={writing} onClick={()=>setDialog(null)}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,plate_keywords:keywords.split('\n')})});setDialog(null);if(await refresh())setMessage('车牌规则已保存。');})}>保存规则</Button></footer></MechanicalDialog>}

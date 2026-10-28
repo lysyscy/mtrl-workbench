@@ -197,7 +197,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
             // AG can finish its row queue before its real horizontal scrollbar
             // takes space. Natural-height reports publish after that dependency too.
             const needsHorizontal = Boolean(grid.getGridOption('alwaysShowHorizontalScroll')) || Boolean(center && center.scrollWidth > center.clientWidth + 1);
-            const scrollbarReady = !horizontal || Boolean(grid.getGridOption('suppressHorizontalScroll')) || (!needsHorizontal || horizontal.offsetHeight > 0);
+            const scrollbarReady = !rows.length || !horizontal || Boolean(grid.getGridOption('suppressHorizontalScroll')) || (!needsHorizontal || horizontal.offsetHeight > 0);
             return scrollbarReady && grid.isAnimationFrameQueueEmpty() && expected.every(id => ids.has(id));
           };
           while (!mounted()) {

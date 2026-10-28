@@ -7,14 +7,9 @@
 .i8-record-tools label{display:flex;flex-direction:column;align-items:stretch;gap:6px;font-size:calc(12px * var(--fscale));color:var(--tx2);width:calc(144px * var(--fscale));max-width:100%}
 .i8-record-tools label:has([aria-label=动作]){width:calc(112px * var(--fscale))}
 .i8-record-tools .ant-select{width:100%;min-width:0;height:calc(32px * var(--fscale))}
-.i8-page th,.i8-page td{min-width:0;padding:calc(10px * var(--fscale)) calc(8px * var(--fscale));vertical-align:middle;line-height:1.5;overflow-wrap:anywhere}
-.i8-page th{font-size:calc(12px * var(--fscale));font-weight:500;white-space:normal}
 .i8-latest{max-height:none}
 .i8-records{max-height:55dvh}
 .i8-latest,.i8-records{border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
-.i8-page td:first-child,.i8-page td:last-child{font-variant-numeric:tabular-nums}
-.i8-page .bounded-table td:first-child,.i8-page .bounded-table td:last-child{white-space:normal}
-.i8-page .bounded-table .status-tag{white-space:normal;max-width:100%;line-height:1.5;text-wrap:pretty}
 .i8-error{margin-top:8px}
 .i8-error>summary{cursor:pointer;color:var(--dg-d);border:1px solid var(--dg-bd);border-radius:var(--radius-pill);background:var(--sf);padding:calc(4px * var(--fscale)) calc(10px * var(--fscale));width:max-content;max-width:100%}
 .i8-error>summary:hover{background:var(--dg-l)}

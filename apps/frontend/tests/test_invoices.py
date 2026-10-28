@@ -15,7 +15,7 @@ def open_payment(page,server,row,label):
 def test_actual_subtable_draft_survives_navigation_and_close_confirm(server,browser_page,api):
     page,_=browser_page;row,label=contract_sample(api);modal=open_payment(page,server,row,label)
     amount=modal.get_by_label('手工付款金额（元）',exact=True);amount.fill('1.25')
-    page.go_back();page.get_by_role('link',name='MOD-11 集采台账',exact=True).click()
+    page.go_back();page.get_by_role('link',name='集采台账',exact=True).click()
     expect(modal).to_be_visible();expect(amount).to_have_value('1.25')
     modal.get_by_role('button',name='关闭',exact=True).click();expect(modal.get_by_role('heading',name='放弃未保存的修改？')).to_be_visible()
     modal.get_by_role('button',name='继续编辑',exact=True).click();expect(amount).to_have_value('1.25')
@@ -34,7 +34,7 @@ def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disp
     expect(modal.get_by_role('button',name='新增手工付款',exact=True)).to_be_enabled()
     after=get(api,'/api/m11/detail',id=row['id'])['data'];assert Decimal(after['pay_sum'])==Decimal(before['pay_sum'])+Decimal('1.25')
     ids={p['id'] for p in before['payments']};added=next(p for p in after['payments'] if p['id'] not in ids)
-    dom=modal.locator('[data-subtable="payment"][data-row="'+str(added['id'])+'"]')
+    dom=modal.locator('.ag-row').filter(has=page.locator('[data-subtable="payment"][data-row="'+str(added['id'])+'"]'))
     dom.get_by_role('button',name='删除手工付款',exact=True).click()
     confirm=modal.get_by_role('group',name='确认删除子行');confirm.get_by_role('button',name='取消删除',exact=True).click()
     assert Decimal(get(api,'/api/m11/detail',id=row['id'])['data']['pay_sum'])==Decimal(after['pay_sum'])

@@ -7,10 +7,7 @@
 .users-note{margin:calc(8px * var(--fscale)) 0 0;line-height:1.5}
 .users-receipt{margin:0 0 calc(10px * var(--fscale));color:var(--tx2);line-height:1.5}
 .users-block .notice{margin:0 0 calc(10px * var(--fscale))}
-.users-page th,.users-page td{min-width:0;padding:calc(9px * var(--fscale)) calc(10px * var(--fscale));vertical-align:top;line-height:1.5;overflow-wrap:anywhere}
-.users-page th{font-size:calc(12px * var(--fscale));font-weight:500;white-space:normal}
 .users-table{max-height:60dvh;border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
-.users-inactive td{color:var(--mut)}
 .users-actions{white-space:nowrap}
 .users-actions .ant-btn+.ant-btn{margin-left:calc(6px * var(--fscale))}
 .users-page input:not([type=checkbox]),.users-page select{font:inherit;font-size:calc(12.5px * var(--fscale));line-height:1.5;padding:calc(4px * var(--fscale)) calc(7px * var(--fscale));min-height:calc(28px * var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);min-width:0;width:100%}

@@ -15,7 +15,8 @@ def synthetic(api):
 
 
 def field_for(page, row):
-    return page.locator('tr').filter(has=page.get_by_text(row['warehouse_name'], exact=True)).locator('input[aria-label^="展示名："]')
+    page.get_by_label('项目搜索', exact=True).fill(row['warehouse_name'])
+    return page.locator('.project-table .ag-row[row-id="'+str(row['id'])+'"]').locator('input[aria-label^="展示名："]')
 
 
 def undo(page):

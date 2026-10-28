@@ -1,5 +1,5 @@
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from 'antd/es/button';
@@ -151,7 +151,11 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
         <p>{summary(chosen.length)}</p>
-        <div className="export-table"><BoundedTable><thead><tr><th>顺序</th><th><Button htmlType="submit" disabled={busy} onClick={() => choose([...chosen].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b), 'zh')).map(item => item.id))}>项目排序</Button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{projectLabel(item)}</td><td><Button htmlType="submit" aria-label={`上移${projectLabel(item)}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</Button> <Button htmlType="submit" aria-label={`下移${projectLabel(item)}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</Button></td></tr>)}</tbody></BoundedTable></div>
+        <><Button disabled={busy} onClick={()=>choose([...chosen].sort((a,b)=>projectLabel(a).localeCompare(projectLabel(b),'zh')).map(item=>item.id))}>项目排序</Button><ReadGrid table={'export-project-order-'+kind} className="export-table" label="导出项目顺序" domLayout="autoHeight" rows={chosen} rowId={item=>String(item.id)} columns={[
+          {colId:'sequence',headerName:'顺序',valueGetter:p=>chosen.findIndex(item=>item.id===p.data!.id)+1},
+          {colId:'project',headerName:'项目',valueGetter:p=>projectLabel(p.data!)},
+          {colId:'actions',headerName:'调整顺序',cellRenderer:({data:item}:{data:Project})=>{const index=chosen.findIndex(p=>p.id===item.id);return <><Button aria-label={'上移'+projectLabel(item)} disabled={busy||index===0} onClick={()=>move(index,-1)}>上移</Button> <Button aria-label={'下移'+projectLabel(item)} disabled={busy||index===chosen.length-1} onClick={()=>move(index,1)}>下移</Button></>; }},
+        ]}/></>
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}

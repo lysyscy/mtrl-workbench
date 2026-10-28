@@ -12,7 +12,7 @@
 
 未实施架构候选统一由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，状态needs-triage；本次启用不自动启动或要求全部完成。
 
-用户2026-10-28要求以全量AG Grid为目标开展分析。已完成[全部业务表盘点与迁移路线](../.scratch/ag-grid-unification/map.md)及[官方能力研究](../.scratch/ag-grid-unification/research.md)：现有11处AG业务声明、待迁34处原生业务声明；动态复用不等于表实例数。本轮仅形成调查材料，未改表格实现、依赖或正式设计规则，未启动迁移/部署；代表版式与具体实施仍待后续确认，不扩大450其余候选。
+用户2026-10-28批准按[AG Grid实施规格](../.scratch/ag-grid-unification/spec.md)推进：先验证四类代表，再分B1—B6迁移34处原生业务声明，复用11处既有AG业务声明；动态复用不等于实例数。Excel/PDF保留原模板，测试通过后提交推送，本次允许正式重启加载。当前TAIL-451的34处迁移、累计105项浏览器覆盖和独立双轴审查已完成，正在提交及正式加载收尾，不扩大450其余候选。
 
 迁移前的范围、决定与技术证据按需查[共同规格](../.scratch/frontend-vue-rewrite/spec.md)、[问题与确认](../.scratch/frontend-vue-rewrite/questions.md)、[前端证据](../.scratch/frontend-vue-rewrite/evidence.md)及[架构深化证据](../.scratch/frontend-architecture/evidence.md)。这些材料中的原8065版本、PID和当时阶段状态属于历史快照；当前正式运行与用户验收以本页顶部及正式master的423/424为准。
 

@@ -23,11 +23,11 @@ def test_real_process_raw_adjusted_rows_and_totals(server,browser_page,api,proje
     pick_popup_option(page,project['disp'])
     for label,kind in [('表② 调整后表','adjusted'),('表① 原始表','raw')]:
         page.get_by_text(label,exact=True).click();row=matrix[kind][0]
-        table=page.get_by_role('table',name=f'{label}，金额单位：元',exact=True)
-        dom=table.locator('tbody tr').filter(has=page.get_by_role('rowheader',name=row['ym'],exact=True)).first
+        table=page.get_by_role('region',name=f'{label}，金额单位：元',exact=True)
+        dom=table.locator('.ag-row[row-id="'+row['ym']+'"]').first
         expect(dom).to_be_visible()
         for index,key in enumerate(KEYS):
-            cell=dom.locator('td').nth(index);expected='' if row[key] is None else money(row[key])
+            cell=dom.locator('[col-id="'+key+'"]').first;expected='' if row[key] is None else money(row[key])
             if key.startswith('mech_'):
                 if cell.locator('input').count():
                     if row[key] is None:expect(cell.locator('input')).to_have_value('')
@@ -37,9 +37,10 @@ def test_real_process_raw_adjusted_rows_and_totals(server,browser_page,api,proje
                 if row[key] is None:expect(cell.locator('input')).to_have_value('')
                 else:assert Decimal(cell.locator('input').input_value())==Decimal(str(row[key]))
             else:expect(cell).to_have_text(expected)
-            expect(table.locator('tfoot tr').first.locator('td').nth(index)).to_have_text('' if matrix['totals'][kind][key] is None else money(matrix['totals'][kind][key]))
+            expect(table.locator('.ag-row[row-id="合计"] [col-id="'+key+'"]').first).to_have_text('' if matrix['totals'][kind][key] is None else money(matrix['totals'][kind][key]))
         for index,segment in enumerate(matrix['segments'][kind]):
-            expect(table.locator('tfoot tr').last.locator('td').nth(index)).to_contain_text('' if segment['total'] is None else money(segment['total']))
+            key=KEYS[[0,5,10,14][index]]
+            expect(table.locator('.ag-row[row-id="总求和（本表）"] [col-id="'+key+'"]').first).to_contain_text('' if segment['total'] is None else money(segment['total']))
 
 
 def test_real_process_grouped_header_stays_visible(server,browser_page,api,projects):
@@ -49,17 +50,35 @@ def test_real_process_grouped_header_stays_visible(server,browser_page,api,proje
     assert matrix['adjusted'],'真实副本没有过程月份，表头滚动保护未覆盖'
     page.set_viewport_size({'width':1761,'height':720});open_page(page,server,'process','过程资料')
     control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp']);pick_popup_option(page,project['disp'])
-    table=page.locator('.process-matrix');expect(table.locator('thead tr')).to_have_count(2)
+    table=page.locator('.process-matrix');expect(table.locator('.ag-header-row').first).to_be_visible()
     region=page.get_by_role('region',name='过程资料月度表，可横向滚动',exact=True)
-    assert region.evaluate('e=>e.scrollHeight>e.clientHeight'),'表区未形成纵向滚动，置顶未覆盖'
-    before=table.locator('thead').bounding_box()
-    table.locator('tbody tr').last.scroll_into_view_if_needed()
-    after=table.locator('thead').bounding_box()
-    assert region.evaluate('e=>e.scrollTop')>0
+    viewport=table.locator('.ag-body-vertical-scroll-viewport')
+    expect(table).to_have_attribute('data-layout-state','ready')
+    assert viewport.evaluate('e=>e.scrollHeight>e.clientHeight'),'表区未形成纵向滚动，置顶未覆盖'
+    before=table.locator('.ag-header').bounding_box()
+    viewport.evaluate('e=>e.scrollTop=e.scrollHeight')
+    expect(table.locator('.ag-row[row-id="'+matrix['adjusted'][-1]['ym']+'"]').first).to_be_visible()
+    after=table.locator('.ag-header').bounding_box()
+    assert viewport.evaluate('e=>e.scrollTop')>0
     assert abs(before['y']-after['y'])<1
     expect(table.get_by_role('columnheader',name='入库',exact=True)).to_be_visible()
     expect(table.get_by_role('columnheader',name='出库',exact=True)).to_be_visible()
     expect(table.get_by_role('columnheader',name='外租包月不含税',exact=True)).to_be_visible()
+
+
+def test_complete_process_input_value_is_readable(server,browser_page,api,projects):
+    page,_=browser_page;project,matrix=sample(api,projects)
+    candidates=[(index,key,str(row[key])) for index,row in enumerate(matrix['adjusted']) for key in KEYS
+                if row[key] is not None and (key.startswith('mech_') or row['material_editable'])]
+    assert candidates,'真实副本没有金额输入，此可见性保护未覆盖'
+    index,key,value=max(candidates,key=lambda item:len(item[2]))
+    row=matrix['adjusted'][index];label=LABELS[int(key[5:])] if key.startswith('mech_') else ('入库' if key.startswith('in_') else '出库')+key.split('_',1)[1]
+    open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    grid=page.locator('.process-matrix');expect(grid).to_have_attribute('data-layout-state','ready')
+    grid.locator('.ag-body-vertical-scroll-viewport').evaluate('(e,fraction)=>e.scrollTop=(e.scrollHeight-e.clientHeight)*fraction',index/max(1,len(matrix['adjusted'])-1))
+    field=grid.get_by_label(row['ym']+' '+label,exact=True)
+    expect(field).to_be_visible();assert Decimal(field.input_value())==Decimal(value)
+    assert field.evaluate('e=>e.scrollWidth<=e.clientWidth'),'完整金额须在输入框内直接读出'
 
 
 def test_real_process_cell_write_and_later_draft(server,browser_page,api,projects,disposable):
@@ -116,7 +135,7 @@ def test_difference_first_visible_frame_has_final_geometry(server,browser_page,a
       const e=document.querySelector('.process-matrix'),card=document.querySelector('.process-page');
       if(e?.checkVisibility({checkVisibilityCSS:true})&&window.__nativeFrames.length<30)
         window.__nativeFrames.push(JSON.stringify({table:e.offsetWidth,card:card.offsetWidth,
-          widths:[...e.querySelectorAll('tbody tr:first-child > th,tbody tr:first-child > td')].map(c=>c.getBoundingClientRect().width)}));
+          widths:[...e.querySelectorAll('.ag-header-cell')].map(c=>c.getBoundingClientRect().width)}));
       if(window.__nativeFrames.length<30)requestAnimationFrame(nativeFrame);}nativeFrame();""")
     open_page(page,server,'process','过程资料')
     page.wait_for_function('window.__nativeFrames.length>=30')

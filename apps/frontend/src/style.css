@@ -41,8 +41,6 @@ html{--status-success-fg:var(--ok-d);--status-success-bg:var(--ok-l);--status-su
 @media(max-width:520px){.sidebar{width:calc(125px * var(--fscale))}.sidebar nav a{font-size:.9rem;overflow-wrap:anywhere}.main>header{padding:.6rem}.page-view{padding:.6rem}.account-area{font-size:.85rem}.preview-label{font-size:.8rem}}
 
 html,body{height:100%}body{display:flex;flex-direction:column}#root{display:flex;flex-direction:column;flex:1;min-height:0}.workspace{flex:1;height:auto}.main>main>.notice{flex-shrink:0}
-
-.bounded-table.bounded-table th,.bounded-table.bounded-table td{white-space:normal;overflow-wrap:anywhere;min-width:0!important;max-width:none!important}
 .sidebar .nav-group+ .nav-group{margin-top:1.2rem}.sidebar .nav-group h2{font-size:calc(12px * var(--fscale));font-weight:500;margin:0 0 .35rem;padding:.2rem .4rem;color:inherit}.sidebar .nav-group a{display:block;overflow-wrap:anywhere}
 .account-pill{display:flex;align-items:center;gap:.5em;border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf2);font-size:calc(12px * var(--fscale));padding:.35em .8em;min-height:0;text-align:left;overflow-wrap:anywhere}.account-dot{width:.55em;height:.55em;flex-shrink:0;border-radius:50%;background:var(--ok)}
 

@@ -68,7 +68,7 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     width = resize(page, '.contracts-grid', 'material')
     login(page, server, 'preview-user')
     page.locator('a[href="/preview/contracts"]').click()
-    expect(page.locator('.grid-width-tools button')).to_be_disabled()
+    expect(page.locator('.contracts-page .grid-width-tools button')).to_be_disabled()
     resize(page, '.contracts-grid', 'material', 96)
     login(page, server)
     page.locator('a[href="/preview/contracts"]').click()
@@ -77,13 +77,13 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     search.fill(label)
     selected = page.locator('.contracts-grid .ag-row:not(.ag-row-pinned) input[type=checkbox]').first
     selected.check()
-    header(page, '.contracts-grid', 'material').locator('.ag-header-cell-label').click()
+    header(page, '.contracts-grid', 'material').get_by_text('材料名',exact=True).click()
     expect(header(page, '.contracts-grid', 'material')).to_have_attribute('aria-sort', 'ascending')
-    page.get_by_role('button', name='恢复自动列宽', exact=True).click()
+    page.locator('.contracts-page').get_by_role('button', name='恢复自动列宽', exact=True).click()
     expect(search).to_have_value(label)
     expect(selected).to_be_checked()
     expect(header(page, '.contracts-grid', 'material')).to_have_attribute('aria-sort', 'ascending')
-    expect(page.get_by_role('button', name='恢复自动列宽', exact=True)).to_be_disabled()
+    expect(page.locator('.contracts-page').get_by_role('button', name='恢复自动列宽', exact=True)).to_be_disabled()
     assert page.evaluate('key=>localStorage.getItem(key)', storage_key(me, 'contracts')) is None
 
 

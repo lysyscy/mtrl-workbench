@@ -2,9 +2,11 @@ import { Link } from 'react-router';
 import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import Radio from 'antd/es/radio';
+import { Virtuoso } from 'react-virtuoso';
 import { BusinessModal } from './business-modal';
 import { DiscardConfirmation } from './dialog-close';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
+import { contentWidth, numberColumnWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
@@ -28,12 +30,16 @@ const hasTradeSide = (candidate: Candidate) => Boolean(candidate.trade_co || can
 function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplier' | 'trade' }) {
   const invoices = candidate.invoices.filter(invoice => invoice.kind === kind);
   const trade = kind === 'trade', name = trade ? '贸易公司' : '供应商';
+  const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
   const uninvoiced = trade ? candidate.trade_uninvoiced : candidate.supplier_uninvoiced;
   return <div className="contract-invoice-side">
     {hasTradeSide(candidate) && <p className="contract-trade-name">{name}，{trade ? candidate.trade_co || '名称未填' : candidate.supplier}</p>}
     <div className="contract-amounts"><div><span>{name}合同金额</span><strong>{trade && candidate.trade_contract_amt === null ? '未确定' : `${money(trade ? candidate.trade_contract_amt! : candidate.contract_amt)} 元`}</strong></div><div><span>{name}发票总金额</span><strong>{money(trade ? candidate.trade_inv_sum : candidate.inv_sum)} 元</strong></div></div>
     <p className="contract-uninvoiced">{uninvoiced === null ? '未开票金额未确定' : <>{cents(uninvoiced) < 0n ? '超开票' : '未开票'} {money(uninvoiced.replace(/^-/,''))} 元</>}</p>
-    <BoundedTable className="contract-invoices" aria-label={`${contractName(candidate)}${name}发票明细`}><thead><tr><th>{name}发票日期</th><th>金额（元）</th></tr></thead><tbody>{invoices.length ? invoices.map(invoice => <tr key={invoice.id}><td>{invoice.date || '日期未填'}</td><td>{money(invoice.amount)}</td></tr>) : <tr><td colSpan={2}>未录入发票</td></tr>}</tbody></BoundedTable>
+    <ReadGrid table="notice-candidate-invoices" className="contract-invoices" label={`${contractName(candidate)}${name}发票明细`} domLayout="autoHeight" rows={invoices} rowId={invoice=>String(invoice.id)} grid={{overlayNoRowsTemplate:'未录入发票'}} columns={[
+      {field:'date',headerName:`${name}发票日期`,...contentWidth(110,180,scale),valueFormatter:p=>p.value||'日期未填'},
+      {field:'amount',headerName:'金额（元）',...numberColumnWidth(invoices.map(invoice=>money(invoice.amount)),scale,false,1),cellClass:'money',valueFormatter:p=>money(p.value)},
+    ]} />
   </div>;
 }
 function Recommendation({ candidate, amount }: { candidate: Candidate; amount: string }) {
@@ -112,14 +118,14 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
       {query.isPending ? <p role="status" className="contract-loading">正在读取合同与发票…</p> : query.isError ? <p role="alert" className="notice">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读候选</Button></p> : data && <>
         {modifying && <div className="contract-current"><span className="contract-state">当前关联</span><strong>{current ? contractName(current) : '当前合同不在候选中'}</strong><span>{current?.contract_no}</span><Link to={`/contracts?contract=${data.current_contract_id}`}>查看合同详情</Link></div>}
         {rows.filter(candidate => candidate.recommendation.reasons.some(reason => reason.kind === 'invoice')).length > 1 && <p className="contract-candidate-note">多份合同的发票金额均可对应，请核对材料和合同号。</p>}
-        {rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p> : <div className="contract-candidates" role="radiogroup" aria-label={modifying ? '选择拟换合同' : '选择关联合同'}>{rows.map(candidate => {
+        {rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p> : <Virtuoso className="contract-candidates" role="radiogroup" aria-label={modifying ? '选择拟换合同' : '选择关联合同'} data={rows} computeItemKey={(_index,candidate)=>candidate.id} itemContent={(_index,candidate) => {
           const isCurrent = candidate.id === data.current_contract_id, isSelected = selected === candidate.id, recommended = candidate.recommendation.reasons.length > 0;
-          return <article className={`contract-candidate${isSelected ? ' is-selected' : ''}`} key={candidate.id}>
+          return <div className="contract-candidate-item"><article className={`contract-candidate${isSelected ? ' is-selected' : ''}`} key={candidate.id}>
             <div className="contract-candidate-heading"><label className="contract-choice"><Radio name="contract-choice" aria-label={`选择${contractName(candidate)}，${candidate.contract_no}`} checked={isSelected} disabled={unavailable || readOnly} onChange={() => setSelected(candidate.id)} /><span><strong>{contractName(candidate)}</strong><small>{candidate.supplier}，{candidate.date || '合同日期未填'}，{candidate.contract_no || '合同号未填'}</small></span></label><div className="contract-states">{isCurrent && <span className="contract-state">当前关联</span>}{recommended && <span className="contract-state recommended">推荐</span>}{isSelected && <span className="contract-state selected">{modifying && !isCurrent ? '拟换合同' : '已选择'}</span>}</div></div>
             <div className={`contract-invoice-grid${hasTradeSide(candidate) ? ' has-trade' : ''}`}><InvoiceSide candidate={candidate} kind="supplier" />{hasTradeSide(candidate) && <InvoiceSide candidate={candidate} kind="trade" />}</div>
             <Recommendation candidate={candidate} amount={data.notice_amount} />
-          </article>;
-        })}</div>}
+          </article></div>;
+        }}/>}
       </>}
       {chosen && <div className="contract-selection" role="status"><div><span>{modifying ? chosen.id === current?.id ? '保持当前关联' : '拟换合同' : '已选合同'}</span><strong>{contractName(chosen)}</strong></div><div><span>关联前欠款</span><b>{money(chosen.debt)} 元</b></div><div><span>本条统计付款</span><b>{money(row.stat_paid)} 元</b></div><p className="contract-match">{cents(chosen.debt) === cents(row.stat_paid) ? '金额一致' : '金额不一致，仍可关联'}</p></div>}
       </>}

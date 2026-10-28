@@ -14,7 +14,6 @@
 .subtable-invoices { display:grid;grid-template-columns:minmax(0,1fr);gap:16px; }
 .contract-subtables section { min-width:0; border:0;border-radius:0;overflow:visible; }
 .subtable-scroll { border:1px solid var(--bd);border-radius:var(--radius-inner); }
-.contract-subtables table { width:100%;table-layout:fixed;border-collapse:collapse; }
 .subtable-invoice-table col:nth-child(1) { width:26%; }
 .subtable-invoice-table col:nth-child(2) { width:36%; }
 .subtable-invoice-table col:nth-child(3) { width:38%; }
@@ -22,14 +21,6 @@
 .subtable-payment-table col:nth-child(2) { width:24%; }
 .subtable-payment-table col:nth-child(3) { width:30%; }
 .subtable-payment-table col:nth-child(4) { width:25%; }
-.contract-subtables th,.contract-subtables td { padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle;overflow-wrap:anywhere;line-height:1.5; }
-.contract-subtables thead tr { height:calc(38px * var(--fscale)); }
-.contract-subtables tbody tr:not(.subtable-draft) { height:calc(42px * var(--fscale)); }
-.contract-subtables th { font-size:calc(12px * var(--fscale));font-weight:500; }
-.contract-subtables table .money { font-size:inherit;text-align:right;white-space:normal;overflow-wrap:anywhere; }
-.contract-subtables thead { background:var(--sf2);color:var(--tx2); }
-.contract-subtables tfoot { font-weight:600;background:var(--sf2); }
-.contract-subtables tfoot th,.contract-subtables tfoot td { border-top:1px solid var(--bd3);border-bottom:0; }
 .contract-subtables small { display:block;color:var(--tx2);margin-top:4px; }
 .contract-subtables .ant-btn,.contract-subtable-dialog > div > .dialog-actions .ant-btn { height:auto;min-height:calc(32px * var(--fscale));border-radius:var(--radius-pill);white-space:normal;line-height:1.5; }
 .contract-subtables .ant-btn-sm { min-height:calc(28px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(8px * var(--fscale)); }
@@ -45,23 +36,12 @@
 .subtable-links > span { color:var(--tx2); }
 .subtable-delete { border:1px solid var(--dg-bd);background:var(--dg-l);border-radius:var(--radius-inner);padding:16px;margin:16px 0; }
 .subtable-delete button+button { margin-left:8px; }
-.contract-subtables tr:focus { outline:2px solid var(--pri);outline-offset:-2px; }
 .contract-subtable-dialog { width:min(calc(920px * var(--fscale)),calc(100vw - 48px));font-size:calc(var(--font-ui-size) * 1px * var(--fscale)); }
 .contract-subtable-dialog .contract-subtables { margin-top:0;padding-top:0;border-top:0; }
 .contract-subtable-dialog .dialog-actions { flex-wrap:wrap; }
 @media(max-width:640px) {
  .subtable-summary { grid-template-columns:minmax(0,1fr);gap:12px; }
- .contract-subtables table,.contract-subtables tbody,.contract-subtables tfoot { display:block; }
  .contract-subtables colgroup { display:none; }
- .contract-subtables thead { position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap; }
- .contract-subtables tbody tr:not(.subtable-draft) { height:auto; }
- .contract-subtables tbody tr { display:grid;grid-template-columns:minmax(0,1fr);padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd); }
- .contract-subtables tbody td { display:block;width:auto;padding:calc(4px * var(--fscale));border:0; }
- .contract-subtables tbody td[data-label]::before { content:attr(data-label);display:block;color:var(--tx2);font-size:calc(12px * var(--fscale));margin-bottom:4px;font-weight:500;text-align:left; }
- .contract-subtables table .money { text-align:left; }
- .contract-subtables tfoot tr { display:grid;grid-template-columns:minmax(0,1fr);padding:calc(8px * var(--fscale)); }
- .contract-subtables tfoot th,.contract-subtables tfoot td { display:block;padding:4px;border:0; }
- .contract-subtables tfoot td:empty { display:none; }
  .subtable-pagination { justify-content:flex-start; }
  .contract-subtables .ant-pagination { display:flex;flex-wrap:wrap;gap:4px; }
 }
@@ -82,7 +62,6 @@
 .contract-subtable-dialog .subtable-summary { padding:calc(6px * var(--fscale)) calc(12px * var(--fscale));margin-bottom:calc(8px * var(--fscale)); }
 .contract-subtable-dialog .subtable-summary dt { line-height:1.5; }
 .contract-subtable-dialog .subtable-tools { display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap; }
-.contract-subtable-dialog .contract-subtables th,.contract-subtable-dialog .contract-subtables td { padding-block:calc(4px * var(--fscale)); }
 .contract-subtable-dialog .subtable-payment-table col:nth-child(1) { width:18%; }
 .contract-subtable-dialog .subtable-payment-table col:nth-child(2) { width:20%; }
 .contract-subtable-dialog .subtable-payment-table col:nth-child(3) { width:38%; }
@@ -109,3 +88,6 @@
 .contract-subtable-dialog-compact .subtable-pagination,
 .contract-subtable-dialog-compact .subtable-linked-group { margin-block:calc(4px * var(--fscale)); }
 .business-modal .contract-subtable-dialog-compact .dialog-actions { margin-top:calc(4px * var(--fscale)); }
+.subtable-entry{display:flex;align-items:flex-end;gap:calc(8px * var(--fscale));flex-wrap:wrap;padding:calc(8px * var(--fscale)) 0}
+.subtable-entry>label{display:flex;flex-direction:column;gap:calc(4px * var(--fscale));flex:1;min-width:calc(130px * var(--fscale));margin:0}
+.subtable-entry .ant-input{width:100%}

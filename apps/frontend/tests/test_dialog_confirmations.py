@@ -1,4 +1,5 @@
-"""Read-only UI regressions for untouched drafts and the shared discard confirmation."""
+"""Actual-copy UI regressions; prepare/restore supplier hints through the normal API."""
+import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page, login
 from live_data import get, contract_sample, grid_row
@@ -7,11 +8,26 @@ from live_data import get, contract_sample, grid_row
 def single_match_notice(api):
     rows=get(api,'/api/m03/notice-list',period='')['items']
     for row in rows:
-        if row['category']!='jc' or row['has_link'] or row['jc_supplier'] or row['is_excluded'] or row['is_revoked']:
+        if row['category']!='jc' or row['has_link'] or row['is_excluded'] or row['is_revoked']:
             continue
         match=api.post('/api/m03/actions/sup-match',json={'notice_id':row['notice_id']}).json()
         if len(match.get('cands',[]))==1:return row,match['cands'][0]
     raise AssertionError('真实副本缺少未关联且自动单命中的通知书，此缺陷未覆盖')
+
+
+@pytest.fixture
+def automatic_notice(api, disposable):
+    row,name=single_match_notice(api)
+    original=row['jc_supplier']
+    if original:
+        result=api.post('/api/m03/actions/jc-supplier',json={'notice_id':row['notice_id'],'supplier':''})
+        result.raise_for_status();assert result.json()['ok']
+    try:
+        yield row,name
+    finally:
+        if original:
+            result=api.post('/api/m03/actions/jc-supplier',json={'notice_id':row['notice_id'],'supplier':original})
+            result.raise_for_status();assert result.json()['ok']
 
 
 def open_notice(page,server,row):
@@ -21,8 +37,8 @@ def open_notice(page,server,row):
     return page.get_by_role('dialog',name='供应商与合同关联',exact=True)
 
 
-def test_untouched_automatic_suggestion_cancels_directly(server,browser_page,api):
-    page,_=browser_page;row,name=single_match_notice(api);login(page,server)
+def test_untouched_automatic_suggestion_cancels_directly(server,browser_page,api,automatic_notice):
+    page,_=browser_page;row,name=automatic_notice;login(page,server)
     dialog=open_notice(page,server,row)
     expect(dialog.get_by_label('供应商名称',exact=True)).to_have_value(name)
     dialog.get_by_role('button',name='取消',exact=True).click()
@@ -35,8 +51,8 @@ def test_untouched_automatic_suggestion_cancels_directly(server,browser_page,api
     expect(page.get_by_role('dialog')).to_have_count(0)
 
 
-def test_discard_confirmation_reuses_contract_content_and_size(server,browser_page,api):
-    page,_=browser_page;notice,_=single_match_notice(api);contract,label=contract_sample(api)
+def test_discard_confirmation_reuses_contract_content_and_size(server,browser_page,api,automatic_notice):
+    page,_=browser_page;notice,_=automatic_notice;contract,label=contract_sample(api)
     login(page,server);page.goto(server+'/preview/contracts')
     page.get_by_label('搜索',exact=True).fill(label)
     grid_row(page,'.contracts-grid',contract['id']).locator('.contract-object button').click()

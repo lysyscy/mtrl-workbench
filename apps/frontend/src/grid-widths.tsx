@@ -1,6 +1,6 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
-import type { GridApi, SizeColumnsToContentStrategy } from 'ag-grid-community';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentType, RefObject } from 'react';
+import type { ColDef, ColGroupDef, GridApi, IHeaderParams, SizeColumnsToContentStrategy } from 'ag-grid-community';
 import Button from 'antd/es/button';
 import { freezeGridFlex } from './grid';
 import { bindGridWidths } from './grid-width-state';
@@ -30,12 +30,30 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
   }, [owner, table, root]);
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); if (active) binding.current?.fit(); }, [scale, active]);
-  return {attach, strategy, ...status, reset: () => binding.current?.reset()};
+  return {attach, strategy, ...status, reset: () => binding.current?.reset(), fit: () => binding.current?.fit()};
 }
 
-export function GridWidthControls({widths, disabled = false}: {widths: ReturnType<typeof useGridWidths>; disabled?: boolean}) {
-  return <div className="grid-width-tools" data-page-chrome>
-    {widths.error && <span role="status">{widths.error}</span>}
-    <Button size="small" disabled={disabled || !widths.custom && !widths.error} onClick={widths.reset} title="清除本表手调列宽，保留排序、筛选和勾选">恢复自动列宽</Button>
-  </div>;
+export const GridWidthContext=createContext<ReturnType<typeof useGridWidths>|null>(null);
+function WidthHeader(params:IHeaderParams&{originalHeader?:ComponentType<IHeaderParams>}) {
+  const widths=useContext(GridWidthContext),Original=params.originalHeader;
+  return <span className="grid-width-header"><span>{Original?<Original {...params}/>:params.displayName}</span>{widths&&<span className="grid-width-tools" data-page-chrome>
+    <Button type="text" size="small" aria-label="恢复自动列宽" disabled={!widths.custom&&!widths.error} title={widths.error||'恢复自动列宽（保留排序、筛选和勾选）'}
+      onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();widths.reset();}}>↺</Button>
+    {widths.error&&<span className="sr-only" role="status">{widths.error}</span>}
+  </span>}</span>;
+}
+// Use the native header extension point. One action per grid, without a toolbar row.
+export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[]) {
+  return useMemo(()=>{
+    let added=false;
+    const visit=(items:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]=>items.map(column=>{
+      if(added)return column;
+      if('children'in column)return {...column,children:visit(column.children)};
+      if(column.headerComponent||(column.minWidth??column.width??column.initialWidth??88)<80)return column;
+      added=true;
+      const params=column.headerComponentParams??{};
+      return {...column,headerComponentParams:{...params,originalHeader:params.innerHeaderComponent,innerHeaderComponent:WidthHeader}};
+    });
+    return visit(columns);
+  },[columns]);
 }

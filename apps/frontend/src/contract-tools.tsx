@@ -4,7 +4,7 @@ import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
 import { Link } from 'react-router';
-import { useRef, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
 import type { Identity, Project } from './api';
@@ -12,7 +12,7 @@ import { readProjects } from './api';
 import { NoticeDialog } from './notice-maintenance';
 import type { NoticeRow } from './notices-api';
 import { BusinessModal } from './business-modal';
-import { BoundedTable } from './bounded-table';
+import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { receipt } from './notices-api';
@@ -51,6 +51,15 @@ export function ContractFetch({me,blocked,close,refresh}:ToolProps) {
 interface Party {name:string;kind:string;kind_name:string;count:number}
 interface Ignored {id:number;name_full:string;reason:string;operator:string;active:boolean}
 interface Settings {parties:Party[];ignored:Ignored[];kinds:string[];names:Record<string,string>}
+const PartyEditing=createContext<{drafts:Record<string,string>;disabled:boolean;options:{value:string;label:string}[];change:(party:Party,value:string)=>void;save:(party:Party)=>void}>(null!);
+function PartyKindCell({data:party}:{data:Party}) {
+  const editing=useContext(PartyEditing);
+  return <Select aria-label={party.name+'分类'} value={editing.drafts[party.name]??party.kind} disabled={editing.disabled} options={editing.options} onChange={value=>editing.change(party,value)}/>;
+}
+function PartySaveCell({data:party}:{data:Party}) {
+  const editing=useContext(PartyEditing);
+  return <Button size="small" disabled={editing.disabled||!editing.drafts[party.name]} onClick={()=>editing.save(party)}>保存</Button>;
+}
 export function ContractSettings({kind,me,blocked,close,refresh}:ToolProps&{kind:'party'|'ignore'}) {
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[feedback,setFeedback]=useState(''),[unknown,setUnknown]=useState(false),[name,setName]=useState(''),[reason,setReason]=useState('');
   const [drafts,setDrafts]=useState<Record<string,string>>({});
@@ -76,7 +85,17 @@ export function ContractSettings({kind,me,blocked,close,refresh}:ToolProps&{kind
   const unavailable=busy||blocked||!me||unknown||query.isPending||query.isError;
   return <BusinessModal open={!blocked} className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title={kind==='party'?'甲方单位分类':'集采项目忽略名单'} titleId="contract-settings-title" closing={closing}>
     <p>{kind==='party'?'分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。':'仅影响以后抓取。停用后项目可再次抓取，已保存的合同不删除。'}</p>
-    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<div className="contract-settings-table"><BoundedTable><thead><tr>{(kind==='party'?['甲方单位','合同数','分类','操作']:['项目全称','原因','状态','操作']).map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{kind==='party'?query.data.parties.map(item=><tr key={item.name}><td>{item.name}</td><td>{item.count}</td><td><Select aria-label={`${item.name}分类`} value={drafts[item.name]??item.kind} disabled={unavailable} options={query.data!.kinds.map(value=>({value,label:query.data!.names[value]||value}))} onChange={value=>setDrafts(old=>{const next={...old};if(value===item.kind)delete next[item.name];else next[item.name]=value;return next;})}/></td><td><Button size="small" disabled={unavailable||!drafts[item.name]} onClick={()=>void write('/api/m11/party-kind',{name:item.name,kind:drafts[item.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[item.name];return next;}))}>保存</Button></td></tr>):query.data.ignored.map(item=><tr key={item.id}><td>{item.name_full}</td><td>{item.reason||'—'}</td><td><Tag className={`status-tag ${item.active?'status-pending':'status-neutral'}`}>{item.active?'正在忽略':'已停用'}</Tag></td><td><Button size="small" disabled={unavailable} onClick={()=>void write(`/api/m14/jc-ignore/${item.id}`,{active:!item.active},'PUT')}>{item.active?'停用忽略':'恢复忽略'}</Button></td></tr>)}</tbody></BoundedTable>{(kind==='party'?!query.data.parties.length:!query.data.ignored.length)&&<p className="state">清单为空</p>}</div>}
+    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party|Ignored> table={'contract-settings-'+kind} className="contract-settings-table" label={kind==='party'?'甲方单位分类':'集采项目忽略名单'} domLayout="autoHeight" rows={kind==='party'?query.data.parties:query.data.ignored} rowId={row=>'id'in row?String(row.id):row.name} columns={kind==='party'?[
+      {colId:'name',headerName:'甲方单位',valueGetter:p=>(p.data as Party).name},
+      {colId:'count',headerName:'合同数',valueGetter:p=>(p.data as Party).count},
+      {colId:'kind',headerName:'分类',cellRenderer:PartyKindCell},
+      {colId:'actions',headerName:'操作',cellRenderer:PartySaveCell},
+    ]:[
+      {colId:'name',headerName:'项目全称',valueGetter:p=>(p.data as Ignored).name_full},
+      {colId:'reason',headerName:'原因',valueGetter:p=>(p.data as Ignored).reason||'—'},
+      {colId:'state',headerName:'状态',cellRenderer:({data:item}:{data:Ignored})=><Tag className={'status-tag '+(item.active?'status-pending':'status-neutral')}>{item.active?'正在忽略':'已停用'}</Tag>},
+      {colId:'actions',headerName:'操作',cellRenderer:({data:item}:{data:Ignored})=><Button size="small" disabled={unavailable} onClick={()=>void write('/api/m14/jc-ignore/'+item.id,{active:!item.active},'PUT')}>{item.active?'停用忽略':'恢复忽略'}</Button>},
+    ]}/></PartyEditing.Provider>}
     {kind==='ignore'&&<form className="contract-ignore-add" onSubmit={e=>{e.preventDefault();if(name.trim())void write('/api/m14/jc-ignore',{name_full:name,reason},'POST',()=>{setName('');setReason('');});}}><label>项目全称<Input value={name} disabled={unavailable} onChange={e=>setName(e.target.value)}/></label><label>忽略原因<Input value={reason} disabled={unavailable} onChange={e=>setReason(e.target.value)}/></label><Button htmlType="submit" disabled={unavailable||!name.trim()}>加入名单</Button></form>}
     {feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button disabled={busy||blocked} onClick={()=>void reread()}>重读清单</Button></div>
   </DialogContents></BusinessModal>;

@@ -1,15 +1,22 @@
 import Button from 'antd/es/button';
 import Select from 'antd/es/select';
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { ApiError, record, requestJson } from './api';
 import { body } from './notices-api';
 import { detailNet, detailProblems, detailSum, mechanicalMoney as money } from './mechanical-api';
 import type { Category, DetailRow, Effective } from './mechanical-api';
 import { fields, MechanicalDialog } from './mechanical-details';
+import { ReadGrid } from './business-grid';
+import { numberColumnWidth } from './grid';
 
 interface Batch { key: string; warehouse: string; ym: string; category: Category; incoming: DetailRow[]; rows: DetailRow[]; source: unknown; effective: Effective; conflicts: { id: string; row_id: string; field: string; current: unknown; incoming: unknown }[] }
 interface Preview { preview_id: string; batches: Batch[] }
 interface Receipt { warehouse: string; ym: string; category: Category; revision: number }
+const ConflictChoices=createContext<{resolutions:Record<string,string>;busy:boolean;label:(warehouse:string)=>string;choose:(key:string,value:string)=>void}>(null!);
+function ConflictResolution({data:entry}:{data:{batch:Batch;key:string;field:string}}) {
+  const choices=useContext(ConflictChoices);
+  return <Select aria-label={'采用'+choices.label(entry.batch.warehouse)+entry.field} value={choices.resolutions[entry.key]??''} disabled={choices.busy} onChange={value=>choices.choose(entry.key,value)} options={[{value:'',label:'请选择'},{value:'current',label:'保留系统值'},{value:'incoming',label:'采用原报值'}]}/>;
+}
 function readPreview(value: unknown): Preview {
   if (!record(value) || typeof value.preview_id !== 'string' || !Array.isArray(value.batches) || !value.batches.length || value.batches.some((b: unknown) => !record(b) || typeof b.key !== 'string' || typeof b.warehouse !== 'string' || typeof b.ym !== 'string' || !['zero','monthly'].includes(String(b.category)) || !Array.isArray(b.incoming) || !Array.isArray(b.rows) || !Array.isArray(b.conflicts) || !record(b.effective) || !record(b.effective.values))) throw new ApiError('录入预览不完整，请重新预览。');
   return value as unknown as Preview;
@@ -72,19 +79,30 @@ export function MechanicalImport({ writable, keywords, label, close, refresh, bu
     {!preview&&!receipt&&<label>Agent整理的录入文件<input type="file" accept=".json,application/json" disabled={busy} onChange={event=>{setFile(event.target.files?.[0]??null);setMessage('');}} /></label>}
     {preview&&!receipt&&<>
       <p>确认只保存明细；有效月值在明细页另行确认。金额单位：元。</p>
-      <div className="mechanical-import-table"><table><thead><tr><th>项目／月份</th><th>类别</th><th>原报行数</th><th>有效含税 → 原报建议</th><th>有效净额 → 原报建议</th><th>来源</th></tr></thead><tbody>{preview.batches.map(batch=>{
-        const gross=detailSum(batch.incoming.map(row=>row.amount)),net=detailSum(batch.incoming.map(detailNet));
-        const oldGross=batch.effective.values[batch.category==='zero'?'mech_2':'mech_3'],oldNet=batch.effective.values[batch.category==='zero'?'mech_4':'mech_5'];
-        const source=record(batch.source)?batch.source.file:batch.source;
-        const reduction=(old:unknown,next:string|null)=>old!=null&&next!=null&&Number(next)<Number(old)?'，减少，请核实':'';
-        return <tr key={batch.key}><th>{label(batch.warehouse)}／{batch.ym}</th><td>{batch.category==='zero'?'零租':'包月'}</td><td className="money">{batch.incoming.length}</td><td className="money">{money(oldGross)} → {money(gross)}{reduction(oldGross,gross)}</td><td className="money">{money(oldNet)} → {money(net)}{reduction(oldNet,net)}{batch.incoming.some(row=>detailNet(row)===null)?'，部分净额待核':''}</td><td>{sourceText(source)}</td></tr>;
-      })}</tbody></table></div>
-      {preview.batches.map(batch=><details key={batch.key}><summary>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'}，查看原报明细与来源</summary><p className="mechanical-import-source">{record(batch.source)?<>{sourceText(batch.source.file)}，{sourceLocation(batch.source)}{batch.source.sha256!=null&&<><br />原文件指纹：{sourceText(batch.source.sha256)}</>}</>:sourceText(batch.source)}</p><div className="mechanical-import-table"><table><thead><tr><th>设备／规格</th><th>出租单位</th><th>车牌</th><th>日期／期间</th><th>含税</th><th>票种／税率</th><th>不含税</th><th>来源</th><th>待补</th></tr></thead><tbody>{batch.incoming.map(row=><tr key={row.id}><td>{sourceText(row.device)} {String(row.spec??'')}</td><td>{String(row.vendor??row.lessor??'')}</td><td>{String(row.plate||'待补')}</td><td>{String(row.date??'')}</td><td className="money">{money(row.amount)}</td><td>{String(row.tax||'待核')}</td><td className="money">{money(detailNet(row))}</td><td>{sourceLocation(row.source)}</td><td>{detailProblems(row,batch.category,batch.ym,keywords).join('、')||'—'}</td></tr>)}</tbody></table></div></details>)}
-      {conflicts.length>0&&<><h3>逐项确认修订冲突</h3><div className="mechanical-import-table"><table><thead><tr><th>位置</th><th>系统当前值</th><th>原报新值</th><th>采用</th></tr></thead><tbody>{conflicts.map(({batch,conflict,key})=>{
-        const field=conflict.field==='__row__'?'整行／拆合行':fields[batch.category].find(([field])=>field===({usage:'use',lessor:'vendor',note:'memo'} as Record<string,string>)[conflict.field]||field===conflict.field)?.[1]??({original:'原报含税',sourceNet:'原报不含税',originalTax:'原报票种／税率',source:'来源'} as Record<string,string>)[conflict.field]??'明细字段';
-        const row=batch.incoming.find(row=>row.id===conflict.row_id)??batch.rows.find(row=>row.id===conflict.row_id);
-        return <tr key={key}><th>{label(batch.warehouse)}／{batch.ym}／{String(row?.device??'明细')}／{field}</th><td>{conflictText(conflict.current,batch.category,conflict.field==='__row__')}</td><td>{conflictText(conflict.incoming,batch.category,conflict.field==='__row__')}</td><td><Select aria-label={`采用${label(batch.warehouse)}${field}`} value={resolutions[key]??''} disabled={busy} onChange={value=>setResolutions(previous=>({...previous,[key]:value}))} options={[{value:'',label:'请选择'},{value:'current',label:'保留系统值'},{value:'incoming',label:'采用原报值'}]}/></td></tr>;
-      })}</tbody></table></div></>}
+      <ReadGrid table="mechanical-import-batches" className="mechanical-import-table" label="录入批次" domLayout="autoHeight" rows={preview.batches} rowId={batch=>batch.key} columns={[
+        {colId:'project',headerName:'项目／月份',valueGetter:p=>label(p.data!.warehouse)+'／'+p.data!.ym},
+        {colId:'category',headerName:'类别',valueGetter:p=>p.data!.category==='zero'?'零租':'包月'},
+        {colId:'count',headerName:'原报行数',valueGetter:p=>p.data!.incoming.length},
+        ...(['gross','net'] as const).map((kind,index)=>({colId:kind,headerName:index?'有效净额 → 原报建议':'有效含税 → 原报建议',valueGetter:(p:{data:Batch|undefined})=>{const batch=p.data!,value=detailSum(batch.incoming.map(row=>index?detailNet(row):row.amount)),old=batch.effective.values[index?(batch.category==='zero'?'mech_4':'mech_5'):(batch.category==='zero'?'mech_2':'mech_3')];return money(old)+' → '+money(value)+(old!=null&&value!=null&&Number(value)<Number(old)?'，减少，请核实':'')+(index&&batch.incoming.some(row=>detailNet(row)===null)?'，部分净额待核':'');}})),
+        {colId:'source',headerName:'来源',valueGetter:p=>sourceText(record(p.data!.source)?p.data!.source.file:p.data!.source)},
+      ]}/>
+      {preview.batches.map(batch=><details key={batch.key}><summary>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'}，查看原报明细与来源</summary><p className="mechanical-import-source">{record(batch.source)?<>{sourceText(batch.source.file)}，{sourceLocation(batch.source)}{batch.source.sha256!=null&&<><br />原文件指纹：{sourceText(batch.source.sha256)}</>}</>:sourceText(batch.source)}</p><ReadGrid table={'mechanical-import-incoming-'+batch.category} className="mechanical-import-table" label="原报明细与来源" domLayout="autoHeight" rows={batch.incoming} rowId={row=>row.id} columns={[
+        {colId:'device',headerName:'设备／规格',valueGetter:p=>sourceText(p.data!.device)+' '+String(p.data!.spec??'')},
+        {colId:'vendor',headerName:'出租单位',valueGetter:p=>String(p.data!.vendor??p.data!.lessor??'')},
+        {colId:'plate',headerName:'车牌',valueGetter:p=>String(p.data!.plate||'待补')},
+        {colId:'date',headerName:'日期／期间',valueGetter:p=>String(p.data!.date??'')},
+        {colId:'amount',headerName:'含税',...numberColumnWidth(batch.incoming.map(row=>money(row.amount))),cellClass:'money',valueGetter:p=>money(p.data!.amount)},
+        {colId:'tax',headerName:'票种／税率',valueGetter:p=>String(p.data!.tax||'待核')},
+        {colId:'net',headerName:'不含税',...numberColumnWidth(batch.incoming.map(row=>money(detailNet(row)))),cellClass:'money',valueGetter:p=>money(detailNet(p.data!))},
+        {colId:'source',headerName:'来源',valueGetter:p=>sourceLocation(p.data!.source)},
+        {colId:'problems',headerName:'待补',valueGetter:p=>detailProblems(p.data!,batch.category,batch.ym,keywords).join('、')||'—'},
+      ]}/></details>)}
+      {conflicts.length>0&&<ConflictChoices.Provider value={{resolutions,busy,label,choose:(key,value)=>setResolutions(previous=>({...previous,[key]:value}))}}><h3>逐项确认修订冲突</h3><ReadGrid table="mechanical-import-conflicts" className="mechanical-import-table" label="修订冲突" domLayout="autoHeight" rows={conflicts.map(entry=>{const {batch,conflict}=entry,field=conflict.field==='__row__'?'整行／拆合行':fields[batch.category].find(([field])=>field===({usage:'use',lessor:'vendor',note:'memo'} as Record<string,string>)[conflict.field]||field===conflict.field)?.[1]??({original:'原报含税',sourceNet:'原报不含税',originalTax:'原报票种／税率',source:'来源'} as Record<string,string>)[conflict.field]??'明细字段',row=batch.incoming.find(row=>row.id===conflict.row_id)??batch.rows.find(row=>row.id===conflict.row_id);return {...entry,field,position:label(batch.warehouse)+'／'+batch.ym+'／'+String(row?.device??'明细')+'／'+field};})} rowId={entry=>entry.key} columns={[
+        {field:'position',headerName:'位置'},
+        {colId:'current',headerName:'系统当前值',valueGetter:p=>conflictText(p.data!.conflict.current,p.data!.batch.category,p.data!.conflict.field==='__row__')},
+        {colId:'incoming',headerName:'原报新值',valueGetter:p=>conflictText(p.data!.conflict.incoming,p.data!.batch.category,p.data!.conflict.field==='__row__')},
+        {colId:'resolution',headerName:'采用',cellRenderer:ConflictResolution},
+      ]}/></ConflictChoices.Provider>}
       {unsaved&&<p role="alert">本次项目／月份有未保存明细，请关闭后先保存或撤销修改，再重新预览。</p>}
     </>}
     {receipt&&<ul>{receipt.map(batch=><li key={batch.warehouse+batch.ym+batch.category}>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'}，已保存 <Button disabled={busy||!writable} onClick={()=>view(batch)}>查看明细</Button></li>)}</ul>}

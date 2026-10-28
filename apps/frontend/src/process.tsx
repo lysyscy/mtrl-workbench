@@ -1,14 +1,14 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, ColGroupDef, ICellRendererParams, IHeaderParams } from 'ag-grid-community';
 import { Link } from 'react-router';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
-import { contentWidth, gridTheme } from './grid';
-import { BoundedTable } from './bounded-table';
+import { contentWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
+import { BusinessGrid } from './business-grid';
 import { ProjectPicker } from './ledger-controls';
 import { useCellSaveQueue } from './use-cell-save';
 import { BusinessModal } from './business-modal';
@@ -140,13 +140,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save}}>
-        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable prepareFonts layoutVersion={displayRows} className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`}>
-          <thead><tr className="process-groups"><th scope="col" rowSpan={2}>核算月</th><th scope="colgroup" colSpan={5} className="process-segment">入库</th><th scope="colgroup" colSpan={5} className="process-segment">出库</th><th scope="colgroup" colSpan={4} className="process-segment">机械</th><th scope="colgroup" colSpan={2} className="process-segment">机械（不含税）</th></tr>
-            <tr>{matrixColumns.map(column=><th scope="col" key={column.field} aria-label={column.label} className={column.segment?'process-segment':''}>{column.header}</th>)}</tr></thead>
-          <tbody>{displayRows.length?displayRows.map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:<MaterialCell data={row} column={column.field} label={column.label}/>}</td>)}</tr>):<tr><td colSpan={17} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
-          <tfoot><tr><th scope="row">合计</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}`}>{show(matrix.totals[kind][column.field])}</td>)}</tr>
-            <tr><th scope="row">总求和（本表）</th>{matrix.segments[kind].map((segment,i)=><td key={segment.name} colSpan={[5,5,4,2][i]} className="money process-segment">{['入库合计','出库合计','机械合计','不含税合计'][i]} {show(segment.total)}</td>)}</tr></tfoot>
-        </BoundedTable></div>
+        <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale}/>
       </ProcessCells.Provider></>}
     </>}
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
@@ -157,6 +151,20 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   </section>;
 }
 
+type MatrixRow=ProcessRow&{rowkind?:'total'|'segments'};
+function MatrixHeader(p:IHeaderParams){useLayoutEffect(()=>{const label=p.column.getColDef().headerTooltip;p.eGridHeader.setAttribute('aria-label',typeof label==='string'?label:p.displayName);},[p]);return <span>{p.displayName}</span>;}
+function MatrixCell(p:ICellRendererParams<MatrixRow>){const row=p.data!,field=p.colDef!.field!;if(row.rowkind==='segments')return row[field];if(p.node.rowPinned)return show(row[field]);const column=matrixColumns.find(column=>column.field===field)!;return field.startsWith('mech_')?<MechanicalCell data={row} column={field}/>:<MaterialCell data={row} column={field} label={column.label}/>;}
+function MatrixGrid({matrix,rows,kind,warehouse,scale}:{matrix:Awaited<ReturnType<typeof getProcess>>['matrices'][string];rows:ProcessRow[];kind:'raw'|'adjusted';warehouse:string;scale:number}){
+  const totals=useMemo<MatrixRow[]>(()=>[
+    {...matrix.totals[kind],ym:'合计',rowkind:'total'} as MatrixRow,
+    {...Object.fromEntries(dataKeys.map(field=>[field,null])),ym:'总求和（本表）',rowkind:'segments',...Object.fromEntries([0,5,10,14].map((start,index)=>[matrixColumns[start]!.field,['入库合计','出库合计','机械合计','不含税合计'][index]+' '+show(matrix.segments[kind][index]!.total)]))} as MatrixRow,
+  ],[matrix,kind]);
+  const columns=useMemo<(ColDef<MatrixRow>|ColGroupDef<MatrixRow>)[]>(()=>[
+    {field:'ym',headerName:'核算月',pinned:'left',...fixedWidth(112,scale)},
+    ...[['入库',0,5],['出库',5,10],['机械',10,14],['机械（不含税）',14,16]].map(([name,start,end])=>({headerName:String(name),children:matrixColumns.slice(Number(start),Number(end)).map((column,index):ColDef<MatrixRow>=>({field:column.field,headerName:column.header,headerTooltip:column.label,headerComponentParams:{innerHeaderComponent:MatrixHeader},...numberColumnWidth([...rows.map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,true,1),wrapText:false,cellClass:p=>'money'+(column.segment?' process-segment':'')+(kind==='adjusted'&&!column.field.startsWith('mech_')&&matrix.raw.some(raw=>raw.ym===p.data?.ym&&raw[column.field]!==p.data?.[column.field])?' process-adjusted':''),colSpan:p=>p.data?.rowkind==='segments'&&index===0?Number(end)-Number(start):1,cellRenderer:MatrixCell}))})),
+  ],[matrix,rows,kind,scale]);
+  return <div className="process-matrix-scroll" role="region" aria-label="过程资料月度表，可横向滚动"><BusinessGrid table="process-matrix" className="process-matrix-view" gridClassName="process-matrix" label={tabLabels[kind==='raw'?0:1]+'，金额单位：元'} domLayout="normal" rows={rows} totals={totals} columns={columns} rowId={row=>row.ym} scope={warehouse+':'+kind} scale={scale} rowMinimum={56*scale} style={{height:'100%'}} grid={{overlayNoRowsTemplate:'当前项目没有月度记录',groupHeaderHeight:34*scale}}/></div>;
+}
 function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
   matrix: Awaited<ReturnType<typeof getProcess>>['matrices'][string]; diffs: ColDef<Difference>[]; warehouse: string; scale: number; active: boolean;
 }) {

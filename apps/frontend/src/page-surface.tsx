@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Button from 'antd/es/button';
 import { loadElementFonts } from './appearance-ready';
+import { PageActivity } from './page-activity';
 
 // Prepare only the first display. Retained pages, refreshes and editing never hide existing content.
 export function PageSurface({ active, title, children }: { active: boolean; title: string; children: ReactNode }) {
@@ -42,6 +43,6 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
   }, [active, client]);
   return <>
     {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>重试字体加载</Button>}</div>}
-    <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} style={{ visibility: ready ? undefined : 'hidden' }}>{children}</div>
+    <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} style={{ visibility: ready ? undefined : 'hidden' }}><PageActivity.Provider value={active}>{children}</PageActivity.Provider></div>
   </>;
 }
