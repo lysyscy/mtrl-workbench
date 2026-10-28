@@ -44,7 +44,7 @@ export function reportMonth() {
 }
 
 interface ExportScopeProps {
-  kind: string; owner: string; projects: Project[]; project: number; unavailable: string;
+  kind: string; owner: string; projects: Project[]; project: number; defaultProjects?: number[]; unavailable: string;
   run: (action: () => Promise<void>, projects: number[]) => Promise<string | null>;
   message: (text: string) => void; valid: () => boolean; signal: AbortSignal | undefined; paused: boolean;
 }
@@ -76,19 +76,20 @@ export function ProjectSelectionOrder({ projects, selected, choose, move, disabl
   </>;
 }
 
-export function ProjectExport({ kind, owner, projects, project, unavailable, run, message, valid, signal, paused, title, description, summary, success, exportFile }: ExportScopeProps & {
+export function ProjectExport({ kind, owner, projects, project, defaultProjects, unavailable, run, message, valid, signal, paused, title, description, summary, success, exportFile }: ExportScopeProps & {
   title: string; description: string; summary: (count: number) => string; success: string;
   exportFile: (projects: Project[], signal?: AbortSignal) => Promise<{ blob: Blob; filename: string }>;
 }) {
   const [open, setOpen] = useState(false); const [ids, setIds] = useState<number[] | null>(null);
-  const singleList = kind === 'ledger' || kind === 'debt';
+  const singleList = kind === 'ledger' || kind === 'debt' || kind === 'mechanical';
   const [order, setOrder] = useState<number[]>([]);
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(''); const [busy, setBusy] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const [preferenceError, setPreferenceError] = useState('');
   const preferenceKey = `mtrl:export-projects:v1:${encodeURIComponent(owner)}:${kind}`;
-  const selected = (ids ?? (project ? [project] : [])).filter(id => projects.some(item => item.id === id));
+  const initial = defaultProjects ?? (project ? [project] : []);
+  const selected = (ids ?? initial).filter(id => projects.some(item => item.id === id));
   const chosen = selected.flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
   const ordered = [...order, ...projects.map(item => item.id).filter(id => !order.includes(id))].flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
   const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
@@ -104,7 +105,7 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
   function restore() {
     try {
       const saved = localStorage.getItem(preferenceKey);
-      const value: unknown = saved === null ? (project ? [project] : []) : JSON.parse(saved);
+      const value: unknown = saved === null ? initial : JSON.parse(saved);
       if (!Array.isArray(value) || !value.every(id => Number.isSafeInteger(id) && id > 0)) throw new Error('Invalid export preference');
       const restored = [...new Set<number>(value)].filter(id => projects.some(item => item.id === id));
       setOrder([...restored, ...projects.map(item => item.id).filter(id => !restored.includes(id))]);

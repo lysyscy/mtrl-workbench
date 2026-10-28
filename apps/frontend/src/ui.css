@@ -19,7 +19,8 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .business-grid-view{min-width:0;max-width:100%}
 .business-grid{width:100%;min-width:0}
 .business-grid .ag-cell{line-height:1.55;display:flex;align-items:center}
-.business-grid :is(.ag-cell-wrapper,.ag-cell-value){min-width:0;width:100%;overflow-wrap:anywhere}
+.ag-cell :is(.ag-cell-wrapper,.ag-cell-value){min-width:0;width:100%}
+.business-grid :is(.ag-cell-wrapper,.ag-cell-value){overflow-wrap:anywhere}
 .business-grid .ag-cell.money{text-align:right;justify-content:flex-end;white-space:nowrap;font-variant-numeric:tabular-nums}
 .business-grid .ag-cell.money .ag-cell-value{text-align:right}
 .business-grid .ag-cell.money.wrap-note{white-space:normal}
@@ -56,6 +57,9 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 
 /* Shared layout defaults precede page-specific layout in styles.css. */
 /* Compact whole-page tables: preserve font size, controls and natural multi-line rows. */
+.ag-header-cell,.ag-header-group-cell{padding-inline:calc(4px * var(--fscale))}
+.workspace .page-view .ag-cell{padding-inline:calc(4px * var(--fscale))}
+@media(min-width:801px) and (max-width:2000px){.workspace>.sidebar{width:calc(128px * var(--fscale))}.workspace .page-view,.workspace .main>header{padding-inline:calc(16px * var(--fscale))}}
 .workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-grid,.mechanical-detail-grid) .ag-cell{padding-block:calc(2px * var(--fscale));line-height:1.5}
 .workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0}
 .workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}

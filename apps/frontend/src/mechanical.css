@@ -1,7 +1,7 @@
 /* Mechanical report surfaces share the account theme and the standard grid geometry. */
 .mechanical-card{overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .mechanical-card .card-head{flex-wrap:wrap}
-.mechanical-toolbar,.mechanical-tabs,.mechanical-detail-head,.mechanical-detail-totals,.mechanical-edit-tools,.mechanical-project-tools,.mechanical-preview-entry,.mechanical-preview-tools{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
+.mechanical-toolbar,.mechanical-tabs,.mechanical-detail-head,.mechanical-detail-totals,.mechanical-edit-tools,.mechanical-project-tools,.mechanical-preview-entry{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
 .mechanical-toolbar,.mechanical-edit-tools{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .mechanical-toolbar{gap:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .mechanical-toolbar .mechanical-tabs,.mechanical-toolbar .filters{padding:0;margin:0;border:0}
@@ -10,7 +10,7 @@
 .mechanical-toolbar .business-period-trigger{min-height:calc(32px * var(--fscale))}
 .mechanical-toolbar .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
 .mechanical-toolbar input[type=month]{width:10em}
-.mechanical-tabs button[aria-pressed=true],.mechanical-preview-tools button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-bd)}
+.mechanical-tabs button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-bd)}
 .mechanical-card .ant-btn,.mechanical-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
 .mechanical-card .ag-cell .ant-btn,.mechanical-detail-head .ant-btn,.mechanical-dialog li .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
 .mechanical-boundary,.mechanical-feedback{margin:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
@@ -43,11 +43,6 @@
 .mechanical-detail-totals strong{font-weight:600;color:var(--tx)}
 .mechanical-detail-grid{width:100%;min-width:0}
 .mechanical-detail-grid .mechanical-missing{background:var(--wn-l);color:var(--wn-d);text-decoration:underline dotted;text-underline-offset:.3em}
-.mechanical-preview-tools{margin:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
-.mechanical-preview-tools [role=group]{display:flex;flex-wrap:wrap;gap:calc(4px * var(--fscale));flex:1}
-.mechanical-sheet{overflow:auto;max-height:65dvh;scrollbar-color:var(--bd3) var(--sf2)}
-.mechanical-sheet .ag-row.mechanical-report-total{font-weight:600;background:var(--sf2)}
-.mechanical-sheet .ag-row.mechanical-report-subtotal{font-weight:600}
 .business-modal .mechanical-dialog{width:min(calc(940px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .business-modal .mechanical-project-dialog{width:min(calc(600px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-plate-dialog{width:min(calc(520px * var(--fscale)),calc(100vw - 24px))}
@@ -96,7 +91,6 @@
 .mechanical-summary-tools{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .mechanical-summary-tools .mechanical-project-tools,.mechanical-tools-spacer{margin-left:auto}
 .mechanical-picker-list{padding:0;list-style:none}.mechanical-picker-list li{display:flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))}.mechanical-picker-list li>span{white-space:nowrap}
-.mechanical-continuous-preview{display:flex;flex-direction:column;gap:calc(20px * var(--fscale))}.mechanical-continuous-preview .mechanical-sheet{max-height:none}
 .mechanical-detail-table{overflow:auto;max-height:65dvh;max-width:100%;scrollbar-color:var(--bd3) var(--sf2)}
 .mechanical-detail-table .money{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}.mechanical-detail-table .ant-input{width:100%;min-width:0;height:calc(28px * var(--fscale));font:inherit;padding-inline:calc(4px * var(--fscale))}
 .mechanical-detail-group-row{background:var(--sf2)}.mechanical-detail-group-row span,.mechanical-detail-group-row small{font-weight:400;color:var(--tx2)}.mechanical-detail-group-row small{display:block}

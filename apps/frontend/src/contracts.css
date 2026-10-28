@@ -20,16 +20,19 @@
 .contract-selection>div{margin-left:0}
 .contract-feedback{margin:0;color:var(--tx2)}
 .contracts-grid{flex:1;min-height:calc(320px * var(--fscale));min-width:0;border-radius:var(--radius-card);box-shadow:var(--shadow);overflow:hidden}
-.contracts-grid .ag-cell{display:flex;align-items:center;line-height:1.5;white-space:normal;overflow-wrap:anywhere;padding:calc(6px * var(--fscale))}
+.contracts-grid .ag-header-cell{padding-inline:4px}
+.contracts-grid .ag-cell{display:flex;align-items:center;line-height:1.5;white-space:normal;overflow-wrap:anywhere;padding:calc(4px * var(--fscale))}
 .contracts-grid .ag-cell.money{white-space:nowrap;overflow-wrap:normal;justify-content:flex-end;text-align:right;font-variant-numeric:tabular-nums}
 .contracts-grid .ag-cell.contract-identifier{white-space:nowrap;overflow-wrap:normal}
 .contracts-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .contracts-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .contracts-grid .ag-cell .ant-btn{white-space:normal;height:auto;min-height:calc(28px * var(--fscale));padding:calc(3px * var(--fscale)) calc(8px * var(--fscale));text-align:left;font-size:calc(12px * var(--fscale));line-height:1.5}
-.contract-row-actions{padding:0;gap:4px;flex-wrap:nowrap}
-.contract-amount-action{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:100%;min-width:0}
+.contract-row-actions{padding:0;gap:4px;flex-direction:column;align-items:stretch}
+.contract-amount-action{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:2px 4px;width:100%;min-width:0}
 .contract-amount-action>span{white-space:nowrap}
-.contracts-grid .ant-input{width:100%;min-width:0;font-size:inherit;height:calc(30px * var(--fscale));padding:2px 6px}
+.contracts-grid .ant-input{width:100%;min-width:0;font-size:inherit;height:calc(30px * var(--fscale));padding:2px 4px}
+.contracts-grid .status-tag{max-width:100%;white-space:normal;overflow-wrap:anywhere;padding-inline:.25em}
+.contracts-grid .contract-inline-select .enum-tag{padding-inline:.25em}
 .contract-inline-editor{padding:calc(16px * var(--fscale));background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-card);flex:none}
 .contract-object{display:flex;flex-direction:column;gap:2px;min-width:0}
 .contract-object small{color:var(--tx2);line-height:1.4}
@@ -70,7 +73,6 @@
 .contract-inline-select{width:100%;min-width:0;height:calc(32px * var(--fscale))}
 .contract-inline-select .ant-tag{margin:0}
 
-.contracts-grid [col-id="payment_method"] :is(.ag-cell-wrapper,.ag-cell-value){width:100%;min-width:0}
 /* The selected enum must fit the table's 28px control, including its border. */
 .contracts-grid .contract-inline-select .ant-select-content{display:flex;align-items:center;min-height:0;height:100%}
 .contracts-grid .contract-inline-select .enum-tag{line-height:1.4;padding-block:0;white-space:nowrap}

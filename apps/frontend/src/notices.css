@@ -50,6 +50,8 @@
 .workspace .notices-page .notice-grid .ag-cell.money input[aria-invalid=true]{border-color:var(--dg);background:var(--dg-l)}
 
 .workspace .notices-page .notice-grid .ag-cell:is([col-id=bill_no],[col-id=doc_date]){overflow-wrap:normal;white-space:nowrap}
+.notice-grid .status-tag{max-width:100%;white-space:normal;overflow-wrap:anywhere;padding-inline:.25em}
+.notice-row-actions :is(button,a){max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}
 
 /* The compact date editor keeps its full value and calendar affordance inside the existing date column. */
 .notice-grid [col-id=doc_date] .business-date-picker{width:100%;padding-inline:0}

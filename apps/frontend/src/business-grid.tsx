@@ -10,7 +10,7 @@ import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-wid
 import { loadElementFonts } from './appearance-ready';
 import { useRetainedGridColumns } from './grid-layout';
 import { PageActivity } from './page-activity';
-const businessTheme=gridTheme.withParams({autoHeightMinBodyHeight:36,cellHorizontalPadding:'calc(8px * var(--fscale))'});
+const businessTheme=gridTheme.withParams({autoHeightMinBodyHeight:36});
 const readColumnDefaults={sortable:false,resizable:true,suppressMovable:true,wrapText:true,autoHeight:true,wrapHeaderText:true,autoHeaderHeight:true};
 type BusinessGridProps<T>={
   table: string; rows: T[]; columns: (ColDef<T> | ColGroupDef<T>)[]; rowId: (row: T) => string;

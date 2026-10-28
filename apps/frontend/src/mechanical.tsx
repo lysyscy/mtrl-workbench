@@ -5,8 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, record, requestFile, requestJson } from './api';
-import type { Identity } from './api';
-import { pageGridGeometry, contentWidth, fixedWidth, fullTextWidth, gridTheme } from './grid';
+import type { Identity, Project } from './api';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
 import { detailSum, mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { MechanicalImport } from './mechanical-import';
@@ -16,11 +16,10 @@ import { useHistoryGuard } from './history';
 import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
-import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
+import type { Category, Detail, Effective, Workbench, MechanicalReport } from './mechanical-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadGrid } from './business-grid';
-import { reportGrid } from './mechanical-report-grid';
-import type { ReportDisplayRow } from './mechanical-report-grid';
+import { ProjectExport } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
 
 interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
@@ -104,36 +103,35 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
         event.api.addEventListener('gridPreDestroyed', () => { observer.disconnect(); visibility.disconnect(); });
       }}} />;
 }
-function MechanicalSheetGrid({sheet,index,target}:{sheet:ReportSheet;index:number;target:string}) {
-  const root=useRef<HTMLDivElement>(null),api=useRef<GridApi<ReportDisplayRow>|null>(null);
-  const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
-  const model=useMemo(()=>reportGrid(sheet,index),[sheet,index]);
-  const columns=useMemo<(ColDef<ReportDisplayRow>|ColGroupDef<ReportDisplayRow>)[]>(()=>{
-    const result:(ColDef<ReportDisplayRow>|ColGroupDef<ReportDisplayRow>)[]=[];
-    for(const {id,path,column,numeric:isNumeric} of model.columns){
-      const title=path.at(-1)||`列${column}`;
-      const numeric=mechanicalNumberWidth(model.rows.map(row=>row.values[id]??''),scale);
-      const size=title==='序号'?fixedWidth(60,scale):title==='年份'?fixedWidth(76,scale):title==='月份'?fixedWidth(60,scale):column<=2?contentWidth(column===1?160:180,320,scale,1):!isNumeric?contentWidth(title==='单位'?68:120,320,scale,title.includes('备注')?1:0):{...numeric,minWidth:Math.max(numeric.minWidth,Math.min(fullTextWidth([title],scale).minWidth,120*scale))};
-      const definition:ColDef<ReportDisplayRow>={colId:id,headerName:path.at(-1)||`列${column}`,pinned:column<=2?'left':null,
-        ...size,
-        valueGetter:p=>p.data?.values[id]??'',cellClass:isNumeric?'money':'',wrapText:!isNumeric};
-      if(path.length>1){const name=path.slice(0,-1).join('／'),last=result.at(-1);if(last&&'children'in last&&last.headerName===name)last.children.push(definition);else result.push({headerName:name,children:[definition]});}
-      else result.push(definition);
-    }
-    return result;
-  },[model,scale]);
-  const locate=()=>{if(!target)return;const row=model.rows.find(row=>row.project===target);if(!row)return;api.current?.ensureNodeVisible(node=>node.data?.id===row.id,'middle');requestAnimationFrame(()=>root.current?.querySelector(`[row-id="${CSS.escape(row.id)}"]`)?.scrollIntoView({block:'center'}));};
-  useEffect(locate,[model,target]);
-  return <div ref={root} className="mechanical-sheet"><h3>{sheet.name}</h3><ReadGrid table={`mechanical-report-${index}`} label={sheet.name} rows={model.rows} columns={columns} rowId={row=>row.id} domLayout="autoHeight" scale={scale} grid={{onGridReady:e=>{api.current=e.api;},onFirstDataRendered:locate,getRowClass:p=>p.data?.total?'mechanical-report-total':p.data?.values.category==='合计'?'mechanical-report-subtotal':''}}/></div>;
+function MechanicalExport({ owner, month, projects, defaults, unavailable, paused, message }: {
+  owner: string; month: string; projects: Project[]; defaults: number[]; unavailable: string; paused: boolean; message: (text: string) => void;
+}) {
+  const request = useRef<AbortController | null>(null), lock = useRef(false);
+  const current = useRef({ owner, month, unavailable, paused }); current.current = { owner, month, unavailable, paused };
+  useEffect(() => {
+    request.current?.abort(); request.current = null;
+    return () => { request.current?.abort(); };
+  }, [owner, month, unavailable, paused]);
+  const valid = () => current.current.owner === owner && current.current.month === month && !current.current.unavailable && !current.current.paused && !request.current?.signal.aborted;
+  async function run(action: () => Promise<void>): Promise<string | null> {
+    if (current.current.owner !== owner || current.current.month !== month || current.current.unavailable || current.current.paused || lock.current) return null;
+    lock.current = true; request.current = new AbortController();
+    try { await action(); return null; }
+    catch (error) { return valid() ? error instanceof Error ? error.message : '导出失败，请重试。' : null; }
+    finally { lock.current = false; }
+  }
+  return <ProjectExport kind="mechanical" owner={owner} projects={projects} project={0} defaultProjects={defaults}
+    unavailable={unavailable} paused={paused} run={run} valid={valid} signal={undefined} message={message}
+    title="导出台账" description={`${month}，生成含公司汇总、零租明细、包月明细、年度汇总的一个 Excel 工作簿。`}
+    summary={count => `已选 ${count} 个项目，按以下顺序导出。`} success="机械费台账已导出。"
+    exportFile={chosen => requestFile(`/api/m06/workbench/export?${new URLSearchParams({ ym: month, projects: JSON.stringify(chosen.map(item => item.warehouse_name!)) })}`, request.current!.signal)} />;
 }
-function Sheet({sheet,index,target}:{sheet:ReportSheet;index:number;target:string}) { return <MechanicalSheetGrid sheet={sheet} index={index} target={target}/>; }
 export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Identity | null; blocked: boolean; exportGuard: string; active: boolean }) {
   const scale=Number(me?.ui_scale_css)||1;
   const client = useQueryClient();
   const [month, setMonth] = useState(()=>{const [year,month]=currentMonth().split('-');return new Date(Date.UTC(Number(year),Number(month)-2,15)).toISOString().slice(0,7);}); const [ids, setIds] = useState<number[] | null>(null);
-  const [sheet, setSheet] = useState<number | null>(null); const [exportIds,setExportIds]=useState<number[]|null>(null); const [pickerIds,setPickerIds]=useState<number[]>([]); const [pickerOrder,setPickerOrder]=useState<number[]>([]); const [target, setTarget] = useState('');
-  const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
-  const download = useRef<AbortController | null>(null); const previewButton = useRef<HTMLButtonElement>(null);
+  const [pickerIds,setPickerIds]=useState<number[]>([]); const [pickerOrder,setPickerOrder]=useState<number[]>([]);
+  const [message, setMessage] = useState('');
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const state = useQuery({ queryKey: ['mechanical-state',month], enabled: !blocked, queryFn: async ({ signal }) => readWorkbench(await requestJson('/api/m06/workbench?ym='+encodeURIComponent(month), { signal })) });
   const candidates = useMemo(() => projects.data?.filter(project => state.data?.warehouses.includes(project.warehouse_name ?? '')) ?? [], [projects.data, state.data]);
@@ -142,23 +140,8 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const ym = month;
   const scopeError = selected.length !== warehouses.length ? '所选项目范围已变化，请重新选择。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : '';
   const scope = JSON.stringify([ym, warehouses]);
-  const valid = useRef({ scope, blocked, exportGuard, scopeError }); valid.current = { scope, blocked, exportGuard, scopeError };
-  const reportWarehouses=useMemo(()=>exportIds===null?warehouses:exportIds.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[]),[exportIds,warehouses,candidates]);
-  const report = useQuery({ queryKey: ['mechanical-report', ym, reportWarehouses], enabled: !blocked && !scopeError && Boolean(ym) && reportWarehouses.length > 0, queryFn: async ({ signal }) => readMechanicalReport(await requestJson(`/api/m06/workbench/preview?${new URLSearchParams({ ym, projects: JSON.stringify(reportWarehouses) })}`, { signal }), ym, reportWarehouses) });
-  useEffect(() => { setSheet(null); setExportIds(null); setTarget(''); setMessage(''); download.current?.abort(); download.current = null; setBusy(false); }, [scope, blocked, exportGuard, scopeError]);
-  useEffect(() => {download.current?.abort();download.current=null;setBusy(false);},[exportIds]);
-  useEffect(() => () => { download.current?.abort(); }, []);
-  const unavailable = !me ? '登录后可下载。' : exportGuard || scopeError || (projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : blocked ? '账号待核实，请稍候。' : report.isFetching || !report.data || report.isError ? '请先取得完整预览。' : '');
-  async function save() {
-    if (unavailable || busy || download.current || !report.data) return;
-    const controller = new AbortController(); download.current = controller; setBusy(true); setMessage('');
-    try {
-      const result = await requestFile(`/api/m06/workbench/export?${new URLSearchParams({ ym, projects: JSON.stringify(reportWarehouses), snapshot_token: report.data.snapshot_token })}`, controller.signal);
-      if (controller.signal.aborted || valid.current.scope !== scope || valid.current.blocked || valid.current.exportGuard || valid.current.scopeError) return;
-      const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setMessage('四页文件已导出。');
-    } catch (error) { if (!controller.signal.aborted && valid.current.scope === scope) setMessage(error instanceof Error ? error.message : '导出失败，请重新预览后重试。'); }
-    finally { if (download.current === controller) { download.current = null; setBusy(false); } }
-  }
+  const report = useQuery({ queryKey: ['mechanical-report', ym, warehouses], enabled: !blocked && !scopeError && Boolean(ym) && warehouses.length > 0, queryFn: async ({ signal }) => readMechanicalReport(await requestJson(`/api/m06/workbench/preview?${new URLSearchParams({ ym, projects: JSON.stringify(warehouses) })}`, { signal }), ym, warehouses) });
+  useEffect(() => { setMessage(''); }, [scope, blocked, exportGuard, scopeError]);
   const [tab, setTab] = useState<'summary' | 'zero' | 'monthly' | 'work'>('summary');
   const [importOpen,setImportOpen] = useState(false);
   const [temporary, setTemporary] = useState(''); const [problemsOnly, setProblemsOnly] = useState(false);
@@ -166,7 +149,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const [,render] = useState(0); const [writing,setWriting] = useState(false); const writeLock = useRef(false);
   const [needsRead,setNeedsRead] = useState(false);
   const [confirmation,setConfirmation] = useState<Confirmation[] | null>(null);
-  const [dialog,setDialog] = useState<'discard' | 'plate' | 'projects' | 'export' | null>(null); const [keywords,setKeywords] = useState('');
+  const [dialog,setDialog] = useState<'discard' | 'plate' | 'projects' | null>(null); const [keywords,setKeywords] = useState('');
   const internalDrafts=useRef(new Map<string,{warehouse:string;ym:string;values:Record<string,string>}>());
   const [internalEpoch,setInternalEpoch]=useState(0);
   const [internalConfirmation,setInternalConfirmation]=useState<{warehouse:string;ym:string;values:Record<string,string>;effective:Effective}[]|null>(null);
@@ -177,7 +160,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const current = useRef({month,ym,category,editingWarehouses,scope,blocked,active});current.current={month,ym,category,editingWarehouses,scope,blocked,active};
   const detail = useCallback((index: number, projectId: string) => {
     const warehouse = projects.data?.find(project => String(project.id) === projectId)?.warehouse_name;
-    if (warehouse) { setSheet(null);setTab(index === 2 ? 'monthly' : 'zero');setTemporary(warehouse);setProblemsOnly(false); }
+    if (warehouse) { setTab(index === 2 ? 'monthly' : 'zero');setTemporary(warehouse);setProblemsOnly(false); }
   },[projects.data]);
   useEffect(() => {setImportOpen(false);setTemporary('');setProblemsOnly(false);setConfirmation(null);setInternalConfirmation(null);setDialog(current=>current==='projects'?'projects':null);},[scope]);
   useEffect(()=>{if(!active){setImportOpen(false);setConfirmation(null);setInternalConfirmation(null);setDialog(null);}},[active]);
@@ -235,37 +218,32 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const dirty=[...drafts.current.values()].filter(d=>d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse)).length;
   const internalTargets=[...internalDrafts.current.values()].filter(d=>d.ym===ym&&warehouses.includes(d.warehouse));
   const internal:InternalEditing={epoch:internalEpoch,writable,value:(id,column)=>internalDrafts.current.get(JSON.stringify([id,ym]))?.values[column],change:(id,column,value)=>{const key=JSON.stringify([id,ym]),warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse)return;const old=internalDrafts.current.get(key);internalDrafts.current.set(key,{warehouse,ym,values:{...old?.values,[column]:value}});render(n=>n+1);}};
-  function openPicker(kind:'projects'|'export'){stopEditors();setTemporary('');const order=[...selected,...candidates.map(p=>p.id).filter(id=>!selected.includes(id))];setPickerOrder(order);setPickerIds([...selected]);setDialog(kind);}
-  function previewButtonControl(){return <Button ref={previewButton} disabled={blocked||writing||projects.isPending||state.isPending||Boolean(scopeError)} onClick={()=>openPicker('export')}>导出预览</Button>;}
+  function openPicker(){stopEditors();setTemporary('');const order=[...selected,...candidates.map(p=>p.id).filter(id=>!selected.includes(id))];setPickerOrder(order);setPickerIds([...selected]);setDialog('projects');}
+  const exportUnavailable = !me ? '登录后可导出。' : exportGuard || (blocked ? '账号待核实，请稍候。' : writing ? '机械费正在保存，请稍候。' : needsRead ? '机械费操作结果待核实，请先重新读取。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : !ym ? '请选择报表月份。' : '');
+  function exportControl(){const owner=me ? `${me.id}:${me.account}` : 'anonymous';return <MechanicalExport key={owner} owner={owner} month={ym} projects={candidates} defaults={selected} unavailable={exportUnavailable} paused={blocked||!active} message={setMessage}/>;}
   useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead ? '机械费操作结果待核实，请返回重新读取。' : drafts.current.size || internalDrafts.current.size ? '请先保存或撤销机械费未保存修改。' : '');
   const error = projects.error || state.error || report.error;
   return <section className="mechanical-card" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
     <div className="mechanical-month"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked||writing} onChange={value=>{stopEditors();setMonth(value);}} /></div>
-    <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id&&sheet===null} onClick={()=>{stopEditors();setTab(id);setSheet(null);setExportIds(null);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
-    <div className="mechanical-preview-entry"><Button disabled={blocked||writing||state.isFetching} onClick={()=>openPicker('projects')}>显示项目</Button><Button disabled={!writable||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入预览</Button></div>
+    <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id} onClick={()=>{stopEditors();setTab(id);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
+    <div className="mechanical-preview-entry"><Button disabled={blocked||writing||state.isFetching} onClick={openPicker}>显示项目</Button><Button disabled={!writable||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入预览</Button></div>
     </div>
-    {tab==='summary'&&sheet===null&&<div data-page-chrome className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools"><Button disabled={!writable||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</Button><Button disabled={!writable||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</Button>{previewButtonControl()}</div></div>}
+    {tab==='summary'&&<div data-page-chrome className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools"><Button disabled={!writable||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</Button><Button disabled={!writable||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</Button>{exportControl()}</div></div>}
     {needsRead && <p className="notice" role="alert">保存后需要重新读取。<Button onClick={()=>void refresh()}>重新读取</Button></p>}
-    {sheet===null && (tab==='zero'||tab==='monthly') && <>
-      <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{stopEditors();setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{stopEditors();setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{setKeywords((state.data?.settings.plate_keywords??[]).join('\n'));setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button><Button disabled={!writable||writing||!dirty} onClick={()=>void operate(()=>saveDetails(false))}>仅保存明细</Button><Button type="primary" disabled={!writable||writing||!editingWarehouses.length||state.isFetching||state.isError} onClick={()=>void operate(()=>saveDetails(true))}>保存并确认汇总</Button>{previewButtonControl()}</div>
+    {(tab==='zero'||tab==='monthly') && <>
+      <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{stopEditors();setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{stopEditors();setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{setKeywords((state.data?.settings.plate_keywords??[]).join('\n'));setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button><Button disabled={!writable||writing||!dirty} onClick={()=>void operate(()=>saveDetails(false))}>仅保存明细</Button><Button type="primary" disabled={!writable||writing||!editingWarehouses.length||state.isFetching||state.isError} onClick={()=>void operate(()=>saveDetails(true))}>保存并确认汇总</Button>{exportControl()}</div>
       {!state.isError && !state.isPending && <DetailsTable scale={Number(me?.ui_scale_css)||1} groups={editingWarehouses.map(warehouse=>{const key=detailKey(warehouse,ym,category);return {warehouse,name:label(warehouse),saved:state.data?.details.find(d=>detailKey(d.warehouse,d.ym,d.category)===key),draft:drafts.current.get(key)};})} ym={ym} category={category} keywords={state.data?.settings.plate_keywords??[]} problemsOnly={problemsOnly} writable={writable} change={edit} />}
 
     </>}
-    {sheet===null&&tab==='work'&&state.data&&!state.isError&&<MechanicalWork data={state.data} warehouses={warehouses} label={label} writable={writable} busy={writing} operate={operate} refresh={refresh} added={warehouse=>{const project=candidates.find(p=>p.warehouse_name===warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);}} />}
+    {tab==='work'&&state.data&&!state.isError&&<MechanicalWork data={state.data} warehouses={warehouses} label={label} writable={writable} busy={writing} operate={operate} refresh={refresh} added={warehouse=>{const project=candidates.find(p=>p.warehouse_name===warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);}} />}
     {scopeError && !error && <p className="notice" role="alert">{scopeError}</p>}
     {error && !needsRead ? <p className="notice" role="alert">{error.message}<Button onClick={() => { void projects.refetch(); void state.refetch(); void report.refetch(); }}>重新读取</Button></p> : state.isPending || projects.isPending || report.isFetching && !report.data ? <p className="state" role="status">正在读取机械报表…</p> : !ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length ? <p className="state" role="status">请选择项目查看报表。</p> : null}
-    {report.data && !scopeError && !report.isError && (sheet===null?warehouses.length:reportWarehouses.length) > 0 && <>
-      {sheet === null ? tab==='summary' ? <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} /> : null : <>
-        <div className="mechanical-preview-tools"><strong>报送导出预览，{ym}</strong><Button onClick={() => { setSheet(null); setExportIds(null); setTarget(''); setTemporary(''); requestAnimationFrame(() => previewButton.current?.focus()); }}>返回查看／编辑</Button><Button disabled={blocked || busy || report.isFetching} onClick={() => { setMessage(''); void report.refetch(); }}>重新预览</Button><Button type="primary" disabled={Boolean(unavailable) || busy} title={unavailable || '下载当前预览的四页文件'} onClick={() => void save()}>{busy ? '正在生成…' : '下载四页Excel'}</Button></div>
-        {unavailable && <p className="mechanical-feedback" role="status">{unavailable}</p>}
-        <div className="mechanical-continuous-preview">{report.data.sheets.map((item,index)=><Sheet key={item.name} sheet={item} index={index} target={target} />)}</div>
-      </>}
-    </>}
-    {importOpen&&<MechanicalImport writable={writable} keywords={state.data?.settings.plate_keywords??[]} label={label} close={()=>setImportOpen(false)} refresh={refresh} busyChanged={setWriting} draftConflict={batches=>batches.some(b=>drafts.current.has(detailKey(b.warehouse,b.ym,b.category)))} view={batch=>{const project=candidates.find(p=>p.warehouse_name===batch.warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);setMonth(batch.ym);setTab(batch.category);setSheet(null);setProblemsOnly(false);setImportOpen(false);}} />}
-    {(dialog==='projects'||dialog==='export')&&<MechanicalDialog className="mechanical-project-dialog" title={dialog==='projects'?'选择显示项目及顺序':'选择本次报送项目'} close={()=>setDialog(null)} busy={writing}>
-      <p>{dialog==='projects'?'按勾选项目显示，顺序可调整；其他项目的数据保留。':'本次选择只用于导出预览。'}</p><div className="mechanical-project-tools"><Button disabled={writing} onClick={()=>setPickerIds([...pickerOrder])}>全选</Button><Button disabled={writing} onClick={()=>setPickerIds([])}>全不选</Button><span>已选 {pickerIds.length} 个项目</span></div>
-      <ol className="mechanical-picker-list">{pickerOrder.map((id,index)=><li key={id}><Checkbox disabled={writing} checked={pickerIds.includes(id)} onChange={e=>setPickerIds(previous=>e.target.checked?[...previous,id]:previous.filter(p=>p!==id))}>{candidates.find(p=>p.id===id)?.disp}</Checkbox>{dialog==='projects'&&<span>{([-1,1] as const).map(step=><Button key={step} disabled={writing||index+step<0||index+step>=pickerOrder.length} onClick={()=>{const next=[...pickerOrder];[next[index+step],next[index]]=[next[index]!,next[index+step]!];setPickerOrder(next);}}>{step===-1?'上移':'下移'}</Button>)}</span>}</li>)}</ol>
-      <footer><Button disabled={writing} onClick={()=>setDialog(null)}>取消</Button><Button type="primary" disabled={dialog==='projects'?!writable:blocked||writing||!pickerIds.length} onClick={()=>{const next=pickerOrder.filter(id=>pickerIds.includes(id));if(dialog==='export'){setExportIds(next);setTemporary('');setSheet(0);setTarget('');setDialog(null);}else void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,shown_projects:next.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[])})});setIds(next);setTemporary('');setDialog(null);if(await refresh())setMessage('显示项目及顺序已保存。');});}}>{dialog==='projects'?'应用项目选择':'生成报送预览'}</Button></footer>
+    {report.data && !scopeError && !report.isError && warehouses.length > 0 && tab==='summary' && <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} />}
+    {importOpen&&<MechanicalImport writable={writable} keywords={state.data?.settings.plate_keywords??[]} label={label} close={()=>setImportOpen(false)} refresh={refresh} busyChanged={setWriting} draftConflict={batches=>batches.some(b=>drafts.current.has(detailKey(b.warehouse,b.ym,b.category)))} view={batch=>{const project=candidates.find(p=>p.warehouse_name===batch.warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);setMonth(batch.ym);setTab(batch.category);setProblemsOnly(false);setImportOpen(false);}} />}
+    {dialog==='projects'&&<MechanicalDialog className="mechanical-project-dialog" title="选择显示项目及顺序" close={()=>setDialog(null)} busy={writing}>
+      <p>按勾选项目显示，顺序可调整；其他项目的数据保留。</p><div className="mechanical-project-tools"><Button disabled={writing} onClick={()=>setPickerIds([...pickerOrder])}>全选</Button><Button disabled={writing} onClick={()=>setPickerIds([])}>全不选</Button><span>已选 {pickerIds.length} 个项目</span></div>
+      <ol className="mechanical-picker-list">{pickerOrder.map((id,index)=><li key={id}><Checkbox disabled={writing} checked={pickerIds.includes(id)} onChange={e=>setPickerIds(previous=>e.target.checked?[...previous,id]:previous.filter(p=>p!==id))}>{candidates.find(p=>p.id===id)?.disp}</Checkbox><span>{([-1,1] as const).map(step=><Button key={step} disabled={writing||index+step<0||index+step>=pickerOrder.length} onClick={()=>{const next=[...pickerOrder];[next[index+step],next[index]]=[next[index]!,next[index+step]!];setPickerOrder(next);}}>{step===-1?'上移':'下移'}</Button>)}</span></li>)}</ol>
+      <footer><Button disabled={writing} onClick={()=>setDialog(null)}>取消</Button><Button type="primary" disabled={!writable} onClick={()=>{const next=pickerOrder.filter(id=>pickerIds.includes(id));void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,shown_projects:next.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[])})});setIds(next);setTemporary('');setDialog(null);if(await refresh())setMessage('显示项目及顺序已保存。');});}}>应用项目选择</Button></footer>
     </MechanicalDialog>}
 
     {internalConfirmation&&<MechanicalDialog title="确认内租填数" close={()=>setInternalConfirmation(null)} busy={writing}><ReadGrid table="mechanical-internal-confirm" label="内租确认清单" domLayout="autoHeight" rows={internalConfirmation.flatMap(d=>Object.entries(d.values).map(([column,value])=>({id:JSON.stringify([d.warehouse,d.ym,column]),d,column,value})))} rowId={row=>row.id} columns={[
@@ -286,6 +264,6 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     </MechanicalDialog>}
     {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{for(const [key,d] of drafts.current)if(d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse))drafts.current.delete(key);render(n=>n+1);setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
     {dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing}><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label><footer><Button disabled={writing} onClick={()=>setDialog(null)}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,plate_keywords:keywords.split('\n')})});setDialog(null);if(await refresh())setMessage('车牌规则已保存。');})}>保存规则</Button></footer></MechanicalDialog>}
-    {message && !needsRead && <p className="mechanical-feedback" role="status">{message}{(needsRead||report.isError) && <Button disabled={busy} onClick={() => void report.refetch()}>重新预览</Button>}</p>}
+    {message && !needsRead && <p className="mechanical-feedback" role="status">{message}</p>}
   </section>;
 }

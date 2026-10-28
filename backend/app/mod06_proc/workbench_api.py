@@ -48,15 +48,13 @@ def report_snapshot(ym, projects):
 @router.get('/api/m06/workbench/preview')
 def preview_report(ym: str = '', projects: str = ''):
     data = report_snapshot(ym, projects)
-    return {**export_registry.get('mechanical').preview(data), 'snapshot_token': workbench.digest(data)}
+    return export_registry.get('mechanical').preview(data)
 
 
 @router.get('/api/m06/workbench/export')
-def export_report(ym: str = '', projects: str = '', snapshot_token: str = ''):
+def export_report(ym: str = '', projects: str = ''):
     output = export_registry.get('service').EXPORT_ROOT
     data = report_snapshot(ym, projects)
-    if snapshot_token and snapshot_token != workbench.digest(data):
-        raise MustReportError('预览后已保存内容有变化，请重新预览再导出')
     path = export_registry.get('mechanical').export(data, output)
     return FileResponse(path, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         filename=path.name, headers={'X-Export-Filename': quote(path.name)})

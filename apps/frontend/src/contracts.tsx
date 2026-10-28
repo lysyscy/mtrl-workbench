@@ -11,7 +11,7 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { pageGridGeometry, contentWidth, fixedWidth, fullTextWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, fullTextWidth, numberColumnWidth, gridTheme } from './grid';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
@@ -129,19 +129,19 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const identifierWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no'].includes(c.key)).map(c=>{
     const values=fullTextWidth(rows.map(row=>String(row[c.key as keyof ContractRow]??'')),scale).minWidth;
     // Headers also need their native padding and sort icon, beyond the cell text floor.
-    const header=fullTextWidth([c.label.replace('（自动）','')],scale).minWidth+36;
+    const header=fullTextWidth([c.label.replace('（自动）','')],scale).minWidth+20;
     const minWidth=Math.max(values,header);
-    return [c.key,{initialWidth:minWidth,minWidth,suppressAutoSize:false}];
+    return [c.key,{initialWidth:minWidth,minWidth}];
   })),[rows,query.data?.columns,scale]);
   const columns=useMemo<ColDef<ContractRow>[]>(()=>[
-    {colId:'select',headerName:'选择',...fixedWidth(36,scale),sortable:false,pinned:'left',headerComponent:()=> <Checkbox aria-label="选择当前合同" checked={shown.length>0&&shown.every(r=>picked.has(r.id))} onChange={e=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/>,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>},
+    {colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:()=> <Checkbox aria-label="选择当前合同" checked={shown.length>0&&shown.every(r=>picked.has(r.id))} onChange={e=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/>,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>},
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
       // Keep formatted amounts and totals intact before flexible text columns shrink.
-      const moneyMin=numeric?Math.max(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?146:102,...[...shown,...totalRow].map(row=>money(row[c.key as typeof contractMoneyKeys[number]]??'0').length*8+14+(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?48:0))):0;
-      const min=c.key==='ret_date'?134:numeric?moneyMin:c.key==='material'?82:c.key==='supplier'?86:c.key==='remark'?104:c.key==='payment_method'?150:c.key==='payment_term'?104:c.key==='arch_no'?104:78;
+      const amountWidth=numeric?numberColumnWidth([...shown,...totalRow].map(row=>row[c.key as typeof contractMoneyKeys[number]]===null?'未确定':money(row[c.key as typeof contractMoneyKeys[number]]??'0')),scale):undefined;
+      const min=c.key==='ret_date'?130:c.key==='material'?80:c.key==='supplier'?64:c.key==='remark'?60:c.key==='payment_method'?80:c.key==='payment_term'?48:c.key==='arch_no'?48:44;
       const identifier=identifierWidths[c.key];
-      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),...(identifier??contentWidth(min,c.key==='remark'||c.key==='supplier'?250:Math.max(min,145),scale,['material','supplier','remark'].includes(c.key)?1:0)),wrapHeaderText:!identifier,autoHeaderHeight:true,wrapText:!numeric&&!identifier,autoHeight:true,cellClass:numeric?'money':identifier?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?{cellRenderer:ContractInlineCell,cellRendererParams:{editKey:c.key,control:()=>inlineControl.current}}:{}),
+      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),...(identifier??amountWidth??contentWidth(min,c.key==='material'?320:c.key==='remark'||c.key==='supplier'?250:Math.max(min,145),scale,['supplier','remark'].includes(c.key)?1:0)),wrapHeaderText:!identifier,autoHeaderHeight:true,wrapText:!numeric&&!identifier,autoHeight:true,cellClass:numeric?'money':identifier?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?{cellRenderer:ContractInlineCell,cellRendererParams:{editKey:c.key,control:()=>inlineControl.current}}:{}),
         comparator:numeric?(a:string|null,b:string|null)=>cents(a??'0')<cents(b??'0')?-1:cents(a??'0')>cents(b??'0')?1:0:undefined,
         cellRenderer:['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?ContractInlineCell:(p:ICellRendererParams<ContractRow>)=>{
           if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
@@ -153,7 +153,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
           return numeric?(p.value===null?'未确定':money(String(p.value))):String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
-    {colId:'actions',headerName:'操作',...contentWidth(144,180,scale),sortable:false,wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
+    {colId:'actions',headerName:'操作',...contentWidth(76,180,scale),sortable:false,wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,shown,picked,projectRows,projects.isPending,identifierWidths]);
   // Keep the reset action on the material header, clear of complete identifiers.
   const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);

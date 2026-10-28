@@ -15,7 +15,7 @@ ModuleRegistry.registerModules([
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
 // Native drag selection/copy is shared by every grid; retain virtualisation.
 provideGlobalGridOptions({ animateRows: false, enableCellTextSelection: true, ensureDomOrder: true });
-export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(12px * var(--fscale))',
+export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(12px * var(--fscale))', cellHorizontalPadding: 'calc(4px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
@@ -41,7 +41,7 @@ export function numberColumnWidth(values: readonly unknown[], scale = Number(get
   context.font = `600 ${fontSize * scale}px ${css.fontFamily}`;
   let widest = context.measureText('0.00').width;
   for (const value of new Set(values.map(value => String(value ?? '')))) widest = Math.max(widest, context.measureText(value).width);
-  const minimum = Math.ceil(widest / scale + (editable ? 32 : 20));
+  const minimum = Math.ceil(widest / scale + (editable ? 24 : 12));
   return contentWidth(minimum, Math.max(minimum, 180), scale, stretch);
 }
 
@@ -49,7 +49,7 @@ export function numberColumnWidth(values: readonly unknown[], scale = Number(get
 export function fullTextWidth(values:readonly string[],scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1) {
   const css=getComputedStyle(document.documentElement),context=document.createElement('canvas').getContext('2d')!;
   context.font=`500 ${(Number(css.getPropertyValue('--font-ui-size'))||13.5)*scale}px ${css.fontFamily}`;
-  const min=Math.ceil(Math.max(0,...[...new Set(values)].map(value=>context.measureText(value).width))/scale+20);
+  const min=Math.ceil(Math.max(0,...[...new Set(values)].map(value=>context.measureText(value).width))/scale+12);
   return contentWidth(min,Math.max(min,300),scale);
 }
 export function textWidth(min: number, max: number, scale = 1, flex = 1) {

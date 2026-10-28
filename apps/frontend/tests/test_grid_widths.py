@@ -23,7 +23,7 @@ def resize(page, grid, column, delta=64):
     page.mouse.move(x + delta, y, steps=8)
     page.mouse.up()
     page.wait_for_function('([selector,width])=>Math.abs(document.querySelector(selector).getBoundingClientRect().width-width)<.6', arg=[f'{grid} .ag-header-cell[col-id="{column}"]', before + delta])
-    return round(before + delta)
+    return target.evaluate('e=>getComputedStyle(e).width')
 
 
 def storage_key(me, table):
@@ -45,16 +45,16 @@ def test_native_resize_survives_reload_and_window_change(server, browser_page, r
     saved = page.evaluate('key=>JSON.parse(localStorage.getItem(key))', storage_key(me, table))
     assert list(saved['widths']) == [column], 'Automatic widths must not become overrides'
     page.reload()
-    expect(header(page, grid, column)).to_have_css('width', f'{width}px')
+    expect(header(page, grid, column)).to_have_css('width', width)
     if route == 'notices':
         expect(page.locator(grid)).to_have_attribute('data-layout-state', 'ready')
     other = 'bill_name' if route == 'notices' else 'supplier'
     before = header(page, grid, other).bounding_box()['width']
     page.set_viewport_size({'width': 3840, 'height': 1080})
-    expect(header(page, grid, column)).to_have_css('width', f'{width}px')
+    expect(header(page, grid, column)).to_have_css('width', width)
     page.wait_for_function('([selector,width])=>document.querySelector(selector).getBoundingClientRect().width>width+1', arg=[f'{grid} .ag-header-cell[col-id="{other}"]', before])
     page.set_viewport_size({'width': 900, 'height': 900})
-    expect(header(page, grid, column)).to_have_css('width', f'{width}px')
+    expect(header(page, grid, column)).to_have_css('width', width)
     assert page.locator(grid + ' .ag-body-horizontal-scroll-viewport').evaluate('e=>e.scrollWidth>e.clientWidth')
 
 
@@ -65,6 +65,7 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     page.locator('a[href="/preview/contracts"]').click()
     page.get_by_label('搜索', exact=True).fill(label)
     expect(page.locator('.contracts-grid .ag-row:not(.ag-row-pinned)').first).to_be_visible()
+    automatic_width = header(page, '.contracts-grid', 'material').evaluate('e=>getComputedStyle(e).width')
     width = resize(page, '.contracts-grid', 'material')
     login(page, server, 'preview-user')
     page.locator('a[href="/preview/contracts"]').click()
@@ -72,7 +73,7 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     resize(page, '.contracts-grid', 'material', 96)
     login(page, server)
     page.locator('a[href="/preview/contracts"]').click()
-    expect(header(page, '.contracts-grid', 'material')).to_have_css('width', f'{width}px')
+    expect(header(page, '.contracts-grid', 'material')).to_have_css('width', width)
     search = page.get_by_label('搜索', exact=True)
     search.fill(label)
     selected = page.locator('.contracts-grid .ag-row:not(.ag-row-pinned) input[type=checkbox]').first
@@ -84,6 +85,7 @@ def test_account_isolation_and_width_reset_preserve_filter_sort_and_selection(se
     expect(selected).to_be_checked()
     expect(header(page, '.contracts-grid', 'material')).to_have_attribute('aria-sort', 'ascending')
     expect(page.locator('.contracts-page').get_by_role('button', name='恢复自动列宽', exact=True)).to_be_disabled()
+    expect(header(page, '.contracts-grid', 'material')).to_have_css('width', automatic_width)
     assert page.evaluate('key=>localStorage.getItem(key)', storage_key(me, 'contracts')) is None
 
 
@@ -103,9 +105,10 @@ def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_p
     manual_width = resize(page, '.notice-grid', 'project_display')
     pay_header = header(page, '.notice-grid', 'pay_amount')
     before = pay_header.bounding_box()['width']
+    before_css = pay_header.evaluate('e=>getComputedStyle(e).width')
     amount.fill('9876543210.12')
     # Editing freezes actual widths; blur must still publish the new amount minimum.
-    expect(pay_header).to_have_css('width', f'{before:g}px')
+    expect(pay_header).to_have_css('width', before_css)
     box = checkbox.bounding_box()
     assert box
     page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
@@ -115,7 +118,7 @@ def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_p
     expect(checkbox).to_be_checked()
     expect(amount).to_have_value('9876543210.12')
     page.wait_for_function('width=>document.querySelector(".notice-grid .ag-header-cell[col-id=pay_amount]").getBoundingClientRect().width>width+1', arg=before)
-    expect(header(page, '.notice-grid', 'project_display')).to_have_css('width', f'{manual_width}px')
+    expect(header(page, '.notice-grid', 'project_display')).to_have_css('width', manual_width)
     page.get_by_role('button', name='恢复自动列宽', exact=True).click()
     expect(checkbox).to_be_checked()
     expect(page.get_by_label('通知书搜索', exact=True)).to_have_value(label[2:])

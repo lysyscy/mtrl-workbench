@@ -47,12 +47,15 @@ export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[]) {
   return useMemo(()=>{
     let added=false;
     const visit=(items:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]=>items.map(column=>{
-      if(added)return column;
       if('children'in column)return {...column,children:visit(column.children)};
-      if(column.headerComponent||(column.minWidth??column.width??column.initialWidth??88)<80)return column;
+      // Pinned columns cannot flex; leaving flex set also makes native reset skip their width.
+      const {flex,initialFlex,...fixed}=column;
+      const leaf:ColDef<T>=column.pinned&&(flex!==undefined||initialFlex!==undefined)?{...fixed,suppressAutoSize:column.suppressAutoSize??true}:column;
+      if(added)return leaf;
+      if(leaf.headerComponent||(leaf.minWidth??leaf.width??leaf.initialWidth??88)<80)return leaf;
       added=true;
-      const params=column.headerComponentParams??{};
-      return {...column,headerComponentParams:{...params,originalHeader:params.innerHeaderComponent,innerHeaderComponent:WidthHeader}};
+      const params=leaf.headerComponentParams??{};
+      return {...leaf,headerComponentParams:{...params,originalHeader:params.innerHeaderComponent,innerHeaderComponent:WidthHeader}};
     });
     return visit(columns);
   },[columns]);

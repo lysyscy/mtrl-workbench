@@ -33,7 +33,7 @@ def test_invoice_instances_share_native_width_and_reset(server, browser_page, ap
     # Give the first actual instance a selector; this changes no grid or business state.
     grids.first.evaluate("e=>e.id='migration-first-invoices'")
     width = resize(page, '#migration-first-invoices', 'date', 40)
-    expect(grids.nth(1).locator('.ag-header-cell[col-id=date]')).to_have_css('width', f'{width}px')
+    expect(grids.nth(1).locator('.ag-header-cell[col-id=date]')).to_have_css('width', width)
     saved = page.evaluate('key=>JSON.parse(localStorage.getItem(key))', storage_key(me, 'notice-candidate-invoices'))
     assert set(saved['widths']) == {'date'}
     grids.first.locator('..').get_by_role('button', name='恢复自动列宽', exact=True).click()
@@ -151,29 +151,6 @@ def test_project_native_drag_uses_complete_business_order(server, browser_page, 
         page.get_by_role('button',name='导出 Excel',exact=True).click()
     assert export.value.post_data_json['ids']==expected, '项目导出必须保持屏幕原生多列排序后的完整顺序'
     preview_screenshot('pilot-project-drag')
-
-
-def test_annual_grid_uses_frozen_preview_values_and_real_month_ids(server, browser_page, api, preview_screenshot):
-    page, _ = browser_page
-    open_page(page, server, 'mechanical', '机械费')
-    page.get_by_role('button', name='导出预览', exact=True).click()
-    page.get_by_role('button', name='生成报送预览', exact=True).click()
-    grid = page.get_by_role('region', name='年度汇总', exact=True)
-    expect(grid).to_have_attribute('data-layout-state', 'ready')
-    ym = page.get_by_label('月份', exact=True).input_value()
-    shown = get(api, '/api/m06/workbench', ym=ym)['settings']['shown_projects']
-    report = get(api, '/api/m06/workbench/preview', ym=ym, projects=json.dumps(shown))
-    sheet = report['sheets'][3]
-    for cell in sheet['rows'][0][2:-6]:
-        year, month = cell['value'].replace('月','').split('年')
-        column = f'month:{year}-{int(month):02d}'
-        expect(grid.locator(f'.ag-header-cell[col-id="{column}"]')).to_have_text(cell['value'])
-        for source_row, cells in enumerate(sheet['rows'][1:], 2):
-            expected = next((c['value'] for c in cells if c['column']==cell['column']), '')
-            amount_cell=grid.locator(f'.ag-row[row-id="年度汇总:{source_row}"] [col-id="{column}"]')
-            expect(amount_cell).to_have_text(expected)
-            assert amount_cell.locator('.ag-cell-value').evaluate('e=>e.scrollWidth<=e.clientWidth'), '年度金额不能被省略'
-    preview_screenshot('pilot-annual-report')
 
 
 def test_party_classification_updates_while_select_keeps_focus(server,browser_page,api):

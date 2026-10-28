@@ -193,31 +193,6 @@ def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
     assert api.captured['exports'][0]['details'][0]['rows'][0]['amount'] == '103.00'
 
 
-def test_export_rejects_preview_token_after_saved_state_changes(api):
-    assert api.client.post('/api/m06/workbench/details-save', json=draft()).status_code == 200
-    params = {'ym': '2026-09', 'projects': json.dumps(['甲'])}
-    preview = api.client.get('/api/m06/workbench/preview', params=params)
-    assert preview.status_code == 200
-    token = preview.json()['snapshot_token']
-    assert len(token) == 64
-    exported = api.client.get('/api/m06/workbench/export', params={**params, 'snapshot_token': token})
-    assert exported.status_code == 200
-    assert len(api.captured['exports']) == 1
-    changed = draft(revision=1)
-    changed['rows'][0]['amount'] = '206.00'
-    assert api.client.post('/api/m06/workbench/details-save', json=changed).status_code == 200
-    rejected = api.client.get('/api/m06/workbench/export', params={**params, 'snapshot_token': token})
-    assert rejected.status_code == 400
-    assert rejected.json()['ok'] is False
-    assert '重新预览' in rejected.json()['message']
-    assert len(api.captured['exports']) == 1
-    fresh = api.client.get('/api/m06/workbench/preview', params=params).json()['snapshot_token']
-    assert fresh != token
-    retried = api.client.get('/api/m06/workbench/export', params={**params, 'snapshot_token': fresh})
-    assert retried.status_code == 200
-    assert json.loads(retried.content)['details'][0]['rows'][0]['amount'] == '206.00'
-
-
 @pytest.mark.parametrize('route', ['preview', 'export'])
 def test_export_unknown_project_is_rejected_before_exporter(api, route):
     response = api.client.get('/api/m06/workbench/' + route,
