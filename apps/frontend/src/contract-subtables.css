@@ -91,3 +91,10 @@
 .subtable-entry{display:flex;align-items:flex-end;gap:calc(8px * var(--fscale));flex-wrap:wrap;padding:calc(8px * var(--fscale)) 0}
 .subtable-entry>label{display:flex;flex-direction:column;gap:calc(4px * var(--fscale));flex:1;min-width:calc(130px * var(--fscale));margin:0}
 .subtable-entry .ant-input{width:100%}
+
+.contract-subtables .grid-single-line .ag-cell{white-space:nowrap;overflow-wrap:normal}
+.contract-subtables .grid-single-line .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0;white-space:nowrap}
+.contract-subtables .grid-single-line .ag-cell[col-id=source]{white-space:normal;overflow-wrap:anywhere}
+.contract-subtables .grid-single-line .subtable-payment-source{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:nowrap;width:100%;min-width:0;white-space:normal}
+.contract-subtables .grid-single-line .subtable-payment-source small{flex:1;min-width:0;margin:0;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.contract-subtables .grid-single-line .subtable-payment-source .ant-btn{flex:none}

@@ -1,13 +1,8 @@
-"""`MOD-06` **机械手录**（§5.2.5 ③）—— 区块渲染 ＋ 表单校验（**不连库**）。
+"""MOD-06 机械手录金额校验，不连库。
 
-口径：
-- ⭐ **机械 6 列全段手录**（含历史段）—— 与材料列**相反**：材料列**恒只读**（引用 / 快照，§5.2.3），
-  机械列**两段都能录**（出口 = `domain.column_editable`）。
-- ⭐ 值落**旁路载体** `proc_mech_manual` ⇒ **不被重抓 i8 / 重导历史覆盖**（§5.2.5 ③ 与 §9.3 同源思路）。
-- ⚠️ **0 是合法录入值**（表单空框与「录了 0」在金额上不可区分 ⇒ 空按 0 记）；
-  **负数 / 非数字 ⇒ 报错且一个字都不写库**（`core.money.require_non_negative` 是值的唯一出口）。
-
-⚠️ 本文件**只渲染与校验**：落库唯一出口 = `repository.save_mech`；路由只做「校验 → 调它 → PRG 回跳」。
+机械六列含历史段均可手填。0合法，负数和非数字拒绝；兼容入口的空值
+按0解析，过程单格入口显式选择None。旁路载体及明细来源确认由工作台和
+repository.save_mech维护，不在此层改变。
 """
 
 from __future__ import annotations
@@ -20,14 +15,15 @@ from app.mod06_proc import domain as D
 PLACEHOLDER_YM = "YYYY-MM"
 
 
-def parse_mech_values(raw) -> dict[str, Decimal]:
-    """表单 6 个框 → `{mech_i: Decimal}`。**空 ⇒ 0**；**非数字 / 负数 ⇒ `ValueError`**（带列名）。"""
-    out: dict[str, Decimal] = {}
+def parse_mech_values(raw, *, empty_as_none: bool = False) -> dict[str, Decimal | None]:
+    """兼容表单空值为0；过程单格入口显式选择留空。非数字、负数仍拒绝。"""
+    out: dict[str, Decimal | None] = {}
     for i, label in enumerate(D.MECH_COLUMNS):
         key = f"mech_{i}"
-        text = str((raw or {}).get(key) or "").strip().replace(",", "")
+        value = (raw or {}).get(key)
+        text = ("" if value is None else str(value)).strip().replace(",", "")
         if not text:
-            out[key] = Decimal("0.00")
+            out[key] = None if empty_as_none else Decimal("0.00")
             continue
         try:
             value = to_money(text)
@@ -43,7 +39,7 @@ def parse_mech_values(raw) -> dict[str, Decimal]:
 #    `_value_of`（表单回填现值）· `block_html`（「机械手录」区块）· `notice_html`（PRG 回执条）——
 #    它们只服务**旧服务端页**；旧页整体删除（授权 `D18`）后三者**零调用方**
 #    （`wiring_audit` 的 W1/W2 当场报出来 ✓）⇒ 一并删除。
-#    ⚠️ 剩下的 `parse_mech_values` 才是**口径所在**（空按 0 / 负数与非数字报错 ✓ 壳与 `/api/m06/mech` 共用）；
+#    剩下的 `parse_mech_values` 为兼容入口与过程单格入口共用的校验。
 
 
 __all__ = ["PLACEHOLDER_YM", "parse_mech_values"]

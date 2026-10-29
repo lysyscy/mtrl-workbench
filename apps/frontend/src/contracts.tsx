@@ -11,7 +11,8 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { pageGridGeometry, contentWidth, fixedWidth, fullTextWidth, numberColumnWidth, gridTheme } from './grid';
+import { pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
+import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
@@ -26,7 +27,7 @@ import { ContractExports } from './contract-export';
 import { ContractSubtableDialog, hasSubtableDrafts } from './contract-subtables';
 import type { SubtableWorkspace } from './contract-subtables';
 
-const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true};
+const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
 
 function decimalCents(value:bigint){const abs=value<0n?-value:value;return `${value<0n?'-':''}${abs/100n}.${String(abs%100n).padStart(2,'0')}`;}
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:''});
@@ -39,7 +40,7 @@ function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKe
   useEffect(()=>setText(value),[value]);
   if(p.node.rowPinned)return null;
   if(key==='payment_method')return <Select className="contract-inline-select" aria-label={`${row.contract_no||row.material} 合同付款方式`} value={text} disabled={control.disabled} options={['',...control.methods].map(value=>({value,label:value?<EnumTag kind="payMethod" value={value}/>: '未约定'}))} onChange={value=>{setText(value);p.control().change(row.id,key,value);void p.control().save(row,key,value);}}/>;
-  return <Input className="record-value" title={key==='remark'?text:undefined} onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?control.next(row):'可填'} onChange={e=>{setText(e.target.value);p.control().change(row.id,key,e.target.value);}} onBlur={()=>void p.control().save(row,key,text)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/>;
+  return <TextPreview text={text}><Input className="record-value" onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?control.next(row):'可填'} onChange={e=>{setText(e.target.value);p.control().change(row.id,key,e.target.value);}} onBlur={()=>void p.control().save(row,key,text)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/></TextPreview>;
 }
 function ContractRemarkEditor({ row, initial, busy, disabled, paused, error, save, close }: { row:ContractRow;initial:string;busy:boolean;disabled:boolean;paused:boolean;error:string;save:(value:string)=>Promise<boolean>;close:()=>void }) {
   const [text,setText]=useState(initial);
@@ -126,35 +127,39 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const state=useRef({unavailable,picked,shown,tag});state.current={unavailable,picked,shown,tag};
   const scale=Number(me?.ui_scale_css??1);
   const widths=useGridWidths('contracts',root,scale,active&&!blocked);
-  const identifierWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no'].includes(c.key)).map(c=>{
-    const values=fullTextWidth(rows.map(row=>String(row[c.key as keyof ContractRow]??'')),scale).minWidth;
-    // Headers also need their native padding and sort icon, beyond the cell text floor.
-    const header=fullTextWidth([c.label.replace('（自动）','')],scale).minWidth+20;
-    const minWidth=Math.max(values,header);
-    return [c.key,{initialWidth:minWidth,minWidth}];
-  })),[rows,query.data?.columns,scale]);
+  const completeWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no','payment_term','payment_method','tag','arch','arch_no','ret_date'].includes(c.key)).map(c=>{
+    const values=rows.map(row=>String(row[c.key as keyof ContractRow]??''));
+    if(c.key==='payment_method')values.push('未约定',...(query.data?.payment_methods??[]));
+    if(c.key==='arch_no')values.push(...[...new Map(rows.map(row=>[row.project_key,row])).values()].map(row=>nextContractArchiveNo(rows,row)));
+    if(c.key==='ret_date')values.push('2000-12-31');
+    const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch'].includes(c.key)?12:0;
+    return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
+  })),[rows,query.data?.columns,query.data?.payment_methods,scale]);
   const columns=useMemo<ColDef<ContractRow>[]>(()=>[
     {colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:()=> <Checkbox aria-label="选择当前合同" checked={shown.length>0&&shown.every(r=>picked.has(r.id))} onChange={e=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/>,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>},
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
       // Keep formatted amounts and totals intact before flexible text columns shrink.
-      const amountWidth=numeric?numberColumnWidth([...shown,...totalRow].map(row=>row[c.key as typeof contractMoneyKeys[number]]===null?'未确定':money(row[c.key as typeof contractMoneyKeys[number]]??'0')),scale):undefined;
-      const min=c.key==='ret_date'?130:c.key==='material'?80:c.key==='supplier'?64:c.key==='remark'?60:c.key==='payment_method'?80:c.key==='payment_term'?48:c.key==='arch_no'?48:44;
-      const identifier=identifierWidths[c.key];
-      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),...(identifier??amountWidth??contentWidth(min,c.key==='material'?320:c.key==='remark'||c.key==='supplier'?250:Math.max(min,145),scale,['supplier','remark'].includes(c.key)?1:0)),wrapHeaderText:!identifier,autoHeaderHeight:true,wrapText:!numeric&&!identifier,autoHeight:true,cellClass:numeric?'money':identifier?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?{cellRenderer:ContractInlineCell,cellRendererParams:{editKey:c.key,control:()=>inlineControl.current}}:{}),
+      const header=c.key==='tag'?'纳入状态':c.label.replace('（自动）','');
+      const values=numeric?[...rows,...totalRow].map(row=>row[c.key as typeof contractMoneyKeys[number]]===null?'未确定':money(row[c.key as typeof contractMoneyKeys[number]]??'0')):[];
+      const measured=numeric?numberColumnWidth(values,scale):undefined;
+      const amountWidth=measured?completeColumnWidth(values,header,scale,['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?56:0):undefined;
+      if(amountWidth&&measured)amountWidth.minWidth=amountWidth.initialWidth=Math.max(amountWidth.minWidth,measured.minWidth+(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?56*scale:0));
+      const bounded=c.key==='material'?{initialWidth:260*scale,...textWidth(220,360,scale,0)}:c.key==='remark'?textWidth(110,210,scale,.7):textWidth(120,c.key==='supplier'?260:240,scale,1);
+      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??amountWidth??bounded),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?{cellRenderer:ContractInlineCell,cellRendererParams:{editKey:c.key,control:()=>inlineControl.current}}:{}),
         comparator:numeric?(a:string|null,b:string|null)=>cents(a??'0')<cents(b??'0')?-1:cents(a??'0')>cents(b??'0')?1:0:undefined,
         cellRenderer:['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?ContractInlineCell:(p:ICellRendererParams<ContractRow>)=>{
           if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
           const row=p.data!;
-          if(c.key==='material')return <div className="contract-object"><Button size="small" onClick={()=>{openEditor(row,true);}}>{row.material||'材料名未填'}</Button><small>{projectRows.find(p=>p.warehouse_name===row.project_key)?.disp||(projects.isPending?'项目读取中…':'项目未匹配')}</small></div>;
+          if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectRows.find(p=>p.warehouse_name===row.project_key)?.disp||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
           if(c.key==='tag'||c.key==='arch')return <Tag className={`status-tag ${c.key==='tag'?(row.tag==='纳入台账'?'status-positive':'status-neutral'):(row.arch==='已存档'?'status-positive':row.arch==='资产处'?'status-pending':'status-neutral')}`}>{String(p.value||'未存档')}</Tag>;
           if(c.key==='payment_method')return row.payment_method?<EnumTag kind="payMethod" value={row.payment_method}/>:<span className="muted">未约定</span>;
           if(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)&&!(c.key==='trade_inv_sum'&&!row.trade_co))return <div className="contract-amount-action"><span>{money(String(p.value??'0'))}</span><Button size="small" aria-label={`${row.contract_no||row.material} ${c.key==='inv_sum'?'供应商发票':c.key==='trade_inv_sum'?'贸易公司发票':'付款'}子表`} onClick={()=>setSubtable({row,kind:c.key==='inv_sum'?'supplier':c.key==='trade_inv_sum'?'trade':'payment'})}>子表</Button></div>;
-          return numeric?(p.value===null?'未确定':money(String(p.value))):String(p.value??'');
+          return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
-    {colId:'actions',headerName:'操作',...contentWidth(76,180,scale),sortable:false,wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
-  ],[query.data?.columns,trade,scale,shown,picked,projectRows,projects.isPending,identifierWidths]);
+    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
+  ],[query.data?.columns,trade,scale,shown,picked,projectRows,projects.isPending,completeWidths]);
   // Keep the reset action on the material header, clear of complete identifiers.
   const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);
   const resetColumn=useGridWidthColumns(resetColumns)[0];
@@ -170,7 +175,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     {(feedback||busy||query.isFetching&&!query.isPending)&&<p className="contract-feedback" role="status">{busy?'正在保存…':query.isFetching?'正在更新合同，保留当前列表…':feedback}</p>}
     {(error||query.isError||projects.isError)&&<p className="notice" role="alert">{error||(query.isError?`合同更新失败，保留上次结果。${query.error.message}`:projects.error?.message)}<Button onClick={()=>void reread()}>重读核对</Button></p>}
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={setFeedback}/>}
-    {query.isPending?<p role="status">正在读取集采合同…</p>:<GridWidthContext.Provider value={widths}><div className="contracts-grid" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider>}
+    {query.isPending?<p role="status">正在读取集采合同…</p>:<GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider>}
     {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={setFeedback}/>)}
     {subtable&&<ContractSubtableDialog scale={scale} row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} change={changeSubtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
     {remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value);}} close={()=>setRemarkEditor(null)}/>}

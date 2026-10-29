@@ -13,7 +13,59 @@ def details(s, category='monthly', ym='2026-09'):
 
 
 def save(s, column='mech_2', value='77.00', **kwargs):
-    return W.save_process_mech(s, warehouse='甲', ym='2026-09', values={column:Decimal(value)}, **kwargs)
+    return W.save_process_mech(s, warehouse='甲', ym='2026-09', values={column:None if value is None else Decimal(value)}, **kwargs)
+
+
+def test_process_clear_is_unknown_and_explicit_zero_remains_a_real_value(session):
+    save(session)
+    save(session, value=None)
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] is None
+    save(session, value='0')
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] == '0.00'
+
+
+def test_clearing_previously_unrecorded_month_keeps_an_explicit_empty_override(session):
+    assert R.mech_row(session, '甲', '2026-09') is None
+    save(session, value=None)
+    assert R.mech_row(session, '甲', '2026-09') is not None
+    assert W.effective(session, '甲', '2026-09')['values']['mech_2'] is None
+
+
+def test_clearing_detail_amount_requires_confirmation_and_keeps_details(session):
+    state, _ = save_detail(session)
+    original = deepcopy(W.read(session, W.key('details', '甲', '2026-09', 'zero')))
+    with pytest.raises(MustReportError, match='明细'):
+        save(session, value=None)
+    save(session, value=None, confirmed=True, effective_signature=state['signature'],
+         detail_signature=W.detail_signatures(session)['甲']['2026-09'])
+    final = W.effective(session, '甲', '2026-09')
+    assert final['values']['mech_2'] is None
+    assert final['values']['mech_4'] == '100.00'
+    assert final['sources']['mech_2']['mode'] == 'manual'
+    assert W.read(session, W.key('details', '甲', '2026-09', 'zero')) == original
+    stamp = R.mech_row(session, '甲', '2026-09').updated_at
+    save(session, value=None)
+    assert R.mech_row(session, '甲', '2026-09').updated_at == stamp
+
+
+@pytest.mark.parametrize('zero', [0, '0'])
+def test_postgresql_cell_clear_preserves_legacy_empty_as_zero(rollback_db, zero):
+    from uuid import uuid4
+    from app.core import db
+    from app.mod06_proc import router
+    from app.mod01_projects.models import Project
+    wh = '清空入口-' + uuid4().hex
+    with db.get_session_factory()() as s:
+        s.add(Project(warehouse_name=wh)); s.commit()
+        req = router.MechSaveRequest(warehouse=wh, ym='2026-09', values={'mech_2': ''})
+        router.api_mech_save(req)
+        assert router.api_mech()['effective_values'][wh]['2026-09']['mech_2'] == '0.00'
+        router.api_mech_cell_save(req)
+        assert router.api_mech()['effective_values'][wh]['2026-09']['mech_2'] is None
+        router.api_mech_cell_save(router.MechSaveRequest(warehouse=wh, ym='2026-09', values={'mech_2': zero}))
+        assert router.api_mech()['effective_values'][wh]['2026-09']['mech_2'] == '0.00'
+        router.api_mech_cell_save(router.MechSaveRequest(warehouse=wh, ym='2026-09', values={'mech_2': None}))
+        assert router.api_mech()['effective_values'][wh]['2026-09']['mech_2'] is None
 
 
 @pytest.mark.parametrize('column',[f'mech_{i}' for i in range(6)])

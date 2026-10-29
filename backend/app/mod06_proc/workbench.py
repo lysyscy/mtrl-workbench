@@ -264,8 +264,10 @@ def save_process_mech(s, *, warehouse, ym, values, confirmed=False, effective_si
                       detail_signature='', operator=''):
     """One transaction checks the decision, changes source and saves only edited cells."""
     current = effective(s, warehouse, ym, lock=True)
+    has_row = repo.mech_row(s, warehouse, ym) is not None
     changed = {column: value for column, value in values.items()
-               if current['values'][column] is None or Decimal(current['values'][column]) != value}
+               if (None if current['values'][column] is None else Decimal(current['values'][column])) != value
+               or value is None and not has_row}
     if not changed:
         return
     details = detail_signatures(s).get(warehouse, {}).get(ym, '')
@@ -276,7 +278,7 @@ def save_process_mech(s, *, warehouse, ym, values, confirmed=False, effective_si
         if detail_signature != details:
             raise MustReportError('机械明细已变化，请重读并重新确认金额。')
         repo.source_manual(s, warehouse=warehouse, ym=ym, columns=list(changed), operator=operator)
-    repo.save_mech(s, warehouse=warehouse, ym=ym, values=changed, project_id=None)
+    repo.save_mech(s, warehouse=warehouse, ym=ym, values=changed, project_id=None, allow_empty=True)
 
 
 def source_manual(s, data, operator=''):

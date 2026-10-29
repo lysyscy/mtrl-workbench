@@ -226,13 +226,13 @@ def _save_mech(req: MechSaveRequest, *, confirm_details: bool) -> dict:
     if not ym:
         raise MustReportError(f"核算月认不出：{req.ym or '（空）'} —— 请写 2026-08 这种形态。")
     try:
-        values = {k: v for k, v in mech_ui.parse_mech_values(req.values).items()
+        values = {k: v for k, v in mech_ui.parse_mech_values(req.values, empty_as_none=confirm_details).items()
                   if k in req.values}
     except ValueError as exc:
         raise MustReportError(f"未保存：{exc}") from exc
 
     with session_scope() as s:
-        parsed = {k: Decimal(v) for k, v in values.items()}
+        parsed = {k: None if v is None else Decimal(v) for k, v in values.items()}
         if confirm_details:
             from app.mod06_proc import workbench
             workbench.save_process_mech(s, ym=ym, warehouse=warehouse, values=parsed,

@@ -90,7 +90,7 @@ def load_mech(s: Session) -> list[dict]:
 
 
 def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None,
-              detail_sources: dict | None = None):
+              detail_sources: dict | None = None, allow_empty: bool = False):
     """Manual writes respect sources; saved detail totals may be unknown or cleared."""
     from app.core.money import require_non_negative
     from app.mod06_proc.domain import normalize_ym
@@ -99,7 +99,7 @@ def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: 
     if not ym:
         raise ValueError("核算月认不出，请写 YYYY-MM")
     derived = detail_sources or {}
-    parsed = {key: None if value is None and key in derived else require_non_negative(value, field=key) for key, value in values.items()
+    parsed = {key: None if value is None and (key in derived or allow_empty) else require_non_negative(value, field=key) for key, value in values.items()
               if key in MECH_KEYS}
     found = mech_row(s, warehouse, ym)
     guarded = writable_mech_values(found, {k: v for k, v in parsed.items() if k not in derived})

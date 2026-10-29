@@ -10,7 +10,7 @@ import type { TextGridColumn } from './grid-layout';
 import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 
-type Measurement<T> = TextGridColumn<T>[] | {
+export type GridMeasurement<T> = TextGridColumn<T>[] | {
   signature?: (row: T, column: string, pinned: boolean) => string;
   textOnly?: readonly string[];
 };
@@ -20,7 +20,7 @@ const details = Symbol('grid-presentation');
 // measurement and publication as one lifecycle. Observations support page labels
 // and existing actions without exposing attach/portal/retry ordering to callers.
 export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, ...layout}: {
-  columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: Measurement<T>;
+  columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: GridMeasurement<T>;
   root: RefObject<HTMLDivElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean;
   table: string; rows: T[]; totals: T[]; rowId: (row: T) => string; scope: string; identity: string; scale: number;
   rowMinimum?: number;

@@ -90,7 +90,9 @@ export function readMechanicalReport(value: unknown, ym: string, warehouses: str
     if (new Set(project_rows.map(group => group.row)).size !== project_rows.length) throw invalid();
     return { name: sheet.name, rows, project_rows };
   });
-  if (sheets[0]!.rows.length !== warehouses.length + 6) throw invalid();
+  const summary=sheets[0]!,total=summary.rows[warehouses.length+5];
+  if (!total || total[0]?.value!=='合计' || summary.project_rows.some((group,index)=>group.row!==index+6)
+    || summary.rows.slice(warehouses.length+6).some(row=>row.length!==1||row[0]!.column!==1||row[0]!.colspan!==15)) throw invalid();
   return { ym, sheets };
 }
 

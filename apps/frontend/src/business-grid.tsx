@@ -6,6 +6,7 @@ import type { AgGridReactProps } from 'ag-grid-react';
 import Button from 'antd/es/button';
 import { gridTheme, contentWidth, pageGridGeometry } from './grid';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import type { GridMeasurement } from './grid-presentation';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { loadElementFonts } from './appearance-ready';
 import { useRetainedGridColumns } from './grid-layout';
@@ -18,26 +19,29 @@ type BusinessGridProps<T>={
   domLayout: 'normal' | 'autoHeight'; context?: unknown;
   rowMinimum?: number;
   gridClassName?: string;
+  singleLine?: boolean;
+  measurement?: GridMeasurement<T>;
   grid?: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
 };
-function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number):(ColDef<T>|ColGroupDef<T>)[]{
-  return columns.map(column=>'children'in column?{...column,children:businessColumns(column.children,scale)}:
-    {...('initialWidth'in column||'width'in column||'minWidth'in column?{}:contentWidth(88,320,scale,1)),wrapText:true,...column});
+function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number,singleLine=false):(ColDef<T>|ColGroupDef<T>)[]{
+  return columns.map(column=>'children'in column?{...column,children:businessColumns(column.children,scale,singleLine)}:
+    {...('initialWidth'in column||'width'in column||'minWidth'in column?{}:contentWidth(88,320,scale,1)),wrapText:!singleLine,
+      ...(singleLine?{wrapHeaderText:false,autoHeight:false,autoHeaderHeight:false}:{}),...column});
 }
 
 // Small business views use the same native definitions and lifecycle as page grids.
 // Each caller chooses its native layout; this component supplies no table schema.
 export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, scope = table, scale: suppliedScale,
-  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='' }: BusinessGridProps<T>) {
+  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement }: BusinessGridProps<T>) {
   const root = useRef<HTMLDivElement>(null);
   const active=useContext(PageActivity);
   const scale = suppliedScale ?? (Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1);
   const totalRows = useMemo(() => totals ?? [], [totals]);
-  const definitions = useMemo(() => businessColumns(columns,scale), [columns, scale]);
+  const definitions = useMemo(() => businessColumns(columns,scale,singleLine), [columns, scale,singleLine]);
   const presentation = useGridPresentation({table, root, active, rows, totals: totalRows, columns: definitions,
-    rowId, scale, scope, identity: scope, context,...(rowMinimum===undefined?{}:{rowMinimum})});
+    rowId, scale, scope, identity: scope, context,...(measurement===undefined?{}:{measurement}),...(rowMinimum===undefined?{}:{rowMinimum})});
   return <div className={`business-grid-view ${className}`}>
-    <PreparedGrid presentation={presentation} className={'business-grid '+gridClassName} style={style} role="region" aria-label={label}
+    <PreparedGrid presentation={presentation} className={'business-grid '+gridClassName+(singleLine?' grid-single-line':'')} style={style} role="region" aria-label={label}
       grid={{theme: businessTheme, domLayout, groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight, getRowId: p => rowId(p.data),
         suppressColumnVirtualisation: true, suppressCellFocus: true,
         defaultColDef: {sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true},
@@ -47,13 +51,14 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
 
 // Repeated small views use AG's native row/header auto height; inputs stay business-owned.
 // Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
-export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context}:BusinessGridProps<T>) {
+export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false}:BusinessGridProps<T>) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
   const scale=suppliedScale??(Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1);
   const widths=useGridWidths(table,root,scale,active),[ready,setReady]=useState(false),[error,setError]=useState(''),[rendered,setRendered]=useState(0),[retry,setRetry]=useState(0);
   const totalRows=useMemo(()=>totals??[],[totals]);
-  const definitions=useMemo(()=>businessColumns(columns,scale),[columns,scale]);
+  const definitions=useMemo(()=>businessColumns(columns,scale,singleLine),[columns,scale,singleLine]);
+  const defaults=useMemo(()=>singleLine?{...readColumnDefaults,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false}:readColumnDefaults,[singleLine]);
   const widthColumns=useGridWidthColumns(definitions);
   const retained=useRetainedGridColumns(widthColumns,root);
   useEffect(()=>{if(api&&!rows.length)setRendered(n=>n||1);},[api,rows.length]);
@@ -64,8 +69,8 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   },[api,rendered,retry,active]);
   const {onGridReady,onFirstDataRendered,...options}=grid;
   return <GridWidthContext.Provider value={widths}><div className={`business-grid-view ${className}`}>
-    <div ref={root} className="business-grid" role="region" aria-label={label} data-layout-state={error?'error':ready?'ready':'preparing'} inert={!ready} style={{...style,visibility:ready?'visible':'hidden'}}>
-      <AgGridReact<T> theme={businessTheme} {...pageGridGeometry(scale)} defaultColDef={readColumnDefaults} suppressCellFocus suppressColumnVirtualisation
+    <div ref={root} className={'business-grid'+(singleLine?' grid-single-line':'')} role="region" aria-label={label} data-layout-state={error?'error':ready?'ready':'preparing'} inert={!ready} style={{...style,visibility:ready?'visible':'hidden'}}>
+      <AgGridReact<T> theme={businessTheme} {...pageGridGeometry(scale)} defaultColDef={defaults} suppressCellFocus suppressColumnVirtualisation
         {...options} domLayout={domLayout} context={context} columnDefs={retained} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
         onGridReady={e=>{widths.attach(e.api);setApi(e.api);onGridReady?.(e);}} onFirstDataRendered={e=>{setRendered(n=>n||1);onFirstDataRendered?.(e);}}/>
     </div>{error&&<p role="alert">{error}<Button onClick={()=>setRetry(n=>n+1)}>重试表格加载</Button></p>}

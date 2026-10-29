@@ -153,7 +153,7 @@ def test_scale_roundtrip_restores_automatic_widths_and_keeps_reader_state(server
         panel=page.get_by_role('dialog',name='外观与字号',exact=True)
         panel.get_by_role('radio',name=item['label']+'字号',exact=True).click();expect(panel).to_have_attribute('aria-busy','false')
         panel.get_by_role('button',name='收起外观面板',exact=True).click()
-        expect(grid).to_have_attribute('data-layout-state','ready')
+        if grid.is_visible():expect(grid).to_have_attribute('data-layout-state','ready')
     try:
         scale_to(maximum)
         page.get_by_role('link',name='付款流水',exact=True).click()

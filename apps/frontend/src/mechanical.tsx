@@ -6,7 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, readProjects, record, requestFile, requestJson, uncertainWrite } from './api';
 import type { Identity, Project } from './api';
-import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, fixedWidth, gridTheme, textWidth } from './grid';
+import { EllipsisText, completeColumnWidth } from './grid-text';
 import { detailSum, mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench, readWorkResult } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { useCellSaveQueue } from './use-cell-save';
@@ -21,6 +22,8 @@ import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadGrid } from './business-grid';
 import { ProjectExport } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
+// These cells stay one line; let the existing native row-height path size them.
+const summaryMeasurement = {textOnly:Array.from({length:15},(_,index)=>`c${index}`)};
 const plateKeywords = (text: string) => [...new Set(text.split('\n').map(word => word.trim()).filter(Boolean))];
 
 interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
@@ -43,7 +46,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
       + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
       + (element.querySelector('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
-      + (horizontal && getComputedStyle(horizontal).visibility !== 'hidden' ? horizontal.getBoundingClientRect().height : 0) + 2;
+      + (horizontal?.getBoundingClientRect().height ?? 0) + 2;
     const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
     if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
   }, []);
@@ -53,7 +56,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   }, [fitHeight]);
   const current=useRef(internal);current.current=internal;
   useEffect(()=>{api.current?.refreshCells({force:true});},[internal.epoch,internal.writable]);
-  const rows = useMemo(() => report.sheets[0]!.rows.slice(5).map((cells, index) => {
+  const rows = useMemo(() => report.sheets[0]!.rows.slice(5, 6+projectIds.length).map((cells, index) => {
     const row: SummaryRow = { id: String(projectIds[index] ?? 'total') };
     for (const cell of cells) row[`c${cell.column - 1}`] = cell.value;
     const warehouse=warehouses[index];
@@ -72,21 +75,20 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   }, []);
   const columns = useMemo<(ColDef<SummaryRow> | ColGroupDef<SummaryRow>)[]>(() => [
     { field: 'c0', headerName: '序号', pinned: 'left', ...fixedWidth(48, scale) },
-    { field: 'c1', headerName: '项目名称', pinned: 'left', ...contentWidth(120, 200, scale), wrapText: true, autoHeight: true },
-    { headerName: '开工日期', children: [{ field: 'c2', headerName: '年', ...contentWidth(48, 68, scale) }, { field: 'c3', headerName: '月', ...contentWidth(34, 56, scale), cellClass: 'mechanical-group-end', headerClass: 'mechanical-group-end' }] },
+    { field: 'c1', headerName: '项目名称', pinned: 'left', ...textWidth(120, 200, scale), wrapText: false, autoHeight: false, cellRenderer: (p: ICellRendererParams<SummaryRow,string>) => <EllipsisText text={p.value ?? ''} /> },
+    { headerName: '开工日期', children: [{ field: 'c2', headerName: '年', ...completeColumnWidth(rows.map(row=>row.c2), '年', scale) }, { field: 'c3', headerName: '月', ...completeColumnWidth(rows.map(row=>row.c3), '月', scale), cellClass: 'mechanical-group-end', headerClass: 'mechanical-group-end' }] },
     ...['开工累计费用（元）', '本月产生费用（元）'].map((name, group) => ({ headerName: name, headerClass: 'mechanical-group-end', children: groupLabels.map((label, index): ColDef<SummaryRow> => ({
-      field: `c${4 + group * 5 + index}`, headerName: label, ...mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2,1), wrapText: false, autoHeight: true, valueFormatter:p=>money(p.value), cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
+      field: `c${4 + group * 5 + index}`, headerName: label, ...mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2,1), minWidth: Math.max(mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2).minWidth, completeColumnWidth([],label,scale).minWidth), wrapText: false, autoHeight: false, valueFormatter:p=>money(p.value), cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
       ...(group===1&&index>2?{cellRenderer:renderInternal}:{}),
       ...(group === 1 && index < 2 ? { cellRenderer: renderDetail } : {}),
     })) })),
-    { field: 'c14', headerName: '备注', ...contentWidth(72, 144, scale), wrapText: true, autoHeight: true },
+    { field: 'c14', headerName: '备注', ...textWidth(72, 144, scale), wrapText: false, autoHeight: false, cellRenderer: (p: ICellRendererParams<SummaryRow,string>) => <EllipsisText text={p.value ?? ''} /> },
   ], [scale, rows, renderInternal, renderDetail]);
-  const measurement = useMemo(() => ({signature:(row:SummaryRow,id:string,pinned:boolean)=>JSON.stringify([row[id],pinned,internal.writable])}), [internal.writable]);
   const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
   const scope = `${report.ym}:${warehouses.join('\0')}`;
-  const presentation = useGridPresentation({table: 'mechanical-summary', root, active, rows: bodyRows, totals: total, columns, measurement, rowId: summaryRowId, scale, scope, identity: scope});
+  const presentation = useGridPresentation({table: 'mechanical-summary', root, active, rows: bodyRows, totals: total, columns, measurement:summaryMeasurement, rowId: summaryRowId, scale, scope, identity: scope});
   useLayoutEffect(() => { if (presentation.state === 'ready') fitHeight(); }, [presentation.state, fitHeight]);
-  return <PreparedGrid presentation={presentation} className="mechanical-grid" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapHeaderText:true},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
+  return <PreparedGrid presentation={presentation} className="mechanical-grid grid-single-line" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
         api.current = event.api;
         // Header wrapping and scrollbar visibility can settle after the first data render.
         const observer = new ResizeObserver(fitHeight);

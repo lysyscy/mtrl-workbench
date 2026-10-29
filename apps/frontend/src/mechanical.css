@@ -97,3 +97,9 @@
 .mechanical-work-table .mechanical-check-table,.mechanical-work-table .mechanical-i8-review{table-layout:auto}
 
 .mechanical-work-table .mechanical-check-table{min-width:calc(1340px * var(--fscale))}
+
+.mechanical-detail-table .mechanical-group-label{display:flex;align-items:center;min-width:0;white-space:nowrap}
+.mechanical-detail-table .mechanical-group-label strong{display:block;min-width:0;overflow:hidden}
+.mechanical-detail-table .mechanical-group-label strong .grid-ellipsis{font-weight:600;color:var(--tx)}
+.mechanical-detail-table .mechanical-group-label>span{flex:none}
+.mechanical-detail-table .mechanical-detail-group-row .money small{display:inline;white-space:nowrap}

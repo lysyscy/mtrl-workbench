@@ -54,5 +54,9 @@
 .process-matrix-scroll .business-grid{flex:1;min-height:0}
 .process-matrix .process-cell .ant-input{width:100%;field-sizing:fixed}
 .process-matrix .ag-cell.process-segment{border-inline-start:.5px solid var(--bd)}
+.process-cell-error{display:flex;flex-direction:column;gap:calc(3px * var(--fscale));font-size:calc(12px * var(--fscale));line-height:1.4;white-space:normal;overflow-wrap:anywhere;color:var(--dg-d)}
+.process-cell-error>div{display:flex;gap:calc(4px * var(--fscale));flex-wrap:wrap}
+.process-matrix .process-cell-error .ant-btn{height:auto;min-height:calc(24px * var(--fscale));padding-inline:calc(4px * var(--fscale));font-size:inherit}
+.process-uncertain p{margin-block:calc(4px * var(--fscale));white-space:normal}
 .process-matrix .process-segment-total{display:flex;flex-wrap:wrap;justify-content:flex-end;column-gap:.35em;line-height:1.5}
 .process-matrix .process-segment-total>span{white-space:nowrap}

@@ -1,0 +1,12 @@
+.grid-text-preview{display:block;width:100%;max-width:100%;min-width:0}
+.grid-ellipsis{display:block;min-width:0;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.grid-full-text{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;cursor:text;line-height:1.55}
+.grid-single-line .ag-cell{line-height:1.5;padding-block:calc(2px * var(--fscale));white-space:nowrap}
+.grid-single-line .ag-cell-value,.grid-single-line .ag-cell-wrapper{min-width:0;width:100%}
+.grid-single-line .ag-cell-wrap-text{white-space:normal;overflow-wrap:anywhere}
+.grid-single-line .ag-header-cell-text,.grid-single-line .ag-header-group-text{white-space:nowrap}
+.grid-single-line :is(.status-tag,.enum-tag,.notice-tag){white-space:nowrap;overflow-wrap:normal}
+.grid-single-line :is(.ant-input,.ant-select,.ant-btn){font-size:inherit}
+.grid-single-line :is(.ant-input,.ant-select-selector){min-height:calc(28px * var(--fscale))}
+.grid-single-line .ant-input{height:calc(28px * var(--fscale))}
+.grid-single-line .ant-btn{white-space:nowrap}

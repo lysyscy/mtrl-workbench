@@ -64,14 +64,15 @@ def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,
     state=get(api,'/api/m06/workbench',ym=ym);warehouses=state['settings']['shown_projects'];assert warehouses
     preview=get(api,'/api/m06/workbench/preview',ym=ym,projects=json.dumps(warehouses,ensure_ascii=False))
     count=len(preview['sheets'][0]['project_rows']);assert count
-    page.wait_for_function("""count=>{const g=document.querySelector('.mechanical-grid');const last=g?.querySelector('[row-index="'+(count-1)+'"]');const total=g?.querySelector('.ag-row-pinned');return last&&total&&Math.abs(total.getBoundingClientRect().top-last.getBoundingClientRect().bottom)<2;}""",arg=count)
+    # Native scrollbar space may separate the body and pinned total; neither may cover the last row.
+    page.wait_for_function("""count=>{const g=document.querySelector('.mechanical-grid');const last=g?.querySelector('[row-index="'+(count-1)+'"]');const total=g?.querySelector('.ag-row-pinned');return last&&total&&last.getBoundingClientRect().bottom<=total.getBoundingClientRect().top+1;}""",arg=count)
     scale=page.evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))")
     assert grid.locator('.ag-header-cell[col-id="c1"]').bounding_box()['width']<=200*scale+1
     assert grid.locator('.ag-header-cell[col-id="c14"]').bounding_box()['width']<=144*scale+1
     project=next(p for p in projects if p['warehouse_name']==warehouses[0])
     position=next(item['row'] for item in preview['sheets'][0]['project_rows'] if item['warehouse']==warehouses[0])
     row=grid_row(page,'.mechanical-grid',project['id'])
-    for dom,cells in [(row,preview['sheets'][0]['rows'][position-1]),(grid.locator('.ag-row-pinned'),preview['sheets'][0]['rows'][-1])]:
+    for dom,cells in [(row,preview['sheets'][0]['rows'][position-1]),(grid.locator('.ag-row-pinned'),preview['sheets'][0]['rows'][count+5])]:
         values={cell['column']-1:cell['value'] for cell in cells}
         for column in [4,5,7,8,9,10,12,13]:
             expected=values[column].replace(',','');cell=dom.locator('[col-id="c'+str(column)+'"]')
