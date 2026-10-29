@@ -12,7 +12,7 @@
 
 现行业务回 [requirements](../requirements.md)，工程结构回 [architecture](../architecture.md)，命令与隔离回 [开发指南](../guides/development-and-verification.md)。普通明确改动用用户需求、实际验证及回执即可，不强制规格、票或每日记录。需要跨会话才复用一张票/必要任务说明；有真实依赖的 effort 保共同规格、必要票、累计基点和已确认授权。单票持有进度，status 仅导航活动 effort。
 
-Mini App的既有规格、身份、依赖、验收、Comments与授权继续有效。React重写已签收，现行业务和界面约束归requirements与frontend-design，原任务材料按Git追溯。开发、隔离验证、人工验收、正式切换和旧版退役分别判定；主线状态不能覆盖独立工作树进度。跨任务文档在安全批次边界整合，遇修改/删除冲突先将独有有效知识迁到现行主人，保护双方内容。
+React重写已签收，现行业务和界面约束归requirements与frontend-design，原任务材料按Git追溯。开发、隔离验证、人工验收、正式切换和旧版退役分别判定；主线状态不能覆盖独立工作树进度。跨任务文档在安全批次边界整合，遇修改/删除冲突先将独有有效知识迁到现行主人，保护双方内容。
 
 ## 提交与权限
 

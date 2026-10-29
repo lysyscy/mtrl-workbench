@@ -22,10 +22,6 @@
 
 未实施架构候选统一由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，状态needs-triage；本次启用不自动启动或要求全部完成。
 
-## Mini App 付款原表核对台（暂缓）
-
-用户2026-10-28决定当前暂不推进。[规格与七票](../.scratch/miniapp-payment-plan-audit/spec.md)原地保留、尚未实施，七票统一needs-info，待用户以后重新安排；恢复时再核主前端、后端接口及宿主变化。既有`skills/payment-plan-audit`仍按自身业务用途保留。
-
 ## 集合筛选研究（暂存参考）
 
 [可行性研究](../.scratch/share-feasibility/research.md)已完成官方接口与合成小样验证。用户2026-10-28确认只是了解、当前先不做，本effort原地保留，未进入实施排期。
