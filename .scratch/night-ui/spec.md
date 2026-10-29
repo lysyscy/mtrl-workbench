@@ -5,9 +5,9 @@
 ## 当前成果与入口
 
 - 工作树：`D:/UserData/Documents/Codex/2026-10-29/task/mtrl-workbench`；分支 `codex/night-ui-20261029`。
-- 产品提交：`bd0ff843ab2835621ed4485fc26fcca85e2982d8`；最终构建 `work/build-19`。后续仅文档提交，产品源另有指纹核对。
+- 产品提交：`bd0ff843ab2835621ed4485fc26fcca85e2982d8`；性能复核后恢复构建 `work/build-21-restored`，全部资源SHA与核准build19完全一致，产品未再修改。后续仅文档提交。
 - 验收入口：http://127.0.0.1:8065/preview 。账号 `preview-admin`，空密码；最终恢复默认主题、1.12字号。
-- PID `13516`，schema `frontend_rewrite_397_a3331e16b0484b6daefed4bdfe83eb6f`，数据库 `mtrl_workbench_test`，可丢弃真实副本，i8关闭。
+- 当前PID `13340`，schema及正常CLI进程事实归 `reports/real_owner.json`、固定快照 `owner-build-21-restored.json`；数据库 `mtrl_workbench_test`，可丢弃真实副本，i8关闭。
 - 产品摘要 `20fb586438cd485cb3f770755b1cfd5c480789c57cb861495d7495d68c4a2335`。实际进程、版本、源与构建哈希经 `registered_preview()` 核对；运行事实归 `reports/real_owner.json`，固定快照 `owner-build19.json`、`version-build19.json`。
 - 证据根 `.artifacts/active/night-ui/20261029-01/`；下文reports、logs、screenshots均相对此根。
 
@@ -75,6 +75,24 @@ build12的1280×800项目页曾一次首入行高裁切，随后3个新context�
 - 最终build19再按完全相同条件复测：输入到rAF中位24.45ms、最大34.8ms；恢复全部行中位2179.93ms；脚本滚动帧中位50.35ms、最大87.6ms。与前测68.95/161.4ms相比输入反馈改善，但全量准备1782.06→2179.93ms、滚动中位37.10→50.35ms更慢；不能称库存整体提速。逐词行数核对、HTTP重读0、复制指纹一致。原始 `inventory-input-final-build19.json`；较好与较差结果同列，三轮样本不能推导现场性能保证。
 - DOM/表格准备和字体初载仍可后续调查；收尾未引新调度器、缓存系统或盲删字体。
 
+### 08:44补充：有界A/B/A性能归因
+
+父任务要求08:50前复核退步，执行当前版A1→仅关闭useDeferredValue的B→恢复同核准资源A2。每阶段3个新context，各预热1轮后测6轮：18次恢复全量、72个输入帧样本、9段各60帧滚动。原三轮与失败记录均保留，不挑最快结果。每context内循环/帧有相关性，不能当成完全独立大样本。
+
+| 阶段 | 恢复全量中位[范围]ms，n18 | 输入到rAF中位[范围]ms，n72 | 9段滚动中位数的中位[范围]ms |
+|---|---|---|---|
+| A1核准版 | 1998.15 [1827.91,2082.32] | 20.20 [15.30,77.90] | 45.60 [43.25,52.55] |
+| B仅关闭输入延后 | 1195.76 [1109.87,1295.55] | 39.40 [23.60,101.20] | 26.75 [25.50,29.85] |
+| A2恢复核准版 | 1342.78 [1229.69,1660.09] | 16.15 [11.70,58.20] | 29.00 [26.80,31.60] |
+
+9个context的18287行数据SHA一致，列宽、总滚动高度1000106px、客户区高度780px一致；1.12字号、61个字体文件/6612968响应体字节在各计时段前后均不变，字体loaded，额外库存HTTP读取0，计时中无截图。首轮与后续滚动分开记录，未呈现足以解释全部差异的一致预热趋势。全系统CPU区间A1为38.20–40.32%，B24.21–27.95%，A2 29.23–33.21%；它包含浏览器自身工作，不能据此确定后台进程原因，旧样本也未记录CPU。
+
+**结论：保留核准版本，无产品回退。** 同一核准代码A1→A2有显著时段差异，原1.78→2.18s的三样本比较不足以证明稳定版本退步。B吞吐更好但输入反馈更慢；调度可能有代价，净收益尚未在受控负载下确认，不能硬称回归不存在或整体提速。14→19的库存原生文本与行高规划代码未变化，因此不能把这一晚期差异直接归因给它们；相对更早React文本组件的绝对成本未独立二分，不回退已修正确性。B只是调度消融，并非完整历史build14。
+
+性能目标仍未全部达成。后续票项：用现有Profiler及表格layoutTiming拆解全量行高/列宽准备、重复提交和React/AG Grid调度；以多context分布验证恢复全量与滚动，同时保持完整文本/金额、18287行范围、手工列宽/锚点、零HTTP本地过滤和输入反馈。库存全量冷入字体6.6MB另行调查，不能删字体破坏行高。
+
+原始与四分位数：`reports/performance-followup-summary.json`、`inventory-repeats-a1-final19.json`、`inventory-repeats-b-no-deferred.json`、`inventory-repeats-a2-restored.json`；协议 `performance-followup-protocol.json`。临时库存源码已逐字节恢复，build21的全部构建文件与build19相同，B已正常CLI退出；未给用户留下对照版。
+
 成熟来源：[React lazy](https://react.dev/reference/react/lazy)、[useDeferredValue](https://react.dev/reference/react/useDeferredValue)、[错误边界](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary)、[AG Grid React引用](https://www.ag-grid.com/react-data-grid/react-hooks/)、[AG Grid原生单元格/滚动](https://www.ag-grid.com/react-data-grid/scrolling-performance/)、[AG Grid初始与有状态列定义](https://www.ag-grid.com/javascript-data-grid/column-updating-definitions/)、[部分列状态](https://www.ag-grid.com/javascript-data-grid/column-state/)、[AntD定位FAQ](https://ant.design/components/tooltip/#faq)。Context7及GitHub reactjs/react.dev原文作适配参考；本地AntD6.6.7源码核实shift能力，AG Grid36.2.0源码核实事件顺序。未执行外部脚本。
 
 ## 鼠标口径、边界与资源退出
@@ -83,6 +101,8 @@ Hindsight正常只读recall：bank `project-3379fef93fbada35`，doc `mtrl-workbe
 
 未穷举全部弹层状态、主题、浏览器及数据；工作事项/发现录入更多草稿边界只做源码审查，未改造；i8外部动作、真实打印、正式切换不在执行范围。当前无审批阻塞，人类审美和业务验收待09:00。
 
-自有16个旧构建、完成的pytest临时目录和运行脚本已释放，work仅留当前8065所需build19，依赖与工作树保供用户验收。3个必要测量方法源码压缩保留 `reports/measurement-methods.zip`，其余临时脚本释放；失败、原始指标、照片有限保留在本次验收run。生命周期明细 `reports/resource-lifecycle.json`。实际workspace_check在active阶段exit0，scope与other_archives均ok，无错误，`reports/workspace-check-final.json`。run仍active，不虚报closed。验收结束由持有任务用原CLI `frontend_preview.py --stop` 正常停服清schema，再将必要证据有限归档/退出active；不能因回复结束停预览。
+自有旧构建、完成的pytest临时目录和运行脚本按生命周期释放，性能复核后work仅留当前8065所需build21-restored，依赖与工作树保供用户验收。必要测量方法压缩保留 `reports/measurement-methods.zip`；失败、原始指标、照片有限保留在本次验收run。生命周期明细 `reports/resource-lifecycle.json`。原最终workspace_check在active阶段exit0，`reports/workspace-check-final.json`；补测收尾检查另归 `workspace-check-followup.json`。run仍active，不虚报closed。验收结束由持有任务用原CLI `frontend_preview.py --stop` 正常停服清schema，再将必要证据有限归档/退出active；不能因回复结束停预览。
 
 原主库.tmp-fees-width.py、主库debug.log和本工作树既有debug.log均未主动编辑、暂存或删除。主库日志SHA保持不变，主库Git仍只有原有两项未跟踪文件。本工作树日志在工具运行期间追加了Chromium GPU shared_image_manager.cc格式诊断，原9900字节前缀SHA仍完全一致，完整文件保留；最初创建者和具体写入进程归属未核定，不冒称整个文件字节未变。初始来源 `reports/protected-debug-provenance.json`，最终快照 `reports/protected-files-final.json`。本分支提交后tracked工作树干净，保留这一已知未跟踪debug.log。
+
+补测后IAB现有tab2续绑失败：browser.user is unavailable，未执行页面操作或续标记。服务本身已由正常HTTP/进程哈希和A2三context实际页面操作验证；可直接打开8065链接，不能冒称本turn已续标记。详情browser-handoff-followup.json。
