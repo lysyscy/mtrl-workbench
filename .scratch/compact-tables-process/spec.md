@@ -4,7 +4,7 @@
 
 ## 验看入口
 
-本轮唯一预览为 <http://127.0.0.1:8065/preview/notices>，专用账号 `preview-admin`、密码留空。它使用可丢弃真实数据副本，真实i8与物理打印已阻断。运行身份、schema、版本和构建以 [owner](../../.artifacts/active/compact-tables-process/20261029-01/reports/real_owner.json) 及实际进程为准；刷新前核注册指针，不另开副本。
+本轮唯一预览为 <http://127.0.0.1:8065/preview/notices>，专用账号 `preview-admin`、密码留空。它使用可丢弃真实数据副本，真实i8与物理打印已阻断。运行身份、schema、版本和构建沿主检出 `var/state/react-writable-preview/current.json` 的 `owner_path` 读取，并核实际进程；当前owner位于本对话附着的 `compact-tables-review` 独立工作区。刷新前核注册指针，不另开副本。
 
 付款通知书、集采台账和机械费普通行采用单行布局；关键短字段、金额和操作完整，长文本限宽省略，实际被截断时可悬停选择全文。通知书业务类型、录入人完整，付款项目收窄；原列序、用户列宽和业务操作保留。
 
@@ -12,7 +12,7 @@
 
 ## 证据与边界
 
-[核验回执](../../.artifacts/active/compact-tables-process/20261029-01/reports/verification.json) 保存相关后端、单元、真实副本交互及最新布局核验范围；[性能对照](../../.artifacts/active/compact-tables-process/20261029-01/reports/performance-comparison.json) 保留同业务快照下全部采样。它们不是全仓回归或正式部署证明。
+当前owner同目录的 `verification.json` 保存相关后端、单元、真实副本交互及最新布局核验范围；性能对照归主检出 `.artifacts/archive/compact-tables-process/20261029-01/reports/performance-comparison.json`，保留同业务快照下全部采样。它们不是全仓回归或正式部署证明。
 
 前期共享检出核验包含“调整机械费报表导出格式”对话的在途导出修改，本轮提交不包含这些文件。网页读契约兼容有附注与无附注的报表，表体只显示项目和合计。最终验看使用本轮提交的独立工作区，实际来源与构建仍以owner核验。
 
