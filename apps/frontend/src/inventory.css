@@ -40,7 +40,8 @@
 .inventory-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .inventory-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 
-.inventory-identifier .inventory-cell-text{white-space:nowrap;overflow-wrap:normal;width:max-content}
+.inventory-grid .inventory-identifier .ag-cell-value{white-space:nowrap;overflow-wrap:normal;width:max-content}
+.inventory-grid .ag-cell-wrap-text .ag-cell-value{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 .inventory-fields small{color:var(--tx2);font-variant-numeric:tabular-nums}.inventory-fields .ant-select{width:100%}
 .inventory-cell-text{width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 

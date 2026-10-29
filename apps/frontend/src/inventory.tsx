@@ -3,7 +3,7 @@ import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
@@ -19,7 +19,6 @@ import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
-import { InventoryText } from './inventory-rows';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true};
@@ -35,6 +34,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const client = useQueryClient(), root = useRef<HTMLDivElement>(null);
   const [period,setPeriod] = useState(reportMonth), [ids,setIds] = useState<number[]>([]), [direction,setDirection] = useState('全部'), [onlyAdjusted,setOnlyAdjusted] = useState(false);
   const [filters,setFilters] = useState<Filters>({}), [column,setColumn] = useState<Field>('material'), [filterOpen,setFilterOpen] = useState(false);
+  const deferredFilters = useDeferredValue(filters), filtering = target === null && filters !== deferredFilters;
   const [editing,setEditing] = useState<InventoryRow|null>(null), [fetchMonth,setFetchMonth] = useState<string|null>(null);
   const [pending,setPending] = useState<InventoryRow|null>(null);
   const pendingKey = `inventory-fetch-pending:${me?.account ?? ''}`;
@@ -51,7 +51,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const warehouses = ids.map(id => projects.data?.find(p => p.id === id)?.warehouse_name ?? '__unavailable__');
   const displayedRows=useMemo(()=>(query.data?.rows??[]).map(row=>{const values=effectiveValues(row);return {...row,...values,amount:row.amount};}),[query.data]);
   const coarse = useMemo(() => coarseRows(displayedRows,period,warehouses,direction,onlyAdjusted),[displayedRows,period,warehouses.join('\0'),direction,onlyAdjusted]);
-  const rows = useMemo(() => target !== null ? displayedRows.filter(row => row.id === target) : filterRows(coarse,filters),[coarse,filters,target,displayedRows]);
+  const rows = useMemo(() => target !== null ? displayedRows.filter(row => row.id === target) : filterRows(coarse,deferredFilters),[coarse,deferredFilters,target,displayedRows]);
   const filter = filters[column] ?? emptyFilter(), meta = fields.find(([key]) => key === column)!;
   const values = useMemo(() => filterOpen ? [...new Set(coarse.map(row => row[column]).filter(Boolean))].sort() : [], [coarse, column, filterOpen]);
   const filterCount = Object.values(filters).filter(filterOn).length;
@@ -67,21 +67,24 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
   const amountWidths = useMemo(() => Object.fromEntries(fields.filter(([, ,type]) => type === 'num').map(([field]) => {
-    return [field, numberColumnWidth([...rows,...totals].map(row=>row[field as keyof typeof row]).filter(value=>value!=null&&value!=='').map(value=>money(String(value))),scale)];
+    const values = new Set([...rows,...totals].map(row=>row[field as keyof typeof row]).filter(value=>value!=null&&value!=='').map(String));
+    return [field, numberColumnWidth([...values].map(value=>money(value)),scale)];
   })), [scale,rows,totals]);
   const identifiers=useMemo(()=>Object.fromEntries(['doc_no','doc_date','biz_type'].map(field=>[field,fullTextWidth(rows.map(row=>row[field as Field]),scale)])),[rows,scale]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
-    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),cellRenderer:type === 'num' ? undefined : InventoryText,
+    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
       ...(type === 'num' ? amountWidths[field]! : identifiers[field] ?? contentWidth(['seq','unit'].includes(field)?40:field==='spec'?56:['wbs_name','cbs_name'].includes(field)?60:field==='material_property'?64:76,['seq','unit'].includes(field)?85:300,scale,['material','vendor','warehouse','spec','wbs_name','cbs_name'].includes(field)?1:0)),
-      ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier'}:{}),
+      ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier',suppressAutoSize:true}:{}),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
   ] satisfies ColDef<InventoryRow>[]),[scale, amountWidths, identifiers]);
-  const presentation = useGridPresentation({ table: 'inventory', root, active: active && !blocked, rows, totals: totals as InventoryRow[], columns, measurement:layoutColumns, scope: JSON.stringify([period,[...ids].sort(),direction,onlyAdjusted,filters,target]), identity: [...ids].sort().join(','), rowId: inventoryRowId, scale });
-  controls.current = { unavailable: paused || query.isError || query.isFetching || presentation.state === 'updating', pendingId: pending?.id ?? null };
-  useEffect(() => { if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] }); }, [active, paused, query.isError, query.isFetching, pending, presentation.state]);
+  const presentation = useGridPresentation({ table: 'inventory', root, active: active && !blocked, rows, totals: totals as InventoryRow[], columns, measurement:layoutColumns, scope: JSON.stringify([period,[...ids].sort(),direction,onlyAdjusted,deferredFilters,target]), identity: [...ids].sort().join(','), rowId: inventoryRowId, scale });
+  useLayoutEffect(() => {
+    controls.current = { unavailable: paused || filtering || query.isError || query.isFetching || presentation.state === 'updating', pendingId: pending?.id ?? null };
+    if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] });
+  }, [active, paused, filtering, query.isError, query.isFetching, pending, presentation.state]);
   function changeFilter(key:'q'|'min'|'max'|'values',value:string|string[]) {setFilters(old => ({...old,[column]:{...filter,[key]:value}}));}
   const filterProblem = [filter.min,filter.max].some(raw => raw && !Number.isFinite(Number(raw.replace(/,/g,'')))) ? '列数值无效，请修改或清除此列。' : '';
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
@@ -103,7 +106,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       {meta[2] === 'num' ? <><label>最小值<Input aria-label="列最小值" value={filter.min} disabled={paused} onChange={e => changeFilter('min',e.target.value)} /></label><label>最大值<Input aria-label="列最大值" value={filter.max} disabled={paused} onChange={e => changeFilter('max',e.target.value)} /></label></> : meta[2] === 'text' && <Input aria-label="列包含文字" placeholder="包含…" value={filter.q} disabled={paused} onChange={e => changeFilter('q',e.target.value)} />}
       <Select mode="multiple" aria-label="列值清单" placeholder="值清单（多选）" value={filter.values} onChange={value => changeFilter('values',value)} options={values.map(value => ({value,label:value}))} showSearch={{optionFilterProp:'label'}} disabled={paused} maxTagCount="responsive" />
       <Button disabled={paused} onClick={() => setFilters(old => {const next = {...old};delete next[column];return next;})}>清除此列</Button><Button disabled={paused} onClick={() => setFilters({})}>清除全部列</Button>{filterProblem && <span role="alert">{filterProblem}</span>}</div>}
-    <div className="inventory-summary" data-page-chrome><span aria-live="polite" aria-atomic="true"><span className="inventory-count-feedback" key={`${rows.length}:${query.data?.rows.length ?? 0}`}>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span></span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}{query.isFetching ? <span role="status">正在重读…</span> : presentation.state === 'updating' && <span role="status">正在更新表格…</span>}</div>
+    <div className="inventory-summary" data-page-chrome><span aria-live="polite" aria-atomic="true"><span className="inventory-count-feedback" key={`${rows.length}:${query.data?.rows.length ?? 0}`}>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span></span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}{query.isFetching ? <span role="status">正在重读…</span> : filtering ? <span role="status">正在筛选…</span> : presentation.state === 'updating' && <span role="status">正在更新表格…</span>}</div>
     {query.isError && <p className="notice" role="alert">{query.error.message}{query.data ? ' 保留上次读取的内容。' : ' 尚未读取库存。'}<Button disabled={paused || query.isFetching} onClick={() => void query.refetch()}>重试读取库存</Button></p>}{projects.isError && <p className="notice" role="alert">{projects.error.message}<Button disabled={paused} onClick={() => void projects.refetch()}>重读项目</Button></p>}
     {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <PreparedGrid presentation={presentation} className="inventory-grid" errorClassName="notice" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,
       getRowId:p=>String(p.data.id),defaultColDef:defaultColumn,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,

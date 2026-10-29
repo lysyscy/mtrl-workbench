@@ -27,7 +27,7 @@ export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[
     }catch(failure){setError(`${saved?'操作已完成，读取尚待核对，勿重复确认。':''}${failure instanceof Error?failure.message:'操作失败，请重试。'}`);}
     finally{setBusy(false);lock.current=false;}
   }
-  return <BusinessModal open={!blocked} className="project-dialog notice-dialog notice-contract-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。读取可能重新登录 i8，并使该账号其他会话下线。</p>{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><ReadGrid table="notice-auto-link" label="关联预览与结果" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
+  return <BusinessModal open={!blocked} className="project-dialog notice-dialog notice-contract-dialog notice-result-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。读取可能重新登录 i8，并使该账号其他会话下线。</p>{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><ReadGrid table="notice-auto-link" className="notice-result-grid" label="关联预览与结果" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
       {field:'code',headerName:'通知书'},
       {colId:'result',headerName:'合同／处理结果',cellRenderer:({data:r}:{data:AutoRow})=><>{r.contract_no||r.reason}{r.amount&&<div>{money(r.amount)} 元</div>}{r.contract_no&&<p>{r.reason}</p>}</>},
       {colId:'basis',headerName:'采购应付依据',valueGetter:p=>p.data?.payable_codes?.join('、')??''},

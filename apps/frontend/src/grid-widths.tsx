@@ -38,7 +38,7 @@ function WidthHeader(params:IHeaderParams&{originalHeader?:ComponentType<IHeader
   const widths=useContext(GridWidthContext),Original=params.originalHeader;
   return <span className="grid-width-header"><span>{Original?<Original {...params}/>:params.displayName}</span>{widths&&<span className="grid-width-tools" data-page-chrome>
     <Button type="text" size="small" aria-label="恢复自动列宽" disabled={!widths.custom&&!widths.error} title={widths.error||'恢复自动列宽（保留排序、筛选和勾选）'}
-      onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();widths.reset();}}>↺</Button>
+      onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();widths.reset();}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6" /></svg></Button>
     {widths.error&&<span className="sr-only" role="status">{widths.error}</span>}
   </span>}</span>;
 }

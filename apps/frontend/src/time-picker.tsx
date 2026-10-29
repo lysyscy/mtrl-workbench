@@ -133,7 +133,7 @@ function SingleEntryPeriod({ value, onChange, modes, disabled = false, label = '
       }} />}
     <div className="business-period-footer"><span aria-live="polite">{available === '跨月' ? start === null ? '选择起月，再选择止月' : `已选 ${start + 1} 月，请选止月` : '选择即生效'}</span><Button type="link" onClick={() => commit(currentMonth())}>本月</Button></div>
   </div>;
-  return <Popover trigger="click" open={open && !disabled} onOpenChange={changeOpen} content={popup} placement="bottomLeft" classNames={{ root: 'business-period-popover ag-custom-component-popup' }} getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body}>
+  return <Popover trigger="click" open={open && !disabled} onOpenChange={changeOpen} content={popup} placement="bottom" classNames={{ root: 'business-period-popover ag-custom-component-popup' }} getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body}>
     <Button ref={trigger} className="business-period-trigger" disabled={disabled} aria-label={label} aria-haspopup="dialog" aria-expanded={open}>{timeLabel(value)}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></Button>
   </Popover>;
 }

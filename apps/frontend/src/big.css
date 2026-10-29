@@ -54,7 +54,7 @@
 .big-grid .ag-root-wrapper { border: 0; }
 .big-grid .ag-header-cell, .big-grid .ag-header-group-cell {
   padding-inline: calc(1px * var(--fscale));
-  font-size: calc(11.5px * var(--fscale));
+  font-size: calc(12px * var(--fscale));
   font-weight: 500;
 }
 .big-grid .ag-header-cell-label, .big-grid .ag-header-group-cell-label { justify-content: center; }
@@ -94,7 +94,7 @@
 .big-manual .ant-tag, .big-origin {
   align-self: flex-end;
   margin: 0;
-  font-size: calc(11px * var(--fscale));
+  font-size: calc(12px * var(--fscale));
   line-height: 1.5;
   white-space: normal;
 }
@@ -105,12 +105,10 @@
 .big-origin { color: var(--tx2); }
 .big-order-dialog {
   width: min(calc(740px * var(--fscale)), calc(100vw - 32px));
-  max-height: 88dvh;
-  overflow: auto;
   color: var(--tx);
   font-size: calc(var(--font-ui-size) * 1px * var(--fscale));
 }
-.big-order-dialog > div:not([hidden]) { display: flex; flex-direction: column; min-height: 0; max-height: 84dvh; }
+.big-order-dialog > div:not([hidden]) { display: flex; flex-direction: column; min-height: 0; max-height: calc(84dvh - 40px * var(--fscale)); }
 .big-order-dialog .dialog-close-heading, .big-order-dialog .dialog-actions { flex: none; }
 .big-order-summary { margin-block: calc(12px * var(--fscale)); color: var(--tx2); line-height: 1.5; }
 .big-order-dialog .dialog-actions { flex-wrap: wrap; padding-top: calc(12px * var(--fscale)); margin-top: calc(12px * var(--fscale)); border-top: 1px solid var(--bd); }

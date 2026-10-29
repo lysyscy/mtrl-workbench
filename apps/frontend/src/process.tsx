@@ -153,7 +153,16 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
 
 type MatrixRow=ProcessRow&{rowkind?:'total'|'segments'};
 function MatrixHeader(p:IHeaderParams){useLayoutEffect(()=>{const label=p.column.getColDef().headerTooltip;p.eGridHeader.setAttribute('aria-label',typeof label==='string'?label:p.displayName);},[p]);return <span>{p.displayName}</span>;}
-function MatrixCell(p:ICellRendererParams<MatrixRow>){const row=p.data!,field=p.colDef!.field!;if(row.rowkind==='segments')return row[field];if(p.node.rowPinned)return show(row[field]);const column=matrixColumns.find(column=>column.field===field)!;return field.startsWith('mech_')?<MechanicalCell data={row} column={field}/>:<MaterialCell data={row} column={field} label={column.label}/>;}
+function MatrixCell(p:ICellRendererParams<MatrixRow>){
+  const row=p.data!,field=p.colDef!.field!;
+  if(row.rowkind==='segments'){
+    if(!row[field])return '';
+    const [label,...amount]=String(row[field]).split(' ');
+    return <span className="process-segment-total"><span>{label}</span>{' '}<span>{amount.join(' ')}</span></span>;
+  }
+  if(p.node.rowPinned)return show(row[field]);
+  const column=matrixColumns.find(column=>column.field===field)!;return field.startsWith('mech_')?<MechanicalCell data={row} column={field}/>:<MaterialCell data={row} column={field} label={column.label}/>;
+}
 function MatrixGrid({matrix,rows,kind,warehouse,scale}:{matrix:Awaited<ReturnType<typeof getProcess>>['matrices'][string];rows:ProcessRow[];kind:'raw'|'adjusted';warehouse:string;scale:number}){
   const totals=useMemo<MatrixRow[]>(()=>[
     {...matrix.totals[kind],ym:'合计',rowkind:'total'} as MatrixRow,

@@ -39,8 +39,8 @@ function Sources({ sources = {} }: { sources?: Record<string,SourceRow[]> }) {
     {colId:'approval',headerName:'本期审批额',...numberColumnWidth((sources[kind]??[]).map(row=>money(row.approval))),cellClass:'money',valueGetter:p=>money(p.data!.approval)},
   ]}/></details>)}</>;
 }
-export function MechanicalWork({ data, warehouses, label, writable, busy, operate, refresh, added }: {
-  data: Workbench; warehouses: string[]; label: (warehouse:string)=>string; writable:boolean; busy:boolean;
+export function MechanicalWork({ data, warehouses, label, writable, busy, paused, operate, refresh, added }: {
+  data: Workbench; warehouses: string[]; label: (warehouse:string)=>string; writable:boolean; busy:boolean; paused:boolean;
   operate:(action:()=>Promise<void>)=>Promise<void>; refresh:()=>Promise<boolean>; added:(warehouse:string)=>void;
 }) {
   const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
@@ -125,7 +125,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, operat
     ]}/></section>}
     {table(rows)}{normal.length>0&&<details><summary>已对平／已忽略（{normal.length}）</summary>{table(normal)}</details>}
     {feedback&&!dialog&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
-    {dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} close={()=>setDialog(null)}>
+    {dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} paused={paused} close={()=>setDialog(null)}>
       {dialog==='fetch'&&(!preview?<><p>{blocked?'正在抓取 i8 当前累计…':'本次未取得可采用的预览。'}</p><footer><Button disabled={blocked} onClick={()=>setDialog(null)}>关闭</Button>{!blocked&&<Button disabled={!writable} onClick={()=>void fetchPreview(warehouse)}>重新抓取</Button>}</footer></>:<>
         <p>已读取班组使用 {preview.counts.usage} 条、项目结算 {preview.counts.project} 条、班组消耗 {preview.counts.team} 条。确认只更新勾选项目。</p>
         <AdoptionSelection.Provider value={{selected,disabled:!writable||blocked,label,toggle:(warehouse,checked)=>setSelected(previous=>checked?[...new Set([...previous,warehouse])]:previous.filter(wh=>wh!==warehouse))}}><ReadGrid table="mechanical-i8-review" className="mechanical-work-table mechanical-i8-review" label="i8累计采用预览" domLayout="autoHeight" rows={reviewProjects} rowId={p=>p.warehouse} columns={[

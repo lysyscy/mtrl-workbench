@@ -55,3 +55,9 @@
 
 /* The compact date editor keeps its full value and calendar affordance inside the existing date column. */
 .notice-grid [col-id=doc_date] .business-date-picker{width:100%;padding-inline:0}
+
+/* Result lists scroll inside the decision window; short results keep natural height. */
+.notice-result-grid{max-height:44dvh;overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2)}
+.notice-ignored-list{max-height:40dvh;overflow:auto;overscroll-behavior:contain;line-height:1.6;scrollbar-color:var(--bd3) var(--sf2)}
+.notice-result-dialog .dialog-close-heading{position:sticky;top:0;z-index:2;background:var(--sf)}
+.notice-result-dialog .dialog-actions{position:sticky;bottom:0;z-index:2;padding-block:calc(12px * var(--fscale));border-top:.5px solid var(--bd);background:var(--sf)}
