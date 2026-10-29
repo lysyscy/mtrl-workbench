@@ -43,7 +43,7 @@ export function useRetainedGridColumns<T>(columns: (ColDef<T>|ColGroupDef<T>)[],
   useLayoutEffect(() => {
     const node = root.current; let frame = 0;
     const publish = () => {
-      if (node?.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea')) return;
+      if (node?.contains(document.activeElement) && document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]),select,textarea')) return;
       const changed=applied.current!==layoutKey;
       setDisplayed(previous=>changed?initialSizing(columns):retainSizing(initialSizing(columns),previous));
       applied.current=layoutKey;

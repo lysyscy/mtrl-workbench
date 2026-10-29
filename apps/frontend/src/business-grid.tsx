@@ -66,6 +66,7 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   const defaults=useMemo(()=>singleLine?{...readColumnDefaults,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false}:readColumnDefaults,[singleLine]);
   const widthColumns=useGridWidthColumns(definitions);
   const retained=useRetainedGridColumns(widthColumns,root,widths.layoutKey);
+  const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
   useEffect(()=>{if(api&&!rows.length)setRendered(n=>n||1);},[api,rows.length]);
   useEffect(()=>{
     const node=root.current;if(!active||!node||!api||!rendered||ready)return;let cancelled=false;
@@ -76,7 +77,7 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   return <GridWidthContext.Provider value={widths}><div className={`business-grid-view ${className}`}>
     <div ref={root} className={'business-grid'+(singleLine?' grid-single-line':'')} role="region" aria-label={label} data-layout-state={error?'error':ready?'ready':'preparing'} inert={!ready} style={{...style,visibility:ready?'visible':'hidden'}}>
       <AgGridReact<T> theme={businessTheme} {...pageGridGeometry(scale)} defaultColDef={defaults} suppressCellFocus suppressColumnVirtualisation
-        suppressScrollOnNewData animateRows={false} {...options} domLayout={domLayout} context={context} columnDefs={retained} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
+        suppressScrollOnNewData animateRows={false} {...options} domLayout={domLayout} context={context} columnDefs={materialized} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
         onGridReady={e=>{widths.attach(e.api);setApi(e.api);onGridReady?.(e);}} onFirstDataRendered={e=>{setRendered(n=>n||1);onFirstDataRendered?.(e);}}/>
     </div>{error&&<p role="alert">{error}<Button onClick={()=>setRetry(n=>n+1)}>重试表格加载</Button></p>}
   </div></GridWidthContext.Provider>;

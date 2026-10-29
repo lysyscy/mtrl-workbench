@@ -1,33 +1,56 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
 import type { ComponentType, RefObject } from 'react';
 import type { ColDef, ColGroupDef, GridApi, IHeaderParams, SizeColumnsToContentStrategy } from 'ag-grid-community';
 import Button from 'antd/es/button';
-import { bindGridWidths } from './grid-width-state';
+import { bindGridWidths, gridWidthPreferences } from './grid-width-state';
 import { GridWidthOwner } from './grid-width-owner';
+import { widthModeColumns } from './grid-manual-widths';
 
 export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean) {
-  const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`});
-  current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`};
+  const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),[dragging,setDragging]=useState<string|null>(null);
+  const preferences=useMemo(()=>gridWidthPreferences(owner,table,()=>window.localStorage),[owner,table]);
+  const revision=useSyncExternalStore(preferences.subscribe,preferences.getSnapshot);
+  const manualIds=useMemo(()=>new Set([...Object.keys(preferences.getWidths()),...(dragging?[dragging]:[])]),[preferences,revision,dragging]);
+  const current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging});
+  current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging};
   const binding = useRef<ReturnType<typeof bindGridWidths> | null>(null), cleanup = useRef<(() => void) | null>(null);
-  const [status, setStatus] = useState({custom: false, error: ''});
   const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({type: 'fitCellContents', skipHeader: true}), []);
   const attach = useCallback((api: GridApi) => {
     cleanup.current?.();
     const controller = bindGridWidths(api, {owner, table, storage: () => window.localStorage, scale: () => current.current.scale,
       layoutKey:()=>current.current.layoutKey,
-      changed: (custom, error, reset) => {setStatus({custom, error});if(reset)setLayoutRevision(n=>n+1);}});
+      activeDragId:()=>current.current.dragging,
+      dragFinished:()=>setDragging(null),
+      changed: (_custom, _error, reset) => {if(reset)setLayoutRevision(n=>n+1);}});
     binding.current = controller;
     const node = root.current;
+    // Before AG starts its native mouse drag, publish the target's manual bounds
+    // through the same React columnDefs path used by saved preferences.
+    const capture=(event:PointerEvent)=>{
+      if(event.button!==0)return;
+      const target=event.target instanceof Element?event.target:null;
+      const id=target?.closest('.ag-header-cell-resize')?.closest('.ag-header-cell')?.getAttribute('col-id');
+      if(id){
+        const column=api.getColumn(id);
+        // Releasing a flex column's auto minimum must not shrink it before AG
+        // captures the mouse drag's starting width. Native state owns this handoff.
+        if(column?.getFlex())api.applyColumnState({state:[{colId:id,width:column.getActualWidth(),flex:null}]});
+        flushSync(()=>setDragging(id));
+      }
+    };
+    node?.addEventListener('pointerdown',capture,true);
     let width=node?.clientWidth??0;
     const resize=new ResizeObserver(()=>{const next=node?.clientWidth??0;if(next&&next!==width){width=next;setLayoutRevision(n=>n+1);}});
     if(node)resize.observe(node);
-    cleanup.current = () => {resize.disconnect();controller.dispose();};
+    cleanup.current = () => {node?.removeEventListener('pointerdown',capture,true);resize.disconnect();controller.dispose();};
     api.addEventListener('gridPreDestroyed', cleanup.current);
   }, [owner, table, root]);
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
   const fit=useCallback(()=>binding.current?.fit(),[]);
-  return {attach, strategy, ...status,layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
+  const columns=useCallback(<T,>(definitions:(ColDef<T>|ColGroupDef<T>)[])=>widthModeColumns(definitions,manualIds),[manualIds]);
+  return {attach, strategy,columns,custom:Object.keys(preferences.getWidths()).length>0,error:preferences.getError(),layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
 }
 
 export const GridWidthContext=createContext<ReturnType<typeof useGridWidths>|null>(null);

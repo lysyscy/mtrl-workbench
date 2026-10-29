@@ -1,5 +1,6 @@
 """Native header resizing survives reload; reset keeps the reader's working state."""
 import json
+from decimal import Decimal
 import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page, login
@@ -30,6 +31,38 @@ def storage_key(me, table):
     return 'mtrl:grid-widths:v1:' + json.dumps([f'{me["id"]}:{me["account"]}', table], separators=(',', ':'))
 
 
+@pytest.mark.parametrize('route,title,grid,column,endpoint,widths',[
+    ('contracts','集采台账','.contracts-grid','remark','**/api/m11/fields',{'arch':50,'arch_no':50,'material':160}),
+    ('notices','付款通知书','.notice-grid','stat_settle','**/api/m03/actions/stat',{'project_display':60,'amount_approved':65,'stat_settle':70}),
+])
+def test_save_preserves_narrow_manual_columns_on_full_list(server,browser_page,api,disposable,route,title,grid,column,endpoint,widths):
+    page,context=browser_page
+    me=api.get('/api/m15/users').json()['me'];preferences=api.get('/api/m15/theme?surface=react').json()
+    scale=next(item for item in preferences['scales'] if item['css']=='1.12')
+    assert api.post('/api/m15/ui-scale',json={'ui_scale':scale['key']}).is_success
+    context.add_init_script('localStorage.setItem('+json.dumps(storage_key(me,route))+','+json.dumps(json.dumps({'version':1,'widths':widths}))+')')
+    try:
+        open_page(page,server,route,title);table=page.locator(grid)
+        field=table.locator('.ag-row:not(.ag-row-pinned) [col-id='+column+'] input:not(:disabled)').first
+        field.scroll_into_view_if_needed();field.click()
+        for col,width in widths.items():
+            page.wait_for_function('([selector,width])=>Math.abs(document.querySelector(selector).getBoundingClientRect().width-width)<1',arg=[grid+' .ag-header-cell[col-id="'+col+'"]',width*1.12])
+        page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+        old=field.input_value();value=old[:230]+'核验' if column=='remark' else str(Decimal(old.replace(',','') or '0')+Decimal('1.25'))
+        page.evaluate('''selector=>{window.saveWidths=[];const g=document.querySelector(selector);const sample=()=>{const h=g.querySelector('.ag-body-horizontal-scroll-viewport');window.saveWidths.push({left:h.scrollLeft,scrollWidth:h.scrollWidth,columns:[...g.querySelectorAll('.ag-header-cell[col-id]')].map(e=>({id:e.getAttribute('col-id'),width:e.getBoundingClientRect().width}))})};window.saveWidthTrace=true;const tick=()=>{if(window.saveWidthTrace){sample();requestAnimationFrame(tick)}};window.saveWidthObserver=new MutationObserver(sample);window.saveWidthObserver.observe(g,{subtree:true,attributes:true,attributeFilter:['style'],childList:true});tick()}''',grid)
+        held=[];page.route(endpoint,lambda request:held.append(request))
+        with page.expect_request(endpoint):field.fill(value);field.blur()
+        request=held.pop();response=request.fetch();assert response.ok;request.fulfill(response=response)
+        page.wait_for_load_state('networkidle')
+        page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+        page.evaluate('window.saveWidthTrace=false;window.saveWidthObserver.disconnect()')
+        frames=page.evaluate('window.saveWidths');baseline={item['id']:item['width'] for item in frames[0]['columns']}
+        bad=[frame for frame in frames if frame['left']!=frames[0]['left'] or frame['scrollWidth']!=frames[0]['scrollWidth'] or any(abs(item['width']-baseline[item['id']])>=1 for item in frame['columns'])]
+        assert not bad,{'baseline':frames[0],'transient_changes':bad[:3]}
+    finally:
+        assert api.post('/api/m15/ui-scale',json={'ui_scale':preferences['ui_scale']}).is_success
+
+
 @pytest.mark.parametrize('route,title,grid,column,table', [
     ('contracts', '集采台账', '.contracts-grid', 'material', 'contracts'),
     ('notices', '付款通知书', '.notice-grid', 'project_display', 'notices'),
@@ -41,7 +74,8 @@ def test_native_resize_survives_reload_and_window_change(server, browser_page, r
     if route == 'notices':
         expect(page.locator(grid)).to_have_attribute('data-layout-state', 'ready')
     me = page.request.get(server + '/api/m15/users').json()['me']
-    width = resize(page, grid, column)
+    before_resize=header(page,grid,column).bounding_box()['width']
+    width = resize(page, grid, column, 50-before_resize)
     saved = page.evaluate('key=>JSON.parse(localStorage.getItem(key))', storage_key(me, table))
     assert list(saved['widths']) == [column], 'Automatic widths must not become overrides'
     page.reload()

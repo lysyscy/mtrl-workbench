@@ -1,38 +1,50 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bindGridWidths, gridWidthKey } from '../../src/grid-width-state.ts';
-import { manualGridColumns } from '../../src/grid-manual-widths.ts';
+import { bindGridWidths, gridWidthKey, gridWidthPreferences } from '../../src/grid-width-state.ts';
+import { manualGridColumns, widthModeColumns } from '../../src/grid-manual-widths.ts';
 
 function fixture(storage, owner = 'reader', scoped = true, scale = 1) {
   const original = [
-    {field:'name',minWidth:120*scale,maxWidth:240*scale,initialWidth:180*scale,flex:1},
+    {field:'name',minWidth:120*scale,maxWidth:240*scale,initialWidth:180*scale,initialFlex:1},
     {field:'amount',minWidth:140*scale,maxWidth:180*scale,initialWidth:140*scale},
     {field:'pick',minWidth:28*scale,maxWidth:28*scale,width:28*scale,resizable:false},
   ];
-  let definitions = scoped ? manualGridColumns(original) : original;
-  const listeners = new Map(), states = new Map(definitions.map(c=>[c.field,{colId:c.field,width:c.initialWidth??c.width,flex:c.flex??null}]));
+  const preferences=gridWidthPreferences(owner,'ledger',()=>storage);
+  let dragging=null,layoutRevision=0,base=scoped?manualGridColumns(original):original;
+  const ids=()=>new Set([...Object.keys(preferences.getWidths()),...(dragging?[dragging]:[])]);
+  let definitions=widthModeColumns(base,ids()),applyCalls=0;
+  const listeners = new Map(), states = new Map(definitions.map(c=>[c.field,{colId:c.field,width:c.initialWidth??c.width,flex:c.flex??c.initialFlex??null}]));
   const emit = (type, event) => { for (const listener of listeners.get(type)??[]) listener(event); };
   const column = id => ({getColDef:()=>definitions.find(c=>c.field===id),getColId:()=>id,getActualWidth:()=>states.get(id).width,getFlex:()=>states.get(id).flex});
   const api = {
     isDestroyed:()=>false,
     getGridOption:()=>definitions,
-    setGridOption:(_key,next)=>{definitions=next;emit('newColumnsLoaded',{});},
+    setGridOption:()=>assert.fail('React is the sole columnDefs owner'),
     getColumnState:()=>[...states.values()].map(s=>({...s})),
-    applyColumnState:({state})=>{for(const update of state){const current=states.get(update.colId),def=column(update.colId).getColDef();Object.assign(current,update);current.width=Math.max(def.minWidth??36,Math.min(def.maxWidth??Infinity,current.width));}},
+    applyColumnState:({state})=>{applyCalls++;for(const update of state){const current=states.get(update.colId),def=column(update.colId).getColDef();Object.assign(current,update);current.width=Math.max(def.minWidth??36,Math.min(def.maxWidth??Infinity,current.width));}},
     getColumn:id=>states.has(id)?column(id):undefined,
     getAllDisplayedColumns:()=>[...states.keys()].map(column),
-    resetColumnState:()=>{for(const def of definitions)states.set(def.field,{colId:def.field,width:def.initialWidth??def.width,flex:def.flex??null});},
+    resetColumnState:()=>{for(const def of definitions)states.set(def.field,{colId:def.field,width:def.initialWidth??def.width,flex:def.flex??def.initialFlex??null});},
     autoSizeColumns:()=>{},
     addEventListener:(type,listener)=>{if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(listener);},
     removeEventListener:(type,listener)=>listeners.get(type)?.delete(listener),
   };
-  const binding=bindGridWidths(api,{owner,table:'ledger',storage:()=>storage,scale:()=>scale,changed:()=>{}});
-  return {api,binding,definition:id=>column(id).getColDef(),width:id=>states.get(id).width,
+  const render=()=>{
+    definitions=widthModeColumns(base,ids());
+    // Like native AG, a new definition clamps actual widths before newColumnsLoaded.
+    for(const def of definitions){const current=states.get(def.field);current.width=Math.max(def.minWidth??36,Math.min(def.maxWidth??Infinity,current.width));}
+    emit('newColumnsLoaded',{});
+  };
+  const unsubscribe=preferences.subscribe(render);
+  const binding=bindGridWidths(api,{owner,table:'ledger',storage:()=>storage,scale:()=>scale,layoutKey:()=>`${scale}:${layoutRevision}`,activeDragId:()=>dragging,
+    dragFinished:()=>{dragging=null;render();},changed:(_custom,_error,reset)=>{if(reset){layoutRevision++;render();}}});
+  return {api,binding:{...binding,dispose:()=>{unsubscribe();binding.dispose();}},definition:id=>column(id).getColDef(),width:id=>states.get(id).width,
+    applyCalls:()=>applyCalls,
+    reread:()=>{base=scoped?manualGridColumns(original):original;render();},
     drag:(id,width)=>{
-      emit('dragStarted',{target:{closest:()=>({closest:()=>({getAttribute:()=>id})})}});
+      dragging=id;render();
       api.applyColumnState({state:[{colId:id,width,flex:null}]});
       emit('columnResized',{source:'uiColumnResized',finished:true,column:column(id)});
-      emit('dragStopped',{});
     }};
 }
 function memoryStorage() {const data=new Map();return {getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};}
@@ -52,6 +64,11 @@ test('scoped manual widths cross automatic bounds, persist, scale and reset to a
   assert.equal(reloaded.width('name'),90);
   assert.equal(reloaded.definition('name').minWidth,undefined);
   assert.equal(reloaded.width('amount'),50);
+  const applied=reloaded.applyCalls();
+  reloaded.reread();
+  assert.equal(reloaded.width('name'),90);
+  assert.equal(reloaded.width('amount'),50);
+  assert.equal(reloaded.applyCalls(),applied,'ordinary definition refresh must not replay unchanged column state');
   reloaded.binding.reset();await Promise.resolve();
   assert.equal(reloaded.definition('name').minWidth,150);
   assert.equal(reloaded.definition('name').maxWidth,300);

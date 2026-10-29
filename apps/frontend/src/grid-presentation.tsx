@@ -27,7 +27,8 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
 }) {
   const widths = useGridWidths(table, layout.root, scale, layout.active);
   const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}`);
-  const widthColumns=useGridWidthColumns(retained);
+  const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
+  const widthColumns=useGridWidthColumns(materialized);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);
   const prepared = useMemo(() => {
     if (Array.isArray(measurement)) return measurement;
