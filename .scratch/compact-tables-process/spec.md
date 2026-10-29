@@ -4,7 +4,7 @@
 
 ## 验看入口
 
-本轮唯一预览为 <http://127.0.0.1:8065/app>，专用账号 `preview-admin`、密码留空。它使用可丢弃真实数据副本，真实i8与物理打印已阻断。运行身份、schema、版本和构建以 [owner](../../.artifacts/active/compact-tables-process/20261029-01/reports/real_owner.json) 及实际进程为准；刷新前核注册指针，不另开副本。
+本轮唯一预览为 <http://127.0.0.1:8065/preview/notices>，专用账号 `preview-admin`、密码留空。它使用可丢弃真实数据副本，真实i8与物理打印已阻断。运行身份、schema、版本和构建以 [owner](../../.artifacts/active/compact-tables-process/20261029-01/reports/real_owner.json) 及实际进程为准；刷新前核注册指针，不另开副本。
 
 付款通知书、集采台账和机械费普通行采用单行布局；关键短字段、金额和操作完整，长文本限宽省略，实际被截断时可悬停选择全文。通知书业务类型、录入人完整，付款项目收窄；原列序、用户列宽和业务操作保留。
 
