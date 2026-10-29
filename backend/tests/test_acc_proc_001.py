@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import Decimal
 from pathlib import Path
 
@@ -78,6 +79,32 @@ def test_一个核算月一行且月份升序逐列独立复算():
     totals = D.column_totals(rows)
     for key in D.DATA_KEYS:
         assert totals[key] == sum((r[key] for r in rows), Decimal("0.00")), f"逐列合计不符：{key}"
+
+
+def test_周转物资与周转材料归入同一列且保留库存原值():
+    rows = [
+        {"ym": "2026-04", "warehouse": "甲仓", "direction": "入库",
+         "material_property": "周转物资", "amount": "10.25"},
+        {"ym": "2026-04", "warehouse": "甲仓", "direction": "出库",
+         "material_property": "周转物资", "amount": "4.50"},
+        {"ym": "2026-04", "warehouse": "甲仓", "direction": "入库",
+         "material_property": "周转材料", "amount": "2.25"},
+        {"ym": "2026-04", "warehouse": "甲仓", "direction": "入库",
+         "material_property": "工具", "amount": "3.00",
+         "adjusted_values": {"material_property": "周转物资"}},
+        {"ym": "2026-04", "warehouse": "甲仓", "direction": "入库",
+         "material_property": "未登记类", "amount": "99.00"},
+    ]
+    original = deepcopy(rows)
+
+    assert D.material_by_month(rows, warehouse="甲仓", adjusted=False) == {
+        "2026-04": {"in_周转材料": Decimal("12.50"), "out_周转材料": Decimal("4.50"),
+                    "in_工具": Decimal("3.00")},
+    }
+    assert D.material_by_month(rows, warehouse="甲仓", adjusted=True) == {
+        "2026-04": {"in_周转材料": Decimal("15.50"), "out_周转材料": Decimal("4.50")},
+    }
+    assert rows == original
 
 
 # ------------------------------------------------------------ 001-03 列结构
