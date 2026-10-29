@@ -42,19 +42,17 @@ class RefillReport:
 
     @property
     def message(self) -> str:
-        if not self.filled and not self.kept and not self.unresolved:
-            return ""
         parts = []
         if self.filled:
-            parts.append(f"已按项目档案回填 {len(self.filled)} 条的付款项目归属")
-        if self.kept:
-            parts.append(f"{len(self.kept)} 条原本就有归属，保持不变")
-        if self.unresolved:
-            parts.append(
-                f"{len(self.unresolved)} 条判不出归属（项目档案里没有对应项目）"
-                "—— 页面上显示「未建档」，请到「项目档案」建档或补关键词后重试"
-            )
+            parts.append(f"已补全 {len(self.filled)} 条付款项目")
+        if self.warning:
+            parts.append(self.warning)
         return "；".join(parts)
+
+    @property
+    def warning(self) -> str:
+        return (f"{len(self.unresolved)} 条付款项目未匹配，请到项目档案核对项目和关键词后重试"
+                if self.unresolved else "")
 
 
 def refill_ownership(session, ids) -> RefillReport:
@@ -155,13 +153,11 @@ class CategoryChange:
     @property
     def message(self) -> str:
         label = category_name(self.category)
-        parts = [f"已把 {len(self.changed)} 行改为「{label}」"]
-        if self.unchanged:
-            parts.append(f"另有 {len(self.unchanged)} 行本就是「{label}」、未变")
-        if self.missing:
-            parts.append(f"另有 {len(self.missing)} 行不在当前数据里、跳过")
-        parts.append("分类改动**会写入、不留痕**，且再次抓取**不被覆盖**（§4.2.4）")
-        return "；".join(parts)
+        return f"已将 {len(self.changed)} 条改为「{label}」"
+
+    @property
+    def warning(self) -> str:
+        return f"{len(self.missing)} 条记录未找到，请重新读取后核对" if self.missing else ""
 
 
 def change_category(rows: list[dict], picked, category: str) -> CategoryChange:
@@ -207,13 +203,11 @@ class ExcludeReport:
 
     @property
     def message(self) -> str:
-        parts = [f"已把 {len(self.marked)} 行标记为**人工批量剔除**（标记保留、默认隐藏、不销毁数据）"]
-        if self.already:
-            parts.append(f"另有 {len(self.already)} 行本就已剔除、未重复标记")
-        if self.missing:
-            parts.append(f"另有 {len(self.missing)} 行不在当前数据里、跳过")
-        parts.append("规则命中的剔除**不在此列**（要放开只能改规则配置）")
-        return "；".join(parts)
+        return f"已剔除 {len(self.marked)} 条"
+
+    @property
+    def warning(self) -> str:
+        return f"{len(self.missing)} 条记录未找到，请重新读取后核对" if self.missing else ""
 
 
 def manual_exclude(rows: list[dict], picked) -> ExcludeReport:
@@ -221,7 +215,8 @@ def manual_exclude(rows: list[dict], picked) -> ExcludeReport:
 
     ⚠️ 「恢复剔除」**只放开这一类**；规则命中的剔除不因人工操作而放开。
     """
-    ids = apply_manual_exclude(rows, picked)   # ← 复用：含"必须先勾选"的拦截
+    picked_ids = {int(x) for x in (picked or ())}
+    ids = apply_manual_exclude(rows, picked_ids)   # ← 复用：含"必须先勾选"的拦截
     want = set(ids)
     report = ExcludeReport()
     seen: set[int] = set()
@@ -234,7 +229,7 @@ def manual_exclude(rows: list[dict], picked) -> ExcludeReport:
             report.already.append(rid)
         else:
             report.marked.append(rid)
-    report.missing = sorted(want - seen)
+    report.missing = sorted(picked_ids - seen)
     return report
 
 

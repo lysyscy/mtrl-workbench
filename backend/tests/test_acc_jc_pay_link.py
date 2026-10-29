@@ -64,9 +64,7 @@ def test_恢复剔除时自动回填归属_判不出则如实保持空():
         assert rep.unresolved == [ids[2]], "判不出的行应如实进 `unresolved`（不硬塞归属）"
         assert hit.ownership_id == int(p.id), "回填没落到行上"
         assert none.ownership_id is None, "判不出的行不该被塞一个归属"
-        assert "未建档" in rep.message, "回执没告诉人「判不出」时会看到什么"
-        assert "保持不变" in rep.message, "回执没说明已指定过的行保持不变"
-        # 端点回执拼上这段（前端原样显示）
+        assert rep.warning == "1 条付款项目未匹配，请到项目档案核对项目和关键词后重试"
         assert refill_ownership(s, []).message == "", "空 id 不该产生任何回执噪音"
         s.rollback()
 
@@ -96,7 +94,8 @@ def test_恢复剔除端点真的调了回填_不是只写了函数没人用():
         assert r["ok"] is True and r["restored"] == [nid], f"恢复没成功：{r}"
         assert r.get("ownership_filled") == [nid], \
             f"恢复后**没有回填归属**（这正是用户报障那条）：{r}"
-        assert "回填" in r["message"], f"回执没提回填：{r['message']!r}"
+        assert r["message"] == "已恢复 1 条"
+        assert "warning" not in r
         s.expire_all()
         assert s.get(PaymentNotice, nid).ownership_id == int(p.id), "归属没落到行上"
         s.rollback()

@@ -22,7 +22,8 @@ def test_real_todo_counts_and_scope_links(server, browser_page):
         expect(tile.locator('.home-tile-count')).to_have_text(str(expected[key]))
         tile.get_by_role('link',name=link,exact=True).click()
         expect(page).to_have_url(re.compile('todo='+key))
-        expect(page.locator('.notice-count')).to_contain_text('显示 '+str(expected[key])+' 条')
+        # AG's accessible total includes the header and, for nonempty results, the total row.
+        expect(page.locator('.notice-grid [role="grid"]')).to_have_attribute('aria-rowcount',str(expected[key]+1+int(expected[key]>0)))
 
 
 def test_anonymous_home_uses_real_counts_and_narrow_links(server,browser_page):

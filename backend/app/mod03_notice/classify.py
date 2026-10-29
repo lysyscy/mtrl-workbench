@@ -245,19 +245,15 @@ class RestoreReport:
     restored: list[int] = field(default_factory=list)        # 真正被恢复的行（**人工 ＋ 规则命中都算**）
     restored_by_rule: list[int] = field(default_factory=list)  # 其中「来自规则命中」的（⚠️ **也给恢复了**，见 `restore_excluded`）
     untouched: list[int] = field(default_factory=list)       # 勾选中本就未剔除的行
+    missing: list[int] = field(default_factory=list)
 
     @property
     def message(self) -> str:
-        parts = [f"已恢复 {len(self.restored)} 条"]
-        if self.restored_by_rule:
-            parts.append(
-                f"其中 {len(self.restored_by_rule)} 条是「规则命中」的 —— 已一并放回，"
-                "重新计入统计与付款"
-                "（再次抓取会保留当前状态；如需再次剔除，请选中该单据手动剔除）"
-            )
-        if self.untouched:
-            parts.append(f"另有 {len(self.untouched)} 条本就未剔除")
-        return "；".join(parts)
+        return f"已恢复 {len(self.restored)} 条"
+
+    @property
+    def warning(self) -> str:
+        return f"{len(self.missing)} 条记录未找到，请重新读取后核对" if self.missing else ""
 
 
 def restore_excluded(rows: list[dict], picked) -> RestoreReport:
@@ -294,6 +290,7 @@ def restore_excluded(rows: list[dict], picked) -> RestoreReport:
             report.restored_by_rule.append(rid)
         else:
             report.untouched.append(rid)
+    report.missing = sorted(want - set(report.restored) - set(report.untouched))
     return report
 
 

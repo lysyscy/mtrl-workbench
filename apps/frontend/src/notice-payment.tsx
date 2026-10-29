@@ -39,7 +39,7 @@ export function PayAmountCell({ row, override, disabled, change }: { row: Notice
 }
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }
-export function NoticePayment({ ids, overrides, projects, blocked, remove, close, paid, refresh, announce }: { ids: number[]; overrides: Record<number,PayOverride>; projects: Project[]; blocked: boolean; remove: (id: number) => void; close: () => void; paid: (ids: number[]) => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
+export function NoticePayment({ ids, overrides, projects, blocked, remove, close, paid, refresh, announce }: { ids: number[]; overrides: Record<number,PayOverride>; projects: Project[]; blocked: boolean; remove: (id: number) => void; close: () => void; paid: (ids: number[]) => void; refresh: () => Promise<void>; announce: (message: string, needsAttention?: boolean) => void }) {
   const lock = useRef(false), requestId = useRef(''), removing = useRef<number | null>(null);
   const active = useRef(true), currentBlocked = useRef(blocked), preflight = useRef<AbortController | null>(null);
   currentBlocked.current = blocked;
@@ -77,7 +77,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   function removeRow(id: number) { if(ids.length===1) { removing.current = id; closing.requestClose(); } else remove(id); }
   async function reread() {
     setRefreshFailed(false);
-    try { await refresh(); } catch { setRefreshFailed(true); }
+    try { await refresh(); return true; } catch { setRefreshFailed(true); return false; }
   }
   async function submit() {
     if (blocked || lock.current || !editable || invalid || missing.length || !targets.length || query.isFetching || query.isError || context.isPending || context.isFetching || context.isError) return;
@@ -117,12 +117,13 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       if (!active.current) return;
       confirmWrite(record(value) && value.ok === true, '付款结果待核实，请到付款流水核对，勿重复提交。');
       saved=true;setPhase('saved');paid(targets.map(row => row.notice_id));
-      const text = receipt(value);setMessage(text);announce(text);
+      const text = receipt(value);setMessage(text);
       if (!record(value) || !Array.isArray(value.flows) || !Array.isArray(value.created) || value.flows.length !== value.created.length || !value.flows.every(f => record(f) && Number.isSafeInteger(f.notice_id) && ['flow_no','amount','pay_date','pay_method','remark'].every(k => typeof f[k] === 'string'))) throw new ApiError('付款已登记，流水回执不完整，请到付款流水核对，勿重复付款。');
       setFlows(value.flows as FlowReceipt[]);
       const skipped = targets.filter(row => !(value.created as number[]).includes(row.notice_id));
-      if (skipped.length) setMessage(`${text}；本次未登记：${skipped.map(row => row.bill_no).join('、')}，请重读核对状态。`);
-      await reread();
+      if (skipped.length) { const attention = `${text}；本次未登记：${skipped.map(row => row.bill_no).join('、')}，请重读核对状态。`; setMessage(attention); announce(attention, true); }
+      const refreshed = await reread();
+      if (refreshed && !skipped.length) announce(text);
     } catch (failure) {
       if (!active.current) return;
       if (!saved) {

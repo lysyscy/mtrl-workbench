@@ -49,8 +49,7 @@ def test_批量改分类分档回报且只动勾选行():
     ]
     change = A.change_category(rows, [1, 2], "mechanical")
     assert change.changed == [1] and change.unchanged == [2]
-    assert "已把 1 行改为「机械」" in change.message
-    assert "不留痕" in change.message              # 手改分类不留痕（§9.3）
+    assert change.message == "已将 1 条改为「机械」"
 
 
 def test_批量改分类落库只改勾选行():
@@ -70,7 +69,7 @@ def test_人工剔除标记来源为manual且分档回报():
     rows = [{"id": 1, "excluded": False}, {"id": 2, "excluded": True}]
     report = A.manual_exclude(rows, [1, 2])
     assert report.marked == [1] and report.already == [2]
-    assert "人工批量剔除" in report.message
+    assert report.message == "已剔除 1 条"
 
 
 def test_恢复剔除人工与规则命中的都放回且分开回报():
@@ -89,8 +88,7 @@ def test_恢复剔除人工与规则命中的都放回且分开回报():
     assert report.restored == [1, 2], "人工 ＋ 规则命中的都放回"
     assert report.restored_by_rule == [2]
     assert report.untouched == [3]
-    assert "「规则命中」" in report.message and "一并放回" in report.message
-    assert "不恢复" not in report.message
+    assert report.message == "已恢复 2 条"
 
 
 def test_恢复剔除必须先勾选():

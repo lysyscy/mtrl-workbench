@@ -59,7 +59,8 @@ def test_API_批量改分类落库并回报():
     assert r.status_code == 200, "JSON 动作 API 一律恒 200（成败看 ok）"
     body = r.json()
     assert body["ok"] is True and body["changed"] == [1] and body["category"] == "mechanical"
-    assert "改" in body["message"] and "机械" in body["message"], f"回执没给中文说明：{body['message']!r}"
+    assert body["message"] == "已将 1 条改为「机械」"
+    assert "warning" not in body
     assert fake.by_model[PaymentNotice][0].category == "mechanical"      # 真落库
 
 
@@ -97,14 +98,45 @@ def test_API_恢复剔除真的落库且两类都放回():
     body = client.post("/api/m03/actions/restore", json={"ids": [1, 2, 3]}).json()
     assert body["ok"] is True and sorted(body["restored"]) == [1, 2], \
         f"规则命中的没被恢复（这正是用户报障那条）：{body}"
-    assert "「规则命中」" in body["message"], f"回执没分档说清哪几条是规则命中的：{body['message']!r}"
-    assert "不恢复" not in body["message"], "回执还在说「不恢复」= 界面在说假话"
+    assert body["message"] == "已恢复 2 条"
+    assert "warning" not in body
     got = {n.id: n for n in fake.by_model[PaymentNotice]}
     for nid in (1, 2):                                     # ⚠️ 逐条验，别只验一条
         assert got[nid].excluded is False, f"第 {nid} 条 `excluded` 没置回 False（还在剔除态）"
         assert str(got[nid].exclude_source or "") == "", \
             f"第 {nid} 条 `exclude_source` 没清空（来源还留着 ⇒ 界面继续当它被剔除）"
     assert got[3].excluded is False                        # 本就未剔除的行不受影响
+
+
+@pytest.mark.parametrize("action, result_key, message", [
+    ("category", "changed", "已将 1 条改为「机械」"),
+    ("exclude", "marked", "已剔除 1 条"),
+    ("restore", "restored", "已恢复 1 条"),
+])
+@pytest.mark.parametrize("missing", [False, True])
+def test_API_动作仅对待处理结果返回警告(action, result_key, message, missing):
+    client, _ = _client([_notice(1, excluded=action == "restore",
+                                  exclude_source="manual" if action == "restore" else "")])
+    payload = {"ids": [1, 99] if missing else [1], "category": "mechanical"}
+    body = client.post(f"/api/m03/actions/{action}", json=payload).json()
+    assert body["ok"] is True and body[result_key] == [1]
+    assert body["message"] == message
+    if missing:
+        assert body["warning"] == message + "；1 条记录未找到，请重新读取后核对"
+    else:
+        assert "warning" not in body
+
+
+def test_API_恢复后归属未匹配持久提示处理方式():
+    client, fake = _client([_notice(1, excluded=True, exclude_source="rule", ownership_id=None)])
+    body = client.post("/api/m03/actions/restore", json={"ids": [1, 99]}).json()
+    assert body["ok"] is True and body["restored"] == [1]
+    assert body["message"] == "已恢复 1 条"
+    assert body["warning"] == (
+        "已恢复 1 条；1 条记录未找到，请重新读取后核对；"
+        "1 条付款项目未匹配，请到项目档案核对项目和关键词后重试"
+    )
+    assert fake.by_model[PaymentNotice][0].ownership_id is None
 
 
 # ============================================================ 列表查询（能力 11 · 统计列的纯度）

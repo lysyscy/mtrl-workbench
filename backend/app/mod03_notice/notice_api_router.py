@@ -90,6 +90,11 @@ class CategoryIn(IdsIn):
     category: str = ""
 
 
+def _action_feedback(message: str, *warnings: str) -> dict[str, str]:
+    pending = [warning for warning in warnings if warning]
+    return {"message": message, **({"warning": "；".join([message, *pending])} if pending else {})}
+
+
 @api_router.post("/api/m03/actions/category")
 def api_category(req: CategoryIn, session: Session = DBSession) -> dict:
     """**批量改分类**（§4.2.4）—— 单行「就地改分类」= 只传一个 id，走同一条路。"""
@@ -101,7 +106,7 @@ def api_category(req: CategoryIn, session: Session = DBSession) -> dict:
             "ok": True,
             "changed": list(change.changed),
             "category": change.category,
-            "message": change.message,
+            **_action_feedback(change.message, change.warning),
         }
     except MustReportError as exc:
         return {"ok": False, "changed": [], "message": exc.message}
@@ -113,7 +118,8 @@ def api_exclude(req: IdsIn, session: Session = DBSession) -> dict:
     try:
         report = manual_exclude(repo.notices_as_dicts(session, ids=req.ids), req.ids)
         repo.set_excluded(session, report.marked, excluded=True, source=EXCLUDE_BY_MANUAL)
-        return {"ok": True, "marked": list(report.marked), "message": report.message}
+        return {"ok": True, "marked": list(report.marked),
+                **_action_feedback(report.message, report.warning)}
     except MustReportError as exc:
         return {"ok": False, "marked": [], "message": exc.message}
 
@@ -132,9 +138,9 @@ def api_restore(req: IdsIn, session: Session = DBSession) -> dict:
         report = restore_excluded(repo.notices_as_dicts(session, ids=req.ids), req.ids)
         repo.set_excluded(session, report.restored, excluded=False, source=EXCLUDE_NONE)
         refill = refill_ownership(session, report.restored)
-        message = report.message + ("；" + refill.message if refill.message else "")
         return {"ok": True, "restored": list(report.restored),
-                "ownership_filled": list(refill.filled), "message": message}
+                "ownership_filled": list(refill.filled),
+                **_action_feedback(report.message, report.warning, refill.warning)}
     except MustReportError as exc:
         return {"ok": False, "restored": [], "message": exc.message}
 

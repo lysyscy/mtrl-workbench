@@ -10,7 +10,7 @@ function readRows(value:unknown):AutoRow[] {
   if(!record(value)||!Array.isArray(value.rows)||!value.rows.every(r=>record(r)&&Number.isSafeInteger(r.notice_id)&&typeof r.code==='string'&&typeof r.reason==='string'&&(r.contract_id===null||Number.isSafeInteger(r.contract_id)&&typeof r.contract_no==='string'&&typeof r.amount==='string'&&Array.isArray(r.payable_codes)&&r.payable_codes.every(c=>typeof c==='string'))))throw new ApiError('关联回执不完整，请重新读取核对。');
   return value.rows as AutoRow[];
 }
-export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[];blocked:boolean;close:()=>void;refresh:()=>Promise<void>;announce:(message:string)=>void}) {
+export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[];blocked:boolean;close:()=>void;refresh:()=>Promise<void>;announce:(message:string,needsAttention?:boolean)=>void}) {
   const lock=useRef(false);
   const [rows,setRows]=useState<AutoRow[]|null>(null),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
   const closing = useDialogClose({ busy, dirty: false, close });
@@ -22,8 +22,8 @@ export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[
       const selections=(rows??[]).filter(r=>r.contract_id!==null).map(({notice_id,contract_id,amount,payable_codes})=>({notice_id,contract_id,amount,payable_codes}));
       const result=await requestJson(confirm?'/api/m11/auto-link':'/api/m11/auto-link-preview',{method:'POST',...body({notice_ids:ids,allow_kick:true,...(confirm?{selections}:{})})});
       saved=confirm;if(confirm)setDone(true);
-      setRows(readRows(result));
-      if(confirm){if(!record(result)||!Number.isSafeInteger(result.linked))throw new ApiError('关联数量读取不完整，请重读列表核对。');announce(`已关联 ${result.linked} 条；未关联的请人工核对。`);await refresh();}
+      const results=readRows(result);setRows(results);
+      if(confirm){if(!record(result)||!Number.isSafeInteger(result.linked))throw new ApiError('关联数量读取不完整，请重读列表核对。');const remaining=ids.length-results.filter(row=>row.contract_id!==null).length;await refresh();announce(`已关联 ${result.linked} 条${remaining?`；${remaining} 条未关联，请核对结果。`:''}`,remaining>0);}
     }catch(failure){setError(`${saved?'操作已完成，读取尚待核对，勿重复确认。':''}${failure instanceof Error?failure.message:'操作失败，请重试。'}`);}
     finally{setBusy(false);lock.current=false;}
   }
