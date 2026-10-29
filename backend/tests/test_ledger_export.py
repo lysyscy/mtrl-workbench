@@ -3,12 +3,12 @@
 
 形态（唯一主人 = 交付面 `docs/requirements/report-templates.md` §二 · §5.1 · §5.2）：
 `辅材` / `机械`（序号 ｜ 月份 ｜ 其他支出金额 ｜ 付款 ｜ 欠款 ｜ 备注 ＋ R19「合计：」尾块）＋
-`特殊费用月报表`（数据项 ｜ `<M>月份` ｜ 合计；**月份列按当前核算月生成**）。
+`特殊费用月报表`（数据项 ｜ 从首个非零月到截止月的逐月列 ｜ 合计）。
 
 ⭐ 断言分五类覆盖维度（各自独立成档 —— 一条红了就知道哪一维坏的）：
 ① **三张表齐**（⛔ 只填两个就交付 = 第三张会留模板里**别的项目**的示例数据，`TAIL-43` 同族）；
 ② **逐格独立复算**（台账 6 列 / 特殊费用 3 列，期望**手写**、不问实现）；
-③ **月份文本口径**（期初行 = `YYYY-MM及之前`、其余 = `YYYY-MM`；含**数字格式 = 文本**）；
+③ **月份文本口径**（辅材2025-11显示及之前；含**数字格式 = 文本**）；
 ④ **尾块随行数派生**（合计行 = 各数据行之和；尾块紧随、下面不留行）；
 ⑤ **标题替换**（模板那句写着**别的项目名** ⇒ 一律整格换掉，且**展示名不带「项目」二字**）。
 
@@ -33,7 +33,7 @@ from app.mod05_flow.models import (
     OpeningBalance,
 )
 from app.mod08_inv.models import InvDetail
-from app.mod09_fee.models import FeeManualItem
+from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.report_export import ledger_export as LX
 from tests.m05_helpers import make_notice_row, make_opening, make_project
 from tests.m09_helpers import M09Session, make_inv, make_item
@@ -46,7 +46,7 @@ DISP_A = "甲公司项目"
 #: 手写期望（**独立复算**，⛔ 不问实现）：台账两侧历史辅材行及后续月份；机械仅取已有台账月份
 LEDGER_EXPECT: dict[str, list[tuple]] = {
     "material": [
-        ("1", "2025-11", "100.00", "0.00", "100.00", ""),
+        ("1", "2025-11及之前", "100.00", "0.00", "100.00", ""),
         *[(str(i+2),ym,"0.00","0.00","0.00","") for i,ym in enumerate([
           "2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08"])],
         ("11", "2026-09", "1000.00", "200.00", "800.00", ""),
@@ -219,7 +219,7 @@ def test_特殊费用月报表逐格等于手写期望(tmp_path):
 # ============================================================ ③ 月份文本口径
 
 
-def test_历史行月份按普通月份导出(tmp_path):
+def test_辅材历史截止标签不改变行和金额(tmp_path):
     path=build(tmp_path)
     for cat,want in LEDGER_EXPECT.items():
         assert txt(sheet(path,LX.SHEET_OF_CATEGORY[cat])[2][1])==want[0][1]
@@ -240,8 +240,7 @@ def test_月份列的数字格式是文本(tmp_path):
 
 
 def test_全本只有一个报告月(tmp_path):
-    """⭐ **全本只有一个报告月**：台账的**止月**与「特殊费用月报表」的**月份列**必须是同一个月 ——
-    否则一本文件里两张表说的不是同一个期间（读的人会拿 9 月的欠款去对 8 月的费用）。
+    """台账止月与费用矩阵的末月份一致，均不包含截止月之后的数据。
 
     ⚠️ 样本里**故意埋了一条 2026-10 的通知书**（见 `dataset()`）：止月一旦没钉住，
        台账就会多出一行 `2026-10` ⇒ 本条与「逐格」那条一起变红
@@ -255,7 +254,7 @@ def test_全本只有一个报告月(tmp_path):
         # 那样多出来的行（跑到下个月去的那种）**正好不被看见**，而它才是本条要抓的东西。
         last = txt(cells(rows, len(rows) - 1, 2)[1])
         assert last == YM, f"[{name}] 台账止月 = {last!r}（应 = 报告月 {YM} —— ⛔ 不跑到下个月）"
-    assert txt(cells(sheet(path, SHEET_FEE), 2, 3)[1]) == "9月份", "特殊费用月报表的月份列 ≠ 报告月"
+    assert txt(sheet(path, SHEET_FEE)[1][-2]) == YM, "特殊费用月报表的末月份列 ≠ 报告月"
 
 
 # ============================================================ ④ 尾块随行数派生
@@ -277,11 +276,11 @@ def test_合计行等于各数据行之和且紧随其后(tmp_path):
         assert txt(tail[0]) == "" and txt(tail[5]) == "", f"[{name}] 合计行的序号 / 备注格应留空：{tail}"
 
 
-def test_特殊费用月报表的单月列由报告月生成(tmp_path):
-    """⭐ `模板清单` §5.2 裁定①丙：`3月份`…`8月份` 只是示例 ⇒ 压成**报告月那一列** ＋ 合计（共 3 列）。"""
+def test_特殊费用月列从首个非零月展开到报告月(tmp_path):
+    """本样例首个非零月恰为报告月，只有一个真实月列。"""
     path = build(tmp_path)
     rows = sheet(path, SHEET_FEE)
-    assert [txt(v) for v in cells(rows, 2, 3)] == ["数据项", "9月份", "合计"], f"表头不对：{rows[1]}"
+    assert [txt(v) for v in cells(rows, 2, 3)] == ["数据项", YM, "合计"], f"表头不对：{rows[1]}"
     assert all(len(r) == 3 for r in rows), f"列数多于 3：{rows[:2]}"
 
 
@@ -348,6 +347,64 @@ def test_成品名含展示名与期间():
     """文件名 = `{展示名}欠款台账_{期间标签}.xlsx`（原型口径：文件名含项目展示名与当前年月）。"""
     assert LX.file_name(DISP_A, YM) == "甲公司项目欠款台账_2026年9月.xlsx"
     assert LX.file_name("乙公司项目", YM) == "乙公司项目欠款台账_2026年9月.xlsx"
+
+
+def test_多项目费用按各自首个非零月展开且保跨年空月和真实零(tmp_path):
+    from io import BytesIO
+    from zipfile import ZipFile
+    from app.report_export import service as EX
+
+    data = dataset()
+    data[InvDetail] += [
+        make_inv('2024-01', WH_B, '出库', 'CBS-安文费', '0', rid=310),
+        make_inv('2025-12', WH_B, '出库', 'CBS-安文费', '10', rid=311),
+        make_inv(YM, WH_B, '出库', 'CBS-安文费', '500', rid=312),
+        make_inv('2026-10', WH_B, '出库', 'CBS-安文费', '9000', rid=313),
+        make_inv('2024-02', WH_B, '入库', 'CBS-安文费', '7000', rid=314),
+        make_inv('2024-03', WH_B, '出库', 'CBS-其他', '8000', rid=315)]
+    data[FeeManualItem] += [
+        make_item(410, '2025-12', 11, '运费', '5'),
+        make_item(411, '2024-01', 12, '运输费', '0'),
+        make_item(412, '2025-11', 12, '运输费', '-5'),
+        make_item(413, '2026-02', 12, '运输费', '0'),
+        make_item(414, '2026-04', 12, '运输费', '20'),
+        make_item(415, YM, 12, '运输费', '55.50'),
+        make_item(416, '2026-10', 12, '运输费', '999'),
+        make_item(417, '2024-02', 12, '已删除费用', '777')]
+    s = M09Session(data)
+    for item in s.by_model[FeeItem]:
+        if item.project_id == 12 and item.name == '运输费':
+            item.name = '运输费统一名称'
+        if item.name == '已删除费用':
+            item.deleted = True
+    path = EX.export_ledger(s, [WH_B, WH_A], ym=YM)
+    with ZipFile(path) as bundle:
+        assert bundle.namelist() == [LX.file_name('乙公司项目', YM), LX.file_name(DISP_A, YM)]
+        b_rows = sheet(BytesIO(bundle.read(LX.file_name('乙公司项目', YM))), SHEET_FEE)
+        a_rows = sheet(BytesIO(bundle.read(LX.file_name(DISP_A, YM))), SHEET_FEE)
+    expected_b_months = ['2025-11', '2025-12'] + [f'2026-{m:02d}' for m in range(1, 10)]
+    assert b_rows[1] == ['数据项', *expected_b_months, '合计']
+    assert a_rows[1] == ['数据项', *expected_b_months[1:], '合计']
+    assert b_rows[0][0] == '乙公司项目费用汇总表'
+    fees = {row[0]: dict(zip(b_rows[1][1:], row[1:])) for row in b_rows[2:]}
+    assert set(fees) == {'安全文明施工费（按 CBS 分类）', '运输费统一名称'}
+    auto, manual = fees['安全文明施工费（按 CBS 分类）'], fees['运输费统一名称']
+    assert auto['2025-12'] == 10 and auto[YM] == 500 and auto['合计'] == 510
+    assert auto['2026-01'] is None
+    assert manual['2025-11'] == -5 and manual['2026-02'] == 0
+    assert manual['2026-03'] is None and manual[YM] == 55.5 and manual['合计'] == 70.5
+    assert not s.added
+
+
+@pytest.mark.parametrize('only_zero', [False, True])
+def test_没有非零费用不造月份列(tmp_path, only_zero):
+    from app.report_export import service as EX
+
+    data = dataset()
+    data[InvDetail] = [make_inv('2024-01', WH_A, '出库', 'CBS-安文费', '0')] if only_zero else []
+    data[FeeManualItem] = [make_item(420, '2025-01', 11, '零费用', '0')] if only_zero else []
+    path = EX.export_ledger(M09Session(data), [WH_A], ym=YM)
+    assert sheet(path, SHEET_FEE)[1] == ['数据项', '合计']
 
 
 if __name__ == "__main__":  # pragma: no cover

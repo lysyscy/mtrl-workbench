@@ -19,7 +19,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.core.period import default_period
-from app.core.money import amount_text
+from app.core.money import amount_text, sum_money
+from app.core.timing import shift_ym
 
 # ---------------------------------------------------------------- 口径常量（唯一出口）
 
@@ -184,6 +185,37 @@ def annual_rows(*, year: str, project_key: str, items: list[dict], inv_rows: lis
             "total": sum((r["total"] for r in result), ZERO)}
 
 
+def export_rows(*, end_ym: str, project_key: str, items: list[dict], inv_rows: list[dict]) -> dict:
+    """从首个非零费用月连续展开到截止月，保留范围内的空值和真实零。"""
+    amounts = {AUTO_NAME: {}}
+
+    def add(name, ym, amount):
+        if not parse_ym(ym) or ym > end_ym:
+            return
+        values = amounts.setdefault(name, {})
+        values[ym] = values.get(ym, ZERO) + Decimal(str(amount or 0))
+
+    for row in inv_rows:
+        if (row.get('warehouse') == project_key and row.get('cbs') == CBS_AWF
+                and row.get('direction') == DIRECTION_OUT):
+            add(AUTO_NAME, str(row.get('ym') or ''), row.get('amount'))
+    for row in items:
+        add(str(row.get('name') or ''), str(row.get('ym') or ''), row.get('amount'))
+    amounts = {name: {ym: sum_money([value]) for ym, value in values.items()}
+               for name, values in amounts.items()}
+    nonzero = [ym for values in amounts.values() for ym, value in values.items() if value != ZERO]
+    months = [min(nonzero)] if nonzero else []
+    while months and months[-1] < end_ym:
+        months.append(shift_ym(months[-1], 1))
+    rows = []
+    for name, values in amounts.items():
+        cells = [values.get(month) for month in months]
+        rows.append({'item': name, 'months': cells,
+                     'total': sum_money(v for v in cells if v is not None)
+                     if any(v is not None for v in cells) else None})
+    return {'months': months, 'rows': rows}
+
+
 def share_text(part, total) -> str:
     """「占合计」= 该项 / 合计；**合计 ≤ 0 ⇒ 「—」**（不是 `NaN%`、也不是 0.0%）。"""
     t = Decimal(str(total or 0))
@@ -238,6 +270,6 @@ __all__ = [
     "AWF_COLUMNS", "PAGE_ONLY_KEYS", "SUM_KEYS", "EMPTY_COLSPAN",
     "MSG_BAD_AMOUNT", "UNNAMED", "EXPORT_NOTE", "EXPORT_BOUNDARY",
     "default_ym", "parse_ym", "parse_amount", "amount_problem", "money_text",
-    "auto_amount", "sum_items", "total_amount", "share_text",
+    "auto_amount", "sum_items", "total_amount", "export_rows", "share_text",
     "auto_row", "manual_rows", "summary_row",
 ]

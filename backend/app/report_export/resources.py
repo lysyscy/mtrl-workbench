@@ -49,7 +49,7 @@ PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLA
 
 #: 登记的 SHA256（**唯一登记处** = `docs/reference/template-export.md` §五 那张表；改模板必须同时改这里）
 EXPECTED_SHA256: dict[str, str] = {
-    "模板-机械费四页.xlsx": "0831c5d8d2472f1d0f703c8d6cf6f2610f7343086a1c6cea3dc8cb4b64cc788d",
+    "模板-机械费四页.xlsx": "1f8c6638a1235d573edd6f4021b40a38cad0f9824c7d2a91ea30976e64316f88",
     "模板-集采打印台账.xlsx": "a9654f0530479929cdb5bd687d8f1fa2fa61ed0979a79af969bd56e0a03f8e6d",
     "模板_收发结存表.xlsx":
         "eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323",

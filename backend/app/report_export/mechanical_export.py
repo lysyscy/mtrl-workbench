@@ -142,14 +142,21 @@ def build(data, *, project_rows=None):
     styles = {i: {r: [copy(sheet.cell(r, c)._style) for c in range(1, width + 1)]
                   for r in rows} for i, (sheet, rows, width) in enumerate(zip(
                       wb, ((6, 7), (5, 6, 7), (5, 6, 7), range(1, 8)), (15, 17, 15, 35)))}
+    summary = wb.worksheets[0]
+    notes = [([summary.cell(r, c).value for c in range(1, 16)],
+              [copy(summary.cell(r, c)._style) for c in range(1, 16)],
+              summary.row_dimensions[r].height)
+             for r in range(8, summary.max_row + 1) if summary.cell(r, 1).value]
     for sheet in wb:
         for row in sheet:
             for cell in row:
                 if isinstance(cell.value, str) and '2026年9月' in cell.value:
                     cell.value = cell.value.replace('2026年9月', f'{ym[:4]}年{int(ym[5:])}月')
     for sheet, header in zip(wb.worksheets[:3], (5, 4, 4)):
+        for merged in list(sheet.merged_cells.ranges):
+            if merged.min_row > header:
+                sheet.unmerge_cells(str(merged))
         sheet.delete_rows(header + 1, sheet.max_row - header)
-    summary = wb.worksheets[0]
     put(summary, 5, 7, '累计周材费')
     put(summary, 5, 12, '当月周材费')
     summary.row_dimensions[5].height = 33
@@ -170,9 +177,14 @@ def build(data, *, project_rows=None):
     summary.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=2)
     for col in range(5, 15):
         sum_formula(summary, total_row, col, range(6, total_row))
+    for row, (values, note_styles, height) in enumerate(notes, total_row + 1):
+        append_row(summary, row, values, note_styles)
+        summary.row_dimensions[row].height = height
+        summary.merge_cells(start_row=row, start_column=1, end_row=row, end_column=15)
     for sheet_index, category, fields, total_col, net_col in (
             (1, 'zero', ZERO_FIELDS, 7, 9), (2, 'monthly', MONTHLY_FIELDS, 8, 15)):
         sheet = wb.worksheets[sheet_index]
+        sheet.freeze_panes = None
         row_no = 5
         groups = []
         net_groups = []
@@ -244,14 +256,14 @@ def build(data, *, project_rows=None):
             month_values[wh, category] = annual_values(data, wh, hist, source, category)
     months = sorted({m for values in month_values.values() for m in values}) or [ym]
     sum_col = len(months) + 3
-    width = sum_col + 5
+    width = sum_col + 6
     annual._cells.clear()
     annual.row_dimensions.clear()
     annual.column_dimensions.clear()
-    headers = ['项目', '费用'] + [f'{m[:4]}年{int(m[5:])}月' for m in months] + ['合计', '总班组使用', 'i6', 'i8', '差额', '信息化消耗结算']
+    headers = ['项目', '费用'] + [f'{m[:4]}年{int(m[5:])}月' for m in months] + ['合计', '总班组使用', 'i6', 'i8', '差额', '信息化消耗结算', '班组使用-消耗结算']
     def annual_styles(template_row):
         old = styles[3][template_row]
-        return old[:2] + [old[2]] * len(months) + old[29:35]
+        return old[:2] + [old[2]] * len(months) + old[29:35] + [old[33]]
     append_row(annual, 1, headers, annual_styles(1))
     annual.row_dimensions[1].height = 30
     for col in range(1, width + 1):
@@ -299,14 +311,25 @@ def build(data, *, project_rows=None):
             f'=IF(COUNT({left_ref},{right_ref})<2,"",{left_ref}-{right_ref})',
             left - right if left is not None and right is not None else None))
         parts = [numeric(snapshot.get('totals', {}).get(k)) for k in ('project', 'team')]
-        put(annual, row_no, sum_col + 5, sum(parts, Decimal(0)) if all(v is not None for v in parts) else None, number=True)
+        settlement = sum(parts, Decimal(0)) if all(v is not None for v in parts) else None
+        put(annual, row_no, sum_col + 5, settlement, number=True)
+        usage_ref = f'{get_column_letter(sum_col + 3)}{row_no}'
+        settlement_ref = f'{get_column_letter(sum_col + 5)}{row_no}'
+        set_formula(annual.cell(row_no, sum_col + 6), Formula(
+            f'=IF(COUNT({usage_ref},{settlement_ref})<2,"",{usage_ref}-{settlement_ref})',
+            usage - settlement if usage is not None and settlement is not None else None))
         totals.append(row_no)
         row_no += 1
     append_row(annual, row_no, [None] * width, annual_styles(7))
     put(annual, row_no, 1, '总计')
     annual.merge_cells(start_row=row_no, start_column=1, end_row=row_no, end_column=2)
     for col in range(3, width + 1):
-        sum_formula(annual, row_no, col, totals)
+        result = sum_formula(annual, row_no, col, totals)
+        refs = f'{get_column_letter(col)}2:{get_column_letter(col)}{row_no - 1}'
+        expression = f'SUBTOTAL(9,{refs})' + ('/2' if col <= sum_col else '')
+        if result is None:
+            expression = f'IF(COUNT({refs})=0,"",{expression})'
+        set_formula(annual.cell(row_no, col), Formula(f'={expression}', result))
     # Rebuild caches after summary rows have acquired their cross-sheet formulas.
     for col in range(5, 15):
         sum_formula(summary, total_row, col, range(6, total_row))
@@ -314,6 +337,11 @@ def build(data, *, project_rows=None):
     for row in annual.iter_rows(min_col=3, max_col=width, max_row=row_no):
         for cell in row:
             cell.border = copy(border)
+    for total in totals:
+        for cell in annual[total - len(categories)]:
+            edge = copy(cell.border)
+            edge.top = Side(style='thick', color='000000')
+            cell.border = edge
     for sheet, max_col in zip(wb, (15, 16, 15, width)):
         sheet.print_area = f'A1:{get_column_letter(max_col)}{sheet.max_row}'
     return wb

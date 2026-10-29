@@ -1,40 +1,21 @@
 # -*- coding: utf-8 -*-
-"""台账成品（`TAIL-04` 路径① 片 2＋3）—— **一本工作簿 / 三个 sheet**。
+"""逐月欠款台账：辅材、机械和特殊费用共用一本工作簿及截止月。
 
-## 形态（唯一登记处 = 交付面 `docs/requirements/report-templates.md` §二 / §5.1 / §5.2）
-
-| sheet | 列 | 行 | 尾块 |
-|---|---|---|---|
-| `辅材` | 序号 ｜ 月份 ｜ 其他支出金额 ｜ 付款 ｜ 欠款 ｜ 备注 | 期初占位行 ＋ 逐月行（空月也出行） | R19「合计：」＋ C/D/E（**以数值覆盖**） |
-| `机械` | 同上 | 同上 | 同上 |
-| `特殊费用月报表` | 数据项 ｜ `<M>月份` ｜ 合计 | 1 自动项 ＋ N 手填项（行数可变） | **无**（列先压成一列，见下） |
-
-## 四处口径（都有现成主人，⛔ 不在此另立）
-
-1. **标题**：`{展示名}` ＋ 模板后缀（`辅材欠款` / `机械费欠款` / `费用汇总表`）——
-   用户 **2026-09-18 裁定**：用**展示名**、**不带「项目」二字**（模板那句 `龙源纸业项目辅材欠款` 里的
-   「项目」二字属于示例项目名本身）⇒ `德州热电辅材欠款`。
-   ⚠️ 模板标题里写着**别的项目名** ⇒ 一律**整格替换**，⛔ 不许原样带走（`TAIL-43` 同族）。
-2. **月份列**＝**页面文本**（`模板清单` §四-4 裁定「按页面文本」）：期初行沿用API的截止月标签，旧调用者兼容`截止 YYYY 年 M 月底`、
-   其余 = `YYYY-MM`；⚠️ 写前把该格**数字格式设为文本**（模板那列原本是日期/数值格式）。
-3. **合计 / 小计一律以数值覆盖**（§四-2 / §六-2）：模板里的 `=SUM(...)` 不进成品。
-4. **`特殊费用月报表` 的月份列按「当前核算月」生成**（§5.2 裁定①丙）：模板的 `3月份`…`8月份`
-   只是示例 ⇒ 先把多月**压成一列**（`tpl_fill.keep_only_columns`，认「N月份」表头、⛔ 不抄列字母），
-   **再**走行维度的 `fill_sheet`。
-
-⛔ 本模块只做**列映射 / 标题 / 数字格式**：不算金额、不筛项目、不拼路径
-（金额与行集合的主人分别是 `mod05_flow` 与 `mod09_fee`；路径唯一出口 = `resources`）。
+费用矩阵由MOD09按项目组装，列布局与字段映射见docs/reference/template-export.md。
+本模块只负责模板布局、标题和数字格式；金额及行集合由业务服务提供。
+沿用模板标记定位、尾块位移和成品逐格回读，清除全部样例值。
 """
 
 from __future__ import annotations
 
 import re
 import zipfile
+from copy import copy
 from decimal import Decimal
 from pathlib import Path
 
 import openpyxl
-from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.utils import get_column_letter
 
 from app.core.errors import MustReportError
 from app.core.money import sum_money
@@ -55,8 +36,6 @@ FILE_SUFFIX = "欠款台账"
 
 #: 台账列映射（`模板清单` §5.1：模板 6 列 = 页面 7 列去掉「操作」）
 LEDGER_COL = {"seq": "A", "month": "B", "other": "C", "pay": "D", "debt": "E", "remark": "F"}
-#: 特殊费用月报表列映射（`模板清单` §5.2：数据项 ＋ 单月列 ＋ 合计）
-FEE_COL = {"item": "A", "month": "B", "total": "C"}
 
 #: 期初占位行的月份文本（**照原型** `ledCutLabel`：空格与「年月」写法一字不差）
 CUT_MONTH_FMT = "截止 {y} 年 {m} 月底"
@@ -85,9 +64,11 @@ def title_of(display: str, sheet: str) -> str:
     return f"{display or ''}{TITLE_SUFFIX[sheet]}"
 
 
-def month_text(row: dict) -> str:
+def month_text(row: dict, *, sheet: str = '') -> str:
     """「月份」列的**页面文本**：期初占位行 = `截止 YYYY 年 M 月底`，其余 = `YYYY-MM`。"""
     ym = str(row.get("month") or "")
+    if sheet == '辅材' and str(row.get('month_label') or ym) == '2025-11':
+        return '2025-11及之前'
     if row.get("month_label"):
         return str(row["month_label"])
     if row.get("is_opening") and len(ym) >= 7 and ym[4] == "-":
@@ -100,7 +81,7 @@ def ledger_spec(sheet: str, side: dict, *, display: str) -> dict:
     rows = list(side.get("display_rows", side.get("rows")) or ())
     data = [
         (r.get("seq"), {
-            LEDGER_COL["month"]: month_text(r),
+            LEDGER_COL["month"]: month_text(r, sheet=sheet),
             LEDGER_COL["other"]: money(r.get("other_expense")),
             LEDGER_COL["pay"]: money(r.get("payment")),
             LEDGER_COL["debt"]: money(r.get("debt")),
@@ -123,38 +104,40 @@ def ledger_spec(sheet: str, side: dict, *, display: str) -> dict:
 
 
 def fee_spec(fee: dict, *, display: str, ym: str) -> dict:
-    """特殊费用月报表 → 引擎 `spec`（**单月列**；「合计」列 = 该月值，§5.2 标注）。"""
-    items = [fee.get("auto") or {}] + list(fee.get("manuals") or [])
-    data = [
-        (str(it.get("item") or "").strip() or None, {      # ⚠️ 同上：空项名给 `None`，不给 `""`
-            FEE_COL["month"]: money(it.get("amount")),
-            FEE_COL["total"]: money(it.get("amount")),      # 单月列 ⇒ 合计 = 该月值
-        })
-        for it in items
-    ]
-    return {"sheet": SHEET_FEE, "rows": data, "tail": {}, "title": title_of(display, SHEET_FEE),
-            "months_col": FEE_COL["month"]}
+    """已组装的逐月费用矩阵 → 模板列；金额及合计由业务服务提供。"""
+    total_col = get_column_letter(len(fee['months']) + 2)
+    data = []
+    for item in fee['rows']:
+        cells = {get_column_letter(col): money(value) for col, value in enumerate(item['months'], 2)}
+        cells[total_col] = money(item['total'])
+        data.append((str(item.get('item') or '').strip() or None, cells))
+    return {"sheet": SHEET_FEE, "rows": data, "tail": {}, "title": title_of(display, SHEET_FEE)}
 
 
-def month_header_text(ym: str) -> str:
-    """单月列的表头（`3月份` → `9月份`）。"""
-    return "%d月份" % int(str(ym)[5:7])
-
-
-def collapse_months(ws, ym: str) -> dict:
-    """把模板的多个月份列**压成一列**并改写表头（`模板清单` §5.2 裁定①丙）。
-
-    ⚠️ 必须在 `fill_sheet` **之前**调用（数据区/尾块定位都基于列）。
-    """
+def layout_fee_months(ws, months: list[str]) -> None:
+    """以模板标题、月列及合计样式生成动态列，随后仍由填充引擎写数据行。"""
     cols = [c for c in range(1, ws.max_column + 1)
             if _MONTH_HEADER.match(str(ws.cell(row=2, column=c).value or "").strip())]
     if not cols:
         raise MustReportError("模板的 `特殊费用月报表` 第 2 行找不到「N月份」列 ⇒ 形态不认识，拒绝产出。")
-    keep = get_column_letter(cols[0])
-    info = tpl_fill.keep_only_columns(
-        ws, keep=keep, drop=[get_column_letter(c) for c in cols[1:]])
-    ws.cell(row=2, column=column_index_from_string(keep)).value = month_header_text(ym)
-    return info
+    data_start = tpl_fill.locate_data_area(ws)['data_start']
+    styles = {r: [copy(ws.cell(r, col)._style) for col in (cols[0], ws.max_column)]
+              for r in range(1, data_start + 1)}
+    for merged in list(ws.merged_cells.ranges):
+        ws.unmerge_cells(str(merged))
+    ws.delete_rows(data_start + 1, ws.max_row - data_start)
+    ws.delete_cols(2, ws.max_column - 1)
+    for col in list(ws.column_dimensions):
+        if col != 'A':
+            del ws.column_dimensions[col]
+    ws.column_dimensions['A'].width = max(ws.column_dimensions['A'].width, 36)
+    for col, label in enumerate([*months, '合计'], 2):
+        ws.column_dimensions[get_column_letter(col)].width = 12
+        for row in range(1, data_start + 1):
+            ws.cell(row, col)._style = copy(styles[row][int(col == len(months) + 2)])
+        ws.cell(2, col).value = label
+        ws.cell(data_start, col).number_format = '#,##0.00'
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(months) + 2)
 
 
 # ---------------------------------------------------------------- 组装
@@ -180,7 +163,7 @@ def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:
     """三个 sheet → 一本 xlsx ⇒ 返回**成品绝对路径**。
 
     `sections` = `{"material": side, "mechanical": side, "特殊费用月报表": fee}`
-    （`side` 由 `mod05_flow.service.build_ledger` 给、`fee` 由 `mod09_fee.service.build_page_data` 给）。
+    （`side` 由 `mod05_flow.service.build_ledger` 给、`fee` 由 `mod09_fee.service.build_export_data` 给）。
 
     - 模板走 `resources.require_template`（缺失 / 被回退 ⇒ **显式拒做**）；
     - ⚠️ 三个 sheet **要么都填、要么不产出** —— 只填两个就交付，第三张会把模板里**别的项目**的
@@ -196,7 +179,7 @@ def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:
     wb = openpyxl.load_workbook(str(template))
     try:
         fee_ws = wb[SHEET_FEE]
-        collapse_months(fee_ws, ym)                       # ⚠️ 先压列、再填行
+        layout_fee_months(fee_ws, sections[SHEET_FEE]['months'])
         for sheet in (SHEET_FEE, *SHEET_OF_CATEGORY.values()):
             wb[sheet]["A1"] = title_of(display, sheet)    # 标题里写着别的项目名 ⇒ 整格替换
         specs = [ledger_spec(sheet, sections.get(cat) or {}, display=display)
@@ -206,7 +189,10 @@ def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:
         for sp in specs:
             ws = wb[sp["sheet"]]
             sheet_plan = tpl_fill.fill_sheet(ws, sp)
-            _set_text_fmt(ws, sheet_plan, sp["months_col"])
+            if sp.get('months_col'):
+                _set_text_fmt(ws, sheet_plan, sp["months_col"])
+            if ws.title == SHEET_FEE:
+                ws.print_area = f'A1:{get_column_letter(ws.max_column)}{ws.max_row}'
             plan.append(sheet_plan)
         save_workbook(wb, out)
     finally:
@@ -229,7 +215,7 @@ def build_zip(paths, out_dir, name: str) -> str:
     return str(out)
 
 
-__all__ = ["SHEET_OF_CATEGORY", "SHEET_FEE", "TITLE_SUFFIX", "FILE_SUFFIX", "LEDGER_COL", "FEE_COL",
+__all__ = ["SHEET_OF_CATEGORY", "SHEET_FEE", "TITLE_SUFFIX", "FILE_SUFFIX", "LEDGER_COL",
            "CUT_MONTH_FMT", "TEXT_FMT", "money", "title_of", "month_text", "ledger_spec",
-           "fee_spec", "month_header_text", "collapse_months", "file_name", "build_xlsx",
+           "fee_spec", "layout_fee_months", "file_name", "build_xlsx",
            "build_zip"]
