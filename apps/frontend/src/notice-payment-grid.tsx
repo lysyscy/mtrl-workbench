@@ -29,8 +29,7 @@ export function PaymentGrid({rows,due,normalize,warningIds,...editing}:Editing&{
     {field:'approval',headerName:'审批状态',...completeColumnWidth(views.map(row=>row.approval),'审批状态',scale,12),cellRenderer:({value,data}:ICellRendererParams<PayView>)=>data!.notice?<Tag className={'status-tag '+(value==='已批'?'status-positive':'status-pending')}>{value}</Tag>:null},
     ...(['approved','paid','due'] as const).map((field,index):ColDef<PayView>=>({field,headerName:['审批金额','已付金额','本次应付'][index]!,minWidth:floors[index]!,cellClass:'money',wrapText:false})),
     {colId:'method',headerName:'实际付款方式',minWidth:110*scale,cellRenderer:Method},
-    {field:'pay',headerName:'本次付款金额',minWidth:floors[3]!,cellClass:'money',cellRenderer:Amount,
-      suppressKeyboardEvent:({event})=>event.target instanceof HTMLInputElement&&event.key!=='Enter'&&event.key!=='Escape'},
+    {field:'pay',headerName:'本次付款金额',minWidth:floors[3]!,cellClass:'money',cellRenderer:Amount},
     {field:'reason',headerName:'不可付原因',minWidth:160*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
     {colId:'actions',headerName:'操作',...completeColumnWidth(['移出'],'操作',scale,16),cellRenderer:Actions},
   ],[signature,scale]);
