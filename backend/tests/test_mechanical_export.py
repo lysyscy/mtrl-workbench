@@ -41,7 +41,7 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     assert monthly['A6'].value == '合计'
     assert all(str(s.print_area) and s.print_title_rows for s in wb)
     assert all(not s.row_dimensions[row].hidden for s in wb for row in range(5 if s is zero or s is monthly else 2, s.max_row + 1))
-    assert str(zero.freeze_panes) == 'C5'
+    assert zero.freeze_panes is None and monthly.freeze_panes is None
     wb.close()
 
 
@@ -160,3 +160,51 @@ def test_explicit_clear_overrides_history_but_absent_category_keeps_reference():
     effective['sources']={'mech_2':{'mode':'manual','basis':{'amount':None}}}
     assert export.annual_values(data,'甲',hist,{},'zero')=={}
     assert export.annual_values(data,'甲',hist,{},'monthly')=={'2026-09':Decimal('206')}
+
+
+@pytest.mark.parametrize('month_count', [28, 29])
+def test_annual_totals_and_usage_settlement_difference_follow_month_columns(tmp_path, month_count):
+    data = sample()
+    months = [f'{2024 + (5 + index) // 12}-{(5 + index) % 12 + 1:02d}' for index in range(month_count)]
+    data['ym'] = months[-1]
+    data['projects'].append({'warehouse': '乙', 'name': '乙项目'})
+    data['annual_effective'] = [
+        {'warehouse': warehouse, 'ym': month, 'values': {'mech_2': value}}
+        for warehouse, value in [('甲', '100'), ('乙', '200')] for month in months]
+    data['histories'] = [{'warehouse': '甲', 'i6': '100'}, {'warehouse': '乙', 'i6': '200'}]
+    data['i8'] = [
+        {'warehouse': '甲', 'totals': {'usage': '300', 'project': '120', 'team': '30'}},
+        {'warehouse': '乙', 'totals': {'usage': '500', 'project': '400', 'team': '50'}}]
+    path = export.export(data, tmp_path)
+    formulas = load_workbook(path)
+    cached = load_workbook(path, data_only=True)
+    annual, values = formulas['年度汇总'], cached['年度汇总']
+    columns = {cell.value: cell.column_letter for cell in annual[1]}
+    difference = columns['班组使用-消耗结算']
+    assert difference == ('AK' if month_count == 28 else 'AL')
+    usage, settlement = columns['i8'], columns['信息化消耗结算']
+    assert f'{usage}6-{settlement}6' in annual[f'{difference}6'].value
+    assert values[f'{difference}6'].value == 150
+    assert values[f'{difference}11'].value == 50
+    assert values[f'{difference}12'].value == 200
+    assert annual['C12'].value == '=SUBTOTAL(9,C2:C11)/2'
+    assert values['C12'].value == 300
+    cumulative = columns['合计']
+    assert annual[f'{cumulative}12'].value == f'=SUBTOTAL(9,{cumulative}2:{cumulative}11)/2'
+    assert values[f'{cumulative}12'].value == 300 * month_count
+    assert annual[f'{usage}12'].value == f'=SUBTOTAL(9,{usage}2:{usage}11)'
+    assert values[f'{usage}12'].value == 800
+    formulas.close()
+    cached.close()
+
+
+def test_usage_settlement_difference_keeps_unknown_inputs_blank(tmp_path):
+    data = sample()
+    data['i8'] = [{'warehouse': '甲', 'totals': {'usage': '300', 'project': '120', 'team': None}}]
+    path = export.export(data, tmp_path)
+    wb = load_workbook(path, data_only=True)
+    annual = wb['年度汇总']
+    difference = next(cell.column for cell in annual[1] if cell.value == '班组使用-消耗结算')
+    assert annual.cell(6, difference).value is None
+    assert annual.cell(7, difference).value is None
+    wb.close()

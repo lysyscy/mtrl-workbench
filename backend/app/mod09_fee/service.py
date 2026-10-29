@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.mod09_fee.models import FeeItem, FeeManualItem
 
 from app.core.query import query_one
+from app.core.errors import MustReportError
 
 from app.mod01_projects import domain as PJ, service as PS
 from app.mod01_projects.models import Project
@@ -63,6 +64,19 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         "count": len(items),
         "can_edit": pj is not None,     # 没档案行 ⇒ 没有可写的那一份
     }
+
+
+def build_export_data(s: Session, *, end_ym: str, project: str) -> dict:
+    """逐月台账的费用矩阵；指定项目精确取数，不回退其他项目。"""
+    if not D.parse_ym(end_ym):
+        raise MustReportError('请选择有效的台账截止月')
+    key = str(project or '').strip()
+    pj = R.project_by_key(s, key)
+    if pj is None:
+        raise MustReportError('导出费用的项目不在档案里，请重新选择')
+    items, inv = R.year_facts(s, year=end_ym[:4], project_id=pj.id, warehouse=key)
+    return {'ym': end_ym, 'project': key,
+            **D.export_rows(end_ym=end_ym, project_key=key, items=items, inv_rows=inv)}
 
 
 def build_year_data(s: Session, *, year: str, project: str) -> dict:
@@ -233,7 +247,7 @@ def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dic
 
 
 __all__ = ["project_references",
-    "parse_state", "candidates", "build_page_data",
+    "parse_state", "candidates", "build_page_data", "build_export_data",
     "act_add", "act_rename", "act_set_amount", "act_delete", "act_batch",
     "project_by_key",        # ⭐ 包间出口（`TAIL-195` 批 2c）
 ]

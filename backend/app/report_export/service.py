@@ -127,9 +127,8 @@ def export_ledger(session: Session, projects, ym: str = "") -> Path:
     （`辅材` / `机械` / `特殊费用月报表`）；≥2 个项目 ⇒ 打一个 zip ⇒ 返回成品（或 zip）的绝对路径。
 
     - 取数：台账两侧 = `mod05_flow.service.build_ledger`（**行集合与页面同一份口径**）；
-      「特殊费用月报表」= `mod09_fee.service.build_page_data`（1 自动项 ＋ N 手填项）。
-    - ⚠️ **全本只有一个报告月**（`ym`）：台账的**止月**与「特殊费用月报表」的**月份列**必须是同一个月
-      —— 否则一本工作簿里两张表说的不是同一期间（用户在同一个文件里看到两个期间，必然读错）。
+      「特殊费用月报表」= `mod09_fee.service.build_export_data`（1 自动项 ＋ N 手填项）。
+    - 全本共用截止月：特殊费用从该项目首个非零费用月连续展开至台账止月，跨年保留逐月列。
     - ⚠️ **三个 sheet 一次做齐**：只填两个就交付，第三张会把模板里**别的项目**的示例数据留给用户
       （`TAIL-43` 同族）⇒ 本函数**不提供"只导两个 sheet"的入口**。
     - 项目**必须在档案里**（拿不到展示名 ⇒ **显式拒做**，⛔ 不猜、不臆造归属）。
@@ -154,7 +153,7 @@ def export_ledger(session: Session, projects, ym: str = "") -> Path:
         display = display_of.get(key) or key
         sides = {s["category"]: s
                  for s in M5.build_ledger(session, project_id=pj.id, end_ym=report_ym)["sides"]}
-        fee = M9.build_page_data(session, {"ym": report_ym, "pj": key})
+        fee = M9.build_export_data(session, end_ym=report_ym, project=key)
         sections = {cat: sides.get(cat) for cat in ledger_export.SHEET_OF_CATEGORY}
         sections[ledger_export.SHEET_FEE] = fee
         made.append(ledger_export.build_xlsx(sections, out_dir, display=display, ym=report_ym))
