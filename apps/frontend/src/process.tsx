@@ -40,10 +40,10 @@ function ProcessAmountCell({data,column,label,mechanical=false}:{data:ProcessRow
   if(!focused&&String(raw).trim())display=displayAmount(raw);
   // Native input records an explicit 0 even when it replaces the same displayed default.
   return <div className={`process-cell${draft?' process-dirty':''}`}><Input className="record-value" htmlSize={1} aria-label={`${data.ym} ${label}`} value={display} disabled={cells.disabled}
-    status={draft?.error?'error':''} title={draft?.error||'清空后留空；明确为零可填 0'}
+    status={draft?.error?'error':''} title={draft?.error||undefined}
     onFocus={()=>setFocused(true)} onInput={e=>cells.change(data.ym,column,e.currentTarget.value)} onBlur={()=>{setFocused(false);cells.save(key);}}
     onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);e.currentTarget.blur();}}} />
-    {draft?.error?<div className="process-cell-error" role="alert"><span>{draft.error}</span><div><Button size="small" disabled={cells.disabled} onClick={()=>cells.save(key,true)}>重试</Button><Button size="small" disabled={cells.disabled} onClick={()=>cells.cancel(key)}>取消修改</Button></div></div>:focused?<small>清空后留空</small>:mechanical&&cells.source(data.ym,column)&&<small>明细确认</small>}</div>;
+    {draft?.error?<div className="process-cell-error" role="alert"><span>{draft.error}</span><div><Button size="small" disabled={cells.disabled} onClick={()=>cells.save(key,true)}>重试</Button><Button size="small" disabled={cells.disabled} onClick={()=>cells.cancel(key)}>取消修改</Button></div></div>:mechanical&&cells.source(data.ym,column)&&<small>明细确认</small>}</div>;
 }
 function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
   return <ProcessAmountCell data={data} column={column} label={mechLabels[mechKeys.indexOf(column)]!} mechanical/>;
@@ -85,8 +85,9 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   const detailSource=(ym:string,column:string)=>query.data?.sources[warehouse]?.[ym]?.[column]?.mode==='detail';
   async function reload(){
     await client.cancelQueries({queryKey:['process'],exact:true});
-    const data=await client.fetchQuery({queryKey:['process'],staleTime:0,queryFn:({signal})=>getProcess(signal)});
-    await client.invalidateQueries({predicate:q=>q.queryKey[0]!=='process'});return data;
+    await client.invalidateQueries({refetchType:'none'});
+    if(me)void client.invalidateQueries({queryKey:['history',`${me.id}:${me.account}`],exact:true});
+    return client.fetchQuery({queryKey:['process'],staleTime:0,queryFn:({signal})=>getProcess(signal)});
   }
   function change(ym:string,column:string,value:string){
     const key=keyOf(warehouse,ym,column);
@@ -157,10 +158,9 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   return <section className="process-page" aria-label="过程资料">
     <div data-page-chrome className="process-toolbar"><h2>过程资料</h2><ProcessExport projects={candidates} current={warehouse} tab={tab} paused={paused} reason={reason} /></div>
     <div data-page-chrome className="process-filters"><span>项目</span><ProjectPicker label="过程资料项目" projects={candidates} selected={candidates.filter(p=>p.warehouse_name===warehouse).map(p=>p.id)} pick={ids=>{const p=candidates.find(p=>p.id===ids[0]);if(p?.warehouse_name){setWarehouse(p.warehouse_name);saves.clearFeedback();}}} disabled={paused||projects.isPending||projects.isError||query.isPending} />{tab!==2&&matrix&&<div className="process-history"><label>增加历史月份 <Input type="month" aria-label="增加历史月份" max="2025-11" value={newMonth} onChange={e=>setNewMonth(e.target.value)} /></label><Button disabled={disabled||!/^\d{4}-(0[1-9]|1[0-2])$/.test(newMonth)||newMonth>'2025-11'||displayRows.some(row=>row.ym===newMonth)} onClick={()=>{setExtraMonths(current=>({...current,[warehouse]:[...(current[warehouse]??[]),newMonth]}));setNewMonth('');}}>增加月份</Button><span>填写金额后保存月份</span></div>}</div>
-    <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{Object.values(drafts).some(draft=>draft.error)&&<span>有未保存的修改，请查看对应金额格。</span>}</div>
+    <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{Object.values(drafts).some(draft=>draft.error)&&<span>有未保存的修改，请查看对应金额格。</span>}<Button disabled={paused||busy||uncertain||!currentDrafts.length} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button></div>
     {(query.isError||projects.isError||uncertain)&&<div className="notice" role="alert">{error||query.error?.message||projects.error?.message}{(query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重新核对</Button>}{projects.isError&&<Button disabled={paused||projects.isFetching} onClick={()=>void projects.refetch()}>重读项目</Button>}</div>}
     {uncertain&&<div className="notice process-uncertain" role="alert">{attempt.current&&<p>{name(attempt.current.warehouse)}，{attempt.current.ym} {matrixColumns.find(column=>column.field===attempt.current!.column)?.label}，本次输入：{attempt.current.value.trim()?displayAmount(attempt.current.value):'留空'}。</p>}<p>{query.isFetching?'正在重新核对…':verified?'已重读，请对照当前金额和本次输入核对结果。':'保存结果待核实，核对前暂停后续保存。'}</p><Button disabled={paused||!me||busy||!verified||query.isFetching||query.isError||projects.isError} onClick={confirmResult}>已核对，保留输入继续</Button></div>}
-    {currentDrafts.length>0&&<Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button>}
     {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,cancel:key=>saves.update(current=>{const next={...current};delete next[key];return next;})}}>

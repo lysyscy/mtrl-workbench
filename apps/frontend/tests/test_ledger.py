@@ -18,13 +18,16 @@ def test_actual_ledger_edit_keeps_next_draft_and_reads_back(server,browser_page,
     before=Decimal(row['other_expense']);value=before+Decimal('1.25');next_value=Decimal(row['payment'])+Decimal('2.50');pending=[]
     page.route('**/api/m05/history/save',lambda route:pending.append(route))
     first.fill(str(value));second.click();second.fill(str(next_value));assert len(pending)==1
-    route=pending.pop();response=route.fetch();assert response.ok;route.fulfill(response=response)
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存');expect(second).to_have_value(str(next_value))
+    route=pending.pop();response=route.fetch();assert response.ok
+    with page.expect_response('**/api/history/status'):
+        route.fulfill(response=response)
+    expect(page.get_by_role('alert',name='保存回执')).to_have_count(0);expect(second).to_have_value(str(next_value))
     page.unroute('**/api/m05/history/save')
-    with page.expect_response(lambda response:response.url.endswith('/api/m05/history/save') and response.request.method=='POST') as paid:
-        page.get_by_role('heading',name='欠款台账',exact=True).click()
+    with page.expect_response('**/api/history/status'):
+        with page.expect_response(lambda response:response.url.endswith('/api/m05/history/save') and response.request.method=='POST') as paid:
+            page.get_by_role('heading',name='欠款台账',exact=True).click()
     assert paid.value.ok
-    expect(page.get_by_role('status',name='保存回执')).not_to_contain_text('正在保存')
+    expect(page.get_by_role('alert',name='保存回执')).to_have_count(0)
     current=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
     actual=next(r for s in current['sides'] if s['category']==side['category'] for r in s['rows'] if r['record_id']==row['record_id'] and r['month']==row['month'])
     assert Decimal(actual['other_expense'])==value and Decimal(actual['payment'])==next_value
@@ -36,7 +39,7 @@ def test_actual_ledger_lost_write_receipt_cannot_resubmit(server,browser_page,ap
     def lose(route):
         response=route.fetch();assert response.ok and response.json()['ok'];writes.append(route.request.post_data);route.abort('failed')
     page.route('**/api/m05/history/save',lose);field.fill(text);page.get_by_role('heading',name='欠款台账',exact=True).click()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('未确认');assert len(writes)==1
+    expect(page.get_by_role('alert',name='保存回执')).to_contain_text('未确认');assert len(writes)==1
     page.get_by_role('heading',name='欠款台账',exact=True).click();assert len(writes)==1
     page.unroute('**/api/m05/history/save');page.get_by_role('button',name='重新加载',exact=True).click()
     expect(field).to_be_enabled();assert len(writes)==1

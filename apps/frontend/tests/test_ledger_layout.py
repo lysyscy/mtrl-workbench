@@ -33,8 +33,10 @@ def test_real_normal_month_remark_save_uses_same_month(server,browser_page,api,p
     # Scroll rendered rows rather than assuming the first viewport covers this month.
     if not field.count():
         page.get_by_role('region',name=side['label']+'欠款台账').locator('.ag-body-viewport').evaluate('e=>e.scrollTop=e.scrollHeight')
-    expect(field).to_be_visible();field.fill(row['remark']+'核验');page.get_by_role('heading',name='欠款台账',exact=True).click()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
+    expect(field).to_be_visible();field.fill(row['remark']+'核验')
+    with page.expect_response('**/api/history/status'):
+        page.get_by_role('heading',name='欠款台账',exact=True).click()
+    expect(page.get_by_role('alert',name='保存回执')).to_have_count(0)
     after=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
     actual=next(r for s in after['sides'] if s['category']==side['category'] for r in s['rows'] if r['row_kind']=='month' and r['month']==row['month'])
     assert actual['remark']==row['remark']+'核验'
@@ -101,7 +103,7 @@ def test_split_pages_keep_unsaved_ledger_guard_without_business_write(server,bro
     expect(page.get_by_role('button',name='导出 Excel',exact=True)).to_be_disabled()
     page.locator('a[href="/preview/debt"]').click()
     expect(field).to_have_value(draft)
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('未确认')
+    expect(page.get_by_role('alert',name='保存回执')).to_contain_text('未确认')
     assert len(attempts)==1
     actual=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
     assert any(r['remark']==row['remark'] for s in actual['sides'] if s['category']==side['category'] for r in s['rows'] if r['record_id']==row['record_id'] and r['row_kind']==row['row_kind'] and r['month']==row['month'])

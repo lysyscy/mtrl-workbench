@@ -80,33 +80,31 @@ function Extract({ me, blocked, active }: Props) {
     enabled:active&&!blocked&&Boolean(me),canWrite:!query.isError&&!query.isPending,
     read:reload,write:(draft,signal)=>saveBalance(draft.kind,draft.warehouse,draft.value,signal),
     acknowledge:(current,submitted)=>current.value===submitted.value?undefined:current,
-    saved:draft=>`${draft.kind}，${draft.warehouse}，已${draft.value.trim()?'保存':'清空'}`,
+    saved:()=>'',
   },{key:'extract-balances',label:'历史结余'});
-  const {drafts,busy,uncertain,verified,error,feedback}=saves;
+  const {drafts,busy,uncertain,verified,error}=saves;
   async function reload() {
-    await client.cancelQueries({queryKey:['extract']});
-    const data = await client.fetchQuery({queryKey,staleTime:0,queryFn:({signal}) => getExtract(year,status,signal)});
-    await client.invalidateQueries({predicate:q => q.queryKey[0] !== 'extract'});
-    await client.invalidateQueries({queryKey:['extract']}, {throwOnError:true});
-    return data;
+    await client.invalidateQueries({refetchType:'none'});
+    await client.cancelQueries({queryKey,exact:true});
+    if(me)void client.invalidateQueries({queryKey:['history',`${me.id}:${me.account}`],exact:true});
+    return client.fetchQuery({queryKey,staleTime:0,queryFn:({signal}) => getExtract(year,status,signal)});
   }
   const save=saves.save;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
   return <>
     <div data-page-chrome className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
-      <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label></div>
+      <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label><Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button></div>
       <SettlementExport scope={`${year} 焊材 / 气体`} url={`/api/m07/extract/export?${new URLSearchParams({period:year,status})}`} paused={!active || blocked} disabled={!query.data || query.isFetching || query.isError || busy || dirty || uncertain}>
         <p>{year}，{status}，焊材 {query.data?.annual.焊材.rows.length} 仓 / 气体 {query.data?.annual.气体.rows.length} 仓</p>
         <p>保留原模板，并附年度汇总；合计包含历史值与所选年 12 个月，2025 年 1–11 月留空。</p>
       </SettlementExport>
     </div>
-    {(busy || feedback) && <p role="status">{busy ? '正在保存历史结余…' : feedback}</p>}
     {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}<Button disabled={busy || blocked} onClick={() => {
       void saves.reread();
     }}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={() => {saves.confirm();}}>已核对，保留输入继续</Button></p>}
-    {Object.entries(drafts).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}{d.error && <span role="alert">，{d.error}</span>}</span>
+    {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}<span role="alert">，{d.error}</span></span>
       <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {save(key,true);}}>保存这项</Button>
       <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消修改</Button></div>)}
     {query.isPending ? <p role="status">正在读取库存年度汇总…</p> : query.data && <Cells.Provider value={{drafts,disabled,save,

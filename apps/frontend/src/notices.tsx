@@ -96,7 +96,14 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current || Object.keys(moneyDrafts.current).length ? '付款通知书有未保存输入，请先处理。' : '');
   const batchUnavailable = unavailable || !picked.size || hidden > 0;
   const batchReason = hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
-  async function refresh() { await client.invalidateQueries({ predicate: query => query.queryKey[0] !== 'notice-maintenance' }, { throwOnError: true }); }
+  async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
+    await client.invalidateQueries({refetchType:'none'});
+    if(me)void client.invalidateQueries({queryKey:['history',`${me.id}:${me.account}`],exact:true});
+    await client.cancelQueries({queryKey:['notices'],exact:true});
+    await client.fetchQuery({queryKey:['notices'],staleTime:0,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
+    if(scope==='ownership')await projects.refetch({throwOnError:true});
+    if(scope!=='notice')await client.invalidateQueries({queryKey:['notice-ownership-pending'],exact:true},{throwOnError:true});
+  }
   function cancelDraft() { draftRef.current = null; setDraft(null); setDraftUncertain(false); setDraftChecked(false); }
   function begin(row?: NoticeRow) {
     if (unavailable || draftRef.current) return;
@@ -129,7 +136,10 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       const value = await requestJson(path, { method: 'POST', ...body(payload) }); saved = true;
       if (!mounted.current) return false;
       const text = receipt(value), attention = record(value) && typeof value.warning === 'string' ? value.warning : '';
-      if (clear) setPicked(new Set()); await refresh(); announce(attention || text, Boolean(attention)); return true;
+      if (clear) setPicked(new Set()); await refresh();
+      if(attention)announce(attention,true);
+      else if(path!=='/api/m03/actions/stat'&&path!=='/api/m03/actions/manual-save')announce(text);
+      return true;
     } catch (failure) { if (mounted.current) setError(`${saved ? '操作已完成，但读取失败；请重读核对，勿重复操作。' : ''}${failure instanceof Error ? failure.message : '操作未完成，请重试。'}`); return saved; }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
@@ -224,19 +234,19 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setPicked(new Set(ids)); setPasteTop(new Set(ids)); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { setPicked(new Set()); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
       {warning && <p className="notice" role="alert">{warning}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setWarning('')).catch(e => setError(e.message))}>重读核对</Button></p>}{error && <p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
-      {query.isError && query.data && <p className="notice" role="alert">列表更新失败，保留上次结果。{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p>}{query.isPending ? <><p className="notice-count" role="status">正在读取付款通知书…</p><div className="notice-grid" aria-hidden="true" /></> : query.isError && !query.data ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试</Button></p> : <>{busy && <p className="notice-feedback" role="status">正在保存，请稍候…</p>}<PreparedGrid presentation={presentation} className="notice-grid grid-single-line" role="region" aria-label="付款通知书列表" grid={{theme:gridTheme,onRowDataUpdated:e=>e.api.refreshCells({columns:['jc_supplier'],force:true}),rowBuffer:2,alwaysShowVerticalScroll:true,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,getRowId:p=>String(p.data.notice_id),getRowClass:p=>p.data?.notice_id===focusId?'notice-focused':'',defaultColDef:defaultColumn,suppressScrollOnNewData:true,animateRows:false,postSortRows,onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选条件下没有付款通知书，请调整条件或按月抓取。'}} /></>}
+      {query.isError && query.data && <p className="notice" role="alert">列表更新失败，保留上次结果。{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p>}{query.isPending ? <><p className="notice-count" role="status">正在读取付款通知书…</p><div className="notice-grid" aria-hidden="true" /></> : query.isError && !query.data ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试</Button></p> : <PreparedGrid presentation={presentation} className="notice-grid grid-single-line" role="region" aria-label="付款通知书列表" grid={{theme:gridTheme,onRowDataUpdated:e=>e.api.refreshCells({columns:['jc_supplier'],force:true}),rowBuffer:2,alwaysShowVerticalScroll:true,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,getRowId:p=>String(p.data.notice_id),getRowClass:p=>p.data?.notice_id===focusId?'notice-focused':'',defaultColDef:defaultColumn,suppressScrollOnNewData:true,animateRows:false,postSortRows,onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选条件下没有付款通知书，请调整条件或按月抓取。'}} />}
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
       <OwnershipPending blocked={blocked || !active} open={row => setMaintenance({kind:'ownership',row})} />
       {autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={refresh} announce={announce} />}
-      {maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id, linking=maintenance.kind === 'link'; setMaintenance(null); if(linking) requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={refresh} announce={announce} />}
+      {maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id, linking=maintenance.kind === 'link'; setMaintenance(null); if(linking) requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}
       {projects.isError && <p className="notice" role="alert">{projects.error.message}<Button htmlType="submit" onClick={() => void projects.refetch()}>重读项目</Button></p>}
     </section>
     {print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}
     {flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}
     {printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}
     {payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={refresh} announce={announce} />}
-    {fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={refresh} />}
+    {fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={()=>refresh('fetch')} />}
     <BusinessModal open={exportOpen && active && !blocked} className="project-dialog" titleId="notice-export-title" requestClose={exportClosing.requestClose}><DialogContents titleId="notice-export-title" title="导出付款通知书台账" closing={exportClosing}><p>导出当前筛选的 {shown.length} 条通知书，按表格显示顺序排列。</p>{error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={exportClosing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={unavailable || !shown.length} onClick={() => void exportExcel()}>保存到本地</Button></div></DialogContents></BusinessModal>
   </div></NoticeSelectionContext.Provider>;
 }

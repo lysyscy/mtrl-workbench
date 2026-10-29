@@ -39,5 +39,5 @@ def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disp
     confirm=modal.get_by_role('group',name='确认删除子行');confirm.get_by_role('button',name='取消删除',exact=True).click()
     assert Decimal(get(api,'/api/m11/detail',id=row['id'])['data']['pay_sum'])==Decimal(after['pay_sum'])
     dom.get_by_role('button',name='删除手工付款',exact=True).click();modal.get_by_role('group',name='确认删除子行').get_by_role('button',name='确认删除',exact=True).click()
-    expect(modal.get_by_role('status').filter(has_text='已删除')).to_be_visible()
+    expect(page.get_by_text('已删除。',exact=True)).to_be_visible()
     assert get(api,'/api/m11/detail',id=row['id'])['data']['pay_sum']==before['pay_sum']

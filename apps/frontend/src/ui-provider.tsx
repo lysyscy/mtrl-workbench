@@ -6,6 +6,8 @@ import zhCN from 'antd/locale/zh_CN';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
+const messageConfig = {maxCount: 1, styles: {list: {top: 'auto', height: 'auto', bottom: 'calc(64px * var(--fscale, 1) + env(safe-area-inset-bottom))'}}};
+
 function appearance() {
   const css = getComputedStyle(document.documentElement);
   const read = (name: string) => css.getPropertyValue(name).trim();
@@ -42,5 +44,5 @@ export function UiProvider({ children, appearanceKey }: { children: ReactNode; a
       Input: { inputFontSizeSM: value.token.fontSizeSM }, DatePicker: { inputFontSizeSM: value.token.fontSizeSM },
       Select: { fontSize: value.token.fontSizeSM }, Button: { fontSizeSM: value.token.fontSizeSM }, Segmented: { fontSize: value.token.fontSizeSM },
       Tag: { borderRadiusSM: 4 }, Checkbox: { borderRadiusSM: 4 } },
-  }}><App component={false}>{children}</App></ConfigProvider></MotionProvider>;
+  }}><App component={false} message={messageConfig}>{children}</App></ConfigProvider></MotionProvider>;
 }

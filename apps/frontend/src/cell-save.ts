@@ -18,7 +18,7 @@ interface Snapshot<D> {
 }
 
 // Callers own draft identity and reliable domain reads. This module owns the
-// ordering: snapshot -> acknowledged write -> retain newer draft -> readback.
+// ordering: snapshot -> acknowledged write -> readback -> retire only the submitted draft.
 // An unknown write stops the queue; dropping a draft never releases that lock.
 export class CellSaveQueue<D extends { error: string }, R> {
   private snapshot: Snapshot<D> = { drafts: {}, busy: false, uncertain: false, verified: false, error: '', feedback: '' };
@@ -27,6 +27,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
   private alive = true;
   private request = new AbortController();
   private generation = 0;
+  private pendingAcknowledge: (() => void) | undefined;
   constructor(private options: () => CellSaveOptions<D, R>) {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -89,9 +90,11 @@ export class CellSaveQueue<D extends { error: string }, R> {
     try {
       await write(this.request.signal); written = true;
       if (!this.alive) return 'blocked';
-      acknowledge?.();
+      this.pendingAcknowledge = acknowledge;
       const result = await adapter.read();
       if (!this.alive) return 'blocked';
+      acknowledge?.();
+      this.pendingAcknowledge = undefined;
       this.publish({ feedback: saved(result) });
       return 'saved';
     } catch (failure) {
@@ -120,6 +123,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
   };
   confirm = (feedback = '已确认，请核对保留输入后再保存。') => {
     if (this.snapshot.busy || !this.snapshot.verified || !this.options().enabled) return;
+    this.pendingAcknowledge?.(); this.pendingAcknowledge = undefined;
     this.publish({ uncertain: false, verified: false, error: '', feedback });
   };
   // An external POST (file generation) may have written even after a lost reply.

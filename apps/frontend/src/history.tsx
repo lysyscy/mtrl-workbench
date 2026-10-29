@@ -101,7 +101,7 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     disabled={!me || blocked || busy || uncertain || Boolean(guard) || !history.data?.[direction]}
     title={guard || history.data?.[direction]?.label || history.data?.notice || '当前没有适用操作'}
     onClick={() => void replay(direction)}>{direction === 'undo' ? '撤销' : '重做'}</Button>)}
-    {(feedback || history.isError || history.data?.notice) && <span role="status">{feedback || (history.isError ? '操作历史未能读取。' : history.data?.notice)}</span>}
+    {(feedback || history.isError) && <span role="status">{feedback || '操作历史未能读取。'}</span>}
     {(uncertain || history.isError) && <Button disabled={busy || blocked} onClick={() => void reload()}>重读核对</Button>}
     {confirmation && <BusinessModal open={!blocked} requestClose={closing.requestClose} className="history-confirm-dialog" titleId="history-confirm-title">
       <DialogContents title={confirmation.direction === 'undo' ? '确认撤销？' : '确认重做？'} titleId="history-confirm-title" closing={closing}>

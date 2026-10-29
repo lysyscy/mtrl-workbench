@@ -1,4 +1,5 @@
 import Button from 'antd/es/button';
+import App from 'antd/es/app';
 import Input from 'antd/es/input';
 import Checkbox from 'antd/es/checkbox';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -124,6 +125,7 @@ function MechanicalExport({ owner, month, projects, defaults, unavailable, pause
     exportFile={chosen => requestFile(`/api/m06/workbench/export?${new URLSearchParams({ ym: month, projects: JSON.stringify(chosen.map(item => item.warehouse_name!)) })}`, request.current!.signal)} />;
 }
 export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Identity | null; blocked: boolean; exportGuard: string; active: boolean }) {
+  const {message: toast} = App.useApp();
   const scale=Number(me?.ui_scale_css)||1;
   const client = useQueryClient();
   const [month, setMonth] = useState(()=>{const [year,month]=currentMonth().split('-');return new Date(Date.UTC(Number(year),Number(month)-2,15)).toISOString().slice(0,7);}); const [ids, setIds] = useState<number[] | null>(null);
@@ -181,13 +183,14 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     saves.update(current=>{const previous=current[key];return {...current,[key]:{warehouse,ym,category,revision:previous?.revision??Math.max(saved?.revision??0,savedRevisions.current.get(key)??0),rows,version:(previous?.version??0)+1,error:''}};});
   }
   async function readDetails(){
+    await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['mechanical-state']});
     const data=await client.fetchQuery({queryKey:['mechanical-state',month],staleTime:0,queryFn:({signal})=>requestJson('/api/m06/workbench?ym='+encodeURIComponent(month),{signal}).then(readWorkbench)});
-    await client.invalidateQueries({predicate:q=>q.queryKey[0]!=='mechanical-state'},{throwOnError:true});
+    await Promise.all([client.invalidateQueries({queryKey:['mechanical-report',month]}),client.invalidateQueries({queryKey:['history',me?`${me.id}:${me.account}`:'anonymous']})]);
     return data;
   }
   async function refresh() {
-    try {await client.invalidateQueries({}, {throwOnError:true});setNeedsRead(false);if(needsRead)setMessage('已重新读取。');return true;}
+    try {await client.invalidateQueries({}, {throwOnError:true});setNeedsRead(false);if(needsRead){setMessage('');void toast.success('已重新读取');}return true;}
     catch {setNeedsRead(true);setMessage('修改已保存，但重新读取失败。请重新读取后再办理，未保存输入保留。');return false;}
   }
   async function operate(action: () => Promise<void>) {
@@ -207,7 +210,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
         if(uncertainWrite(error)){setNeedsRead(true);throw new Error('设置保存结果待核实，请重新读取核对；输入已保留。');}
         throw error;
       }
-      saved();setDialog(null);if(await refresh())setMessage(message);
+      saved();setDialog(null);if(await refresh())void toast.success(message);
     });
   }
   async function rereadSettings() {
@@ -227,7 +230,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const settingsDirty=dialog==='plate'?JSON.stringify(plateKeywords(keywords))!==keywordsBaseline:dialog==='projects'&&JSON.stringify(pickerSelection)!==JSON.stringify(pickerBaseline);
   const settingsFeedback=(message||needsRead)&&<p className="notice" role="alert">{message||'设置操作结果待核实，请重新读取核对；输入已保留。'}{needsRead&&<Button disabled={writing||state.isFetching||blocked} onClick={()=>void rereadSettings()}>重新读取</Button>}</p>;
   const exportUnavailable = !me ? '登录后可导出。' : exportGuard || (blocked ? '账号待核实，请稍候。' : writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请先重新读取。' : Object.keys(saves.drafts).length ? '请先处理机械费未保存输入。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : !ym ? '请选择报表月份。' : '');
-  function exportControl(){const owner=me ? `${me.id}:${me.account}` : 'anonymous';return <MechanicalExport key={owner} owner={owner} month={ym} projects={candidates} defaults={selected} unavailable={exportUnavailable} paused={blocked||!active} message={setMessage}/>;}
+  function exportControl(){const owner=me ? `${me.id}:${me.account}` : 'anonymous';return <MechanicalExport key={owner} owner={owner} month={ym} projects={candidates} defaults={selected} unavailable={exportUnavailable} paused={blocked||!active} message={text=>{void toast.success(text);}}/>;}
   useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请返回重新读取。' : Object.keys(saves.drafts).length || internalDrafts.current.size || settingsDirty ? '请先处理机械费未保存修改。' : '');
   const error = projects.error || state.error || report.error;
   return <section className="mechanical-card" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
@@ -258,7 +261,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
         {colId:'category',headerName:'类别',valueGetter:p=>p.data!.column==='mech_0'?'工程公司内租':'租赁公司内租'},
         {colId:'old',headerName:'原有效值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.keys(d.values).map(column=>money(d.effective.values[column]))),scale),cellClass:'money',valueGetter:p=>money(p.data!.d.effective.values[p.data!.column])},
         {colId:'next',headerName:'拟采用值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.values(d.values).map(money)),scale),cellClass:'money wrap-note',valueGetter:p=>money(p.data!.value)+(Number(p.data!.value)<Number(p.data!.d.effective.values[p.data!.column])?'，金额减少，请核实':'')},
-      ]}/><footer><Button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</Button><Button type="primary" disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())setMessage('内租有效月值已确认。');})}>确认更新内租</Button></footer></MechanicalDialog>}
+      ]}/><footer><Button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</Button><Button type="primary" disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())void toast.success('内租有效月值已确认');})}>确认更新内租</Button></footer></MechanicalDialog>}
     {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing} paused={blocked||!active}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{saves.update(current=>Object.fromEntries(Object.entries(current).filter(([,d])=>d.ym!==ym||d.category!==category||!editingWarehouses.includes(d.warehouse))));saves.clearFeedback();setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
     {dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label>{settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void saveSettings({plate_keywords:plateKeywords(keywords)},()=>{},'车牌规则已保存。')}>保存规则</Button></footer></>}</MechanicalDialog>}
     {message && !needsRead && <p className="mechanical-feedback" role="status">{message}</p>}

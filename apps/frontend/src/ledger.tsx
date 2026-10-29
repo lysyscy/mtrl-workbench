@@ -1,4 +1,5 @@
 import Button from 'antd/es/button';
+import App from 'antd/es/app';
 import { readHistory, useHistoryState } from './history';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -151,7 +152,9 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const query = useQuery({ queryKey: ['ledger', owner, project, end], enabled: !blocked && project > 0,
     queryFn: ({ signal }) => loadLedger(project, end, signal) });
   const changed = () => { if (mounted.current) render(n => n + 1); };
+  const { message: toast } = App.useApp();
   function message(s: Scope, text: string, reload = false) { messages.current.set(s.key, { text, reload }); changed(); }
+  function success(s: Scope, text: string) { messages.current.delete(s.key); if (current.current.active && current.current.scope.key === s.key) void toast.success(text); changed(); }
   function state(s: Scope, row: LedgerRow): Edit {
     const key = `${s.key}|${row.key}`; let edit = edits.current.get(key);
     if (!edit) { edit = { scope: s, base: row, drafts: {}, own: new Map(), queue: [], saving: false, locked: false }; edits.current.set(key, edit); }
@@ -233,7 +236,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
               for (const queued of other.queue) if (queued.field === task.field && same(task.field, queued.base, task.base)) queued.base = saved[task.field];
             }
           }
-          edit.base = saved; edit.locked = false; message(edit.scope, '台账已保存。');
+          edit.base = saved; edit.locked = false; message(edit.scope, '');
         } catch (error) {
           clearQueue(edit); message(edit.scope, `已保存，读取失败；请重新加载，不必重复提交。${error instanceof Error ? error.message : ''}`, true); break;
         }
@@ -282,14 +285,14 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       const edit = state(s, row);
       if (edit.locked) throw new ApiError('请先刷新核对，再删除历史行。');
       await deleteLedgerRow(edit.base, lifetime.current!.signal);
-      try { await refresh(s); message(s, '历史行已删除，可撤销。'); }
+      try { await refresh(s); success(s, '历史行已删除'); }
       catch { message(s, '已删除，读取失败；请重新加载，不必重复删除。', true); }
     }); },
   };
   async function add() {
     await control(scope, async () => {
       const id = await addLedgerRow(project, lifetime.current!.signal);
-      try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(id); message(scope, '已新增历史行，可直接填写。'); }
+      try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(id); success(scope, '已新增历史行'); }
       catch { message(scope, '已新增，读取失败；请重新加载，不必重复新增。', true); }
     });
   }
@@ -302,21 +305,20 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   }, [shown]);
   async function reload() {
     if (!me) { void query.refetch(); return; }
-    await control(scope, async () => { await refresh(scope); message(scope, '已重新加载；未保存输入仍保留。'); }, true);
+    await control(scope, async () => { await refresh(scope); success(scope, '已重新加载'); }, true);
   }
   const sharedGuard = [...messages.current.values()].some(item => item.reload) || [...edits.current.values()].some(edit => edit.locked) ? '台账操作结果待核实，请返回台账重新加载。' : controlBusy || [...edits.current.values()].some(edit => edit.saving) ? '台账正在保存，请稍候。' : [...edits.current.values()].some(edit => Object.keys(edit.drafts).length > 0) ? '台账有未保存输入，请返回台账处理。' : '';
   useEffect(() => { onExportGuard(sharedGuard); }, [onExportGuard, sharedGuard]);
   const receipt = messages.current.get(scope.key);
   const exportUnavailable = historyBusy || historyUncertain ? '全局操作正在处理或结果待核实，请在顶栏重读核对。' : !me ? '登录后可导出。' : blocked ? '正在核实账号，暂不能导出。' : controlBusy ? '正在处理操作，请稍候。' : receipt?.reload ? '操作结果待核实，请先重新加载核对。' : query.isError ? '台账读取失败，请先重新加载。' : projects.isError ? '项目读取失败，请先重试。' : projects.isPending ? '正在读取项目…' : '';
   const status = <div className="ledger-status">
-    <span role="status" aria-label="保存回执">{receipt?.text ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
+    {receipt?.text && <span role="alert" aria-label="保存回执">{receipt.text}</span>}
     {(receipt?.reload) && !query.isError && <Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button>}
-    {hasDrafts(scope) && <Button htmlType="submit" onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。', Boolean(messages.current.get(scope.key)?.reload)); changed(); }}>放弃未保存输入</Button>}
   </div>;
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
     <section className="ledger-card" aria-labelledby="ledger-title">
-      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => message(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
+      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports"><Button htmlType="submit" disabled={blocked || controlBusy || !hasDrafts(scope)} onMouseDown={e => e.preventDefault()} onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } if (messages.current.get(scope.key)?.reload) message(scope, '未保存输入已放弃；保存结果仍待核实，请重新加载。', true); else success(scope, '已放弃未保存输入'); changed(); }}>放弃未保存输入</Button>{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
       <div className="ledger-card-body">
         <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}

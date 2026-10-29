@@ -32,10 +32,29 @@ def test_real_process_enter_saves_without_clicking_elsewhere(server,browser_page
     open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
     field=page.get_by_label(row['ym']+' '+LABELS[0],exact=True)
     value=Decimal(str(row['mech_0'] or 0))+Decimal('1.25')
-    replace_amount(field,str(value));field.press('Enter')
+    cancel=page.get_by_role('button',name='取消本项目修改',exact=True)
+    expect(cancel).to_be_disabled()
+    grid=page.locator('.process-matrix')
+    expect(grid).to_have_attribute('data-layout-state','ready')
+    before=grid.bounding_box();cancel_before=cancel.bounding_box()
+    field.click()
+    expect(field.locator('..').locator('small')).to_have_count(0)
+    assert not field.get_attribute('title')
+    background='async e=>{await Promise.all(e.getAnimations().map(animation=>animation.finished));return getComputedStyle(e).backgroundColor}'
+    focused_color=field.evaluate(background)
+    field.fill(str(value));expect(cancel).to_be_enabled()
+    assert field.evaluate(background)==focused_color
+    for element,previous in [(grid,before),(cancel,cancel_before)]:
+        current=element.bounding_box()
+        assert all(abs(current[key]-previous[key])<1 for key in ('x','y','width','height'))
+    reads=[]
+    page.on('request',lambda request:reads.append(request.url.split('/api/',1)[1].split('?',1)[0])
+            if request.method=='GET' and '/api/' in request.url else None)
+    field.press('Enter')
     saved(field)
     expect(field.locator('..').locator('small')).to_have_count(0)
     expect(field).to_have_value(money(value))
+    assert not set(reads)-{'m06/matrix','m06/mech','history/status'}, reads
     fresh=get(api,'/api/m06/mech')['effective_values'][project['warehouse_name']][row['ym']]
     assert Decimal(fresh['mech_0'])==value
 

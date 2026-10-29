@@ -68,7 +68,7 @@ function ProjectField({ project, field, disabled, readDisabled, draft, changeDra
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
     if (e.key === 'Escape' && !pending && !uncertain) { e.preventDefault(); changeDraft(null); }
-  }} />{pending && <span className="project-cell-state" role="status">正在保存…</span>}{error && <p id={errorId} className="project-cell-error" role="alert">{error}</p>}{uncertain && <Button className="project-cell-recheck" disabled={pending || readDisabled} aria-label={`重读核对：${fieldName}：${label(project)}`} onClick={() => void reread(project, field)}>重读核对</Button>}</div>;
+  }} />{error && <p id={errorId} className="project-cell-error" role="alert">{error}</p>}{uncertain && <Button className="project-cell-recheck" disabled={pending || readDisabled} aria-label={`重读核对：${fieldName}：${label(project)}`} onClick={() => void reread(project, field)}>重读核对</Button>}</div>;
 }
 export function Projects({ me, blocked }: { me: Identity | null; blocked: boolean }) {
   const client = useQueryClient();

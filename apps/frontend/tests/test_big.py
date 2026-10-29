@@ -51,8 +51,14 @@ def test_real_month_cell_focus_width_and_save_identity(server,browser_page,api,d
     widths=lambda:grid.locator('.ag-header-cell').evaluate_all('cells=>cells.map(c=>[c.getAttribute("col-id"),c.getBoundingClientRect().width])')
     before=widths();field.click();assert widths()==before
     value=Decimal(row['manual']['oil']['value'] or '0')+Decimal('1.25')
-    field.fill(str(value));assert widths()==before;page.get_by_role('heading',name='月度会大表',exact=True).click()
-    expect(page.locator('.big-month:not([hidden]) .big-feedback')).to_contain_text('已保存到本月')
+    origin=field.locator('xpath=..').inner_text()
+    field.fill(str(value));assert widths()==before
+    assert field.locator('xpath=..').inner_text()==origin
+    expect(page.locator('.big-month:not([hidden]) .big-draft,.big-month:not([hidden]) .big-feedback')).to_have_count(0)
+    with page.expect_response(lambda r:'/api/m07/big?' in r.url and r.request.method=='GET' and r.ok) as readback:
+        page.get_by_role('heading',name='月度会大表',exact=True).click()
+    readback.value.finished()
+    expect(page.locator('.big-month:not([hidden]) .big-draft,.big-month:not([hidden]) .big-feedback')).to_have_count(0)
     fresh=get(api,'/api/m07/big',period=data['month'])
     assert Decimal(next(r for r in fresh['rows'] if r['warehouse']==row['warehouse'])['manual']['oil']['value'])==value
 

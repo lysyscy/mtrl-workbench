@@ -52,8 +52,12 @@ def test_actual_fee_save_updates_only_original_id(server,browser_page,api,projec
     page,_=browser_page;project,data=sample(api,projects);open_sample(page,server,project,data)
     row=data['records'][0];month=int(row['ym'][-2:]);page.locator('.fees-grid .ag-body-horizontal-scroll-viewport').evaluate('(e,m)=>e.scrollLeft=Math.max(0,(m-2)*170)',month)
     field=page.get_by_label(f'{row["ym"]} {row["item"]}金额',exact=True)
-    changed=Decimal(row['amount'])+Decimal('1.25');field.fill(str(changed));page.get_by_role('heading',name='特殊费用',exact=True).click()
-    expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible()
+    changed=Decimal(row['amount'])+Decimal('1.25');field.fill(str(changed))
+    expect(page.locator('.fee-draft-feedback,.fee-feedback')).to_have_count(0)
+    with page.expect_response(lambda r:'/api/m09/fee/year?' in r.url and r.request.method=='GET' and r.ok) as readback:
+        page.get_by_role('heading',name='特殊费用',exact=True).click()
+    readback.value.finished()
+    expect(page.locator('.fee-draft-feedback,.fee-feedback')).to_have_count(0)
     after=get(api,'/api/m09/fee/year',year=data['year'],pj=project['warehouse_name'])
     before={r['id']:r for r in data['records']};current={r['id']:r for r in after['records']}
     assert set(before)==set(current)
@@ -67,14 +71,20 @@ def test_new_annual_item_creates_only_entered_month(server,browser_page,api,proj
     year=data['year']; project_name=project['warehouse_name']; name='验证费用'+uuid4().hex[:10]
     before=get(api,'/api/m09/fee/year',year=year,pj=project_name)
     page.get_by_role('button',name='增加手填项').click()
-    expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已增加')).to_be_visible(timeout=15000)
+    expect(page.locator('.ant-message')).to_contain_text('已增加',timeout=15000)
     added=get(api,'/api/m09/fee/year',year=year,pj=project_name)
     ids={r.get('item_id') for r in before['rows']};new_item=next(r for r in added['rows'] if r.get('item_id') and r['item_id'] not in ids)
-    field=page.get_by_label(f'{new_item["item"]}费用项名称',exact=True);field.fill(name);field.press('Enter')
-    expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible(timeout=15000)
+    field=page.get_by_label(f'{new_item["item"]}费用项名称',exact=True);field.fill(name)
+    with page.expect_response(lambda r:'/api/m09/fee/year?' in r.url and r.request.method=='GET' and r.ok) as readback:
+        field.press('Enter')
+    readback.value.finished()
+    expect(page.get_by_label(f'{name}费用项名称',exact=True)).to_be_visible()
     assert get(api,'/api/m09/fee/year',year=year,pj=project_name)['records']==before['records']
-    amount=page.get_by_label(f'{year}-03 {name}金额',exact=True);expect(amount).to_be_visible();amount.fill('12.34');amount.press('Enter')
-    expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible(timeout=15000)
+    amount=page.get_by_label(f'{year}-03 {name}金额',exact=True);expect(amount).to_be_visible();amount.fill('12.34')
+    with page.expect_response(lambda r:'/api/m09/fee/year?' in r.url and r.request.method=='GET' and r.ok) as readback:
+        amount.press('Enter')
+    readback.value.finished()
+    expect(page.locator('.fee-draft-feedback,.fee-feedback')).to_have_count(0)
     after=get(api,'/api/m09/fee/year',year=year,pj=project_name)
     new=[r for r in after['records'] if r['id'] not in {x['id'] for x in before['records']}]
     assert len(new)==1 and new[0]['item']==name and new[0]['ym']==year+'-03' and Decimal(new[0]['amount'])==Decimal('12.34')

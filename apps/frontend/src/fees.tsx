@@ -1,3 +1,4 @@
+import App from 'antd/es/app';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Popconfirm from 'antd/es/popconfirm';
@@ -44,6 +45,7 @@ function AmountCell({data,node,colDef}:ICellRendererParams<FeeYearRow>) {
 export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
   const [year,setYear]=useState(()=>reportMonth().slice(0,4)),[project,setProject]=useState('');
   const client=useQueryClient(),root=useRef<HTMLDivElement>(null);
+  const {message}=App.useApp();
   const queryKey=['fees-year-inline',year,project];
   const projects=useQuery({queryKey:['projects','all'],enabled:active&&!blocked,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const query=useQuery({queryKey,enabled:active&&!blocked,queryFn:({signal})=>getFeeYear(year,project,signal)});
@@ -52,24 +54,25 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
     enabled:active&&!blocked&&Boolean(me),canWrite:Boolean(ready&&query.data?.can_edit&&!query.isError),
     read:reload,write:async(d,signal)=>{await feeWrite(`item/${d.field==='name'?'rename':'amount'}`,{project,item_id:d.itemId,ym:d.ym,value:d.value},signal);},
     acknowledge:(current,submitted)=>current.value===submitted.value?undefined:current,
-    saved:d=>`${d.ym ? `${d.ym}，` : ''}${d.item}，已保存`,
+    saved:()=>'',
   },{key:`fees:${year}:${project}`,label:'特殊费用'});
   async function reload() {
+    await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey,exact:true});
-    const data=await client.fetchQuery({queryKey,staleTime:0,queryFn:({signal})=>getFeeYear(year,project,signal)});
-    await client.invalidateQueries({predicate:q=>JSON.stringify(q.queryKey)!==JSON.stringify(queryKey)});return data;
+    if(me)void client.invalidateQueries({queryKey:['history',`${me.id}:${me.account}`],exact:true});
+    return client.fetchQuery({queryKey,staleTime:0,queryFn:({signal})=>getFeeYear(year,project,signal)});
   }
-  const {drafts,busy,uncertain,verified,error,feedback}=saves,dirty=Object.keys(drafts).length>0;
+  const {drafts,busy,uncertain,verified,error}=saves,dirty=Object.keys(drafts).length>0;
   const disabled=blocked||!active||!me||uncertain||!ready||!query.data?.can_edit||query.isError;
   const paused=blocked||busy||dirty||uncertain;
   async function add() {
     if(disabled||busy||dirty||query.isFetching)return;
     const names=new Set(query.data?.rows.map(row=>row.item));let name='新项';for(let n=2;names.has(name);n++)name=`新项${n}`;
-    await saves.run(async signal=>{const id=await feeWrite('item/create',{project,name},signal);if(!id)throw new Error('新增回执不完整，请重读核对。');},()=>`已增加「${name}」`,'新增费用项：');
+    if(await saves.run(async signal=>{const id=await feeWrite('item/create',{project,name},signal);if(!id)throw new Error('新增回执不完整，请重读核对。');},()=>'','新增费用项：')==='saved')void message.success(`已增加「${name}」`);
   }
   async function remove(row:FeeYearRow) {
     if(disabled||busy||dirty||!row.item_id)return;
-    await saves.run(async signal=>{await feeWrite('item/delete',{project,item_id:row.item_id},signal);},()=>`已删除「${row.item}」及其月度记录`,'删除费用项：');
+    if(await saves.run(async signal=>{await feeWrite('item/delete',{project,item_id:row.item_id},signal);},()=>'','删除费用项：')==='saved')void message.success(`已删除「${row.item}」及其月度记录`);
   }
   const rows=useMemo(()=>query.data?.rows??[],[query.data]);const scale=Number(me?.ui_scale_css??1);
   const columns=useMemo<ColDef<FeeYearRow>[]>(()=>{
@@ -87,11 +90,10 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
   return <section className="fees-page" aria-label="特殊费用">
     <div data-page-chrome className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data??[]).filter(p=>p.warehouse_name&&p.project_type!=='shell')} selected={(projects.data??[]).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused||projects.isPending} /></label></div>
-    <div data-page-chrome className="fee-toolbar"><div><Button disabled={disabled||busy||dirty||query.isFetching} onClick={()=>void add()}>增加手填项</Button></div><span className="muted">随逐月欠款台账导出，特殊费用月报表</span></div>
-    {(busy||feedback)&&<p role="status" className="fee-feedback">{busy?'正在保存费用…':feedback}</p>}
+    <div data-page-chrome className="fee-toolbar"><div><Button disabled={disabled||busy||dirty||query.isFetching} onClick={()=>void add()}>增加手填项</Button><Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button></div><span className="muted">随逐月欠款台账导出，特殊费用月报表</span></div>
     {(error||projects.isError||query.isError)&&<p role="alert" className="notice">{error||projects.error?.message||query.error?.message}<Button disabled={busy||blocked} onClick={()=>void saves.reread()}>重读核对</Button></p>}
     {uncertain&&<p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified||busy} onClick={()=>saves.confirm()}>已核对，保留输入继续</Button></p>}
-    {Object.entries(drafts).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item}，{d.field==='name'?'项名':'金额'}：{d.error||'未保存'} <Button size="small" disabled={disabled||busy} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.save(key,true)}>保存</Button><Button size="small" disabled={busy||blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(ds=>{const next={...ds};delete next[key];return next;})}>取消这项修改</Button></p>)}
+    {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item}，{d.field==='name'?'项名':'金额'}：{d.error} <Button size="small" disabled={disabled||busy} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.save(key,true)}>保存</Button><Button size="small" disabled={busy||blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(ds=>{const next={...ds};delete next[key];return next;})}>取消这项修改</Button></p>)}
     {query.isPending?<p role="status">正在读取费用…</p>:ready&&<FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled||busy||dirty||query.isFetching,remove,save:saves.save,
       change:d=>saves.update((ds,writing)=>{const key=keyOf(d.itemId,d.field,d.ym),old=ds[key],next={...ds,[key]:{...d,original:old?.original??d.original}};if(d.value===(old?.original??d.original)&&!writing)delete next[key];return next;})}}><PreparedGrid presentation={presentation} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" grid={{theme:gridTheme,domLayout:'autoHeight',getRowId:p=>rowId(p.data),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,animateRows:false}} /></FeeCells.Provider>}
   </section>;
