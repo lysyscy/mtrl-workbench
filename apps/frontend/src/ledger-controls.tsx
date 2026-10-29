@@ -6,6 +6,7 @@ import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
 import Radio from 'antd/es/radio';
 import Select from 'antd/es/select';
+import theme from 'antd/es/theme';
 import type { Project } from './api';
 import { projectLabel, requestFile } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
@@ -13,6 +14,7 @@ import { DialogContents, useDialogClose } from './dialog-close';
 export function ProjectPicker({ projects: allProjects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false, emptyLabel = '请选择项目' }: {
   projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean; emptyLabel?: string;
 }) {
+  const { token } = theme.useToken();
   const projects = allProjects.filter(item => !multiple || item.project_type !== 'shell');
   const [open, setOpen] = useState(initiallyOpen);
   const chosen = selected.map(id => projects.find(item => item.id === id));
@@ -21,12 +23,14 @@ export function ProjectPicker({ projects: allProjects, selected, pick, multiple 
     options: projects.filter(item => item.status === status).map(item => ({ value: item.id, label: projectLabel(item), title: projectLabel(item) })) }));
   const invalid = selected.filter(id => !projects.some(item => item.id === id));
   if (invalid.length) options.push({ label: '已失效', options: invalid.map(value => ({ value, label: '项目已失效', title: '请重新选择项目' })) });
+  const listHeight = Math.min((12 + options.filter(group => group.options.length).length) * token.controlHeight, Math.max(token.controlHeight, window.innerHeight - 160));
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return <span className="business-project-picker" title={summary} style={{ width: `${Math.min(36, Math.max(10, summary.length + 5))}em` }}
     onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); } }}>
     <Select aria-label={label} value={multiple ? selected : selected[0] ?? null} {...(multiple ? { mode: 'multiple' as const } : {})}
       placeholder={emptyLabel} disabled={disabled} open={open && !disabled} onOpenChange={setOpen}
       showSearch={{ optionFilterProp: 'label' }} options={options} maxTagCount={0} maxTagPlaceholder={() => summary}
+      listHeight={listHeight}
       classNames={{ popup: { root: 'business-project-popup ag-custom-component-popup' } }}
       popupMatchSelectWidth={Math.min(560, Math.max(280, summary.length * 14 + 70))}
       getPopupContainer={trigger => (trigger as HTMLElement).closest<HTMLElement>('.ant-modal-container') ?? document.body}
