@@ -191,16 +191,30 @@ class WindowsService:
         if self.info()['state'] != expected:
             raise RuntimeError(f'服务未达到{expected}状态')
 
-    def verify_listener(self):
-        result = powershell("$ErrorActionPreference='Stop';$s=Get-CimInstance Win32_Service -Filter "
-            + ps_quote("Name='" + self.name + "'")
-            + ";$ids=@(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue|Select-Object -ExpandProperty OwningProcess -Unique);"
-            + "$owned=$false;foreach($listener in $ids){$cursor=$listener;for($i=0;$i -lt 8 -and $cursor;$i++){"
-            + "if($cursor -eq $s.ProcessId){$owned=$true;break};$p=Get-CimInstance Win32_Process -Filter \"ProcessId=$cursor\";$cursor=$p.ParentProcessId}};"
-            + "@{owned=$owned;listener_pids=$ids}|ConvertTo-Json -Compress")
-        if not result['owned']:
-            raise RuntimeError('8000监听进程未归属本次正式服务，不能确认重启完成')
-        return result
+    def verify_listener(self, *, get=None):
+        def owners(selection):
+            return powershell("$ErrorActionPreference='Stop';$s=Get-CimInstance Win32_Service -Filter "
+                + ps_quote("Name='" + self.name + "'")
+                + ";$ids=@(" + selection + "|Select-Object -ExpandProperty OwningProcess -Unique);"
+                + "$owned=$false;foreach($listener in $ids){$cursor=$listener;for($i=0;$i -lt 8 -and $cursor;$i++){"
+                + "if($cursor -eq $s.ProcessId){$owned=$true;break};$p=Get-CimInstance Win32_Process -Filter \"ProcessId=$cursor\";$cursor=$p.ParentProcessId}};"
+                + "@{owned=$owned;listener_pids=$ids}|ConvertTo-Json -Compress")
+        result = owners('Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue')
+        if result['owned']:
+            return result
+        # Some Windows CIM providers report a listening socket as unknown (0).
+        # Prove ownership of the actual HTTP connection instead of accepting health alone.
+        if get is not None:
+            response = get('/healthz')
+            stream = response.extensions.get('network_stream')
+            if response.status_code == 200 and stream is not None:
+                client, server = [stream.get_extra_info(key) for key in ('client_addr', 'server_addr')]
+                if client and server and client[0] == server[0] == '127.0.0.1' and server[1] == 8000:
+                    result = owners('Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 '
+                        + '-RemoteAddress 127.0.0.1 -RemotePort ' + str(int(client[1])) + ' -ErrorAction SilentlyContinue')
+                    if result['owned']:
+                        return {**result, 'verification': 'health-connection'}
+        raise RuntimeError('8000监听进程未归属本次正式服务，不能确认重启完成')
 
 
 def verify_http(get, manifest, wait):
@@ -298,7 +312,7 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
         after = service.validate()
         if after['state'] != 'Running' or after['pid'] == before['pid'] or after['account'] != before['account']:
             raise RuntimeError('重启后的服务身份不符')
-        report['listener'] = service.verify_listener()
+        report['listener'] = service.verify_listener(get=get)
         report.update(status='loaded', service=after, finished_at=datetime.now(timezone.utc).isoformat())
         checkpoint('actual-version-verified')
         return report
@@ -313,7 +327,7 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
                 if service.info()['state'] != 'Running':
                     service.control('start')
                 verify_http(get, old_manifest, wait)
-                report['recovery_listener'] = service.verify_listener()
+                report['recovery_listener'] = service.verify_listener(get=get)
                 report['recovery'] = 'previous-frontend-verified'
             except BaseException as recovery:
                 report['recovery'] = 'failed'; report['recovery_error'] = type(recovery).__name__

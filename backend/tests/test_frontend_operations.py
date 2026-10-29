@@ -36,7 +36,7 @@ class IsolatedService:
 
     validate = info
 
-    def verify_listener(self):
+    def verify_listener(self, **kwargs):
         return {'owned': True, 'listener_pids': [self.pid]}
 
     def control(self, action):
@@ -69,6 +69,38 @@ class IsolatedService:
             return httpx.Response(200, content=body)
         path = selected / route.removeprefix('/app/')
         return httpx.Response(200, content=path.read_bytes()) if path.is_file() else httpx.Response(404)
+
+
+class ListenerOwnershipTests(unittest.TestCase):
+    def setUp(self):
+        self.service = release.WindowsService(Path.cwd(), 'isolated-service', Path.cwd(), 1)
+
+    def test_normal_listener_needs_no_http_fallback(self):
+        with patch.object(release, 'powershell', return_value={'owned': True, 'listener_pids': [42]}):
+            self.assertTrue(self.service.verify_listener()['owned'])
+
+    def test_unknown_listener_state_uses_actual_http_connection(self):
+        from types import SimpleNamespace
+        stream = SimpleNamespace(get_extra_info=lambda key: {'client_addr': ('127.0.0.1', 32123), 'server_addr': ('127.0.0.1', 8000)}[key])
+        response = SimpleNamespace(status_code=200, extensions={'network_stream': stream})
+        with patch.object(release, 'powershell', side_effect=[{'owned': False, 'listener_pids': []}, {'owned': True, 'listener_pids': [42]}]) as query:
+            result = self.service.verify_listener(get=lambda route: response)
+        self.assertEqual(result['verification'], 'health-connection')
+        self.assertIn('-RemotePort 32123', query.call_args.args[0])
+
+    def test_healthy_connection_owned_by_another_process_is_rejected(self):
+        from types import SimpleNamespace
+        stream = SimpleNamespace(get_extra_info=lambda key: {'client_addr': ('127.0.0.1', 32123), 'server_addr': ('127.0.0.1', 8000)}[key])
+        response = SimpleNamespace(status_code=200, extensions={'network_stream': stream})
+        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': [99]}):
+            with self.assertRaisesRegex(RuntimeError, '未归属'):
+                self.service.verify_listener(get=lambda route: response)
+
+    def test_health_without_transport_identity_is_rejected(self):
+        from types import SimpleNamespace
+        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': []}):
+            with self.assertRaisesRegex(RuntimeError, '未归属'):
+                self.service.verify_listener(get=lambda route: SimpleNamespace(status_code=200, extensions={}))
 
 
 class ReleaseTests(unittest.TestCase):
