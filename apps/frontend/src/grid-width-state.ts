@@ -1,4 +1,5 @@
-import type { ColumnResizedEvent, GridApi } from 'ag-grid-community';
+import type { ColumnResizedEvent, DragStartedEvent, GridApi } from 'ag-grid-community';
+import { widthModeColumns } from './grid-manual-widths';
 
 type Widths = Record<string, number>;
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -29,6 +30,16 @@ export function bindGridWidths(api: GridApi, options: {
     channels.set(key, channel);
   }
   const shared = channel;
+  let dragging: string | null = null;
+  const syncBounds = (ids = new Set(Object.keys(shared.widths))) => {
+    const columns = api.getGridOption('columnDefs');
+    if (!columns) return;
+    const next = widthModeColumns(columns, ids);
+    if (next === columns) return;
+    const state = api.getColumnState();
+    api.setGridOption('columnDefs', next);
+    api.applyColumnState({state});
+  };
   const notify = () => options.changed(Object.keys(shared.widths).length > 0, shared.error);
   const publish = (reset = false, origin?: (reset:boolean)=>void) => queueMicrotask(()=>[...shared.listeners].forEach(listener => {
     if (shared.listeners.has(listener)) { if(listener===origin)notify();else listener(reset); }
@@ -42,6 +53,7 @@ export function bindGridWidths(api: GridApi, options: {
   };
   const apply = () => {
     if (api.isDestroyed()) return;
+    syncBounds(new Set([...Object.keys(shared.widths), ...(dragging ? [dragging] : [])]));
     const state = Object.entries(shared.widths).flatMap(([colId, width]) => {
       const column = api.getColumn(colId), definition = column?.getColDef();
       if (!column || !definition || definition.minWidth === definition.maxWidth && definition.minWidth !== undefined) return [];
@@ -59,6 +71,14 @@ export function bindGridWidths(api: GridApi, options: {
     save();
     publish(false,receive);
   };
+  const dragStarted = (event: DragStartedEvent) => {
+    const handle = event.target.closest('.ag-header-cell-resize');
+    const id = handle?.closest('.ag-header-cell')?.getAttribute('col-id');
+    if (!id) return;
+    dragging = id;
+    syncBounds(new Set([...Object.keys(shared.widths), id]));
+  };
+  const dragStopped = () => { dragging = null; syncBounds(); };
   const fit = () => {
     if (api.isDestroyed()) return;
     const columns = api.getAllDisplayedColumns().filter(column => !Object.hasOwn(shared.widths, column.getColId()) && !column.getFlex() && !column.getColDef().suppressAutoSize);
@@ -66,6 +86,8 @@ export function bindGridWidths(api: GridApi, options: {
   };
   const resetNative = () => {
     if (api.isDestroyed()) return;
+    dragging = null;
+    syncBounds();
     // Native reset releases user width ownership. Restore every other column attribute.
     const state = api.getColumnState().map(({width: _width, flex: _flex, ...rest}) => rest);
     api.resetColumnState();
@@ -84,11 +106,14 @@ export function bindGridWidths(api: GridApi, options: {
   };
   shared.listeners.add(receive);
   api.addEventListener('columnResized', resized);
+  api.addEventListener('dragStarted', dragStarted);
+  api.addEventListener('dragStopped', dragStopped);
+  api.addEventListener('dragCancelled', dragStopped);
   api.addEventListener('newColumnsLoaded', columnsLoaded);
   apply(); notify();
   return {apply, fit, reset, dispose: () => {
     shared.listeners.delete(receive);
     if (!shared.listeners.size) channels.delete(key);
-    if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', columnsLoaded); }
+    if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', columnsLoaded); api.removeEventListener('dragStarted', dragStarted); api.removeEventListener('dragStopped', dragStopped); api.removeEventListener('dragCancelled', dragStopped); }
   }};
 }

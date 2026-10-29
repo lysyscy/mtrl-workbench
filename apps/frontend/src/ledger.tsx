@@ -6,7 +6,7 @@ import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, uncertainWrite, projectLabel, readProjects, requestJson } from './api';
+import { ApiError, uncertainWrite, readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { addLedgerRow, amount, deleteLedgerRow, editable, loadLedger, same, saveLedgerCell, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
@@ -146,7 +146,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
-  const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell').sort((a, b) => a.ord - b.ord || projectLabel(a).localeCompare(projectLabel(b), 'zh')) ?? [], [projects.data]);
+  const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell') ?? [], [projects.data]);
   useEffect(() => { if (!blocked && projects.data && !candidates.some(item => item.id === project)) setProject(candidates[0]?.id ?? 0); }, [blocked, projects.data, candidates, project, setProject]);
   const query = useQuery({ queryKey: ['ledger', owner, project, end], enabled: !blocked && project > 0,
     queryFn: ({ signal }) => loadLedger(project, end, signal) });

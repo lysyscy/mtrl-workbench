@@ -14,6 +14,7 @@ import { ApiError, confirmWrite, uncertainWrite, projectLabel, readProjects, rec
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { contentWidth, fixedWidth, gridTheme, numberColumnWidth, textWidth } from './grid';
+import { manualGridColumns } from './grid-manual-widths';
 import { completeColumnWidth, EllipsisText } from './grid-text';
 import { archiveLabel, body, categories, cents, live, money, moneyKeys, readNotices, receipt, searchKey, selectable, total } from './notices-api';
 import type { MoneyKey, NoticeRow } from './notices-api';
@@ -163,7 +164,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       return p.node.rowPinned ? '' : <Checkbox aria-label={`勾选${p.data!.bill_no}`} disabled={current.current.unavailable || !selectable(p.data!)} checked={current.current.picked.has(p.data!.notice_id)} onChange={e => current.current.pick(p.data!.notice_id, e.target.checked)} />;
     },
   }), [scale]);
-  const columns = useMemo<ColDef<NoticeRow>[]>(() => ([
+  const baseColumns = useMemo<ColDef<NoticeRow>[]>(() => ([
     selectionColumn,
     { field: 'doc_date', headerName: '单据日期', pinned: 'left', ...contentWidth(identityWidths.date, 200, scale), wrapText: false }, { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', ...contentWidth(identityWidths.code, Math.max(identityWidths.code, 360), scale), wrapText: false },
     { field: 'project_display', headerName: '付款项目', ...textWidth(96, 160, scale, 1), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? <EllipsisText text={p.data!.project_display} fullText={p.data!.project_name||p.data!.project_display}/> : <Button htmlType="submit" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
@@ -186,6 +187,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
   }), [scale,moneyWidths,identityWidths,Boolean(draft),selectionColumn]);
+  const columns = useMemo(() => manualGridColumns(baseColumns,scale,{bill_name:64,payee:64}),[baseColumns,scale]);
   const footer = useMemo(() => draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary, [draft,summary]);
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;

@@ -11,7 +11,7 @@
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "test:unit": "node --import=tsx --test tests/unit/cell-save.test.mjs tests/unit/identity-gate.test.mjs tests/unit/notice-codes.test.mjs tests/unit/contracts-api.test.mjs tests/unit/flow-api.test.mjs tests/unit/mechanical-api.test.mjs"
+    "test:unit": "node --import=tsx --test tests/unit/cell-save.test.mjs tests/unit/identity-gate.test.mjs tests/unit/notice-codes.test.mjs tests/unit/contracts-api.test.mjs tests/unit/flow-api.test.mjs tests/unit/mechanical-api.test.mjs tests/unit/project-picker-order.test.mjs tests/unit/grid-width-state.test.mjs"
   },
   "dependencies": {
     "@rc-component/motion": "1.3.3",

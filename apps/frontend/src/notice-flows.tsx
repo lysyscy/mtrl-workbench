@@ -8,13 +8,14 @@ import { EnumTag } from './enum-tag';
 import { loadFlows } from './flow-api';
 import { money } from './notices-api';
 import type { NoticeRow } from './notices-api';
+const manualTextMinimums={remark:64,revoke_reason:64};
 
 export function NoticeFlows({ notice, blocked, close }: { notice: NoticeRow; blocked: boolean; close: () => void }) {
   const closing = useDialogClose({ busy: false, dirty: false, close });
   const query = useQuery({ queryKey: ['notice-flows', notice.notice_id], enabled: !blocked, refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => (await loadFlows(signal)).filter(flow => flow.notice_id === notice.notice_id) });
   return <BusinessModal open={!blocked} className="project-dialog notice-flows-dialog" titleId="notice-flows-title" requestClose={closing.requestClose}><DialogContents title={`${notice.bill_no}，付款流水`} titleId="notice-flows-title" closing={closing}>
-    {query.isPending ? <p role="status">正在读取付款流水…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p> : !query.data.length ? <p role="status">暂无付款流水。</p> : <ReadGrid table="notice-flows" className="notice-flows-table" label="付款流水明细" domLayout="autoHeight" rows={query.data} rowId={flow=>String(flow.id)} columns={[
+    {query.isPending ? <p role="status">正在读取付款流水…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p> : !query.data.length ? <p role="status">暂无付款流水。</p> : <ReadGrid manualTextMinimums={manualTextMinimums} table="notice-flows" className="notice-flows-table" label="付款流水明细" domLayout="autoHeight" rows={query.data} rowId={flow=>String(flow.id)} columns={[
       {field:'flow_no',headerName:'流水号'},
       {field:'status_label',headerName:'状态',cellRenderer:({data:flow}:{data:NonNullable<typeof query.data>[number]})=><span className={'status-tag '+(flow.status==='revoked'?'status-neutral':'status-positive')}>{flow.status_label}</span>},
       {field:'pay_date',headerName:'付款日期'},

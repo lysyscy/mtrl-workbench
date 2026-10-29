@@ -13,6 +13,7 @@ import { ApiError, record, requestJson, uncertainWrite } from './api';
 import { body, cents, money, receipt, readNotices } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { SupplierStep } from './notice-supplier-step';
+const manualTextMinimums={};
 
 interface Invoice { id: number; kind: string; date: string; amount: string }
 interface Reason { kind: string; text: string; amounts?: string[]; prior_amount?: string; invoice_total?: string; notice_codes?: string[] }
@@ -36,7 +37,7 @@ function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplie
     {hasTradeSide(candidate) && <p className="contract-trade-name">{name}，{trade ? candidate.trade_co || '名称未填' : candidate.supplier}</p>}
     <div className="contract-amounts"><div><span>{name}合同金额</span><strong>{trade && candidate.trade_contract_amt === null ? '未确定' : `${money(trade ? candidate.trade_contract_amt! : candidate.contract_amt)} 元`}</strong></div><div><span>{name}发票总金额</span><strong>{money(trade ? candidate.trade_inv_sum : candidate.inv_sum)} 元</strong></div></div>
     <p className="contract-uninvoiced">{uninvoiced === null ? '未开票金额未确定' : <>{cents(uninvoiced) < 0n ? '超开票' : '未开票'} {money(uninvoiced.replace(/^-/,''))} 元</>}</p>
-    <ReadGrid table="notice-candidate-invoices" className="contract-invoices" label={`${contractName(candidate)}${name}发票明细`} domLayout="autoHeight" rows={invoices} rowId={invoice=>String(invoice.id)} grid={{overlayNoRowsTemplate:'未录入发票'}} columns={[
+    <ReadGrid manualTextMinimums={manualTextMinimums} table="notice-candidate-invoices" className="contract-invoices" label={`${contractName(candidate)}${name}发票明细`} domLayout="autoHeight" rows={invoices} rowId={invoice=>String(invoice.id)} grid={{overlayNoRowsTemplate:'未录入发票'}} columns={[
       {field:'date',headerName:`${name}发票日期`,...contentWidth(110,180,scale),valueFormatter:p=>p.value||'日期未填'},
       {field:'amount',headerName:'金额（元）',...numberColumnWidth(invoices.map(invoice=>money(invoice.amount)),scale,false,1),cellClass:'money',valueFormatter:p=>money(p.value)},
     ]} />

@@ -12,6 +12,7 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
+import { manualGridColumns } from './grid-manual-widths';
 import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { EnumTag } from './enum-tag';
@@ -135,7 +136,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch'].includes(c.key)?12:0;
     return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
   })),[rows,query.data?.columns,query.data?.payment_methods,scale]);
-  const columns=useMemo<ColDef<ContractRow>[]>(()=>[
+  const baseColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     {colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:()=> <Checkbox aria-label="选择当前合同" checked={shown.length>0&&shown.every(r=>picked.has(r.id))} onChange={e=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(e.target.checked)next.add(row.id);else next.delete(row.id);}return next;})}/>,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>},
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
@@ -160,6 +161,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,shown,picked,projectRows,projects.isPending,completeWidths]);
+  const columns=useMemo(()=>manualGridColumns(baseColumns,scale,{material:96,supplier:64,trade_co:64,remark:64}),[baseColumns,scale]);
   // Keep the reset action on the material header, clear of complete identifiers.
   const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);
   const resetColumn=useGridWidthColumns(resetColumns)[0];

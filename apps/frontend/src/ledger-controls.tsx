@@ -10,12 +10,13 @@ import theme from 'antd/es/theme';
 import type { Project } from './api';
 import { projectLabel, requestFile } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { projectPickerProjects } from './project-picker-order';
 
 export function ProjectPicker({ projects: allProjects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false, emptyLabel = '请选择项目' }: {
   projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean; emptyLabel?: string;
 }) {
   const { token } = theme.useToken();
-  const projects = allProjects.filter(item => !multiple || item.project_type !== 'shell');
+  const projects = projectPickerProjects(allProjects, multiple);
   const [open, setOpen] = useState(initiallyOpen);
   const chosen = selected.map(id => projects.find(item => item.id === id));
   const summary = chosen.length ? chosen.map(item => item ? projectLabel(item) : '项目已失效').join('、') : emptyLabel;
