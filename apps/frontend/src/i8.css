@@ -17,3 +17,6 @@
 .i8-error pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;color:var(--tx);background:var(--sf2);border-radius:var(--radius-input);padding:12px}
 .i8-page .notice .ant-btn{margin-left:8px}
 .i8-page{width:min(100%,calc(1080px * var(--fscale)));margin-inline:auto;box-sizing:border-box}
+.i8-server{display:flex;align-items:flex-end;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.i8-server label{display:flex;flex-direction:column;gap:6px;max-width:100%}
+.i8-server .ant-select{width:calc(320px * var(--fscale));max-width:100%}
