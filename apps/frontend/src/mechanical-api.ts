@@ -4,6 +4,14 @@ export type Category = 'zero' | 'monthly';
 export interface DetailRow { id: string; [field: string]: unknown }
 export interface Detail { warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[]; totals: { gross: string | null; net: string | null }; issues: { id: string; fields: string[] }[] }
 export interface Effective { warehouse: string; ym: string; signature: string; values: Record<string, string | null>; sources: Record<string, { mode: string }> }
+export type InternalColumn = 'mech_0' | 'mech_1';
+export function internalAmount(value: string): string | null {
+  return /^\d+(?:\.\d{1,2})?$/.test(value.trim()) ? detailSum([value]) : null;
+}
+export function readInternalSave(value: unknown, warehouse: string, ym: string, column: InternalColumn, expected: string): Effective {
+  if (!record(value) || value.ok !== true || value.warehouse !== warehouse || value.ym !== ym || typeof value.signature !== 'string' || !value.signature || !record(value.values) || typeof value.values[column] !== 'string' || internalAmount(value.values[column]) !== expected || !record(value.sources)) throw new ApiError('内租保存回执不完整，请重新读取核对。', 0, 'invalid_receipt');
+  return value as unknown as Effective;
+}
 export interface SourceRow { id: string; bill?: string; periodName?: string; periodKey?: string; amount?: string | null; approval?: string | null }
 export interface Relation { warehouse: string; relation: string; left: string | null; right: string | null; pending: string | null; raw: string | null; ignored: string; revision: number; i8_revision: number; i6: string | null; fetched_at?: string }
 export interface BillDifference extends SourceRow { warehouse: string; document_id: string; fact: string; settlement: string; difference: string; ignored: boolean; revision: number }

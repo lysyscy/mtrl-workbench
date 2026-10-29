@@ -1,7 +1,7 @@
 import { createElement, Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
-import type { GridApi, IRowNode } from 'ag-grid-community';
+import type { ColDef, ColGroupDef, GridApi, IRowNode } from 'ag-grid-community';
 import { loadElementFonts, loadTextFonts } from './appearance-ready';
 
 // Opt-in preparation. Rich cells render through a portal in the owning React tree,
@@ -18,44 +18,66 @@ export interface TextGridColumn<T> {
 
 // React/AG treats a replacement renderer definition as a new component even if
 // row IDs and values are unchanged. Defer that replacement through an input session.
-export function useRetainedGridColumns<T>(columns: T[], root: RefObject<HTMLElement | null>) {
-  const [displayed, setDisplayed] = useState(columns);
+const sizingKeys = ['width','initialWidth','minWidth','maxWidth','flex','initialFlex'] as const;
+function initialSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]{
+  return columns.map(column=>{
+    if('children'in column)return {...column,children:initialSizing(column.children)};
+    const {width,flex,...rest}=column;return {...rest,...(width===undefined?{}:{initialWidth:width}),...(flex===undefined?{}:{initialFlex:flex??0})};
+  });
+}
+// Column state stays in AG Grid. Content-only definition updates keep the same
+// sizing suggestions, while replacing business renderers/formatters normally.
+function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[] {
+  const old=new Map(previous.flatMap(column=>'children'in column?[]:[[column.colId??column.field,column] as const]));
+  return columns.map(column=>{
+    if('children'in column){const group=previous.find(item=>'children'in item&&item.groupId===column.groupId&&item.headerName===column.headerName);return {...column,children:retainSizing(column.children,group&&'children'in group?group.children:[])};}
+    const prior=old.get(column.colId??column.field);if(!prior)return column;
+    const next={...column};for(const key of sizingKeys){delete next[key];const value=prior[key];if(typeof value==='number')next[key]=value;else if(key==='flex'&&value===null)next.flex=null;}
+    if(prior.context?.manualWidthBounds)next.context={...next.context,manualWidthBounds:prior.context.manualWidthBounds};
+    return next;
+  });
+}
+export function useRetainedGridColumns<T>(columns: (ColDef<T>|ColGroupDef<T>)[], root: RefObject<HTMLElement | null>, layoutKey: string|number = '') {
+  const [displayed, setDisplayed] = useState(()=>initialSizing(columns));
+  const applied=useRef(layoutKey);
   useLayoutEffect(() => {
     const node = root.current; let frame = 0;
     const publish = () => {
       if (node?.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea')) return;
-      setDisplayed(columns);
+      const changed=applied.current!==layoutKey;
+      setDisplayed(previous=>changed?initialSizing(columns):retainSizing(initialSizing(columns),previous));
+      applied.current=layoutKey;
     };
     const released = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(publish); };
     publish(); node?.addEventListener('focusout', released);
     return () => { cancelAnimationFrame(frame); node?.removeEventListener('focusout', released); };
-  }, [columns, root]);
+  }, [columns, root, layoutKey]);
   return displayed;
 }
 
-export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot }: {
+export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, fit }: {
   root: RefObject<HTMLElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean; rows: T[]; totals: T[];
   scope: string; identity: string; columns: TextGridColumn<T>[]; rowId: (row: T) => string; minimum: number; headerMinimum: number;
+  fit?: () => void;
 }) {
   const [measurement, setMeasurement] = useState<ReactNode>(null);
   const [api, attach] = useState<GridApi<T> | null>(null);
   const [state, setState] = useState<'preparing' | 'updating' | 'ready' | 'error'>('preparing');
   const [error, setError] = useState(''), [retry, setRetry] = useState(0);
-  const configured = useRef<GridApi<T> | null>(null), publishedRows = useRef<T[] | null>(null), publishedTotals = useRef<T[] | null>(null), rowSize = useRef({minimum,rowId});
+  const configured = useRef<GridApi<T> | null>(null), rowSize = useRef({minimum,rowId});
   rowSize.current = {minimum,rowId};
   const ready = useRef(false), heights = useRef(new Map<string, number>());
+  const fitted = useRef('');
   const cache = useRef(new Map<string, number>()), geometry = useRef('');
-  const readingAnchor = useRef<{id: string; offset: number; header: number; scope: string} | null>(null), appliedWidth = useRef(0), appliedHeight = useRef(0);
-  const restoredTop = useRef<number | null>(null), appliedGeometry = useRef('');
   const headerSize = useRef({ key: '', height: headerMinimum });
-  const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string } | null>(null);
+  const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string; errors:string } | null>(null);
   const appliedScope = useRef(scope), appliedIdentity = useRef(identity);
   useLayoutEffect(() => {
     const node = root.current;
     if (!api || !node || !active) return;
     const grid = api;
-    if (configured.current !== grid) { ready.current = false; setState('preparing'); grid.setGridOption('getRowHeight', p => p.data ? heights.current.get(rowSize.current.rowId(p.data)) ?? rowSize.current.minimum : rowSize.current.minimum); configured.current = grid; publishedRows.current = null; publishedTotals.current = null; }
-    let disposed = false, version = 0, frame = 0, anchorFrame = 0, pendingEdit = false, preparing = false;
+    if (configured.current !== grid) { ready.current = false; setState('preparing'); grid.setGridOption('getRowHeight', p => p.data ? heights.current.get(rowSize.current.rowId(p.data)) ?? rowSize.current.minimum : rowSize.current.minimum); configured.current = grid; }
+    let disposed = false, version = 0, frame = 0, pendingEdit = false;
     const cancelled = (run: number) => disposed || run !== version || grid.isDestroyed();
     const editable = () => grid.getEditingCells().length > 0 || node.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea');
     const geometryStamp = () => {
@@ -66,16 +88,29 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     async function prepare(run: number) {
       if (cancelled(run) || !node!.clientWidth) return;
       // Retained pages and duplicate resize notifications reuse the applied layout.
-      // Immutable row/column inputs plus actual geometry still invalidate on refresh, scale or manual resize.
+      // An immutable value update is not a layout request. Only changed multiline
+      // prose/errors or a real range/column/font/viewport change need measurement.
       const previous = prepared.current;
-      if (previous?.grid === grid && previous.rows === rows && previous.totals === totals && previous.columns === columns && previous.rowId === rowId && previous.scope === scope && previous.identity === identity && previous.geometry === geometryStamp()) {
+      const errors=[...node!.querySelectorAll('.ag-row [role=alert],.ag-row .has-error,.ag-row .process-cell-error')].map(element=>element.textContent).join('\n');
+      const layoutChanged=!previous||previous.grid!==grid||previous.scope!==scope||previous.identity!==identity||previous.geometry!==geometryStamp();
+      const sameRows=(current:T[],old:T[])=>current.length===old.length&&current.every((row,index)=>rowId(row)===rowId(old[index]!));
+      const proseChanged=(current:T[],old:T[],pinned:boolean)=>current.some((row,index)=>{
+        if(row===old[index])return false;
+        return columns.filter(column=>column.wrap).some(column=>{
+          const prior=previous?.columns.find(item=>item.id===column.id);if(!prior)return true;
+          const before=prior.text(old[index]!,pinned),after=column.text(row,pinned);
+          return before!==after&&!(/^[\d\s,.%¥￥()+−+—-]*$/.test(before)&&/^[\d\s,.%¥￥()+−+—-]*$/.test(after));
+        });
+      });
+      if (previous&&!layoutChanged&&previous.errors===errors&&sameRows(rows,previous.rows)&&sameRows(totals,previous.totals)&&!proseChanged(rows,previous.rows,false)&&!proseChanged(totals,previous.totals,true)) {
         const now = performance.now();
         node!.dataset.layoutTiming = JSON.stringify({started:now,fonts:now,applied:now,measured:0,reused:true,minimum,rows:rows.length,width:node!.clientWidth});
+        prepared.current={...previous,rows,totals,columns,rowId};
         setState('ready'); setError(''); return;
       }
       if (editable()) { pendingEdit = true; return; }
       pendingEdit = false;
-      const started = performance.now(); preparing = true;
+      const started = performance.now();
       let host: HTMLDivElement | undefined;
       try {
         const wrapping = columns.filter(c => c.wrap || c.render);
@@ -84,6 +119,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         await Promise.all([fontRoot?.current ? loadElementFonts(fontRoot.current) : Promise.resolve(), loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
         if (cancelled(run) || !node!.clientWidth || editable()) return;
+        if(layoutChanged&&fitted.current!==`${scope}:${identity}:${geometryStamp()}`){fit?.();fitted.current=`${scope}:${identity}:${geometryStamp()}`;}
         const fontsAt = performance.now();
         const displayed = grid.getAllDisplayedColumns();
         const viewport = node!.querySelector<HTMLElement>('.ag-grid-viewport,.ag-body-viewport');
@@ -103,7 +139,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const plannedWidths = displayed.map(col => col.getActualWidth());
         const widthById = new Map(displayed.map((col,i) => [col.getColId(),plannedWidths[i]!]));
         const key = `${css.font}:${css.lineHeight}:${minimum}:${displayed.map(c => `${c.getColId()}:${widthById.get(c.getColId())}`).join('|')}`;
-        const geometryChanged = appliedGeometry.current !== key;
         if (geometry.current !== key) { cache.current.clear(); geometry.current = key; }
         host.replaceChildren();
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
@@ -181,12 +216,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         }
         headerSize.current = { key: headerKey, height: header };
         if (cancelled(run) || editable()) return;
-        const anchor = readingAnchor.current?.scope === scope ? readingAnchor.current : null;
-        const contentChanged = publishedRows.current !== rows;
         heights.current = next;
         if (Math.abs((grid.getGridOption('headerHeight') ?? headerMinimum) - header) >= .5) grid.setGridOption('headerHeight', header);
-        if (publishedRows.current !== rows) { grid.setGridOption('rowData', rows); publishedRows.current = rows; }
-        if (publishedTotals.current !== totals) { grid.setGridOption('pinnedBottomRowData', totals); publishedTotals.current = totals; }
         let changed = false;
         const applyHeight = (n: IRowNode<T>) => { if (n.data) { const height = next.get(rowId(n.data)) ?? minimum; if (Math.abs((n.rowHeight ?? 0) - height) >= .1) { n.setRowHeight(height); changed = true; } } };
         grid.forEachNode(applyHeight); for (let i = 0; i < grid.getPinnedBottomRowCount(); i++) { const node = grid.getPinnedBottomRow<T>(i); if (node) applyHeight(node); }
@@ -213,27 +244,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           }
         }
         if (scope !== appliedScope.current) viewport.scrollTop = 0;
-        else if (anchor && (geometryChanged || contentChanged || node!.clientWidth !== appliedWidth.current || node!.clientHeight !== appliedHeight.current)) {
-          const restored = grid.getRowNode(anchor.id);
-          if (restored?.rowTop != null) {
-            viewport.scrollTop = Math.round((restored.rowTop + anchor.offset) / scrollScale());
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            if (cancelled(run)) return;
-            let element = node!.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(anchor.id)}"]`);
-            if (!element) {
-              grid.ensureNodeVisible(restored, 'top');
-              await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-              if (cancelled(run)) return;
-              element = node!.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(anchor.id)}"]`);
-            }
-            // Keep the row relative to the header bottom as type changes. The
-            // native viewport includes header/footer geometry and AG floors its
-            // stretch offset. Correct against the actual row, not a second estimate.
-            if (element) viewport.scrollTop += (element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - (header - anchor.offset)) / scrollScale();
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-            if (cancelled(run)) return;
-          }
-        }
         // Publishing rows can reveal the vertical scrollbar and shrink flex columns.
         // Never cache heights measured at the previous widths under that new geometry.
         const finalColumns = grid.getAllDisplayedColumns();
@@ -241,39 +251,14 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           prepared.current = null;
           schedule(); return;
         }
-        appliedGeometry.current = key; appliedScope.current = scope; appliedIdentity.current = identity; appliedWidth.current = node!.clientWidth; appliedHeight.current = node!.clientHeight;
-        restoredTop.current = viewport.scrollTop;
-        cancelAnimationFrame(anchorFrame); if (!anchor || scope !== anchor.scope) anchorFrame = requestAnimationFrame(captureAnchor);
-        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, reused: false, minimum, rows: rows.length, width: node!.clientWidth, anchor, restored: viewport.scrollTop });
-        prepared.current = { grid, rows, totals, columns, rowId, geometry: geometryStamp(), scope, identity };
+        appliedScope.current = scope; appliedIdentity.current = identity;
+        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, reused: false, minimum, rows: rows.length, width: node!.clientWidth });
+        prepared.current = { grid, rows, totals, columns, rowId, geometry: geometryStamp(), scope, identity, errors };
         ready.current = true; setState('ready'); setError('');
       } catch (failure) {
         if (!cancelled(run)) { setError(failure instanceof Error ? failure.message : '表格尺寸准备失败，请重试。'); setState(ready.current ? 'ready' : 'error'); }
-      } finally { setMeasurement(null); host?.remove(); if (run === version) preparing = false; }
+      } finally { setMeasurement(null); host?.remove(); }
     }
-    const viewport = node.querySelector<HTMLElement>('.ag-grid-viewport,.ag-body-viewport');
-    function scrollScale() {
-      const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1), range = grid.getVerticalPixelRange();
-      const modelHeight = (last?.rowTop ?? 0) + (last?.rowHeight ?? 0), max = viewport ? viewport.scrollHeight - viewport.clientHeight : 0;
-      // AG compresses very tall row models into a smaller native scroll range.
-      return max > 0 ? Math.max(1, (modelHeight - (range.bottom - range.top)) / max) : 1;
-    }
-    function captureAnchor() {
-      if (disposed || preparing || !viewport || node!.clientWidth !== appliedWidth.current || scope !== appliedScope.current) return;
-      const box = viewport.getBoundingClientRect();
-      // Anchor a row the reader can actually see, rather than AG's offscreen row buffer.
-      const visible = [...node!.querySelectorAll<HTMLElement>('.ag-row[row-id]')].find(element => {
-        const rect = element.getBoundingClientRect();
-        return grid.getRowNode(element.getAttribute('row-id')!) && rect.top >= box.top && rect.top < box.bottom;
-      });
-      if (visible) { const header = grid.getGridOption('headerHeight') ?? headerMinimum; readingAnchor.current = {id: visible.getAttribute('row-id')!, offset: header - (visible.getBoundingClientRect().top - box.top), header, scope}; }
-
-    }
-    // Programmatic restoration may round in a compressed scroll range. Keep the
-    // requested reading anchor until the reader actually scrolls, so the residual
-    // never becomes the input for the next restoration.
-    const scrolled = () => { if (!preparing && viewport?.scrollTop !== restoredTop.current) { cancelAnimationFrame(anchorFrame); anchorFrame = requestAnimationFrame(captureAnchor); } };
-    viewport?.addEventListener('scroll', scrolled, {passive: true});
     let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
     const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; const changed = next !== width || grid.getGridOption('domLayout') !== 'autoHeight' && nextHeight !== height; width = next; height = nextHeight; if (next && changed) schedule(); });
     resize.observe(node);
@@ -286,7 +271,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     // Unrelated page font shards must not invalidate an already prepared grid.
     node.addEventListener('focusout', afterEdit);
     schedule();
-    return () => { disposed = true; cancelAnimationFrame(frame); cancelAnimationFrame(anchorFrame); viewport?.removeEventListener('scroll', scrolled); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); };
-  }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, retry]);
+    return () => { disposed = true; cancelAnimationFrame(frame); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); };
+  }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, retry,fit]);
   return { attach, state, error, measurement, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
 }

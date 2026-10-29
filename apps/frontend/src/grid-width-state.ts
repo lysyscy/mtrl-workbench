@@ -19,7 +19,8 @@ export function readGridWidths(storage: Storage, key: string): Widths {
 // Persist only deliberate header resizes. AG Grid owns bounds, width ownership and flex.
 export function bindGridWidths(api: GridApi, options: {
   owner: string; table: string; storage: () => Storage; scale: () => number;
-  changed: (custom: boolean, error: string) => void;
+  changed: (custom: boolean, error: string, reset?: boolean) => void;
+  layoutKey?: () => string;
 }) {
   const key = gridWidthKey(options.owner, options.table);
   let channel = channels.get(key);
@@ -40,7 +41,7 @@ export function bindGridWidths(api: GridApi, options: {
     api.setGridOption('columnDefs', next);
     api.applyColumnState({state});
   };
-  const notify = () => options.changed(Object.keys(shared.widths).length > 0, shared.error);
+  const notify = (reset = false) => options.changed(Object.keys(shared.widths).length > 0, shared.error, reset);
   const publish = (reset = false, origin?: (reset:boolean)=>void) => queueMicrotask(()=>[...shared.listeners].forEach(listener => {
     if (shared.listeners.has(listener)) { if(listener===origin)notify();else listener(reset); }
   }));
@@ -95,13 +96,13 @@ export function bindGridWidths(api: GridApi, options: {
     fit();
   };
   const reset = () => { shared.widths = {}; save(); publish(true); };
-  const receive = (reset: boolean) => { if (reset) resetNative(); else apply(); notify(); };
-  let columnScale = options.scale();
+  const receive = (reset: boolean) => { if (reset) resetNative(); else apply(); notify(reset); };
+  let columnLayout = options.layoutKey?.() ?? String(options.scale());
   const columnsLoaded = () => {
-    const nextScale = options.scale();
+    const nextLayout = options.layoutKey?.() ?? String(options.scale());
     // Initial widths do not update existing native columns when type shrinks.
     // Wait for the new definitions, then restore reader state and saved widths.
-    if (nextScale !== columnScale) { columnScale = nextScale; resetNative(); }
+    if (nextLayout !== columnLayout) { columnLayout = nextLayout; resetNative(); }
     apply();
   };
   shared.listeners.add(receive);

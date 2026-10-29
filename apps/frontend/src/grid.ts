@@ -1,4 +1,3 @@
-import type { GridApi } from 'ag-grid-community';
 import {
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
@@ -54,23 +53,4 @@ export function fullTextWidth(values:readonly string[],scale=Number(getComputedS
 }
 export function textWidth(min: number, max: number, scale = 1, flex = 1) {
   return { minWidth: min * scale, maxWidth: max * scale, flex };
-}
-
-// Public AG APIs own content fitting and flex distribution.
-export function freezeGridFlex(api:GridApi,root:HTMLElement) {
-  let frozen:{colId:string;flex:number}[]|null=null,frame=0;
-  const editing=()=>api.getEditingCells().length>0||root.contains(document.activeElement)&&document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]),select,textarea,[contenteditable=true]');
-  const freeze=()=>{
-    if(frozen||api.isDestroyed()||!editing())return;
-    frozen=api.getColumnState().flatMap(c=>c.flex? [{colId:c.colId,flex:c.flex}]:[]);
-    if(frozen.length) api.applyColumnState({state:frozen.map(c=>({colId:c.colId,flex:null}))});
-  };
-  const restore=()=>{
-    if(frozen&&!api.isDestroyed())api.applyColumnState({state:frozen});
-    frozen=null;
-  };
-  const release=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(!editing())restore();});};
-  root.addEventListener('focusin',freeze);root.addEventListener('focusout',release);
-  api.addEventListener('cellEditingStarted',freeze);api.addEventListener('cellEditingStopped',release);
-  return()=>{cancelAnimationFrame(frame);root.removeEventListener('focusin',freeze);root.removeEventListener('focusout',release);api.removeEventListener('cellEditingStarted',freeze);api.removeEventListener('cellEditingStopped',release);restore();};
 }

@@ -26,7 +26,7 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
   rowMinimum?: number;
 }) {
   const widths = useGridWidths(table, layout.root, scale, layout.active);
-  const retained = useRetainedGridColumns(columns, layout.root);
+  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}`);
   const widthColumns=useGridWidthColumns(retained);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);
   const prepared = useMemo(() => {
@@ -38,9 +38,9 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
     });
   }, [definitions, context, measurement]);
   const geometry = {...pageGridGeometry(scale),...(rowMinimum===undefined?{}:{rowHeight:rowMinimum})};
-  const preparation = useTextGridLayout({...layout, columns: prepared, minimum: geometry.rowHeight, headerMinimum: geometry.headerHeight});
+  const preparation = useTextGridLayout({...layout, columns: prepared, minimum: geometry.rowHeight, headerMinimum: geometry.headerHeight,fit:widths.fit});
   return {state: preparation.state, visible: !preparation.concealed && preparation.state !== 'preparing' && preparation.state !== 'error',
-    [details]: {root: layout.root, definitions, context, geometry, preparation, widths, active: layout.active}};
+    [details]: {root: layout.root, definitions, context, geometry, preparation, widths, rows: layout.rows, totals: layout.totals, active: layout.active}};
 }
 
 export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClassName, attachRoot = true, ...container}: Omit<ComponentProps<'div'>, 'ref' | 'children'> & {
@@ -51,11 +51,11 @@ export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClass
   // The ledger measures its existing outer region, including the side heading.
   attachRoot?: boolean;
 }) {
-  const {visible} = presentation, {root, definitions, context, geometry, preparation, widths} = presentation[details];
+  const {visible} = presentation, {root, definitions, context, geometry, preparation, widths, rows, totals} = presentation[details];
   const {onGridReady, ...options} = grid;
   const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
       data-layout-state={preparation.state} data-layout-error={preparation.error || undefined} aria-busy={preparation.state !== 'ready'}>
-      <AgGridReact<T> {...options} autoSizeStrategy={widths.strategy} columnDefs={definitions} context={context} rowHeight={geometry.rowHeight} headerHeight={geometry.headerHeight}
+      <AgGridReact<T> {...options} autoSizeStrategy={widths.strategy} columnDefs={definitions} rowData={rows} pinnedBottomRowData={totals} context={context} rowHeight={geometry.rowHeight} headerHeight={geometry.headerHeight}
         onGridReady={event => { widths.attach(event.api); preparation.attach(event.api); onGridReady?.(event); }} />
     </div>;
   return <GridWidthContext.Provider value={widths}>

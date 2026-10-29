@@ -106,8 +106,9 @@ def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_p
     pay_header = header(page, '.notice-grid', 'pay_amount')
     before = pay_header.bounding_box()['width']
     before_css = pay_header.evaluate('e=>getComputedStyle(e).width')
+    page.evaluate('''()=>{window.widthFrames=[];window.widthTrace=true;const tick=()=>{if(!window.widthTrace)return;window.widthFrames.push(document.querySelector('.notice-grid .ag-header-cell[col-id=pay_amount]').getBoundingClientRect().width);requestAnimationFrame(tick)};tick()}''')
     amount.fill('9876543210.12')
-    # Editing freezes actual widths; blur must still publish the new amount minimum.
+    # Ordinary input and blur keep the displayed geometry, even across digit counts.
     expect(pay_header).to_have_css('width', before_css)
     box = checkbox.bounding_box()
     assert box
@@ -117,7 +118,10 @@ def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_p
     page.mouse.up()
     expect(checkbox).to_be_checked()
     expect(amount).to_have_value('9876543210.12')
-    page.wait_for_function('width=>document.querySelector(".notice-grid .ag-header-cell[col-id=pay_amount]").getBoundingClientRect().width>width+1', arg=before)
+    page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+    page.evaluate('window.widthTrace=false')
+    assert all(abs(width-before)<1 for width in page.evaluate('window.widthFrames'))
+    expect(pay_header).to_have_css('width', before_css)
     expect(header(page, '.notice-grid', 'project_display')).to_have_css('width', manual_width)
     page.get_by_role('button', name='恢复自动列宽', exact=True).click()
     expect(checkbox).to_be_checked()

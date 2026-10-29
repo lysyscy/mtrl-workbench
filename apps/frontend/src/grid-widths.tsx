@@ -2,35 +2,32 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ComponentType, RefObject } from 'react';
 import type { ColDef, ColGroupDef, GridApi, IHeaderParams, SizeColumnsToContentStrategy } from 'ag-grid-community';
 import Button from 'antd/es/button';
-import { freezeGridFlex } from './grid';
 import { bindGridWidths } from './grid-width-state';
 import { GridWidthOwner } from './grid-width-owner';
 
 export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean) {
-  const owner = useContext(GridWidthOwner), current = useRef({scale, active});
-  current.current = {scale, active};
+  const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`});
+  current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`};
   const binding = useRef<ReturnType<typeof bindGridWidths> | null>(null), cleanup = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState({custom: false, error: ''});
-  const editing = (api: GridApi) => api.getEditingCells().length > 0 || Boolean(root.current?.contains(document.activeElement) && document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]),select,textarea,[contenteditable=true]'));
-  const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({type: 'fitCellContents', continuous: true, skipHeader: true,
-    shouldAutoSizeColumns: ({api, reason}) => reason !== 'viewportChanged' && current.current.active && !editing(api),
-  }), [root]);
+  const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({type: 'fitCellContents', skipHeader: true}), []);
   const attach = useCallback((api: GridApi) => {
     cleanup.current?.();
     const controller = bindGridWidths(api, {owner, table, storage: () => window.localStorage, scale: () => current.current.scale,
-      changed: (custom, error) => setStatus({custom, error})});
+      layoutKey:()=>current.current.layoutKey,
+      changed: (custom, error, reset) => {setStatus({custom, error});if(reset)setLayoutRevision(n=>n+1);}});
     binding.current = controller;
-    const node = root.current, unfreeze = node ? freezeGridFlex(api, node) : () => {};
-    let frame = 0;
-    const released = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { if (!api.isDestroyed() && current.current.active && !editing(api)) controller.fit(); }); };
-    node?.addEventListener('focusout', released);
-    api.addEventListener('cellEditingStopped', released);
-    cleanup.current = () => { cancelAnimationFrame(frame); node?.removeEventListener('focusout', released); if (!api.isDestroyed()) api.removeEventListener('cellEditingStopped', released); unfreeze(); controller.dispose(); };
+    const node = root.current;
+    let width=node?.clientWidth??0;
+    const resize=new ResizeObserver(()=>{const next=node?.clientWidth??0;if(next&&next!==width){width=next;setLayoutRevision(n=>n+1);}});
+    if(node)resize.observe(node);
+    cleanup.current = () => {resize.disconnect();controller.dispose();};
     api.addEventListener('gridPreDestroyed', cleanup.current);
   }, [owner, table, root]);
   useEffect(() => () => cleanup.current?.(), []);
-  useLayoutEffect(() => { binding.current?.apply(); if (active) binding.current?.fit(); }, [scale, active]);
-  return {attach, strategy, ...status, reset: () => binding.current?.reset(), fit: () => binding.current?.fit()};
+  useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
+  const fit=useCallback(()=>binding.current?.fit(),[]);
+  return {attach, strategy, ...status,layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
 }
 
 export const GridWidthContext=createContext<ReturnType<typeof useGridWidths>|null>(null);

@@ -9,7 +9,7 @@ import { ApiError, readProjects, record, requestFile, requestJson, uncertainWrit
 import type { Identity, Project } from './api';
 import { pageGridGeometry, fixedWidth, gridTheme, textWidth } from './grid';
 import { EllipsisText, completeColumnWidth } from './grid-text';
-import { detailSum, mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench, readWorkResult } from './mechanical-api';
+import { detailSum, internalAmount, mechanicalMoney as money, readDetail, readInternalSave, readMechanicalReport, readWorkbench, readWorkResult } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { useCellSaveQueue } from './use-cell-save';
 import { TimePicker } from './time-picker';
@@ -18,20 +18,23 @@ import { useHistoryGuard } from './history';
 import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
-import type { Category, Effective, Workbench, MechanicalReport } from './mechanical-api';
+import type { Category, InternalColumn, Workbench, MechanicalReport } from './mechanical-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
-import { ReadGrid } from './business-grid';
 import { ProjectExport } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
 // These cells stay one line; let the existing native row-height path size them.
 const summaryMeasurement = {textOnly:Array.from({length:15},(_,index)=>`c${index}`)};
 const plateKeywords = (text: string) => [...new Set(text.split('\n').map(word => word.trim()).filter(Boolean))];
 
-interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
-function InternalCell({ id, column, value, label, editing, epoch }: { id: string; column: string; value: string; label: string; editing: React.RefObject<InternalEditing>; epoch: number }) {
+interface InternalDraft { kind: 'internal'; warehouse: string; ym: string; column: InternalColumn; value: string; version: number; error: string }
+type MechanicalDraft = Draft | InternalDraft;
+const isInternalDraft = (draft: MechanicalDraft): draft is InternalDraft => 'kind' in draft;
+const internalKey = (warehouse: string, ym: string, column: InternalColumn) => JSON.stringify(['internal',warehouse,ym,column]);
+interface InternalEditing { writable: boolean; value: (id: string,column: InternalColumn) => string | undefined; change: (id: string,column: InternalColumn,value: string) => void; save: (id: string,column: InternalColumn) => void }
+function InternalCell({ id, column, value, label, editing }: { id: string; column: InternalColumn; value: string; label: string; editing: React.RefObject<InternalEditing> }) {
   const [text,setText]=useState(()=>editing.current.value(id,column)??value);
-  useEffect(()=>{setText(editing.current.value(id,column)??value);},[value,id,column,editing,epoch]);
-  return <Input aria-label={label} inputMode="decimal" className="mechanical-internal-input money" value={text} onChange={event=>{setText(event.target.value);editing.current.change(id,column,event.target.value);}} />;
+  useEffect(()=>{setText(editing.current.value(id,column)??value);},[value,id,column,editing]);
+  return <Input aria-label={label} inputMode="decimal" className="mechanical-internal-input money" disabled={!editing.current.writable} value={text} onChange={event=>{setText(event.target.value);editing.current.change(id,column,event.target.value);}} onBlur={()=>editing.current.save(id,column)} onKeyDown={event=>{event.stopPropagation();if(event.key==='Enter'&&!event.nativeEvent.isComposing){event.preventDefault();event.currentTarget.blur();}}} />;
 }
 interface SummaryRow { id: string; [column: string]: string }
 const groupLabels = ['零租', '包月', '周材', '内租（租赁公司）', '内租（工程公司）'];
@@ -56,7 +59,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     return () => { window.removeEventListener('resize', fitHeight); };
   }, [fitHeight]);
   const current=useRef(internal);current.current=internal;
-  useEffect(()=>{api.current?.refreshCells({force:true});},[internal.epoch,internal.writable]);
+  useEffect(()=>{api.current?.refreshCells({force:true});},[internal.writable]);
   const rows = useMemo(() => report.sheets[0]!.rows.slice(5, 6+projectIds.length).map((cells, index) => {
     const row: SummaryRow = { id: String(projectIds[index] ?? 'total') };
     for (const cell of cells) row[`c${cell.column - 1}`] = cell.value;
@@ -68,7 +71,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   const openDetail = useRef(detail); openDetail.current = detail;
   const renderInternal = useCallback((params: ICellRendererParams<SummaryRow,string>) => {
     const index = params.colDef?.field === 'c12' ? 3 : 4;
-    return params.node.rowPinned || !current.current.writable ? money(params.value) : <InternalCell id={params.data!.id} column={index === 3 ? 'mech_1' : 'mech_0'} value={params.value ?? ''} label={`${params.data?.c1} ${groupLabels[index]}`} editing={current} epoch={current.current.epoch} />;
+    return params.node.rowPinned ? money(params.value) : <InternalCell id={params.data!.id} column={index === 3 ? 'mech_1' : 'mech_0'} value={params.value ?? ''} label={`${params.data?.c1} ${groupLabels[index]}`} editing={current} />;
   }, []);
   const renderDetail = useCallback((params: ICellRendererParams<SummaryRow,string>) => {
     const index = params.colDef?.field === 'c9' ? 0 : 1;
@@ -126,7 +129,6 @@ function MechanicalExport({ owner, month, projects, defaults, unavailable, pause
 }
 export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Identity | null; blocked: boolean; exportGuard: string; active: boolean }) {
   const {message: toast} = App.useApp();
-  const scale=Number(me?.ui_scale_css)||1;
   const client = useQueryClient();
   const [month, setMonth] = useState(()=>{const [year,month]=currentMonth().split('-');return new Date(Date.UTC(Number(year),Number(month)-2,15)).toISOString().slice(0,7);}); const [ids, setIds] = useState<number[] | null>(null);
   const [pickerIds,setPickerIds]=useState<number[]>([]); const [pickerOrder,setPickerOrder]=useState<number[]>([]);
@@ -144,17 +146,27 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   useEffect(() => { setMessage(''); }, [scope, blocked, exportGuard, scopeError]);
   const [tab, setTab] = useState<'summary' | 'zero' | 'monthly' | 'work'>('summary');
   const [temporary, setTemporary] = useState(''); const [problemsOnly, setProblemsOnly] = useState(false);
-  const [,render] = useState(0); const [operating,setWriting] = useState(false); const writeLock = useRef(false);
+  const [operating,setWriting] = useState(false); const writeLock = useRef(false);
   const savedRevisions=useRef(new Map<string,number>());
   const [needsRead,setNeedsRead] = useState(false);
   const [dialog,setDialog] = useState<'discard' | 'plate' | 'projects' | null>(null); const [keywords,setKeywords] = useState('');
-  const internalDrafts=useRef(new Map<string,{warehouse:string;ym:string;values:Record<string,string>}>());
-  const [internalEpoch,setInternalEpoch]=useState(0);
-  const [internalConfirmation,setInternalConfirmation]=useState<{warehouse:string;ym:string;values:Record<string,string>;effective:Effective}[]|null>(null);
-  const saves=useCellSaveQueue<Draft,Workbench>({
+  const internalDrafts=useRef(new Map<string,InternalDraft>());
+  const internalSubmitted=useRef<{draft:InternalDraft;signature:string}|null>(null);
+  const saves=useCellSaveQueue<MechanicalDraft,Workbench>({
     enabled:Boolean(me)&&active&&!blocked,canWrite:!operating&&!needsRead&&!state.isError&&Boolean(state.data),
     read:readDetails,
     write:async(draft,signal)=>{
+      if(isInternalDraft(draft)){
+        const effective=client.getQueryData<Workbench>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
+        if(!effective)throw new Error('内租原金额尚未取得，请重新读取后重试。');
+        const value=internalAmount(draft.value)!;
+        internalSubmitted.current={draft,signature:effective.signature};
+        try{
+          const response=await requestJson('/api/m06/workbench/internal-save',{method:'POST',signal,...body({warehouse:draft.warehouse,ym:draft.ym,values:{[draft.column]:value},effective_signature:effective.signature})});
+          readInternalSave(response,draft.warehouse,draft.ym,draft.column,value);
+        }catch(error){if(!uncertainWrite(error))internalSubmitted.current=null;throw error;}
+        return;
+      }
       const response=await requestJson('/api/m06/workbench/details-save',{method:'POST',signal,...body({warehouse:draft.warehouse,ym:draft.ym,category:draft.category,revision:draft.revision,rows:structuredClone(draft.rows)})});
       let saved;try{saved=readDetail(response);if(!record(response)||response.ok!==true||saved.warehouse!==draft.warehouse||saved.ym!==draft.ym||saved.category!==draft.category||saved.revision!==draft.revision+1)throw new Error();}
       catch{throw new ApiError('明细保存回执不完整，请重读核对。',0,'invalid_receipt');}
@@ -162,10 +174,19 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
       await client.cancelQueries({queryKey:['mechanical-state']});
       client.setQueriesData<Workbench>({queryKey:['mechanical-state']},old=>old?{...old,details:[...old.details.filter(detail=>detailKey(detail.warehouse,detail.ym,detail.category)!==detailKey(saved.warehouse,saved.ym,saved.category)),saved]}:old);
     },
-    acknowledge:(current,submitted)=>current.version===submitted.version?undefined:{...current,revision:submitted.revision},
+    acknowledge:(current,submitted)=>{
+      if(isInternalDraft(submitted)){
+        internalSubmitted.current=null;
+        const key=internalKey(submitted.warehouse,submitted.ym,submitted.column),latest=internalDrafts.current.get(key);
+        if(!latest||latest.version===submitted.version){internalDrafts.current.delete(key);return undefined;}
+        return latest;
+      }
+      return !isInternalDraft(current)&&current.version!==submitted.version?{...current,revision:submitted.revision}:undefined;
+    },
+    validate:draft=>isInternalDraft(draft)&&internalAmount(draft.value)===null?'内租须填写非负金额，最多两位小数。':'',
     saved:()=>'',stopOnRejection:true,
-    describe:draft=>`${draft.warehouse}，${draft.ym} `,
-  },{key:'mechanical-details',label:'机械明细'});
+    describe:draft=>`${draft.warehouse}，${draft.ym}${isInternalDraft(draft)?draft.column==='mech_0'?'，工程公司内租 ':'，租赁公司内租 ':' '}`,
+  },{key:'mechanical-details',label:'机械费'});
   const writing=operating||saves.busy;
   const writable = Boolean(me) && active && !blocked && !operating && !needsRead && !saves.uncertain && Boolean(state.data) && !state.isError;
   const category: Category = tab === 'monthly' ? 'monthly' : 'zero';
@@ -175,18 +196,19 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     const warehouse = projects.data?.find(project => String(project.id) === projectId)?.warehouse_name;
     if (warehouse) { setTab(index === 2 ? 'monthly' : 'zero');setTemporary(warehouse);setProblemsOnly(false); }
   },[projects.data]);
-  useEffect(() => {setTemporary('');setProblemsOnly(false);setInternalConfirmation(null);setDialog(current=>current==='projects'?'projects':null);},[scope]);
+  useEffect(() => {setTemporary('');setProblemsOnly(false);setDialog(current=>current==='projects'?'projects':null);},[scope]);
   function edit(warehouse: string, rows: import('./mechanical-api').DetailRow[]) {
     if (!writable) return;
     const key=detailKey(warehouse,ym,category);
     const saved=state.data?.details.find(d => detailKey(d.warehouse,d.ym,d.category)===key);
-    saves.update(current=>{const previous=current[key];return {...current,[key]:{warehouse,ym,category,revision:previous?.revision??Math.max(saved?.revision??0,savedRevisions.current.get(key)??0),rows,version:(previous?.version??0)+1,error:''}};});
+    saves.update(current=>{const entry=current[key],previous=entry&&!isInternalDraft(entry)?entry:undefined;return {...current,[key]:{warehouse,ym,category,revision:previous?.revision??Math.max(saved?.revision??0,savedRevisions.current.get(key)??0),rows,version:(previous?.version??0)+1,error:''}};});
   }
   async function readDetails(){
+    const readMonth=internalSubmitted.current?.draft.ym??month;
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['mechanical-state']});
-    const data=await client.fetchQuery({queryKey:['mechanical-state',month],staleTime:0,queryFn:({signal})=>requestJson('/api/m06/workbench?ym='+encodeURIComponent(month),{signal}).then(readWorkbench)});
-    await Promise.all([client.invalidateQueries({queryKey:['mechanical-report',month]}),client.invalidateQueries({queryKey:['history',me?`${me.id}:${me.account}`:'anonymous']})]);
+    const data=await client.fetchQuery({queryKey:['mechanical-state',readMonth],staleTime:0,queryFn:({signal})=>requestJson('/api/m06/workbench?ym='+encodeURIComponent(readMonth),{signal}).then(readWorkbench)});
+    await Promise.all([client.invalidateQueries({queryKey:['mechanical-report',readMonth]}),client.invalidateQueries({queryKey:['history',me?`${me.id}:${me.account}`:'anonymous']})]);
     return data;
   }
   async function refresh() {
@@ -222,14 +244,38 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     if(latest&&dialog==='projects'&&JSON.stringify(pickerOrder.filter(id=>pickerIds.includes(id)).flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[]))===JSON.stringify(latest.shown)){const selected=pickerOrder.filter(id=>pickerIds.includes(id));setPickerBaseline(selected);setIds(selected);setTemporary('');}
     setMessage('已重新读取，请核对设置后继续。');
   }
-  const dirty=Object.values(saves.drafts).filter(d=>d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse)).length;
-  const internalTargets=[...internalDrafts.current.values()].filter(d=>d.ym===ym&&warehouses.includes(d.warehouse));
-  const internal:InternalEditing={epoch:internalEpoch,writable,value:(id,column)=>internalDrafts.current.get(JSON.stringify([id,ym]))?.values[column],change:(id,column,value)=>{const key=JSON.stringify([id,ym]),warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse)return;const old=internalDrafts.current.get(key);internalDrafts.current.set(key,{warehouse,ym,values:{...old?.values,[column]:value}});render(n=>n+1);}};
+  const detailDrafts=Object.fromEntries(Object.entries(saves.drafts).filter((entry):entry is [string,Draft]=>!isInternalDraft(entry[1])));
+  const dirty=Object.values(detailDrafts).filter(d=>d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse)).length;
+  const internal:InternalEditing={writable,value:(id,column)=>{const warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;return warehouse?internalDrafts.current.get(internalKey(warehouse,ym,column))?.value:undefined;},change:(id,column,value)=>{
+    const warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse||!writable)return;
+    const key=internalKey(warehouse,ym,column),previous=internalDrafts.current.get(key);
+    internalDrafts.current.set(key,{kind:'internal',warehouse,ym,column,value,version:(previous?.version??0)+1,error:''});
+  },save:(id,column)=>{
+    const warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse||!writable)return;
+    const key=internalKey(warehouse,ym,column),draft=internalDrafts.current.get(key);if(!draft)return;
+    saves.update(current=>({...current,[key]:{...draft}}));saves.save(key,true);
+  }};
+  function confirmCellRead(){
+    if(!saves.verified||writing||blocked)return;
+    const submitted=internalSubmitted.current;
+    saves.confirm();
+    if(!submitted||internalSubmitted.current!==submitted)return;
+    internalSubmitted.current=null;
+    saves.update(current=>{
+      const next={...current};
+      const draft=submitted.draft,key=internalKey(draft.warehouse,draft.ym,draft.column),expected=internalAmount(draft.value);
+      const effective=client.getQueryData<Workbench>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
+      if(internalDrafts.current.get(key)?.version===draft.version&&effective&&effective.signature!==submitted.signature&&expected!==null&&internalAmount(effective.values[draft.column]??'')===expected){
+        internalDrafts.current.delete(key);delete next[key];
+      }
+      return next;
+    });
+  }
   function openPicker(){setTemporary('');setMessage('');const order=[...selected,...candidates.map(p=>p.id).filter(id=>!selected.includes(id))];setPickerOrder(order);setPickerIds([...selected]);setPickerBaseline([...selected]);setDialog('projects');}
   const pickerSelection=pickerOrder.filter(id=>pickerIds.includes(id));
   const settingsDirty=dialog==='plate'?JSON.stringify(plateKeywords(keywords))!==keywordsBaseline:dialog==='projects'&&JSON.stringify(pickerSelection)!==JSON.stringify(pickerBaseline);
   const settingsFeedback=(message||needsRead)&&<p className="notice" role="alert">{message||'设置操作结果待核实，请重新读取核对；输入已保留。'}{needsRead&&<Button disabled={writing||state.isFetching||blocked} onClick={()=>void rereadSettings()}>重新读取</Button>}</p>;
-  const exportUnavailable = !me ? '登录后可导出。' : exportGuard || (blocked ? '账号待核实，请稍候。' : writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请先重新读取。' : Object.keys(saves.drafts).length ? '请先处理机械费未保存输入。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : !ym ? '请选择报表月份。' : '');
+  const exportUnavailable = !me ? '登录后可导出。' : exportGuard || (blocked ? '账号待核实，请稍候。' : writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请先重新读取。' : Object.keys(saves.drafts).length||internalDrafts.current.size ? '请先处理机械费未保存输入。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : !ym ? '请选择报表月份。' : '');
   function exportControl(){const owner=me ? `${me.id}:${me.account}` : 'anonymous';return <MechanicalExport key={owner} owner={owner} month={ym} projects={candidates} defaults={selected} unavailable={exportUnavailable} paused={blocked||!active} message={text=>{void toast.success(text);}}/>;}
   useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请返回重新读取。' : Object.keys(saves.drafts).length || internalDrafts.current.size || settingsDirty ? '请先处理机械费未保存修改。' : '');
   const error = projects.error || state.error || report.error;
@@ -238,12 +284,12 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id} onClick={()=>{setTab(id);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
     <div className="mechanical-project-entry"><Button disabled={blocked||writing||state.isFetching} onClick={openPicker}>显示项目</Button></div>
     </div>
-    {tab==='summary'&&<div data-page-chrome className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools"><Button disabled={!writable||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</Button><Button disabled={!writable||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</Button>{exportControl()}</div></div>}
+    {tab==='summary'&&<div data-page-chrome className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools">{exportControl()}</div></div>}
     {needsRead && <p className="notice" role="alert">保存后需要重新读取。<Button onClick={()=>void refresh()}>重新读取</Button></p>}
-    {(saves.error||saves.uncertain)&&<p className="notice" role="alert">{saves.error||'已重读，请核对保存结果后继续。'}{saves.uncertain&&<Button disabled={blocked||writing||state.isFetching} onClick={()=>void saves.reread()}>重读明细</Button>}{saves.uncertain&&<Button disabled={blocked||writing||!saves.verified||state.isFetching||state.isError} onClick={()=>saves.confirm()}>已核对，继续</Button>}</p>}
+    {(saves.error||saves.uncertain)&&<p className="notice" role="alert">{saves.error||'已重读，请核对保存结果后继续。'}{saves.uncertain&&<Button disabled={blocked||writing||state.isFetching} onClick={()=>void saves.reread()}>{Object.values(saves.drafts).some(isInternalDraft)?'重读内租':'重读明细'}</Button>}{saves.uncertain&&<Button disabled={blocked||writing||!saves.verified||state.isFetching||state.isError} onClick={confirmCellRead}>已核对，继续</Button>}</p>}
     {(tab==='zero'||tab==='monthly') && <>
       <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{const text=(state.data?.settings.plate_keywords??[]).join('\n');setKeywords(text);setKeywordsBaseline(JSON.stringify(plateKeywords(text)));setMessage('');setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button>{exportControl()}</div>
-      {!state.isError && !state.isPending && <DetailsTable scale={Number(me?.ui_scale_css)||1} groups={editingWarehouses.map(warehouse=>{const key=detailKey(warehouse,ym,category);return {warehouse,name:label(warehouse),saved:state.data?.details.find(d=>detailKey(d.warehouse,d.ym,d.category)===key),draft:saves.drafts[key]};})} ym={ym} category={category} keywords={state.data?.settings.plate_keywords??[]} problemsOnly={problemsOnly} writable={writable} change={edit} save={warehouse=>saves.save(detailKey(warehouse,ym,category),true)} />}
+      {!state.isError && !state.isPending && <DetailsTable scale={Number(me?.ui_scale_css)||1} groups={editingWarehouses.map(warehouse=>{const key=detailKey(warehouse,ym,category);return {warehouse,name:label(warehouse),saved:state.data?.details.find(d=>detailKey(d.warehouse,d.ym,d.category)===key),draft:detailDrafts[key]};})} ym={ym} category={category} keywords={state.data?.settings.plate_keywords??[]} problemsOnly={problemsOnly} writable={writable} change={edit} save={warehouse=>saves.save(detailKey(warehouse,ym,category),true)} />}
 
     </>}
     {tab==='work'&&state.data&&!state.isError&&<MechanicalWork data={state.data} warehouses={warehouses} label={label} writable={writable} busy={writing} paused={blocked||!active} operate={operate} refresh={refresh} added={warehouse=>{const project=candidates.find(p=>p.warehouse_name===warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);}} />}
@@ -256,13 +302,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
       {settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={!writable} onClick={()=>void saveSettings({shown_projects:pickerSelection.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[])},()=>{setIds(pickerSelection);setTemporary('');},'显示项目及顺序已保存。')}>应用项目选择</Button></footer>
     </>}</MechanicalDialog>}
 
-    {internalConfirmation&&<MechanicalDialog title="确认内租填数" close={()=>setInternalConfirmation(null)} busy={writing} paused={blocked||!active}><ReadGrid table="mechanical-internal-confirm" label="内租确认清单" domLayout="autoHeight" rows={internalConfirmation.flatMap(d=>Object.entries(d.values).map(([column,value])=>({id:JSON.stringify([d.warehouse,d.ym,column]),d,column,value})))} rowId={row=>row.id} columns={[
-        {colId:'project',headerName:'项目／月份',valueGetter:p=>label(p.data!.d.warehouse)+'／'+p.data!.d.ym},
-        {colId:'category',headerName:'类别',valueGetter:p=>p.data!.column==='mech_0'?'工程公司内租':'租赁公司内租'},
-        {colId:'old',headerName:'原有效值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.keys(d.values).map(column=>money(d.effective.values[column]))),scale),cellClass:'money',valueGetter:p=>money(p.data!.d.effective.values[p.data!.column])},
-        {colId:'next',headerName:'拟采用值',...mechanicalNumberWidth(internalConfirmation.flatMap(d=>Object.values(d.values).map(money)),scale),cellClass:'money wrap-note',valueGetter:p=>money(p.data!.value)+(Number(p.data!.value)<Number(p.data!.d.effective.values[p.data!.column])?'，金额减少，请核实':'')},
-      ]}/><footer><Button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</Button><Button type="primary" disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())void toast.success('内租有效月值已确认');})}>确认更新内租</Button></footer></MechanicalDialog>}
-    {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing} paused={blocked||!active}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{saves.update(current=>Object.fromEntries(Object.entries(current).filter(([,d])=>d.ym!==ym||d.category!==category||!editingWarehouses.includes(d.warehouse))));saves.clearFeedback();setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
+    {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing} paused={blocked||!active}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{saves.update(current=>Object.fromEntries(Object.entries(current).filter(([,d])=>isInternalDraft(d)||d.ym!==ym||d.category!==category||!editingWarehouses.includes(d.warehouse))));saves.clearFeedback();setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
     {dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label>{settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void saveSettings({plate_keywords:plateKeywords(keywords)},()=>{},'车牌规则已保存。')}>保存规则</Button></footer></>}</MechanicalDialog>}
     {message && !needsRead && <p className="mechanical-feedback" role="status">{message}</p>}
   </section>;

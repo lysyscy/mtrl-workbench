@@ -207,6 +207,9 @@ importers:
       react-virtuoso:
         specifier: 4.18.19
         version: 4.18.19(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      uuid:
+        specifier: 14.0.3
+        version: 14.0.3
       valibot:
         specifier: 1.5.0
         version: 1.5.0(typescript@7.0.2)
@@ -1229,6 +1232,10 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  uuid@14.0.3:
+    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
+    hasBin: true
+
   valibot@1.5.0:
     resolution: {integrity: sha512-nil6AkP2TChWL43Z5uJ6GTxX01CUA+g8LWUM+N/rB9NBbkUMaUsi9PUNzlUPgoKASgmx9f7eGOYpJ04/fSa6FQ==}
     peerDependencies:
@@ -2193,6 +2200,8 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
+
+  uuid@14.0.3: {}
 
   valibot@1.5.0(typescript@7.0.2):
     optionalDependencies:

@@ -67,6 +67,45 @@ def sample(api,projects):
     raise AssertionError('真实副本没有过程矩阵，行及合计保护未覆盖')
 
 
+def test_rapid_process_saves_never_revert_or_move_view(server,browser_page,api,projects,disposable):
+    data=get(api,'/api/m06/matrix');mechanical=get(api,'/api/m06/mech')
+    project,row=next((p,r) for p in projects if p['warehouse_name'] in data['matrices']
+        for r in data['matrices'][p['warehouse_name']]['adjusted']
+        if r['ym'] not in mechanical['detail_signatures'].get(p['warehouse_name'],{}))
+    page,_=browser_page;open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    grid=page.locator('.process-matrix');expect(grid).to_have_attribute('data-layout-state','ready')
+    labels=[row['ym']+' '+label for label in LABELS[:3]]
+    page.evaluate('''labels=>{window.editFrames=[];window.editWanted={};window.editTrace=true;const tick=()=>{if(!window.editTrace)return;const g=document.querySelector('.process-matrix');window.editFrames.push({visibility:getComputedStyle(g).visibility,cells:labels.map(label=>{const e=document.querySelector('input[aria-label="'+label+'"]');return {label,value:e?.value,wanted:window.editWanted[label]}}),scroll:g.querySelector('.ag-body-vertical-scroll-viewport')?.scrollTop});requestAnimationFrame(tick)};tick()}''',labels)
+    pending=[];page.route('**/api/m06/mech-cell',lambda route:pending.append(route) if route.request.method=='POST' else route.continue_())
+    values=[]
+    for index,label in enumerate(labels):
+        field=page.get_by_label(label,exact=True);value=str(Decimal(str(row['mech_'+str(index)] or 0))+Decimal('1.25'));values.append(value)
+        replace_amount(field,value);page.evaluate('([label,value])=>window.editWanted[label]=value',[label,value])
+        if index<2:field.blur()
+    assert len(pending)==1
+    route=pending.pop(0);response=route.fetch();assert response.ok;route.fulfill(response=response)
+    page.wait_for_timeout(150)  # Observe the previous cell while the next input still owns focus.
+    page.get_by_label(labels[2],exact=True).blur()
+    viewport=grid.locator('.ag-body-vertical-scroll-viewport');viewport.evaluate('e=>e.scrollTop=Math.min(100,e.scrollHeight-e.clientHeight)')
+    page.evaluate('window.scrollStart=window.editFrames.length')
+    scroll=viewport.evaluate('e=>e.scrollTop')
+    for _ in range(2):
+        for attempt in range(100):
+            if pending:break
+            page.wait_for_timeout(20)
+        assert pending,'后续保存未发出'
+        route=pending.pop(0);response=route.fetch();assert response.ok;route.fulfill(response=response)
+        page.wait_for_timeout(150)
+    expect(page.get_by_role('button',name='取消本项目修改',exact=True)).to_be_disabled()
+    page.wait_for_timeout(100);page.evaluate('window.editTrace=false')
+    frames=page.evaluate('window.editFrames');start=page.evaluate('window.scrollStart')
+    bad=[frame for frame in frames if frame['visibility']!='visible' or any(cell.get('wanted') is not None and cell.get('value') is not None and Decimal(cell['value'].replace(',','') or '0')!=Decimal(cell['wanted']) for cell in frame['cells'])]
+    assert not bad,bad[:3]
+    assert all(abs(frame['scroll']-scroll)<1 for frame in frames[start:]),'保存覆盖了用户主动滚动的位置'
+    fresh=get(api,'/api/m06/mech')['effective_values'][project['warehouse_name']][row['ym']]
+    assert all(Decimal(fresh['mech_'+str(index)])==Decimal(value) for index,value in enumerate(values))
+
+
 def test_real_process_raw_adjusted_rows_and_totals(server,browser_page,api,projects):
     page,_=browser_page;project,matrix=sample(api,projects);open_page(page,server,'process','过程资料')
     control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp'])

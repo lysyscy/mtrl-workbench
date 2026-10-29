@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Input, Select } from 'antd';
 import { requestJson } from './api';
+import { randomUUID } from './random-id';
 import { body } from './notices-api';
 import { MechanicalDialog } from './mechanical-details';
 import { detailSum, mechanicalMoney as money, readI8Preview, readWorkResult } from './mechanical-api';
@@ -95,7 +96,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
     try {await operate(async()=>{
       setFeedback('');
       try {
-        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:crypto.randomUUID(),allow_kick:true})}));
+        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:randomUUID(),allow_kick:true})}));
         const refreshed=await refresh();
         if(!mounted.current||currentScope.current!==scope)return;
         if(!refreshed){failed('取数预览已取得，重新读取失败；请重新读取后再抓取。');return;}

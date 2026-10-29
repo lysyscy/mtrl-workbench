@@ -45,7 +45,7 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
   return <div className={`business-grid-view ${className}`}>
     <PreparedGrid presentation={presentation} className={'business-grid '+gridClassName+(singleLine?' grid-single-line':'')} style={style} role="region" aria-label={label}
       grid={{theme: businessTheme, domLayout, groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight, getRowId: p => rowId(p.data),
-        suppressColumnVirtualisation: true, suppressCellFocus: true,
+        suppressColumnVirtualisation: true, suppressCellFocus: true,suppressScrollOnNewData:true,animateRows:false,
         defaultColDef: {sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true},
         ...grid}} />
   </div>;
@@ -65,10 +65,10 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   },[columns,scale,singleLine,manualWidths]);
   const defaults=useMemo(()=>singleLine?{...readColumnDefaults,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false}:readColumnDefaults,[singleLine]);
   const widthColumns=useGridWidthColumns(definitions);
-  const retained=useRetainedGridColumns(widthColumns,root);
+  const retained=useRetainedGridColumns(widthColumns,root,widths.layoutKey);
   useEffect(()=>{if(api&&!rows.length)setRendered(n=>n||1);},[api,rows.length]);
   useEffect(()=>{
-    const node=root.current;if(!active||!node||!api||!rendered)return;let cancelled=false;
+    const node=root.current;if(!active||!node||!api||!rendered||ready)return;let cancelled=false;
     void loadElementFonts(node).then(()=>{if(!cancelled&&!api.isDestroyed()){widths.fit();api.resetRowHeights();setReady(true);setError('');}},failure=>{if(!cancelled)setError(failure instanceof Error?failure.message:'字体读取失败，请重试。');});
     return()=>{cancelled=true;};
   },[api,rendered,retry,active]);
@@ -76,7 +76,7 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   return <GridWidthContext.Provider value={widths}><div className={`business-grid-view ${className}`}>
     <div ref={root} className={'business-grid'+(singleLine?' grid-single-line':'')} role="region" aria-label={label} data-layout-state={error?'error':ready?'ready':'preparing'} inert={!ready} style={{...style,visibility:ready?'visible':'hidden'}}>
       <AgGridReact<T> theme={businessTheme} {...pageGridGeometry(scale)} defaultColDef={defaults} suppressCellFocus suppressColumnVirtualisation
-        {...options} domLayout={domLayout} context={context} columnDefs={retained} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
+        suppressScrollOnNewData animateRows={false} {...options} domLayout={domLayout} context={context} columnDefs={retained} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
         onGridReady={e=>{widths.attach(e.api);setApi(e.api);onGridReady?.(e);}} onFirstDataRendered={e=>{setRendered(n=>n||1);onFirstDataRendered?.(e);}}/>
     </div>{error&&<p role="alert">{error}<Button onClick={()=>setRetry(n=>n+1)}>重试表格加载</Button></p>}
   </div></GridWidthContext.Provider>;

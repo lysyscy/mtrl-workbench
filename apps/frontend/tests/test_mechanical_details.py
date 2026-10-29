@@ -103,6 +103,64 @@ def test_lost_detail_receipt_can_reread_and_resume_without_another_write(server,
     assert Decimal(saved['rows'][0]['amount'])==value
 
 
+def internal_fields(page,server,api,projects):
+    state=get(api,'/api/m06/workbench')
+    ym=state['months'][-1]
+    project=next(p for p in projects if p['warehouse_name'] in {item['warehouse'] for item in state['projects']})
+    open_page(page,server,'mechanical','机械费');select_project(page,project['disp'],ym)
+    page.get_by_role('button',name='表1 公司汇总',exact=True).click()
+    return project,ym,page.get_by_label(' 内租（租赁公司）',exact=False),page.get_by_label(' 内租（工程公司）',exact=False)
+
+
+def test_internal_blur_and_enter_save_only_their_field_and_keep_later_draft(server,browser_page,api,projects,disposable):
+    page,_=browser_page;project,ym,rental,engineering=internal_fields(page,server,api,projects)
+    expect(page.get_by_role('button',name='取消内租修改',exact=True)).to_have_count(0)
+    expect(page.get_by_role('button',name='确认内租',exact=False)).to_have_count(0)
+    pending=[];writes=[]
+    effective=next(item for item in get(api,'/api/m06/workbench',ym=ym)['effective'] if item['warehouse']==project['warehouse_name'] and item['ym']==ym)
+    rental_value=format(Decimal(effective['values']['mech_1'] or '0')+Decimal('1.25'),'.2f')
+    engineering_value=format(Decimal(effective['values']['mech_0'] or '0')+Decimal('2.50'),'.2f')
+    page.route('**/api/m06/workbench/internal-save',lambda route:pending.append(route))
+    with page.expect_request('**/api/m06/workbench/internal-save'):
+        rental.fill(rental_value);engineering.click()
+    engineering.fill(engineering_value)
+    assert len(pending)==1
+    route=pending.pop();writes.append(route.request.post_data_json)
+    assert writes[0]['values']=={'mech_1':rental_value}
+    response=route.fetch();assert response.ok;route.fulfill(response=response)
+    expect(page.get_by_role('button',name='表2 零租明细',exact=True)).to_be_enabled()
+    expect(engineering).to_have_value(engineering_value)
+    with page.expect_request('**/api/m06/workbench/internal-save'):
+        engineering.press('Enter')
+    assert len(pending)==1
+    route=pending.pop();writes.append(route.request.post_data_json)
+    assert writes[1]['values']=={'mech_0':engineering_value}
+    assert writes[1]['effective_signature']!=writes[0]['effective_signature']
+    response=route.fetch();assert response.ok;route.fulfill(response=response)
+    expect(page.get_by_role('button',name='表2 零租明细',exact=True)).to_be_enabled()
+    saved=next(item for item in get(api,'/api/m06/workbench',ym=ym)['effective'] if item['warehouse']==project['warehouse_name'] and item['ym']==ym)
+    assert saved['values']['mech_1']==rental_value and saved['values']['mech_0']==engineering_value
+
+
+def test_internal_lost_receipt_locks_writes_and_rereads_without_duplicate(server,browser_page,api,projects,disposable):
+    page,_=browser_page;project,ym,rental,engineering=internal_fields(page,server,api,projects)
+    writes=[]
+    def lose_receipt(route):
+        response=route.fetch();assert response.ok;writes.append(route.request.post_data_json);route.abort('failed')
+    page.route('**/api/m06/workbench/internal-save',lose_receipt)
+    rental.fill('121.25');rental.press('Enter')
+    expect(page.get_by_role('alert').filter(has_text='保存结果待核实')).to_be_visible()
+    expect(rental).not_to_be_editable();expect(engineering).not_to_be_editable()
+    page.get_by_role('button',name='重读内租',exact=True).click()
+    resume=page.get_by_role('button',name='已核对，继续',exact=True)
+    expect(resume).to_be_enabled();resume.click()
+    expect(rental).to_be_editable();expect(rental).to_have_value('121.25')
+    rental.focus();rental.press('Enter')
+    assert len(writes)==1
+    saved=next(item for item in get(api,'/api/m06/workbench',ym=ym)['effective'] if item['warehouse']==project['warehouse_name'] and item['ym']==ym)
+    assert saved['values']['mech_1']=='121.25'
+
+
 def test_settings_mouse_close_and_navigation_keep_only_effective_drafts(server,browser_page,api,disposable):
     page,_=browser_page;open_page(page,server,'mechanical','机械费')
     page.get_by_role('button',name='表2 零租明细',exact=True).click()

@@ -7,6 +7,7 @@ import { BusinessModal } from './business-modal';
 import { numberColumnWidth, fixedWidth, textWidth } from './grid';
 import { EllipsisText, TextPreview, completeColumnWidth } from './grid-text';
 import { BusinessGrid } from './business-grid';
+import { randomUUID } from './random-id';
 import { mechanicalMoney as money, detailNet, detailProblems, detailSum, editDetailRow } from './mechanical-api';
 import type { Category, Detail, DetailRow } from './mechanical-api';
 
@@ -80,7 +81,7 @@ export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,wr
         const input=<DetailInput id={field==='device'?'mechanical-device-'+row.id:undefined} aria-label={`${d.name} 第${d.index+1}行 ${label}`} inputMode={numericFields.includes(field)?'decimal':'text'} className={numericFields.includes(field)?'money':''} value={value} disabled={!state.writable} maxLength={4000} onBlur={()=>current.current.save(d.warehouse)} onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();e.currentTarget.blur();}}} change={value=>{const latest=current.current,g=latest.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];latest.change(d.warehouse,rows.map(item=>item.id===row.id?editDetailRow(item,field,value,latest.category):item));}}/>;
         return longFields.includes(field)?<TextPreview text={value}>{input}</TextPreview>:input;
       }})),
-    {colId:'actions',headerName:'操作',pinned:'right',...fixedWidth(80,scale),wrapText:false,autoHeight:false,cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d?null:<Button danger={d.kind==='detail'} size="small" disabled={!current.current.writable} onClick={()=>{const state=current.current,g=state.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];if(d.kind==='group'){const row={id:crypto.randomUUID(),device:'',unit:'台班',amount:'',tax:''};focus.current=row.id;state.change(d.warehouse,[...rows,row]);}else{state.change(d.warehouse,rows.filter(row=>row.id!==d.row!.id));state.save(d.warehouse);}}}>{d.kind==='group'?'增行':'移除'}</Button>},
+    {colId:'actions',headerName:'操作',pinned:'right',...fixedWidth(80,scale),wrapText:false,autoHeight:false,cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d?null:<Button danger={d.kind==='detail'} size="small" disabled={!current.current.writable} onClick={()=>{const state=current.current,g=state.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];if(d.kind==='group'){const row={id:randomUUID(),device:'',unit:'台班',amount:'',tax:''};focus.current=row.id;state.change(d.warehouse,[...rows,row]);}else{state.change(d.warehouse,rows.filter(row=>row.id!==d.row!.id));state.save(d.warehouse);}}}>{d.kind==='group'?'增行':'移除'}</Button>},
   // Numeric bounds update after editing; handlers read the current draft rather than a retained closure.
   ],[category,scale,signature]);
   const count=display.filter(row=>row.kind==='detail').length;

@@ -7,7 +7,7 @@ import { ReadGrid } from './business-grid';
 import { PaymentGrid } from './notice-payment-grid';
 import { numberColumnWidth,fullTextWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
 import { readPaymentContext } from './payment-context';
@@ -15,6 +15,7 @@ import type { PaymentContext } from './payment-context';
 import { PaymentTerms } from './payment-terms';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { randomUUID } from './random-id';
 
 export interface PayOverride { value: string; basis: string }
 const basis = (row: NoticeRow) => `${row.amount_approved}:${row.amount_paid}`;
@@ -62,7 +63,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   const excluded = rows.filter(row => row.is_excluded || row.is_revoked), targets = rows.filter(row => !row.is_excluded && !row.is_revoked);
   const missing = ids.filter(id => !rows.some(row => row.notice_id === id));
   const targetIds = targets.map(row => row.notice_id);
-  const context = useQuery({ queryKey: ['notice-payment-context',targetIds,date], enabled: !blocked && phase === 'edit' && Boolean(query.data) && !missing.length && Boolean(targets.length) && Boolean(date), retry: false, refetchOnWindowFocus: false,
+  const context = useQuery({ queryKey: ['notice-payment-context',targetIds,date], enabled: !blocked && phase === 'edit' && Boolean(query.data) && !missing.length && Boolean(targets.length) && Boolean(date), placeholderData: keepPreviousData, retry: false, refetchOnWindowFocus: false,
     queryFn: ({signal}) => readPaymentContext(targetIds,date,query.data!.methods,signal) });
   if (!blocked && context.isFetchedAfterMount && context.isSuccess && !context.isFetching) {
     for (const item of context.data.rows) defaults.current[item.notice_id] ??= item.default_pay_method;
@@ -110,7 +111,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     const payload = confirmed.current;
     if (!payload || !active.current || currentBlocked.current) return;
     setPhase('sending');
-    requestId.current ||= crypto.randomUUID();
+    requestId.current ||= randomUUID();
     let saved = false;
     try {
       const value = await requestJson('/api/m03/actions/batch-pay',{method:'POST',...body({...payload,request_id:requestId.current})});
@@ -139,7 +140,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     lock.current=true;
     try { await sendPayment(); } finally { lock.current=false; }
   }
-  const shownContext = phase === 'edit' ? (context.isFetching || context.isError ? undefined : context.data) : checked;
+  const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
   return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
       {message && <p role="status" className="notice-feedback">{message}</p>}
@@ -152,7 +153,6 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
         {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
       ]}/> : <PaymentGrid rows={targets} due={row=>paymentValue(row,overrides)} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??[]} normalize={amount} warningIds={shownContext?.rows.filter(item=>item.term_warning).map(item=>item.notice_id)??[]} />}
       {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
-      {editable && context.isFetching && <p role="status">正在核对合同账期…</p>}
       {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
       {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
       {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} project={id => rows.find(row => row.notice_id === id)?.project_display || '—'} amount={id => { const row = rows.find(row => row.notice_id === id); return row ? amount(draft(row).amount) : null; }} />}

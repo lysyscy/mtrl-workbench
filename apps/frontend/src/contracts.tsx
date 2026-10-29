@@ -16,6 +16,7 @@ import { pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme }
 import { manualGridColumns } from './grid-manual-widths';
 import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
+import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
 import { contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
@@ -72,7 +73,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const [subtables,changeSubtables]=useState<SubtableWorkspace>({}),[sort,setSort]=useState('');
   const query=useQuery({queryKey:['contracts'],enabled:!blocked&&active,refetchOnMount:'always',queryFn:async({signal})=>readContracts(await requestJson('/api/m11/list',{signal}))});
   const projects=useQuery({queryKey:['projects','all'],enabled:!blocked&&active,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
-  const rows=query.data?.rows??[], projectRows=projects.data??[];
+  const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
+  const projectRows=useMemo(()=>projects.data??[],[projects.data]);
   const needle=searchKey(search);
   const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||row.arch===filters.arch)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
     projectRows.find(p=>p.warehouse_name===row.project_key)?.disp??'',
@@ -181,7 +183,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   // Keep the reset action on the material header, clear of complete identifiers.
   const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);
   const resetColumn=useGridWidthColumns(resetColumns)[0];
-  const widthColumns=useMemo(()=>columns.map(c=>c.field==='material'&&resetColumn?resetColumn:c),[columns,resetColumn]);
+  const decoratedColumns=useMemo(()=>columns.map(c=>c.field==='material'&&resetColumn?resetColumn:c),[columns,resetColumn]);
+  const widthColumns=useRetainedGridColumns(decoratedColumns,root,widths.layoutKey);
   const subBusy=Object.values(subtables).some(s=>s.busy), subUncertain=Object.values(subtables).some(s=>s.uncertain), subDirty=Object.values(subtables).some(hasSubtableDrafts);
   const exportUnavailable=blocked||!active?'当前页面暂不可操作。':!me?'请先登录。':busy||subBusy?'合同正在保存，请稍候。':uncertain||subUncertain?'合同操作结果待核实，请先重读。':subDirty?'合同子表有未保存输入，请先处理。':query.isPending||query.isFetching||projects.isPending||projects.isFetching?'正在读取合同及项目，请稍候。':query.isError||projects.isError?'合同或项目读取失败，请先重读。':Object.keys(inlineDrafts).length?'请先保存收发登记输入。':Object.keys(editors).length||tool||subtable||remarkEditor?'请先处理并关闭合同窗口。':'';
   function exportIds(){if(!grid.current)throw new Error('合同列表尚未准备好，请稍候。');const ids:number[]=[];grid.current.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});return ids;}

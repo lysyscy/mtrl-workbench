@@ -9,8 +9,9 @@ import type { TextGridColumn } from './grid-layout';
 export function initialLayoutColumns<T>(definitions: (ColDef<T> | ColGroupDef<T>)[]): (ColDef<T> | ColGroupDef<T>)[] {
   return definitions.map(definition => {
     if ('children' in definition) return {...definition, children: initialLayoutColumns(definition.children)};
-    const {width, autoHeight: _autoHeight, autoHeaderHeight: _autoHeaderHeight, ...rest} = definition;
+    const {width, flex, autoHeight: _autoHeight, autoHeaderHeight: _autoHeaderHeight, ...rest} = definition;
     return {...rest, ...(width === undefined ? {} : {initialWidth: width}),
+      ...(flex === undefined ? {} : {initialFlex:flex??0}),
       suppressAutoSize: rest.suppressAutoSize ?? Boolean(rest.wrapText || rest.cellRenderer || rest.cellRendererSelector)};
   });
 }
