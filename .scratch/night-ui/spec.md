@@ -1,116 +1,88 @@
-# 夜间前端优化：执行与验收记录
+# 夜间前端优化：验收记录
 
-本文件是本轮工作唯一任务记录。检查点 `NUI-20261029-02`，2026-10-28 22:43 UTC。任务继续中，尚未完成早上验收。
+本文件是本轮唯一任务记录。产品实现、目标回归、最终集成核对与资源收尾已完成，8065保持最终版本供验收；北京时间2026-10-29 09:00的人类验收尚未发生。历史检查点按Git追溯，原始证据保留失败与负面样本。
 
-## 目标、基线与授权
+## 当前成果与入口
 
-用户要求使用已安装 Impeccable 全面优化密集业务工作台，截止北京时间 2026-10-29 09:00（UTC01:00）。保持今日功能和审美、金额/保存/撤销/选择/搜索/打印语义，以有证据的收益分批推进。
+- 工作树：`D:/UserData/Documents/Codex/2026-10-29/task/mtrl-workbench`；分支 `codex/night-ui-20261029`。
+- 产品提交：`bd0ff843ab2835621ed4485fc26fcca85e2982d8`；最终构建 `work/build-19`。后续仅文档提交，产品源另有指纹核对。
+- 验收入口：http://127.0.0.1:8065/preview 。账号 `preview-admin`，空密码；最终恢复默认主题、1.12字号。
+- PID `13516`，schema `frontend_rewrite_397_a3331e16b0484b6daefed4bdfe83eb6f`，数据库 `mtrl_workbench_test`，可丢弃真实副本，i8关闭。
+- 产品摘要 `20fb586438cd485cb3f770755b1cfd5c480789c57cb861495d7495d68c4a2335`。实际进程、版本、源与构建哈希经 `registered_preview()` 核对；运行事实归 `reports/real_owner.json`，固定快照 `owner-build19.json`、`version-build19.json`。
+- 证据根 `.artifacts/active/night-ui/20261029-01/`；下文reports、logs、screenshots均相对此根。
 
-- 主库最新交接基线：`54b8a21bab43cfd8fc7dc75ea2525c5c3846b320`，`D:/dev/mtrl-workbench`，master。用户原有 `.tmp-fees-width.py`、`debug.log` 不处理。
-- 本轮原生 Git worktree：`D:/UserData/Documents/Codex/2026-10-29/task/mtrl-workbench`，分支 `codex/night-ui-20261029`。托管创建接口不支持 durable，使用获批原生 worktree，未重复 clone。
-- 父任务 `01a172cb-a3c9-7230-8b62-ffe44fed30cc`；本执行任务 `01a1834f-00fc-73c1-ab3c-5fb593266025`。
-- 只在隔离预览及测试副本验证，允许本地提交。禁止正式8000切换、真实业务写入、i8登录/抓取、物理打印、正式迁移、推送/合并/部署。不得覆盖其他任务未提交成果或改锁/伪造owner。
-- 采用项目 `docs/guides/frontend-design.md`、预览和验证指南；已读 Impeccable4.8.0、frontend-design，按真实 audit/operate/adapt/harden/clarify/optimize 等参考工作流使用。context仅跑一次；最后一次人工 detector 尚待最终 UI 修改完成后执行。
+## 目标、协调与授权
 
-## 8065交接和当前可查看版本
+用户要求用已安装Impeccable全面优化密集业务工作台，增加性能重点，保持今日功能和金额/保存/撤销/选择/搜索/打印语义。使用Impeccable4.8.0及frontend-design，按真实audit、operate、adapt、harden、clarify、optimize参考推进；context仅跑一次，未重装或改启用项。
 
-原任务 **梳理机械费工作台改进方案**，ID `01a182d3-54ae-75a1-b2f6-a44a32838fa2`，确认主库54b8、无后续源码/索引改动。通过官方线程接口发送协调要求、读取其实际回执，交接已发生。
+主库 `D:/dev/mtrl-workbench` 产品基线 `54b8a21bab43cfd8fc7dc75ea2525c5c3846b320`。原任务 **梳理机械费工作台改进方案**（`01a182d3-54ae-75a1-b2f6-a44a32838fa2`）通过支持接口完成交涉，原任务自己用CLI停止PID8224、释放8065及旧schema，本任务才接手。其最新主线1255a7cd对54b8仅有交接证据文档差异，无新增产品；机械修改在核最新成果后实施，未覆盖脏改动。证据 `reports/preview-handoff.json`。
 
-用户21:21 UTC明确“允许使用8065”后，先只读查看原版。原任务以自身正常CLI停止PID8224，exit0；本任务独立核旧进程退出、端口释放及旧测试schema删除，再按正常唯一预览流程启动本轮。未强杀、未篡改锁、未另开端口。证据 `reports/preview-handoff.json`。
+用户21:21 UTC明确“允许使用8065”；此前缺授权拒绝已解决。曾拒绝的file:诊断未执行，未换端口/协议、改锁/owner绕过。拒绝原文在 `reports/access-blockers.json`，不是当前阻塞。父任务 `01a172cb-a3c9-7230-8b62-ffe44fed30cc`，执行任务 `01a1834f-00fc-73c1-ab3c-5fb593266025`。
 
-- 地址：`http://127.0.0.1:8065/preview`，账号 `preview-admin`，空密码；`preview-user` 为大字号深色预设。
-- 当前 **work/build-09**，PID **31092**，schema `frontend_rewrite_397_d1c544124cfa4e46aadca75004dbe4a9`，数据库 `mtrl_workbench_test`，revision `mechauto261028`，disposable=true，synthetic=false，i8=false。
-- owner：本run `reports/real_owner.json`。`registered_preview()` 核对进程、HTTP版本、源码/静态资源散列与HTML。构建时Git为052c371加本批未提交源码，owner如实保留该元数据；提交后用产品散列核对当前HEAD，不手工改owner。
-- 正常生命周期：`backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop`；重新启动使用 `--source-env D:/dev/mtrl-workbench/.env --run .artifacts/active/night-ui/20261029-01 --copy-source --disposable --port 8065`，隐藏后台进程。后续保留当前预览供接续和验收，失去用途时才正常停止。
-- 历史8065未获交接拒绝已被新授权解决。历史file协议拒绝未绕过；本轮不再依赖它。原文与执行边界保存在 `reports/access-blockers.json`。当前无审批/访问阻塞。
+只做隔离验收、本地提交；未推送/合并/部署或改8000。正式 `mtrl_workbench.public` 仅由既有复制流程必要读取，未写真实业务；未登录/抓取i8或物理打印。本次限制优先于一般自动推送规则。
 
-## 已实现
+## 已完成批次
 
-前两批本地提交 `977de0fe`、`0a38c8b3`，文档检查点 `052c3715`：共享弹窗容器允许子浮层、正文自己滚动；统一弃稿确认实际选择器；日期单字段浮层随字号缩放及视口限高；项目编辑取消不合理最小宽；通知抓取/关联长结果限高和局部sticky；大表来源/历史提示至少12px；规则/用户/项目弹窗内边距和工具栏换行；列宽恢复图标统一SVG；预览标签限preview路径；未知路由友好返回；首页容器约束。无接口/保存业务改写。
+| 提交 | 结果 |
+|---|---|
+| `977de0fe` | 共享弹窗外壳不截正文，正文独立滚动；期间面板按字号缩放；项目选择区可收缩。 |
+| `0a38c8b3` | 通知书长结果与列表有界、操作区可达；标签/来源/历史字号；大表、规则、用户工具、首页密度；恢复列宽统一SVG；预览与未知路由反馈。 |
+| `052c3715` | 当时离线检查点，当前状态由本文件取代。 |
+| `1e6abaf5` | 项目页lazy减少首页提前加载；金额测宽计入内边距；表格发布后核实际列宽、处理滚动条导致的变化再规划；列跨度宽度索引查找；库存数值去重测宽、原生文本替代逐格React文本组件。保换行及手工列宽策略。 |
+| `c1de491c` | 机械车牌规则/显示项目真实草稿保护；有效值比较避免误报；取消/关闭/切页保留；未知、过期、不匹配回执不清稿不重复写；明确重读仅认可匹配当前输入的结果。 |
+| `4d78238f` | 按页React错误边界保导航/其他保活页，显式重载消费既有保护；期间Popover用AntD原生bottom移位；通知书名称按真实renderer测行高；过程合计标签可与完整金额分行。 |
+| `c532c4b5` | 库存列筛选用React useDeferredValue优先反馈输入，明确筛选状态；旧结果暂禁调整；操作状态仅在已提交layout effect发布。无固定延时、新请求、缓存层、依赖或业务计算变化。 |
+| `bd0ff843` | 修复最大字号缩回后自动列宽残留。等AG Grid加载新列定义后复用原生列状态恢复与测宽，再应用已存手工宽度；保排序、列序、显示/固定、筛选和勾选，不把API改宽记成拖拽。 |
 
-本批 build-09，随本检查点本地提交：
+机械明细自动保存、队列、金额、零值、未知和撤销链保持原任务成果，未重写工作事项抓取/录入。显示项目比较有效勾选顺序；未选项目移位、往返勾选、规则空白/重复词不误报弃稿。后台读取不重置草稿基线，暂停弹层仍参加全局刷新保护。独立只读审查发现的恢复入口、回执、暂停保护、并发render ref问题均已修正。
 
-1. 修复月度会大表序号过窄和金额最小宽漏算共享内边距/边框，避免完整金额尾数被裁切。
-2. 共享行高规划在发布行数据后复核实际显示列宽；滚动条使flex列变窄时废弃旧stamp并重排。实测库存长说明需97.22px而旧行高74px，已修复。单列宽查找改用已有Map，跨列仍保留原语义。独立代码复核建议清空旧prepared，已纳入。
-3. 项目页沿既有模块级React.lazy/Suspense模式加载，首页不再提前加载AG Grid及业务表格。
-4. 库存金额列先去重原始值再格式化/测宽；纯文本采用AG原生单元格，删除无用React壳组件。明确保留标识列原自动列宽策略，防止原生文本迁移引入22px横向滚动；原长文换行、虚拟化和手动列宽仍保留。
-5. 扩展既有库存滚动回归，检查实际原生文本的横纵向溢出。无新增框架或依赖。
+## 覆盖与实际验证
 
-外观弹窗原生dialog/Tab方案和新增键盘测试已完整撤回，未计成果。机械三文件至本检查点尚未编辑；已有最小修复建议，后续在已完成交接基线上实施，不改今日自动保存、零值、未知回执和清空最后金额语义。
+15页：首页、项目、i8、通知书、欠款、流水、合同、过程、结存、大表、库存、费用、机械、规则、用户。检查导航/保活、金额与长文、滚动、字号、加载/空态/错误和弹层；不声称穷举全部业务状态或35类弹层组合。
 
-## 覆盖地图与真实验证
+最终build19三组代表条件共45/45内容完整，页面水平溢出0、所测单元格裁切0。三组为1280×800/1.12默认、1024×768/1.4默认、800×650/1.4深色+reduced-motion。必要表格内部横滚保留，原探针对此仍标overflow，不能称45样本均strict ready。证据 `reports/responsive-build19.json`，全部稳定前快照亦保留。最终1920×1080/1.12桌面15/15 strict ready，`reports/layout-build19-1920.json`。
 
-| 页面/区域 | 常规1920×1080、1.12字号 | 已执行交互/待深化 |
-|---|---|---|
-| 首页 | build09 ready | 真实摘要/失败重试；首载三轮性能 |
-| 项目档案 | ready | 行内写入回读、未知结果回执 |
-| i8接入层 | ready | 状态只读；未登录/抓取 |
-| 付款通知书 | ready | 长结果样式已改，复杂长结果仍待代表性实测 |
-| 欠款台账 | ready | 主表；展开及大字号组合待验 |
-| 付款流水 | ready | 主表；详情组合待验 |
-| 集采台账 | ready | 弃稿保护/关闭继续编辑既有目标回归 |
-| 过程资料 | ready | 主表；弹层组合待验 |
-| 收发结存与提取 | ready | 主表；弹层组合待验 |
-| 月度会大表 | ready | 金额/序号修复，保存不改 |
-| 库存单据与调整单 | ready | 3项回归：本地筛选、调整写读/撤销、滚动/锚点/列宽；18287行性能 |
-| 特殊费用 | ready | 主表；细节组合待验 |
-| 机械费 | ready | 实际复现车牌规则取消即丢稿；尚待修复 |
-| 规则配置 | ready | CRUD回归；新版弹窗截图及取消关闭 |
-| 用户管理 | ready | 用户与外观持久化回归 |
-| 共享外观/历史/弃稿/列宽 | 部分交互通过 | 小窗口、1.4字号、深浅色、reduced-motion代表性组合待验 |
+最终IAB实际重载build19，登录测试账号，付款流水页1.12→1.4→1.12后返回保活通知书；日期列112px、编码160.156px，内部横滚available=total=1722，手工新增按钮恢复可用。`reports/cua-final19.json`与稳定截图 `screenshots/build19-notices-cua.png`。浏览器已恢复默认1280×720视口、默认主题1.12、停在首页并标记交付；未留强制测试视口。
 
-- build00为未修改前基线；04初次15页为13ready、2overflow，不能当当前失败。05大表修复后ready；07及**09最新15/15 ready**，报告 `reports/layout-build09-1920.json`。
-- 首批15个浏览器节点真实执行全部通过：14pass，1项因系统pytest临时目录ACL在测试体前报错，改用本run新basetemp单独重跑export后1pass。证据 `reports/browser-targets-01.json`、`logs/browser-targets-01.log`、`browser-export-02.log`。
-- **build09最新10项目标浏览器回归全部通过（107.86s，exit0）**：库存3、列宽4、preview真实读取/行内写入未知结果/读取失败重试及过期3；`logs/browser-regression-03.log`。其中列宽4与前批重复，不声称25个唯一测试。
-- Node既有单测11/11pass。build09 typecheck/build退出0；AG Grid大块警告仍存在。源码双轴审查仅覆盖54b8..0a38，均0明确发现；本批另作目标复核，未冒称全批双轴完成。
-- 8主题184组静态配色对比均>=4.5:1，只是token证据，不是DOM主题矩阵。
-- 新版截图：`screenshots/build09-rule-dialog.jpg`，实际1920×1080/1.12，弹窗537.59×416.64、带内边距、取消正常。基线 `baseline-rule-dialog.jpg`，前批 `build04-rule-dialog.jpg`。
-- 未把测试收集当执行、其他版本当本分支、抽样当穷举。未增加键盘专项。
+build17此前桌面15/15 strict ready；小窗口矩阵首次43/45，付款流水两项在字号变化后短暂再准备。真实UI确认busy解除；定向复核两项均通过，分别记录pending→overflow、无裁切，非产品修复。`reports/responsive-build17.json` 与 `flow-responsive-build17-followup.json`。最终采样器在有限次数内等稳定，完整45样本且无错误才判通过，不丢弃原始未通过记录。
 
-## Hindsight口径核实
+build14在800×650/1.4/深色/reduced-motion额外12类弹层实际打开/鼠标取消通过：手工项目、通知抓取配置、自动关联合同配置、欠款汇总/月报导出、过程导出、结存导出、库存抓取及原生月份浮层、库存调整、机械i6历史、用户新增、规则新增。未触发外部抓取或业务写入。`reports/dialog-coverage-build-14.json` 和 `screenshots/build-14-800-dialog-*.jpg`。显示项目、关键词、期间、规则另随响应式矩阵核对；实际减弱动画为none/0s，正文与取消可达。
 
-正常recall只读，未改记忆。项目bank `project-3379fef93fbada35`；doc `mtrl-workbench-mouse-first-interaction-20261027`；来源线程 `01a17c2a-1c9e-72f0-b414-4eef7a72dbaf`，正式规则在 `docs/guides/frontend-design.md#操作方式（用户2026-10-27确认）`。
+| 实际版本/目标 | 真实执行 |
+|---|---|
+| build04，初始15个不同浏览器目标 | 14pass；1个在测试体前因pytest临时目录ACL出错，使用本run basetemp仅重跑export后1pass。`browser-targets-01.log`、`browser-export-02.log`，目标清单 `reports/browser-targets-01.json`。 |
+| build09，库存3/列宽4/preview3 | 10passed/107.86s，`browser-regression-03.log`。部分列宽与前批重复，不累加成25个独立节点。 |
+| build11，机械/摘要/资源失败 | 机械摘要8pass；lazy2仅因探针选错busy包装层失败，改为实际“项目列表”region后仅重跑2pass/12.10s。失败日志保留，产品未为探针修改。`browser-mechanical-02.log`、`browser-loading-03.log`。 |
+| build12，窄布局影响面 | 10passed/80.43s，过程原始/调整合计与表头、通知付款草稿和首次鼠标选值、列宽持久/重置/账号隔离、首次字号。`browser-final-targets-04.log`。 |
+| build13，机械未知回执 | lost/stale/mismatch三项3passed/33.45s，含重读失败与恢复。`browser-settings-05.log`。 |
+| build13，通知关联合同 | 两步选择、丢hint回执读回、关联/解除、长列表选择和页脚2passed/24.60s；本地匹配，无i8。`browser-association-06.log`。 |
+| build16，最终库存产品源 | 3passed/63.77s：连续改词最终结果及零HTTP重读；调整保存读回撤销；长表范围、切页锚点、手工列宽。`browser-inventory-07.log`。build17产品源/构建文件等价，提交元数据变化有版本证据。 |
+| build18，字号/列宽 | 4个原目标通过；新增字号目标起初因1px阈值失败，实测差160.156→159.031px，手工147→147px；修正为2px自动测宽容差并补保活切页，单独重跑1passed/15.92s。旧版真实残留198.797px的失败保留。`browser-widths-08.log`、`browser-scale-before.log`、`browser-scale-diagnostic.log`、`browser-scale-after.log`。 |
 
-- fact `e63fd1f7-fe2d-4598-8cb7-c799657e0dba`：鼠标操作＋普通文本输入。
-- fact `ea2f35b1-2769-4048-b412-46317b49c04c`：退役自写全局undo/redo快捷键、Tab跨格/跨行、方向键选择和专用键盘焦点模式及其专项验收。
-- fact `818945eb-286c-4ddf-a7e0-da802e556c88`：保留IME、基本输入确认/取消、普通选取/复制/粘贴、组件/浏览器默认行为、离格保存及草稿/异步回执/输入位置/撤销重做按钮业务保护。
+日志位于logs。早期现有Node单测11/11pass。最终构建/类型检查和正常产品提交钩子通过；build19日志 `build19-build.log`、`build19-typecheck.log`。Impeccable全src扫描exit0/[]，后续机械文案、库存、列宽分别目标扫描exit0/[]；这是源码检测，不是完整浏览器可访问性认证。8套主题184对静态文本token对比≥4.5:1，仅静态证据。独立重点源码复核与实际回归分开，未冒称最终全量双轴重审；最后原生列状态复核归 `reports/scale-width-review.json`。
 
-用户本次21:50 UTC再次明确性能优先、取消Tab专项。证据 `reports/memory-scope-check.json`，不把例外继续列入待验。
+build12的1280×800项目页曾一次首入行高裁切，随后3个新context、3次实际字号1→1.12切换及build14最终矩阵未复现。原因未确认，未添加猜测修复。保留 `reports/responsive-build12.json`、`project-geometry-build12.json`、`project-scale-transition-build12.json`。
 
-## 性能：同条件测量和成熟来源
+资源失败实测：原项目JS失败导致root/nav清空；改后保加载等待、错误反馈、导航和其他机械草稿。显式重载先被既有草稿保护阻止，明确放弃后才重载成功。
 
-报告 `reports/performance-comparison.json` 统一原始数据、口径和限制。正常Chrome156，无CPU/网络限速，预览真实副本，仅读取交互。不是现场INP、Lighthouse TBT、React渲染次数或冻结数据库基准。
+## 性能与来源
 
-- 首页3个全新context，1920×1080/字号1：build06→07，JS传输 **533236→232653字节，减少56.37%**，三次一致。ready中位890.89→734.8ms，但after首轮1096.5ms更慢；首次进入项目1024→1388ms承担延迟网格成本。37字体文件约967892字节未改，不能声称全站均加速。
-- 库存18287行，同数据副本散列完全匹配，代码/字体热缓存，字号1.12，3轮筛选和60帧大步滚动：build07→09，恢复全部结果中位1935.83→1943.82ms；输入到帧中位68.8→75.25ms、最差168.8→203.5ms；脚本滚动帧中位50.8→44.5ms、最差85.6→120.1ms。**运行指标有升有降，不宣称输入或整体运行性能改善**。筛选结果数量全验、筛选期间额外HTTP读取0。全时段场景原版和新版都有16px内部横向滚动，不计为无溢出通过。
-- CPU原样采样见 `reports/cpu-cpu-before.json`，规划/DOM几何/文本测宽主要；未有after CPU对比，不补造结论。没有采用自制调度器、deferred filter、缓存层或新依赖。
-- Context7查询官方文档：React模块级lazy/Suspense https://react.dev/reference/react/lazy （GitHub reactjs/react.dev/src/content/reference/react/lazy.md）；AG公共稳定引用 https://www.ag-grid.com/react-data-grid/react-hooks/ ；纯文本免自定义renderer https://www.ag-grid.com/react-data-grid/scrolling-performance/ 。只读参考，不执行外部脚本。
+统一派生汇总 `reports/performance-comparison.json`，逐样本原始JSON同留。本机Chromium156，无CPU/网络节流；真实副本只读交互，非冻结DB基准、现场INP、Lighthouse TBT或React渲染次数。复制的tables/omitted/sequences/ledger指纹一致，正负样本均保留。
 
-## 接续：按实际收益优先
+- 首页JS：build06为533236压缩响应体字节，最终build19为233014，减少56.30%。各3个新context、1920×1080、字号1；ready原样本[890.89,854.15,898.84]ms，最终[845.09,1192.54,906.49]ms，中位890.89→906.49ms，不能称整体首屏变快。最终长任务[69,76,74]ms也未改善；37个字体文件967892字节未改。首次项目1332.91ms对旧1024ms有lazy延后成本，温热切页另在原始JSON记录。`reports/performance-final19-route-load.json`。build14/17中间样本均保留，没有挑最快的一组作为最终结论。
+- 库存结构调整build07→09：18287行/1.12，恢复全部行中位1935.83→1943.82ms，输入到rAF中位68.8→75.25ms；滚动帧中位50.8→44.5ms，最大85.6→120.1ms。结构简化没有整体提速结论。
+- 最后一批build14→16：同浏览器/1920×1080/1.12/18287行、三轮温热筛选。输入事件到下一rAF中位68.95→24.10ms，最大161.4→65.9ms；恢复全部行中位1782.06→1925.03ms；滚动帧中位37.10→39.55ms、最大111.3→85.8ms。保留输入优先，结果准备仍慢；逐词全量核行数、HTTP重读0。首次after误用字号1的原记录保留且排除，匹配1.12后复测。不当成端到端输入延迟或现场INP。
+- 最终build19再按完全相同条件复测：输入到rAF中位24.45ms、最大34.8ms；恢复全部行中位2179.93ms；脚本滚动帧中位50.35ms、最大87.6ms。与前测68.95/161.4ms相比输入反馈改善，但全量准备1782.06→2179.93ms、滚动中位37.10→50.35ms更慢；不能称库存整体提速。逐词行数核对、HTTP重读0、复制指纹一致。原始 `inventory-input-final-build19.json`；较好与较差结果同列，三轮样本不能推导现场性能保证。
+- DOM/表格准备和字体初载仍可后续调查；收尾未引新调度器、缓存系统或盲删字体。
 
-1. 机械草稿问题已有旧/新源码溯源和真实复现，原任务正常交接完成。最小接入现有MechanicalDialog dirty/requestClose/paused协议，优先车牌规则及项目显示选择；核对工作台编辑再按独立风险处理。不得改金额自动保存与异步结果链。
-2. 本分支代表性小窗口、最大1.4字号、深浅主题、reduced-motion实际验收，尤其日期浮层和长结果/弹窗底部操作；遇真实问题再改，避免猜测式宽泛CSS。
-3. 性能继续先量后改；库存当前输入收益不足，不能靠中位选择性宣称完成。字体仍近1MB，但500字重用于当前导航，不能直接删预载而破坏字体就绪。
-4. 留足最终源码检查、目标测试、正常CLI构建、本地提交和最新预览核对。最终UI修改后执行一次Impeccable detector。当前是阶段成果，非整夜任务结束。
+成熟来源：[React lazy](https://react.dev/reference/react/lazy)、[useDeferredValue](https://react.dev/reference/react/useDeferredValue)、[错误边界](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary)、[AG Grid React引用](https://www.ag-grid.com/react-data-grid/react-hooks/)、[AG Grid原生单元格/滚动](https://www.ag-grid.com/react-data-grid/scrolling-performance/)、[AG Grid初始与有状态列定义](https://www.ag-grid.com/javascript-data-grid/column-updating-definitions/)、[部分列状态](https://www.ag-grid.com/javascript-data-grid/column-state/)、[AntD定位FAQ](https://ant.design/components/tooltip/#faq)。Context7及GitHub reactjs/react.dev原文作适配参考；本地AntD6.6.7源码核实shift能力，AG Grid36.2.0源码核实事件顺序。未执行外部脚本。
 
-接续先只读核分支/HEAD、owner实际PID及registered_preview、上轮日志/本文件；不重做原交接、记忆检索或已通过且无变更的测试。保留当前8065预览和测试schema。全部日志/截图/临时脚本归本run，artifact不入Git，不清理前人材料。
+## 鼠标口径、边界与资源退出
 
-## 第四批：机械设置草稿与回执保护
+Hindsight正常只读recall：bank `project-3379fef93fbada35`，doc `mtrl-workbench-mouse-first-interaction-20261027`，来源线程 `01a17c2a-1c9e-72f0-b414-4eef7a72dbaf`；主人 `docs/guides/frontend-design.md#操作方式（用户2026-10-27确认）`。事实ID `e63fd1f7-fe2d-4598-8cb7-c799657e0dba`、`ea2f35b1-2769-4048-b412-46317b49c04c`、`818945eb-286c-4ddf-a7e0-da802e556c88`：鼠标及普通输入优先；不做全局快捷键、Tab跨格/跨行、方向选择、独立键盘模式和专项验收；保IME、普通输入/复制粘贴、组件原生能力及保存/异步回执/撤销保护。用户21:50 UTC再次确认。未写改记忆；`reports/memory-scope-check.json`。
 
-原任务最新主库1255a7cd仅更新其交接文档，产品仍54b8，未覆盖其成果。机械规则与显示项目复用已有dirty/requestClose/paused：取消、关闭和往返切页保草稿；比较有效项目顺序和规范化关键词，未选项目位置/空行/重复词不误报。未知、旧版或内容不匹配的设置回执保留输入、禁重复写，弹窗内可显式重读；只有重读内容与当前输入一致才认可已保存，显示选择也同步。后台读取不重置草稿基线。机械工作台仅新增route inactive暂停接线，未改其事项/抓取流程。明细保存队列、金额计算、零值和最后金额清空链保持。
+未穷举全部弹层状态、主题、浏览器及数据；工作事项/发现录入更多草稿边界只做源码审查，未改造；i8外部动作、真实打印、正式切换不在执行范围。当前无审批阻塞，人类审美和业务验收待09:00。
 
-独立只读审查发现的两项设置边界与一项跨页重载保护均已落实。build11目标执行8pass，2项lazy测试只因测试状态选择器指向包装层失败；改为实际“项目列表”region后2pass，产品未因该测试修正再改。10个唯一节点功能断言通过，失败原始日志保留，不声称一次全绿。日志browser-mechanical-02.log、browser-loading-03.log。
+自有16个旧构建、完成的pytest临时目录和运行脚本已释放，work仅留当前8065所需build19，依赖与工作树保供用户验收。3个必要测量方法源码压缩保留 `reports/measurement-methods.zip`，其余临时脚本释放；失败、原始指标、照片有限保留在本次验收run。生命周期明细 `reports/resource-lifecycle.json`。实际workspace_check在active阶段exit0，scope与other_archives均ok，无错误，`reports/workspace-check-final.json`。run仍active，不虚报closed。验收结束由持有任务用原CLI `frontend_preview.py --stop` 正常停服清schema，再将必要证据有限归档/退出active；不能因回复结束停预览。
 
-补充：未知设置回执后重读仍失败时保持“待核实”，不沿用普通成功写入后的“修改已保存”文案。build13对应lost/stale/mismatch三个目标全部通过（33.45s），包含重读失败、输入保留、禁重复写及再次重读恢复。日志browser-settings-05.log。
-
-## 第五批：资源失败恢复和实测小窗口修正
-
-- 已实测build10项目JS失败使root_children=0、nav_links=0。按React官方错误边界逐页保住壳和其他页面实例；明确重载复用现有草稿/在途保护。项目首入等待、失败提示、恢复及其他页面保留草稿已通过真实静态资源故障测试。来源https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary 。
-- single-entry期间Popover从bottomLeft改为官方支持自动移位的bottom，避免上下均不足时只翻转仍越界。核本机AntD6.6.7 placements源码和官方FAQ https://ant.design/components/tooltip/#faq ，未自造定位器。800×650/1.4的面板从bottom854.53越界改为bottom644.53，鼠标点外关闭正常。
-- 通知书单据名称按实际React渲染器准备行高，移出纯文本捷径；窄窗长名称少一行的裁切已消失。过程表分组合计把标签和完整金额分别作为可换行项，金额本身单行，2px裁切消失；不改数值、合计范围或导出。
-- build12另10项目标回归全部通过（80.43s）：过程原始/调整表完整行合计和表头滚动、通知书付款草稿/鼠标选择、手调列宽重载/窗口/账号与清除保工作状态、字体首帧。日志browser-final-targets-04.log。
-- 45项尺寸/外观采样：1280×800/1.12默认为14/15内容完整，1024×768/1.4默认与800×650/1.4深色reduced-motion各15/15。必要网格横滚单列记录，页面横向溢出均0；项目页一次首入行高异常未假称修复。追加3个新context及3次实际字号切换均未复现；原始响应矩阵与6次探针都保留。最终构建仍需复核，不用重试替代原因。
-- 800×650/1.4深色的项目选择、关键词、期间面板、新增规则均实际可达/取消。外观覆盖面板aria-modal=true、主区inert、正文可滚动；reduced-motion弹窗animation=none、transition=0s，状态反馈仍保留。
-- Impeccable按现有配置扫apps/frontend/src，exit0、JSON=[]，属于源码检测，不等同浏览器全a11y认证。唯一后续改动为设置重读失败文案，目标测试已通过，最终仅复核该文件检测。
-
-当前收敛产品改动，后续完成提交版本的最终桌面与响应式核验、其余代表性弹窗、首页性能复测、资源生命周期和验收记录。不扩大架构或恢复键盘专项。
+原主库.tmp-fees-width.py、主库debug.log和本工作树既有debug.log均未主动编辑、暂存或删除。主库日志SHA保持不变，主库Git仍只有原有两项未跟踪文件。本工作树日志在工具运行期间追加了Chromium GPU shared_image_manager.cc格式诊断，原9900字节前缀SHA仍完全一致，完整文件保留；最初创建者和具体写入进程归属未核定，不冒称整个文件字节未变。初始来源 `reports/protected-debug-provenance.json`，最终快照 `reports/protected-files-final.json`。本分支提交后tracked工作树干净，保留这一已知未跟踪debug.log。
