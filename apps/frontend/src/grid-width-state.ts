@@ -74,13 +74,21 @@ export function bindGridWidths(api: GridApi, options: {
   };
   const reset = () => { shared.widths = {}; save(); publish(true); };
   const receive = (reset: boolean) => { if (reset) resetNative(); else apply(); notify(); };
+  let columnScale = options.scale();
+  const columnsLoaded = () => {
+    const nextScale = options.scale();
+    // Initial widths do not update existing native columns when type shrinks.
+    // Wait for the new definitions, then restore reader state and saved widths.
+    if (nextScale !== columnScale) { columnScale = nextScale; resetNative(); }
+    apply();
+  };
   shared.listeners.add(receive);
   api.addEventListener('columnResized', resized);
-  api.addEventListener('newColumnsLoaded', apply);
+  api.addEventListener('newColumnsLoaded', columnsLoaded);
   apply(); notify();
   return {apply, fit, reset, dispose: () => {
     shared.listeners.delete(receive);
     if (!shared.listeners.size) channels.delete(key);
-    if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', apply); }
+    if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', columnsLoaded); }
   }};
 }

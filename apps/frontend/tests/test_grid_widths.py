@@ -130,3 +130,39 @@ def test_notice_amount_click_keeps_automatic_and_manual_widths(server, browser_p
     expect(draft_pick.locator('input[type=checkbox]')).to_have_count(0)
     page.get_by_role('button', name='取消草稿', exact=True).click()
     expect(draft_pick).to_have_count(0)
+
+
+def test_scale_roundtrip_restores_automatic_widths_and_keeps_reader_state(server, browser_page, disposable):
+    page,_=browser_page
+    open_page(page,server,'notices','付款通知书')
+    grid=page.locator('.notice-grid');expect(grid).to_have_attribute('data-layout-state','ready')
+    me=page.request.get(server+'/api/m15/users').json()['me']
+    original=page.request.get(server+'/api/m15/theme?surface=react').json()
+    start_scale=next(s for s in original['scales'] if s['key']==original['ui_scale'])
+    maximum=next(s for s in original['scales'] if float(s['css'])==1.4)
+    manual=float(resize(page,'.notice-grid','project_display').removesuffix('px'))
+    first=grid.locator('.ag-row:not(.ag-row-pinned) [col-id=pick] input[type=checkbox]:not(:disabled)').first
+    label=first.get_attribute('aria-label');assert label
+    page.get_by_label('通知书搜索',exact=True).fill(label[2:])
+    selected=grid.get_by_label(label,exact=True).first;selected.check()
+    header(page,'.notice-grid','bill_no').get_by_text('单据编码',exact=True).click()
+    expect(grid).to_have_attribute('data-layout-state','ready')
+    automatic=header(page,'.notice-grid','bill_no').bounding_box()['width']
+    def scale_to(item):
+        page.get_by_role('button',name=me['name']+'（管理员）',exact=True).click();page.get_by_role('menuitem',name='外观与字号',exact=True).click()
+        panel=page.get_by_role('dialog',name='外观与字号',exact=True)
+        panel.get_by_role('radio',name=item['label']+'字号',exact=True).click();expect(panel).to_have_attribute('aria-busy','false')
+        panel.get_by_role('button',name='收起外观面板',exact=True).click()
+        expect(grid).to_have_attribute('data-layout-state','ready')
+    try:
+        scale_to(maximum)
+        page.get_by_role('link',name='付款流水',exact=True).click()
+        scale_to(start_scale)
+        page.get_by_role('link',name='付款通知书',exact=True).click();expect(grid).to_have_attribute('data-layout-state','ready')
+        page.wait_for_function('width=>Math.abs(document.querySelector(".notice-grid .ag-header-cell[col-id=bill_no]").getBoundingClientRect().width-width)<2',arg=automatic)
+        assert abs(header(page,'.notice-grid','project_display').bounding_box()['width']-manual)<1
+        expect(page.get_by_label('通知书搜索',exact=True)).to_have_value(label[2:]);expect(selected).to_be_checked()
+        expect(header(page,'.notice-grid','bill_no')).to_have_attribute('aria-sort','ascending')
+    finally:
+        if page.request.get(server+'/api/m15/theme?surface=react').json()['ui_scale']!=original['ui_scale']:
+            scale_to(start_scale)
