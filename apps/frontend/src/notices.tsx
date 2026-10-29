@@ -187,7 +187,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
   }), [scale,moneyWidths,identityWidths,Boolean(draft),selectionColumn]);
-  const columns = useMemo(() => manualGridColumns(baseColumns,scale,{bill_name:64,payee:64}),[baseColumns,scale]);
+  const columns = useMemo(() => manualGridColumns(baseColumns),[baseColumns]);
   const footer = useMemo(() => draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary, [draft,summary]);
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;

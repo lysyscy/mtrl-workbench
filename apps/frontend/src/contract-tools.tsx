@@ -16,7 +16,6 @@ import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { receipt } from './notices-api';
-const manualTextMinimums={name:64,reason:64};
 
 interface ToolProps { me:Identity|null;blocked:boolean;close:()=>void;refresh:()=>Promise<void> }
 export function ContractFetch({me,blocked,close,refresh}:ToolProps) {
@@ -86,7 +85,7 @@ export function ContractSettings({kind,me,blocked,close,refresh}:ToolProps&{kind
   const unavailable=busy||blocked||!me||unknown||query.isPending||query.isError;
   return <BusinessModal open={!blocked} className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title={kind==='party'?'甲方单位分类':'集采项目忽略名单'} titleId="contract-settings-title" closing={closing}>
     <p>{kind==='party'?'分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。':'仅影响以后抓取。停用后项目可再次抓取，已保存的合同不删除。'}</p>
-    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party|Ignored> manualTextMinimums={manualTextMinimums} table={'contract-settings-'+kind} className="contract-settings-table" label={kind==='party'?'甲方单位分类':'集采项目忽略名单'} domLayout="autoHeight" rows={kind==='party'?query.data.parties:query.data.ignored} rowId={row=>'id'in row?String(row.id):row.name} columns={kind==='party'?[
+    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party|Ignored> manualWidths table={'contract-settings-'+kind} className="contract-settings-table" label={kind==='party'?'甲方单位分类':'集采项目忽略名单'} domLayout="autoHeight" rows={kind==='party'?query.data.parties:query.data.ignored} rowId={row=>'id'in row?String(row.id):row.name} columns={kind==='party'?[
       {colId:'name',headerName:'甲方单位',valueGetter:p=>(p.data as Party).name},
       {colId:'count',headerName:'合同数',valueGetter:p=>(p.data as Party).count},
       {colId:'kind',headerName:'分类',cellRenderer:PartyKindCell},

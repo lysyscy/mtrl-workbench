@@ -21,7 +21,7 @@ type BusinessGridProps<T>={
   rowMinimum?: number;
   gridClassName?: string;
   singleLine?: boolean;
-  manualTextMinimums?: Record<string, number>;
+  manualWidths?: boolean;
   measurement?: GridMeasurement<T>;
   grid?: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
 };
@@ -53,7 +53,7 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
 
 // Repeated small views use AG's native row/header auto height; inputs stay business-owned.
 // Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
-export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,manualTextMinimums}:BusinessGridProps<T>) {
+export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,manualWidths=false}:BusinessGridProps<T>) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
   const scale=suppliedScale??(Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1);
@@ -61,8 +61,8 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
   const totalRows=useMemo(()=>totals??[],[totals]);
   const definitions=useMemo(()=>{
     const native=businessColumns(columns,scale,singleLine);
-    return manualTextMinimums ? manualGridColumns(native,scale,manualTextMinimums) : native;
-  },[columns,scale,singleLine,manualTextMinimums]);
+    return manualWidths ? manualGridColumns(native) : native;
+  },[columns,scale,singleLine,manualWidths]);
   const defaults=useMemo(()=>singleLine?{...readColumnDefaults,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false}:readColumnDefaults,[singleLine]);
   const widthColumns=useGridWidthColumns(definitions);
   const retained=useRetainedGridColumns(widthColumns,root);

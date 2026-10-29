@@ -8,7 +8,6 @@ import { ApiError, record, requestFile, requestJson } from './api';
 import { body, money } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
-const manualTextMinimums={project_display:64};
 
 interface Outcome { notice_id: number; bill_no: string; ok: boolean; unverified: boolean; reason: string; download_url: string }
 interface Result { total: number; success: number; failed: number; items: Outcome[]; unprinted_bill_nos: string[] }
@@ -46,7 +45,7 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
   }
   return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="notice-print-title" closing={closing}>
     <p>本批 {rows.length} 条通知书（含搜索隐藏行）。</p>
-    <ReadGrid manualTextMinimums={manualTextMinimums} table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
+    <ReadGrid manualWidths table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
       {field:'bill_no',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no||'—')),wrapText:false,valueFormatter:p=>p.value||'—'},
       {field:'project_display',headerName:'付款项目'},
       {field:'amount_approved',headerName:'审批金额（元）',...numberColumnWidth(rows.map(row=>money(row.amount_approved))),cellClass:'money',valueFormatter:p=>money(p.value)},

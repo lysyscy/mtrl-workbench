@@ -15,7 +15,6 @@ import type { PaymentContext } from './payment-context';
 import { PaymentTerms } from './payment-terms';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
-const manualTextMinimums={remark:64};
 
 export interface PayOverride { value: string; basis: string }
 const basis = (row: NoticeRow) => `${row.amount_approved}:${row.amount_paid}`;
@@ -145,7 +144,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       {message && <p role="status" className="notice-feedback">{message}</p>}
       {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
       {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
-      {phase === 'saved' ? flows.length > 0 && <ReadGrid manualTextMinimums={manualTextMinimums} table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" domLayout="autoHeight" rows={flows} rowId={flow=>flow.flow_no} columns={[
+      {phase === 'saved' ? flows.length > 0 && <ReadGrid manualWidths table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" domLayout="autoHeight" rows={flows} rowId={flow=>flow.flow_no} columns={[
         {colId:'bill',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no)),wrapText:false,valueGetter:p=>rows.find(row=>row.notice_id===p.data!.notice_id)?.bill_no??''},
         {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
         {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},

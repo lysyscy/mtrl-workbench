@@ -161,7 +161,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,shown,picked,projectRows,projects.isPending,completeWidths]);
-  const columns=useMemo(()=>manualGridColumns(baseColumns,scale,{material:96,supplier:64,trade_co:64,remark:64}),[baseColumns,scale]);
+  const columns=useMemo(()=>manualGridColumns(baseColumns),[baseColumns]);
   // Keep the reset action on the material header, clear of complete identifiers.
   const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);
   const resetColumn=useGridWidthColumns(resetColumns)[0];
