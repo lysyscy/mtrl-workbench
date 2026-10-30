@@ -3,7 +3,7 @@
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
-from workspace_paths import output as _run_output, output_dir as _run_dir
+from workspace_paths import output as _run_output, output_dir as _run_dir, finish_run as _finish_run
 from pathlib import Path
 import os, shutil, subprocess, sys, tempfile
 ROOT=Path(__file__).resolve().parents[2]
@@ -33,4 +33,4 @@ def main():
                 print('PASS 正常绿、指定缺陷红：'+label,flush=True)
             finally:p.write_bytes(original)
     return 0
-if __name__=='__main__':sys.exit(main())
+if __name__=='__main__':sys.exit(_finish_run(main()))

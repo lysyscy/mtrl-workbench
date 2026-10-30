@@ -98,7 +98,7 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
         report['returncode'] = code
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-        close_runs()
+        close_runs(success=code == 0)
     if not report_path.exists():
         report_path = ROOT / '.artifacts/archive' / log_path.parents[2].name / log_path.parents[1].name / 'reports/backend-verify.json'
     return code, report_path

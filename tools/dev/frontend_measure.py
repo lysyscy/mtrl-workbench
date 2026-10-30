@@ -14,7 +14,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tools.audit.workspace_paths import output_dir
+from tools.audit.workspace_paths import output_dir, finish_run
 
 PAGES = [('', '首页'), ('projects', '项目档案'), ('i8', 'i8 接入层'),
          ('notices', '付款通知书'), ('ledger', '付款流水与欠款统计'),
@@ -350,7 +350,7 @@ def main(argv=None):
 
 if __name__ == '__main__':
     try:
-        raise SystemExit(main())
+        raise SystemExit(finish_run(main()))
     except Exception as exc:
         print(f'MEASURE FAILED: {type(exc).__name__}: {exc}', file=sys.stderr)
         raise SystemExit(1)

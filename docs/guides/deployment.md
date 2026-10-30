@@ -16,7 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action p
 powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action restart
 ```
 
-publish沿预览运行时的同一输入声明检查已跟踪增删改及实际未跟踪输入，包含根锁文件和构建工具；全部提交后用锁定Corepack/pnpm生成完整`/app/`构建，核源码与文件散列后按提交存到稳定发布目录，再停止原服务、只切换根`.env`的FRONTEND_APP_DIR、启动并核实际索引/公开资源、缺资源404及8000监听进程归属。restart核当前完整资源与前端源码一致后重启；前端输入已变则提示使用publish。两者校验服务注册模板、账号及相关环境覆盖，发布锁只覆盖实际切换与重启；NSSM管道按真实UTF-16解码。`-CheckOnly`执行只读核对，publish还构建核候选，随后释放临时构建；不进入服务操作。报告、日志和失败退出沿workspace_paths，默认运行结束后给出实际归档路径。
+publish沿预览运行时的同一输入声明检查已跟踪增删改及实际未跟踪输入，包含根锁文件和构建工具；全部提交后用锁定Corepack/pnpm生成完整`/app/`构建，核源码与文件散列后按提交存到稳定发布目录，再停止原服务、只切换根`.env`的FRONTEND_APP_DIR、启动并核实际索引/公开资源、缺资源404及8000监听进程归属。restart核当前完整资源与前端源码一致后重启；前端输入已变则提示使用publish。两者校验服务注册模板、账号及相关环境覆盖，发布锁只覆盖实际切换与重启；NSSM管道按真实UTF-16解码。`-CheckOnly`执行只读核对，publish还构建核候选，随后释放临时构建；不进入服务操作。报告、日志和失败退出沿workspace_paths，运行结束后给出实际证据路径；失败现场暂缓删除。
 
 切换或探活失败会返回非零，并尝试恢复上一前端字段和原服务，重新核旧资源；其他配置的并发修改保留，前端字段已被他人改动则明确报告恢复失败，保留现场。私有配置仅在内存保留必要旧值，不复制到证据；在用发布与上一套完整资源按回退用途保留。
 

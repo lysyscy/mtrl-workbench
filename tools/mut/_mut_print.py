@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
-from workspace_paths import output as _run_output, output_dir as _run_dir
+from workspace_paths import output as _run_output, output_dir as _run_dir, finish_run as _finish_run
 import hashlib
 import subprocess
 import sys
@@ -59,4 +59,4 @@ def main() -> int:
     print(f"结论：**{('全绿' if bad == 0 else f'有 {bad} 处不合格')}**（{len(MUTS)} 处变异）")
     return 1 if bad else 0
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(_finish_run(main()))

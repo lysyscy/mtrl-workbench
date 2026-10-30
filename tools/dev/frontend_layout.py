@@ -186,7 +186,7 @@ def main():
         report['error'] = str(exc) if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__
     report['finished_at'] = datetime.now(timezone.utc).isoformat()
     write_json(report_path, report)
-    close_runs()
+    close_runs(success=report['ok'])
     if not report_path.exists():
         report_path = ROOT / '.artifacts/archive' / report_path.relative_to(ROOT / '.artifacts/active')
     print(json.dumps({'ok': report['ok'], 'pages': len(report['pages']), 'report': str(report_path)}, ensure_ascii=False))

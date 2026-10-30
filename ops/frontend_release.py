@@ -448,7 +448,7 @@ def elevate(arguments):
 
 
 def outcome(code, run, **details):
-    close_runs()
+    close_runs(success=code == 0)
     if not run.exists():
         run = ROOT / '.artifacts/archive' / run.relative_to(ROOT / '.artifacts/active')
     print(json.dumps({**details, 'run': str(run)}, ensure_ascii=False))

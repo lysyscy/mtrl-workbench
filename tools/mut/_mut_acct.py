@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
-from workspace_paths import output as _run_output, output_dir as _run_dir
+from workspace_paths import output as _run_output, output_dir as _run_dir, finish_run as _finish_run
 
 import hashlib
 import os
@@ -76,4 +76,4 @@ for name, path, old, new in MUTS:
 final = run_pytest()
 print(f"\n复原后 pytest rc={final} {'✅（全绿）' if final == 0 else '❌（复原后仍有红！）'}")
 print(f"反向灵敏度：{ok}/{len(MUTS)} 变红")
-raise SystemExit(0 if ok == len(MUTS) and final == 0 else 1)
+raise SystemExit(_finish_run(0 if ok == len(MUTS) and final == 0 else 1))

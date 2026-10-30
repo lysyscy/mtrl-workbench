@@ -64,7 +64,7 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_layout.py --previ
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_layout.py --preview-run <本任务run> --route /contracts --route /inventory
 ```
 
-页面从实际侧栏导航枚举，`--route`只选择其中的入口。采集等待页面、数据与当前展开网格就绪，记录视口、字号、列、行数、页面横向溢出、单元格及其内容容器的横竖溢出和实际可见横向条；关闭的details不参与。无可验网格、零可见数据行或明确空结果、页面错误或超时分别记录且返回非零，不能当作布局通过；整数测量1px取整差与0高隐藏横向条区分。失败截图沿frontend_capture带预览身份；JSON绑定采集器散列和实际预览身份，运行前后核相同实例/产品输入。产物按workspace_paths退出，默认结束给出实际归档报告路径。此检查覆盖所选主视图，额外明细、弹窗和交互按本次变化选测。
+页面从实际侧栏导航枚举，`--route`只选择其中的入口。采集等待页面、数据与当前展开网格就绪，记录视口、字号、列、行数、页面横向溢出、单元格及其内容容器的横竖溢出和实际可见横向条；关闭的details不参与。无可验网格、零可见数据行或明确空结果、页面错误或超时分别记录且返回非零，不能当作布局通过；整数测量1px取整差与0高隐藏横向条区分。失败截图沿frontend_capture带预览身份；JSON绑定采集器散列和实际预览身份，运行前后核相同实例/产品输入。产物按workspace_paths退出，结束给出实际证据路径；明确失败的现场暂缓删除。此检查覆盖所选主视图，额外明细、弹窗和交互按本次变化选测。
 
 ## 性能测量
 

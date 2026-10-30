@@ -14,7 +14,7 @@ React 重写已签收，现行业务和界面约束归 requirements 与 frontend
 
 ## 目录与退出
 
-本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；字体及模板按backend/app/resources的运行消费者保留；历史第三方源码由Git追溯。`.scratch/<effort>` 只放活动 Markdown/票；工具输出按 `tools/audit/workspace_paths.py` 生成到 `.artifacts/active/<effort>/<run>/<kind>`，结束释放 work，必要证据有限保留到 `.artifacts/archive`。父运行负责自己创建的 run；手动指定 MTRL_EFFORT/MTRL_RUN_ID 后由操作者核实际消费者和退出去向。接入、专项迁移、复杂运行产物、共享资源退出或分类/保留有具体风险时，从实际 setup 安装运行 workspace_check 的相关范围；已触发检查非零须解决或保留阻塞。无相关产物/变化的简单任务不造 effort/run 或重复治理检查；仍供用户验收的主预览按原任务用途保留，不因回复结束停服。
+本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；字体及模板按backend/app/resources的运行消费者保留；历史第三方源码由Git追溯。`.scratch/<effort>` 只放活动 Markdown/票；默认新工具输出由 `tools/audit/workspace_paths.py` 登记到本机受管区，明确成功后释放 work 并保留30天证据，失败或未结项则保护；实际路径以工具回执为准。显式指定旧运行的现场继续使用 `.artifacts/active/<effort>/<run>/<kind>` 及原退出方式。父运行负责自己创建的 run；手动指定 MTRL_EFFORT/MTRL_RUN_ID 后由操作者核实际消费者和退出去向。接入、专项迁移、复杂运行产物、共享资源退出或分类/保留有具体风险时，从实际 setup 安装运行 workspace_check 的相关范围；已触发检查非零须解决或保留阻塞。无相关产物/变化的简单任务不造 effort/run 或重复治理检查；仍供用户验收的主预览按原任务用途保留，不因回复结束停服。
 
 历史有效独有知识先归现行正文；可达Git提交及原路径足够追溯且无活动用途时，旧正文退出。本项目仍保活动依赖、验收和范围裁决所需最小集合，终态不推定缺票已完成。恢复用可达提交及原路径，核后续修改后只取所需内容。
 

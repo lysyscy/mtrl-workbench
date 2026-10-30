@@ -7,11 +7,23 @@ import os
 from pathlib import Path
 import re
 import shutil
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / 'var/state/verification'
 _owned: dict[Path, Path] = {}
 _owns_run = False
+_managed = {}
+
+
+def _lifecycle():
+    source = Path.home() / '.skills-manager/skills/setup-solo-workflow/scripts/artifact_lifecycle.py'
+    spec = importlib.util.spec_from_file_location('mtrl_artifact_lifecycle', source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    target = Path(os.environ.get('MTRL_LIFECYCLE_ROOT', str(Path.home() / 'AppData/Local/AgentArtifacts/projects/mtrl-workbench')))
+    module.enrolled(target)
+    return module, target
 
 
 def _no_links(path: Path, root: Path) -> None:
@@ -35,6 +47,28 @@ def output_dir(kind: str = 'reports', *, root: Path = ROOT) -> Path:
     for value in (effort, run):
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', value):
             raise ValueError('effort/run 必须是安全的短标识')
+    inherited = os.environ.get('MTRL_LIFECYCLE_OUTPUT')
+    if root == ROOT and (inherited or _owns_run):
+        module, managed_root = _lifecycle()
+        if inherited:
+            base = Path(inherited)
+            expected = managed_root / 'groups' / run / 'files'
+            if base != expected:
+                raise ValueError('继承的生命周期输出身份不符')
+            module.safe(base)
+            _, _, record = module.load(managed_root, run)
+            if record['state'] != 'active' or record['hold']:
+                raise ValueError('输出轮次已结束或暂缓，不能继续写入')
+        else:
+            base = Path(module.register(managed_root, run, effort, '开发工具运行证据；用途结束后复查', 'evidence'))
+            lease = module.lock(managed_root)
+            lease.__enter__()
+            os.environ['MTRL_LIFECYCLE_OUTPUT'] = str(base)
+            _managed[base] = (module, managed_root, run, lease)
+        target = base / kind
+        module.safe(target)
+        target.mkdir(parents=True, exist_ok=True)
+        return target
     base = root / '.artifacts/active' / effort / run
     _no_links(base, root)
     if _owns_run:
@@ -54,9 +88,30 @@ def output(name: str, *, kind: str = 'reports', root: Path = ROOT) -> Path:
     return target
 
 
-def close_runs() -> None:
+def close_runs(*, success: bool = True) -> None:
     """只收本进程创建的轮次；临时 work 释放，实际结果保留最多30天。"""
     import json
+    global _owns_run
+    managed_ids = [entry[2] for entry in _managed.values()]
+    for base, (module, managed_root, run, lease) in list(_managed.items()):
+        module.inventory(base)
+        if success and (base / 'work').exists():
+            shutil.rmtree(base / 'work')
+        # The group is still active when the write lease is released. A concurrent
+        # sweeper cannot delete it before the atomic close/hold below.
+        lease.__exit__(None, None, None)
+        if not success:
+            _, _, record = module.load(managed_root, run)
+            if not record['hold']:
+                module.hold(managed_root, run, '生产者失败或未明确结束；保留现场', '核实运行结果、活动消费者及永久依据后结项')
+        else:
+            # Only the owning producer calls this after its consumers have exited.
+            module.close(managed_root, run)
+        _managed.pop(base)
+    if os.environ.get('MTRL_RUN_ID') in managed_ids:
+        os.environ.pop('MTRL_RUN_ID', None)
+        os.environ.pop('MTRL_LIFECYCLE_OUTPUT', None)
+        _owns_run = False
     for base, root in list(_owned.items()):
         if not base.exists():
             _owned.pop(base)
@@ -89,4 +144,15 @@ def close_runs() -> None:
         _owned.pop(base)
 
 
-atexit.register(close_runs)
+def finish_run(code=0):
+    """Seal an explicitly finished CLI run while preserving its original exit code."""
+    close_runs(success=code in (None, 0))
+    return code
+
+
+def _exit_runs():
+    # Process exit alone is not evidence that a business/verification run finished.
+    close_runs(success=False)
+
+
+atexit.register(_exit_runs)

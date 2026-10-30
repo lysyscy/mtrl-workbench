@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
-from workspace_paths import output as _run_output, output_dir as _run_dir
+from workspace_paths import output as _run_output, output_dir as _run_dir, finish_run as _finish_run
 
 import hashlib
 import os
@@ -107,4 +107,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_finish_run(main()))
