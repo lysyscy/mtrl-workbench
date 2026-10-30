@@ -6,7 +6,8 @@
 
 | 当前动作 | 先读 |
 |---|---|
-| 开发实施、工程验证、提交或开发环境操作 | [项目工作流](docs/agents/workflow.md)，实施开工先读“够用即止” |
+| 开发实施、工程验证、提交或开发环境操作 | [项目工作流](docs/agents/workflow.md)与[贡献指南](CONTRIBUTING.md)；改代码时读[编码规范](CODING_STANDARDS.md) |
+| 代码或文档审查 | [贡献指南](CONTRIBUTING.md)、[编码规范](CODING_STANDARDS.md)及其适用专题；原需求/规格与固定差异范围分别核对 |
 | 开票、领票、改状态或依赖 | [票协议](docs/agents/issue-tracker.md) |
 | 改业务、金额、归属或权限 | [当前需求](docs/requirements.md)中的相应主题 |
 | 改共享结构、写入/撤销或刷新链 | [架构](docs/architecture.md) |

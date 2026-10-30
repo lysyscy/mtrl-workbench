@@ -6,14 +6,14 @@
 
 - 改业务或查字段含义：[当前需求](docs/requirements.md)。
 - 理解结构与跨域关系：[架构](docs/architecture.md)。
-- 开发和核验：[开发指南](docs/guides/development-and-verification.md)；部署、服务身份和配置：[部署指南](docs/guides/deployment.md)；恢复：[数据库备份](docs/guides/database-backup.md)。
+- 开发协作、选测与保存：[贡献指南](CONTRIBUTING.md)；编码约束：[编码规范](CODING_STANDARDS.md)；具体命令和隔离：[开发指南](docs/guides/development-and-verification.md)。部署、服务身份和配置：[部署指南](docs/guides/deployment.md)；恢复：[数据库备份](docs/guides/database-backup.md)。
 - 查在途项目：[当前状态](docs/status.md)。Agent 按 [AGENTS](AGENTS.md) 的动作入口读取。
 
 ## 仓库地图
 
 `backend/app`、`backend/tests`、`backend/alembic` 是现有 Python 组件；运行模板与字体在 `backend/app/resources`。`ops` 放部署/服务/备份与提交钩子，`tools` 放仍有用途的开发工具，`skills` 放业务技能。实际依赖以 `backend/pyproject.toml`、`backend/uv.lock` 为准。
 
-React 组件在 `apps/frontend`，源码、测试、依赖声明与 pnpm 锁由组件持有；隔离构建、启动与清理见[预览指南](docs/guides/frontend-preview.md)。正式前端仍在 `backend/app/web`，本地提交不代表入口切换。
+正式 React 前端源码在 `apps/frontend`，源码、测试、依赖声明与 pnpm 锁由组件持有；隔离构建、启动与清理见[预览指南](docs/guides/frontend-preview.md)，正式服务装配见[架构](docs/architecture.md)。本地提交不代表服务已加载。
 
 `docs` 只保当前知识；`.scratch` 保活动规格和票。已结束且无活动消费者的历史材料通过 Git 读取，例如 `git log --all -- <原路径>`、`git show <提交>:<原路径>`。不复制另一套历史目录。
 
