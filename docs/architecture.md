@@ -4,10 +4,6 @@ FastAPI 承载业务，PostgreSQL 保存事实，NSSM 托管现行单 worker 服
 
 React 已获准采用构建步骤；原无构建/不另用 React 的旧阶段限制已被本次授权取代。业务判定、金额与写入仍归后端，正式切换和旧版退役分别守原授权。
 
-## 分层与装配
-
-工程分层、金额和模型约束见[编码规范](../CODING_STANDARDS.md)。
-
 ## 写入、幂等与恢复
 
 改事务、并发、缓存失效、单格保存或恢复时，读[写入、幂等与恢复](architecture/writes-and-history.md)。其中同时包含与保存相关的 React 数据流和过程资料兼容路径。

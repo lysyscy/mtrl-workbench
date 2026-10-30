@@ -100,6 +100,67 @@ def validate_release(directory):
     return manifest
 
 
+def retire_releases(root, current, previous, *, created):
+    """Called under the publication lock, only after actual service verification.
+
+    A valid build alone is not proof of ownership: only releases copied by a
+    successful publication are enrolled. Unknown/prepared directories stay put.
+    """
+    releases = no_links(Path(root) / 'var/frontend/releases', root)
+    state = no_links(Path(root) / 'var/state/frontend-release/retention.json', root)
+    saved = read_json(state) if state.exists() else {'version': 1, 'releases': {}}
+    if (not isinstance(saved, dict) or saved.get('version') != 1
+            or not isinstance(saved.get('releases'), dict)
+            or any(not re.fullmatch('[0-9a-f]{12}', name)
+                   or not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest)
+                   for name, digest in saved['releases'].items())):
+        raise ValueError('发布保留记录无法确认，保留全部资源')
+    owned = dict(saved['releases'])
+    current = no_links(current, releases)
+    if Path(FrontendPointer.value((Path(root) / '.env').read_bytes())).resolve() != current:
+        raise RuntimeError('前端指针已变化，保留全部资源')
+    # Republishing the same version must not forget its existing rollback build.
+    rollback = str(previous) if previous and previous != current else saved.get('previous_release')
+    keep = {current}
+    if rollback:
+        rollback_path = no_links(rollback, releases)
+        validate_release(rollback_path)
+        keep.add(rollback_path)
+    if created:
+        manifest = validate_release(current)
+        if current.name != manifest['product_commit'][:12] or current.parent != releases:
+            raise ValueError('发布目录格式不符，保留全部资源')
+        owned[current.name] = hashlib.sha256((current / 'release-manifest.json').read_bytes()).hexdigest()
+    saved = {'version': 1, 'releases': owned, 'previous_release': rollback}
+    no_links(state.with_suffix('.json.tmp'), root)
+    write_json(state, saved)
+    result = {'removed': [], 'retained': []}
+    for directory in sorted(releases.iterdir()):
+        reason = 'unknown-ownership'
+        try:
+            resolved = no_links(directory, releases)
+            if resolved in keep:
+                reason = 'current-or-rollback'
+            elif directory.name in owned:
+                manifest = validate_release(directory)
+                digest = hashlib.sha256((directory / 'release-manifest.json').read_bytes()).hexdigest()
+                if manifest['product_commit'][:12] != directory.name or digest != owned[directory.name]:
+                    reason = 'ownership-manifest-changed'
+                elif Path(FrontendPointer.value((Path(root) / '.env').read_bytes())).resolve() != current:
+                    reason = 'frontend-pointer-changed'
+                else:
+                    # validate_release checked every descendant for links and hashes.
+                    shutil.rmtree(resolved)
+                    result['removed'].append(directory.name)
+                    del owned[directory.name]
+                    continue
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError):
+            reason = 'identity-or-cleanup-unconfirmed'
+        result['retained'].append({'name': directory.name, 'reason': reason})
+    write_json(state, saved)
+    return result
+
+
 class FrontendPointer:
     """Only the frontend setting is switched or restored; private values never enter reports."""
     def __init__(self, path):
@@ -307,6 +368,8 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
         checkpoint('service-started')
         report.update(verify_http(get, manifest, wait))
         current = (root / '.env').read_bytes()
+        if FrontendPointer.value(current) != (pointer.selected if candidate else pointer.previous):
+            raise RuntimeError('前端配置在操作中发生变化，已保留当前值')
         if POINTER.sub(b'FRONTEND_APP_DIR=', current) != POINTER.sub(b'FRONTEND_APP_DIR=', pointer.original):
             raise RuntimeError('其他配置在操作中发生变化，已停止验收并保留当前值')
         after = service.validate()
@@ -315,6 +378,13 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
         report['listener'] = service.verify_listener(get=get)
         report.update(status='loaded', service=after, finished_at=datetime.now(timezone.utc).isoformat())
         checkpoint('actual-version-verified')
+        if candidate:
+            try:
+                report['release_cleanup'] = retire_releases(root, new_release, previous, created=created)
+            except Exception as cleanup:
+                # A cleanup problem must not roll back an already verified release.
+                report['release_cleanup'] = {'status': 'retained', 'reason': type(cleanup).__name__}
+            write_json(report_path, report)
         return report
     except BaseException as exc:
         report['error'] = str(exc) if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__

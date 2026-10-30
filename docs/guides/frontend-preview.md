@@ -51,6 +51,8 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --sour
 
 停止仍用统一CLI `--stop`。它按当前owner的真实进程和HTTP身份请求正常退出，不依赖可能已替换的待用version清单；停止后核端口及拥有者状态。用户试用schema和私有状态保留，可丢弃验证schema由创建者清理。需要临时写验证时先停并保留试用实例，验证后恢复原试用入口；试用修改不作为测试重置材料。
 
+服务退出时在唯一预览锁内清除与自身owner路径及进程身份一致的current登记和停止请求，保留停止回执、用户试用数据及私有状态。替换owner（包括复用同一路径的新进程）保持；异常退出遗留或无法核实的历史登记须先核进程与用途。
+
 ## 布局采集
 
 `tools/dev/frontend_layout.py`只附着指定run且与当前登记一致的最新可丢弃真实副本，使用其本地验看账号和新浏览器context。先按本任务授权把临时账号设为目标字号；采集器核实际字号，保留账号设置。

@@ -135,6 +135,66 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.apply(candidate=False)['status'], 'loaded')
         self.assertEqual((self.root / '.env').read_bytes(), self.original)
 
+    def test_successful_publications_retire_only_owned_versions_beyond_rollback(self):
+        unknown = make_release(self.root / 'var/frontend/releases' / ('e' * 12), 'e' * 40, 'prepared by another task')
+        self.apply()
+        for commit in ('c', 'd'):
+            self.candidate = make_release(self.root / '.artifacts/active/operation/run/work' / commit,
+                                          commit * 40, commit)
+            result = self.apply()
+        releases = self.root / 'var/frontend/releases'
+        self.assertEqual(result['release_cleanup']['removed'], ['b' * 12])
+        self.assertFalse((releases / ('b' * 12)).exists())
+        self.assertTrue((releases / ('c' * 12)).is_dir())
+        self.assertTrue((releases / ('d' * 12)).is_dir())
+        self.assertTrue(unknown.is_dir())
+        self.assertTrue(self.old.is_dir())
+        self.assertIn({'name': unknown.name, 'reason': 'unknown-ownership'}, result['release_cleanup']['retained'])
+        # Publishing the current version again still keeps c as the rollback.
+        self.apply()
+        self.assertTrue((releases / ('c' * 12)).is_dir())
+
+    def test_changed_owned_release_and_unknown_records_are_retained(self):
+        self.apply()
+        owned = self.root / 'var/frontend/releases' / ('b' * 12)
+        (owned / 'assets/app.js').write_text('changed after publication', encoding='utf-8')
+        # Move the live selection to a separate complete release, so b is only a
+        # retirement candidate; corrupt current releases still block publication.
+        (self.root / '.env').write_bytes(self.original)
+        self.candidate = make_release(self.root / '.artifacts/active/operation/run/work/c', 'c' * 40, 'c')
+        result = self.apply()
+        self.assertTrue(owned.is_dir())
+        self.assertIn({'name': owned.name, 'reason': 'identity-or-cleanup-unconfirmed'}, result['release_cleanup']['retained'])
+
+    def test_failed_publication_does_not_enroll_or_retire_releases(self):
+        self.apply()
+        state = self.root / 'var/state/frontend-release/retention.json'
+        before = state.read_bytes()
+        self.candidate = make_release(self.root / '.artifacts/active/operation/run/work/c', 'c' * 40, 'c')
+        self.service.fail_starts = 1
+        with self.assertRaisesRegex(RuntimeError, 'startup failure'):
+            self.apply()
+        self.assertEqual(state.read_bytes(), before)
+        self.assertTrue((self.root / 'var/frontend/releases' / ('b' * 12)).is_dir())
+
+    def test_cleanup_failure_does_not_rollback_verified_publication(self):
+        with patch.object(release, 'retire_releases', side_effect=OSError('unavailable state')):
+            result = self.apply()
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['release_cleanup']['status'], 'retained')
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+
+    def test_changed_frontend_pointer_is_rejected_even_when_http_content_matches(self):
+        other = make_release(self.root / 'var/frontend/releases/manual', 'b' * 40, 'new saved release')
+        def change():
+            path = self.root / '.env'
+            path.write_bytes(release.POINTER.sub(b'FRONTEND_APP_DIR=' + other.as_posix().encode(), path.read_bytes()))
+        self.service.start_callback = change
+        with self.assertRaisesRegex(RuntimeError, '前端配置在操作中发生变化'):
+            self.apply()
+        self.assertEqual(release.FrontendPointer.value((self.root / '.env').read_bytes()), other.as_posix())
+        self.assertEqual(runtime.read_json(self.report)['recovery'], 'failed')
+
     def test_canonical_paths_keep_the_release_boundary(self):
         self.assertEqual(release.no_links(self.old, self.root.resolve()), self.old.resolve())
         with self.assertRaisesRegex(ValueError, '路径不属于指定目录'):

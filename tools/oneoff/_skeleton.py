@@ -1,7 +1,6 @@
 """大件的**骨架表**（一次性 · 只读 · 2026-10-02 立 · 出处 = `/retro` 复盘的候选 6）。
 
-**为什么要有它**：本仓有几个"堆场"大件（`backend/tests/test_ux_pages.py` 774 行 ·
-`tools/probe/_shell_smoke.py` 689 行 · `tools/audit/audit_meta.py` 880 行 …）。
+**为什么要有它**：读取大文件前先列出结构，缩小需要阅读的范围。
 想先看清它们**有什么**时，对着整份文件 grep / 整份读都很贵 ——
 实测：一次结构枚举就把工具的输出缓冲撑爆（提示 `Search output exceeded internal buffer limit … results are partial`
 ⇒ 只回了一部分，**而它看起来像"就这些"**）。⇒ 用本件拿一张**骨架表**（行号 ＋ 种类 ＋ 名字 ＋ 首行说明），再看哪几段值得读。

@@ -1,16 +1,12 @@
 # 项目执行绑定
 
-本页只保存本项目的路径、授权、隔离与生命周期。个人方法来自 lysyscy/My-Skills，按宿主真实入口或 Skills Manager 登记定位实际安装资源；维护源发布不代表本机已经安装，读取不授权更新个人包。
+本页只保存个人方法绑定、项目目录与运行例外、共享记忆身份。个人方法来自lysyscy/My-Skills，按宿主真实入口或Skills Manager登记定位实际安装资源；维护源发布不代表本机已经安装，读取不授权更新个人包。
 
 ## 按动作读取个人方法
 
 普通实施与唯一收尾读 implement-solo-spec 的 `references/execution.md`；验证存在资金、权限、写入/恢复等风险时读其 `verification.md`。明确采用跨批统筹时读 `coordination.md`，确有独立收益并获准委派时先读 `delegation.md`。文档维护、选目录、专项迁移分别读 setup-solo-workflow 的 document-maintenance、document-layout、document-migration；写 Agent 消费资料时读实际安装的 writing-for-agents。在途任务按原规格固定业务、验收和授权基线；已批准治理切片的安装来源及采用点归原规格。
 
 重要界面内容取舍、主预览与临时预览的协作方法，按实际安装的同源 implement-solo-spec / `references/human-collaboration.md` 读取。主预览在已有规划的验收点开放；当前入口、实际版本及需用户判断事项留在原任务记录，资源按本项目隔离、归属及生命周期退出。
-
-## 项目协作入口
-
-开发输入、选测和提交权限见[贡献指南](../../CONTRIBUTING.md)；编码约束见[编码规范](../../CODING_STANDARDS.md)。在途任务按原规格固定业务、验收和授权基线。
 
 React 重写已签收，现行业务和界面约束归 requirements 与 frontend-design，原任务材料按 Git 追溯。开发、隔离验证、人工验收、正式切换和旧版退役分别判定；主线状态不能覆盖独立工作树进度。跨任务文档在安全批次边界整合，遇修改/删除冲突先将独有有效知识迁到现行主人，保护双方内容。
 

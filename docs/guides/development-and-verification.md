@@ -1,19 +1,12 @@
-# 开发与验证
+# 隔离验证参考
 
-先核当前任务范围与 [workflow](../agents/workflow.md)，业务预期回 [requirements](../requirements.md)。命令从仓根运行；依赖、Python 版本及 pytest 配置以 backend/pyproject.toml/uv.lock 为准，已有 backend/.venv 可用时不为文档改动重装。
+本页供已选定验证动作时查询隔离、参数及证据边界。普通开发顺序和常用命令由仓根CONTRIBUTING持有；本页不要求再次遍历开发入口。
 
-## 按影响选检查
-
-```text
-backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/backend_verify.py --source-env <明确来源.env> --test <backend内测试文件或节点> -- <pytest选项>
-backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged
-backend/.venv/Scripts/python.exe -X utf8 tools/audit/bytes_guard.py --staged
-backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py
-```
+## 后端隔离验证参数
 
 backend_verify从仓根调用，--test可重复，测试路径相对backend，--之后支持`-q/-v/-x/-k/-m/--maxfail/--tb/--durations/--disable-warnings`和清空默认参数的`-o addopts=`，不能追加收集路径；仅在已核专用测试库创建独占临时schema，升级后运行明确节点，成功或测试失败均退出自有schema。pytest临时目录由入口在本run/work内独立分配，以独立argv参数传入，正常、非零或异常退出均回收；无需经PYTEST_ADDOPTS手工指定。报告分别记录schema与临时目录清理结果。不启动HTTP预览，不停止现有8065，也不复制/改写正式业务数据。pytest从启动起DATABASE_URL就是测试目标，MTRL_TEST_SOURCE_ENV仅供守卫读取明确来源身份；同库、不同目标和错缓存仍拒绝。默认沿workspace_paths归档日志与JSON报告，含源提交/dirty、测试选择、退出码及清理结果，不记录DSN或凭据。
 
-pytest 在 backend 组件运行；选文件/节点前先看 fixture。保留真实原始退出码、失败节点和未验边界，不从票终态推当前环境通过。普通局部改动复用现有定向检查，不自动全量回归/变异。文档验证看业务语义、当前引用、imports/动态读取/配置及接手路径，不再生成旧验收 JSON 或四态报告。`@acc` 在存量业务测试中仍可作历史标识，不是新开发前置。
+pytest 在 backend 组件运行；选文件/节点前先看 fixture，保留原始退出码、失败节点和未验边界。`@acc` 在存量业务测试中仅作历史标识，不再生成旧验收JSON或四态报告。
 
 ## 隔离和写入
 
@@ -33,7 +26,7 @@ React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/
 
 工具用途及边界读 tools/README.md。syntax_audit、bytes_guard 和凭据文件名保护在真实 pre-commit 执行，不能跳钩子。前端源码、配置、单测或依赖变化由.github/workflows/frontend-checks.yml在push/PR运行锁定依赖安装、typecheck和test:unit；纯Markdown变化不触发，检查无需数据库或浏览器。票工具用临时 tracker/票目录验证高水位、依赖和失败回滚，干跑不得写入。audit_work 只提示运行产物生命周期；wiring_audit 的 W2 只是候选线索，不能当成业务缺陷或删除授权。
 
-运行产物由 workspace_paths 分到本轮 .artifacts/active/<effort>/<run>/<kind>，父进程收尾；临时脚本放 work/系统临时目录，证据必要才有限保留。异常日志完整保留原始返回码后再读末尾。Windows 用 python -X utf8、显式文件编码与 subprocess encoding；PS1 保 UTF-8 BOM，其余保原行尾。禁止用跨壳字符串拼接处理删除/移动；按绝对路径、对象范围和原件恢复依据操作。
+运行产物由workspace_paths分到本轮.artifacts/active/<effort>/<run>/<kind>，父进程收尾；临时脚本放work/系统临时目录，证据必要才有限保留。手工指定MTRL_RUN_ID的运行由指定操作者负责退出。异常日志保留原始返回码后按需读取；删除/移动须核绝对路径、链接边界、实际用途及恢复依据，并在同一执行环境内完成。
 
 
 暂存语法/字节审计的`--staged`读取Git stage-0内容，部分暂存以index为准；删除不读工作区、重命名按目标检查，Git读取失败返回非零。无参数仍为全量检查。纯Git输入回归用`backend/.venv/Scripts/python.exe -B -X utf8 -m unittest discover -s backend/tests -p test_staged_audits.py -v`，只创建临时Git仓、不装配应用/数据库。

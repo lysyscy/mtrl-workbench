@@ -22,9 +22,3 @@ for old,new in [("[bal.get(w), *cells]", "cells"), ("m <= '2025-11'", "False")]:
     assert not valid(namespace['extract_template_grid'])
     print('caught:',old)
 print('normal 1/1; mutations 2/2 caught')
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tools/probe'))
-from _shell_pops import anchored
-assert anchored(dict(top=105,triggerBottom=100,panelBottom=200,triggerTop=80))
-assert anchored(dict(top=20,triggerBottom=100,panelBottom=75,triggerTop=80))
-assert not anchored(dict(top=20,triggerBottom=100,panelBottom=60,triggerTop=80))
-print('popup normal below/above 2/2; detached red 1/1')

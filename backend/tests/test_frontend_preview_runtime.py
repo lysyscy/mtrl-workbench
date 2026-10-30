@@ -94,6 +94,39 @@ def test_stop_uses_verified_active_owner_even_with_pending_build(tmp_path,monkey
     assert runtime.read_json(path.parent/'stop-request.json')=={'process':owner['process']}
 
 
+def test_finish_unregisters_only_own_instance_and_preserves_owner_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime, 'state_dir', lambda: tmp_path)
+    path = tmp_path / 'reports/real_owner.json'
+    process = {'pid': 123, 'created': 'original', 'command': 'preview'}
+    owner = {'process': process, 'schema': 'frontend_writable_user', 'preserve_schema_on_stop': True}
+    runtime.write_json(path, owner)
+    runtime.write_json(tmp_path / 'current.json', {'owner_path': str(path), 'process': process})
+    runtime.write_json(path.parent / 'stop-request.json', {'process': process})
+    stopped = {**owner, 'status': 'stopped-schema-preserved'}
+    assert runtime.finish_preview(path, stopped)
+    assert runtime.read_json(path) == stopped
+    assert not (tmp_path / 'current.json').exists()
+    assert not (path.parent / 'stop-request.json').exists()
+
+
+@pytest.mark.parametrize('same_path', [False, True])
+def test_finish_cannot_remove_a_replacement_registration(tmp_path, monkeypatch, same_path):
+    monkeypatch.setattr(runtime, 'state_dir', lambda: tmp_path)
+    path = tmp_path / 'reports/real_owner.json'
+    old = {'process': {'pid': 123, 'created': 'original', 'command': 'preview'}}
+    new = {'process': {'pid': 456, 'created': 'replacement', 'command': 'preview'}}
+    new_path = path if same_path else tmp_path / 'replacement/real_owner.json'
+    runtime.write_json(path, old)
+    runtime.write_json(new_path, new)
+    registration = {'owner_path': str(new_path), 'process': new['process']}
+    runtime.write_json(tmp_path / 'current.json', registration)
+    runtime.write_json(path.parent / 'stop-request.json', {'process': new['process']})
+    runtime.finish_preview(path, {**old, 'status': 'stopped-disposable'})
+    assert runtime.read_json(tmp_path / 'current.json') == registration
+    assert runtime.read_json(new_path) == new
+    assert runtime.read_json(path.parent / 'stop-request.json') == {'process': new['process']}
+
+
 @pytest.mark.parametrize('actual',['12.15.0','11.25.0'])
 def test_build_uses_corepack_and_rejects_wrong_package_manager(tmp_path,monkeypatch,actual):
     root=tmp_path/'带 空格的项目';front=root/'apps/frontend';front.mkdir(parents=True)

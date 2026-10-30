@@ -13,7 +13,7 @@
 - 受影响后端回归111项通过：`.artifacts/archive/backend-verify/233023-447925-33104/reports/backend-verify.json`。
 - 审查修复后的金额清空与导出检查17项通过：`.artifacts/archive/backend-verify/234333-172582-24548/reports/backend-verify.json`。
 - 实际副本浏览器代表3项通过：本轮run的`logs/browser-final.log`；另有丢回执→重读→继续且不重复写入1项通过：`logs/browser-recovery-02.log`。后续仅增加横向滚动条可见性触发的高度重算，实际宽/窄窗口已核。
-- 前端严格类型检查及构建通过，当前构建`work/build-07`；既有单元检查11项通过，见`logs/frontend-unit.log`。
+- 前端严格类型检查及构建通过，当时构建`work/build-07`（预览已退出；2026-10-30清理已释放该历史构建，版本清单仍在原run/reports/version.json）；既有单元检查11项通过，见`logs/frontend-unit.log`。
 - 独立进程技能命令完成只读状态、直接录入、独立回读及重复请求验证，来源哈希未变：`reports/skill-cli.json`。只写自建测试schema，该轮预览已正常退出清理。
 - 实际截图与几何见`reports/visual.json`及其截图：1920×1080、1440×900、字号1.12；项目行约40px，空项目只留一行，窄窗口末行完整。跟进成功色实际为`rgb(32,115,79)`。布局检测器无发现，见`reports/design-layout.json`。
 

@@ -147,7 +147,7 @@ def test_后端的用户可见串里也不许出现工程代号():
     ⚠️ **立判据当场又抓出 9 处**（量法 = `tools/oneoff/_text_ctx9.py --codes`）：`（决策 1 兜底）` ·
        `（决策 2：…）`×2 · `（DEV-P-04）` · `（链路 A）` · `（API-05）`×2 · `（R1）` ·
        以及 `report_export/resources.py` 那句给用户看的 `_RETRY` 里写着的 `docs/reference/template-export.md`
-       ＋ 交付面 / 仓内两条路径（清法 = `tools/oneoff/_tail211_codes.py`）。
+       ＋ 交付面 / 仓内两条路径；对应单次补丁已完成。
     ⚠️ **能证伪**：往任一后端**字符串**里写 `（R99）` ⇒ 本件必红（自证见 `tools/oneoff/_tail209_mark_proof.py` 的 `T5`）。
        ⛔ 写进**注释 / docstring**、或把代号**用反引号包住** ⇒ 不红（那两种都是工程侧记法）。
     """

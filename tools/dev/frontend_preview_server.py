@@ -16,7 +16,7 @@ import sys
 import threading
 
 from tools.dev.frontend_preview_runtime import (ROOT, product_sources, process_identity,
-    read_json, write_json, state_dir, verify_build)
+    read_json, write_json, state_dir, verify_build, finish_preview)
 
 
 def arguments():
@@ -246,7 +246,7 @@ def run(args):
             if stop.exists():
                 stop.unlink()
             write_json(path, owner)
-            write_json(state_dir() / 'current.json', {'owner_path':str(path)})
+            write_json(state_dir() / 'current.json', {'owner_path':str(path), 'process':owner['process']})
             import uvicorn
             server = uvicorn.Server(uvicorn.Config(app, log_level='warning', access_log=False))
             finished = threading.Event()
@@ -263,4 +263,4 @@ def run(args):
                 finished.set()
                 thread.join(timeout=2)
                 owner.update(status='stopped-schema-preserved' if owner['preserve_schema_on_stop'] else 'stopped-disposable', stopped_at=datetime.now(timezone.utc).isoformat())
-                write_json(path, owner)
+                finish_preview(path, owner)

@@ -25,6 +25,28 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def finish_preview(path, owner):
+    """Retire this server's registration while its exclusive lock is still held.
+
+    Preserve a replacement owner, including a restart reusing the same run path.
+    The owner record and user-copy state remain available after unregistering.
+    """
+    path = Path(path)
+    if not owner.get('process') or read_json(path).get('process') != owner['process']:
+        return False
+    write_json(path, owner)
+    pointer = state_dir() / 'current.json'
+    if pointer.exists():
+        registration = read_json(pointer)
+        if (Path(registration['owner_path']).resolve() == path.resolve()
+                and registration.get('process', owner['process']) == owner['process']):
+            pointer.unlink()
+    stop = path.parent / 'stop-request.json'
+    if stop.exists() and read_json(stop).get('process') == owner['process']:
+        stop.unlink()
+    return True
+
+
 def state_dir():
     common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
         cwd=ROOT, capture_output=True, encoding="utf-8", check=True).stdout.strip()

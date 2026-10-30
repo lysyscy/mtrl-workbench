@@ -2,7 +2,22 @@
 
 按本次需求、实际验证和回执完成普通明确改动，不强制规格、票或每日记录。需要跨会话时复用一张票或必要任务说明；有真实依赖的 effort 保共同规格、必要票、累计基点和已确认授权。单票持有进度，[status](docs/status.md) 仅导航活动 effort。接手活动工作先核原规格/票、所在分支、工作树及实际进度。
 
-现行业务回 [requirements](docs/requirements.md)，工程结构回 [architecture](docs/architecture.md)，代码约束回 [CODING_STANDARDS](CODING_STANDARDS.md)，具体命令与隔离回 [开发与验证](docs/guides/development-and-verification.md)。项目方法来源、例外与产物生命周期回 [workflow](docs/agents/workflow.md)；其他动作按 [AGENTS](AGENTS.md) 导航。
+## 普通开发顺序
+
+1. 首次进入或切换执行基线时，核[项目绑定](docs/agents/workflow.md)；相同基线已读则复用。明确本次范围和原有未提交内容，业务预期从[需求入口](docs/requirements.md)选择受影响主题。
+2. 改代码先读[编码规范](CODING_STANDARDS.md)；结构变化才读对应[架构专题](docs/architecture.md)，界面变化读[前端设计](docs/guides/frontend-design.md)。按本次动作到正文，不递归遍历所有链接。
+3. 实施时同步受影响的唯一正文；退役功能连同专属工具、测试、过期说明和派生物一起核退出。历史引用或只验证旧工具自身的测试，不单独构成保留理由；共享后端行为、业务原件和其他任务未提交内容保留。
+4. 按下节风险选择验证。命令从仓根运行；Python版本、依赖和pytest配置以backend/pyproject.toml、uv.lock及pytest.ini为准，复用现有backend/.venv。需要数据库、浏览器或专项工具时，直接读[验证参考](docs/guides/development-and-verification.md)的对应分支。
+5. 核实际结果、相关旧内容和本轮资源的退出去向，再按本文保存。用途不明的先查实际消费者、活动任务与恢复依据；没有核实就明确保留，不按目录名或年龄删除。
+
+常用入口如下；后端命令只在已核专用测试目标运行，不能借正式库：
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/backend_verify.py --source-env <明确来源.env> --test <backend内测试文件或节点> -- <pytest选项>
+backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged
+backend/.venv/Scripts/python.exe -X utf8 tools/audit/bytes_guard.py --staged
+backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py
+```
 
 ## 够用即止：按影响选测
 
@@ -13,7 +28,7 @@
 - 实现细节、源码形状、纯文案/布局及低概率理论边界不默认成为永久回归或交付阻塞；已修 bug 也按当前风险取舍，混合测试只裁多余断言并清无消费者专用夹具。
 - 输入、环境、代码和预期仍覆盖且证据足够就复用；只验受影响范围。必要收尾完成即止，不以全仓复跑、重复计时、多轮审查、四态或全量变异作为默认加码。
 
-未执行、失败、空选择、超时和未知都不报通过。测试目标、资金及写入隔离和实际命令按[开发与验证](docs/guides/development-and-verification.md)执行。
+未执行、失败、空选择、超时和未知都不报通过。文档变动核语义、当前引用、实际工具读取及接手路径；不为此运行应用或业务测试。真实pre-commit检查暂存语法、字节和凭据文件名，前端push/PR检查由现有CI按受影响路径触发。
 
 ## 保存与操作权限
 

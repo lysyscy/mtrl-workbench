@@ -109,7 +109,7 @@ def test_集采未关联合同不可付():
 
     ⚠️ 本测试钉的是**纯函数侧**（`PayRow.block()`）；生产接线（`NoticeRow.category` / `has_link`
        ⇒ `PayRow`）在 `notice_pay_actions.apply_batch_pay` —— 若那里漏传，本测试**照样绿**
-       （`jc_linked` 默认 `False` 的方向是"拦住"）⇒ 界面上另有 `_shell_smoke` 与真机复做兜。
+       （`jc_linked` 默认 `False` 的方向是"拦住"）；本测试不证明浏览器交互。
     """
     # 集采 + 未关联 ⇒ 不可付（即便已批、有额度）
     assert verify_row(PayRow(11, "已批", to_money("100"), CATEGORY_JC, False)) == BLOCK_JC_UNLINKED

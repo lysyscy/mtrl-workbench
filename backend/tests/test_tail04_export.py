@@ -19,8 +19,8 @@
 ⚠️ 两片都走**离线**（不连 i8、不顶号）：库存单据那片喂的是 i8 源文件**字节**
 （优先仓里现成的真机导出件 `artifacts/_diag/inv_2026-09.xlsx`，缺则现造一份）。
 
-真机验证在 `tools/oneoff/_verify_tail04.py`（连库跑 SQL 与成品逐分对账，**第三条独立路径**）与
-`tools/probe/_shell_smoke.py`（第 ⑬ 段，走 HTTP 真下载）。
+独立对账入口为 `tools/oneoff/_verify_tail04.py`（连库跑 SQL 与成品逐分对账）；
+真实执行按当前任务授权。
 """
 
 from __future__ import annotations

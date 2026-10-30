@@ -10,9 +10,7 @@
   ③ ⭐ **值级缺口**：导出列引用的每个键都必须真的出现在**行字典**里 —— `r.get(key)` 拿到空**不报错**
      ⇒ 那是"永远空着一列"的静默病（本仓最贵的一族）。
 
-⚠️ 壳侧那半在 `tests/test_ux_pages.py::001-61`（行为表按 id ＋ 渲染后量宽）与
-  `tests/test_acc_jc_shell.py`（空态跨列由表头派生）；真机那半（渲染出的表头列数 = 1 ＋ 列清单长度）
-  在 `tools/probe/_shell_jcpin.py`（㉝）。
+本文件只验证导出与域内核，浏览器列布局由当前 React 验证入口承担。
 """
 
 from __future__ import annotations

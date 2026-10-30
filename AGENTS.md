@@ -6,14 +6,14 @@
 
 | 当前动作 | 先读 |
 |---|---|
-| 开发实施、工程验证、提交或开发环境操作 | [项目工作流](docs/agents/workflow.md)与[贡献指南](CONTRIBUTING.md)；改代码时读[编码规范](CODING_STANDARDS.md) |
+| 开发实施、工程验证、提交或开发环境操作 | [贡献指南](CONTRIBUTING.md)的开发顺序与选测；改代码时读[编码规范](CODING_STANDARDS.md) |
 | 代码或文档审查 | [贡献指南](CONTRIBUTING.md)、[编码规范](CODING_STANDARDS.md)及其适用专题；原需求/规格与固定差异范围分别核对 |
 | 开票、领票、改状态或依赖 | [票协议](docs/agents/issue-tracker.md) |
 | 改业务、金额、归属或权限 | [当前需求](docs/requirements.md)中的相应主题 |
 | 改共享结构、写入/撤销或刷新链 | [架构](docs/architecture.md) |
 | 改界面与文案 | [前端设计](docs/guides/frontend-design.md) |
 | React 构建、启动、更新、核验或退出预览 | [预览指南](docs/guides/frontend-preview.md)与活动规格；先核在用资源与目标 schema |
-| 运行开发工具、选择检查或排查隔离 | [开发与验证](docs/guides/development-and-verification.md) |
+| 已选定数据库、浏览器或专项检查，查询参数与隔离 | [验证参考](docs/guides/development-and-verification.md)的对应分支 |
 | 配置、启停、部署或服务加载 | [部署](docs/guides/deployment.md)；恢复再读 [备份](docs/guides/database-backup.md) |
 | i8 调用、探测或解析 | [i8 契约](docs/reference/i8-contract.md)与既有封装 |
 | 集采付款方式/账期接口 | [共享契约](docs/reference/jc-payment-contract.md) |
