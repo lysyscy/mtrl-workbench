@@ -6,7 +6,7 @@
 
 - 改业务或查字段含义：[当前需求](docs/requirements.md)。
 - 理解结构与跨域关系：[架构](docs/architecture.md)。
-- 开发协作、选测与保存：[贡献指南](CONTRIBUTING.md)；编码约束：[编码规范](CODING_STANDARDS.md)；具体命令和隔离：[开发指南](docs/guides/development-and-verification.md)。部署、服务身份和配置：[部署指南](docs/guides/deployment.md)；恢复：[数据库备份](docs/guides/database-backup.md)。
+- 开发协作、选测与保存：[贡献指南](CONTRIBUTING.md)；编码约束：[编码规范](CODING_STANDARDS.md)；专项隔离：[验证参考](docs/guides/development-and-verification.md)。部署、服务身份和配置：[部署指南](docs/guides/deployment.md)；恢复：[数据库备份](docs/guides/database-backup.md)。
 - 查在途项目：[当前状态](docs/status.md)。Agent 按 [AGENTS](AGENTS.md) 的动作入口读取。
 
 ## 仓库地图
@@ -17,4 +17,4 @@
 
 `docs` 只保当前知识；`.scratch` 保活动规格和票。已结束且无活动消费者的历史材料通过 Git 读取，例如 `git log --all -- <原路径>`、`git show <提交>:<原路径>`。不复制另一套历史目录。
 
-用户原件在 `data/source`，成品在 `exports`，构建在 `dist`；`var` 下 data/state/cache/log/tmp/backups 各按运行职责保存。`.codex-attachments` 是本机用户附件。它们和忽略文件不因文档清理退出，实际模板、字体授权与 `delivery` 第三方原件保留原有消费者契约。开发产物生命周期见[项目工作流](docs/agents/workflow.md)。
+用户原件在 `data/source`，成品在 `exports`；正式前端构建在 `var/frontend/releases`，技能打包时可按需重建 `dist`。`var` 下 data/state/cache/log/tmp/backups 各按运行职责保存。`.codex-attachments` 保存本机用户附件，`.github` 保存持续集成配置；实际模板、字体及授权文件由运行资源目录持有。开发产物生命周期见[项目工作流](docs/agents/workflow.md)。
