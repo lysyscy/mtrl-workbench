@@ -13,3 +13,19 @@
 .oilcard-assignment-history { border-top: .5px solid var(--bd); padding-top: 16px; }
 .oilcard-assignment-history h2 { margin: 0; font-size: inherit; font-weight: 600; }
 .oilcard-assignment-history > .oilcard-toolbar { margin-bottom: 8px; }
+.oilcard-primary { display: flex; align-items: center; gap: 8px; }
+.oilcard-primary-row { background: var(--sf2); }
+.oilcard-ledger-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.oilcard-ledger-pane { min-width: 0; }
+.oilcard-ledger-pane > .oilcard-toolbar { margin-bottom: 8px; align-items: flex-start; }
+.oilcard-ledger-pane h2 { margin: 0; font-size: inherit; font-weight: 600; }
+.oilcard-ledger-pane .ant-select { width: 100%; }
+.oilcard-ledger-pane .oilcard-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.oilcard-invoice-pending { background: var(--sf); border: .5px solid var(--bd); border-radius: var(--radius-card); padding: 12px; }
+.oilcard-date-text { display: flex; width: 100%; align-items: center; gap: 4px; }
+.oilcard-date-text > .ant-input { min-width: 0; flex: 1; }
+.oilcard-date-text .oilcard-calendar { width: var(--control-h); flex: none; padding-inline: 6px; }
+.oilcard-calendar .ant-picker-input > input { width: 0; padding: 0; }
+.oilcard-calendar .ant-picker-suffix { margin: 0; }
+.oilcard-refund-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
+.oilcard-refund-dialog { max-width: min(calc(480px * var(--fscale)), calc(100vw - 24px)); }

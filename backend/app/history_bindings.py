@@ -7,7 +7,7 @@ from app.mod06_proc.models import ProcMaterialManual
 from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, WeldGasBalance
 from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
-from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard
+from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry
 
 
 def configure():
@@ -35,6 +35,8 @@ def configure():
     oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'parent_card_id', 'remark', 'version', 'updated_by'}), True)
     oil_account = Rule(OilAccount, frozenset({'name', 'project_id', 'card_id', 'status', 'remark', 'version', 'updated_by'}), True)
     oil_assignment = Rule(OilAccountAssignment, frozenset(), True)
+    oil_entry = Rule(OilEntry, frozenset({'kind', 'account_id', 'project_id', 'card_id', 'date_text',
+        'entry_date', 'amount', 'remark', 'version', 'updated_by'}), True)
     bind_policies([
         ('POST', '/api/m03/actions/exclude', '剔除付款通知书', [notice]),
         ('POST', '/api/m03/actions/restore', '恢复付款通知书', [notice]),
@@ -61,4 +63,7 @@ def configure():
         ('PUT', r'/api/m13/cards/\d+', '维护实体油卡', [oil_card]),
         ('POST', '/api/m13/accounts', '建立用卡账户', [oil_account, oil_assignment]),
         ('PUT', r'/api/m13/accounts/\d+', '维护用卡账户', [oil_account, oil_assignment]),
+        ('POST', '/api/m13/ledger/entries', '登记油卡充值或调整', [oil_entry]),
+        ('PUT', r'/api/m13/ledger/entries/\d+', '更正油卡充值或调整', [oil_entry]),
+        ('POST', '/api/m13/ledger/refunds', '登记油卡充值退款', [oil_entry]),
     ])

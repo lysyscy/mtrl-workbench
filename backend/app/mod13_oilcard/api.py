@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.db import session_scope
 from app.core.errors import DataConflictError
 from . import service
+from . import ledger
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
 
@@ -89,3 +90,58 @@ def create_account(req: AccountCreate):
 def update_account(account_id: int, req: AccountUpdate):
     return _write(lambda session: service.save_account(session, req.model_dump(mode='json', exclude={'version'}),
         key=account_id, version=str(req.version)), service.account_data)
+
+
+class EntryFields(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['recharge', 'adjustment', 'refund'] = 'recharge'
+    project_id: int = Field(gt=0)
+    account_id: int = Field(gt=0)
+    date_text: StrictStr = Field(default='', max_length=128)
+    amount: StrictStr
+    remark: StrictStr = ''
+
+
+class EntryCreate(EntryFields):
+    request_id: UUID
+
+
+class EntryUpdate(EntryFields):
+    version: UUID
+
+
+class RefundCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_id: UUID
+    original_id: int = Field(gt=0)
+    date_text: StrictStr = Field(default='', max_length=128)
+    amount: StrictStr
+    remark: StrictStr = ''
+
+
+@router.get('/ledger')
+def read_ledger():
+    with session_scope() as session:
+        return ledger.entries(session)
+
+
+@router.get('/reconciliation')
+def read_reconciliation():
+    with session_scope() as session:
+        return ledger.reconciliation(session)
+
+
+@router.post('/ledger/entries')
+def create_entry(req: EntryCreate):
+    return _write(lambda session: ledger.save_entry(session, req.model_dump(mode='json')), ledger.entry_data)
+
+
+@router.put('/ledger/entries/{entry_id}')
+def update_entry(entry_id: int, req: EntryUpdate):
+    return _write(lambda session: ledger.save_entry(session, req.model_dump(mode='json', exclude={'version'}),
+        key=entry_id, version=str(req.version)), ledger.entry_data)
+
+
+@router.post('/ledger/refunds')
+def create_refund(req: RefundCreate):
+    return _write(lambda session: ledger.refund(session, req.model_dump(mode='json')), ledger.entry_data)
