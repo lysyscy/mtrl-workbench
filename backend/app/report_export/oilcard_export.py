@@ -9,7 +9,7 @@ from app.report_export.save import workbook_bytes
 
 COLUMNS = (('记录编号', 'id'), ('日期', 'date_text'), ('类型', 'kind_label'),
            ('项目', 'project'), ('用卡账户', 'account'), ('实体卡号', 'card'),
-           ('金额', 'amount'), ('备注', 'remark'), ('关联原充值', 'related_entry_id'))
+           ('金额', 'amount'), ('备注', 'remark'), ('关联原充值', 'related_entry_id'), ('转账关联编号', 'transfer_id'))
 
 
 def build(snapshot):
@@ -38,8 +38,8 @@ def build(snapshot):
     sheet.cell(total_row, 7, Decimal(snapshot['total_amount'])).number_format = '#,##0.00'
     for cell in sheet[total_row]:
         cell.font = Font(bold=True)
-    for column, width in enumerate((12, 22, 10, 28, 24, 30, 18, 40, 16), 1):
+    for column, width in enumerate((12, 22, 10, 28, 24, 30, 18, 40, 16, 40), 1):
         sheet.column_dimensions[get_column_letter(column)].width = width
     sheet.freeze_panes = 'A2'
-    sheet.auto_filter.ref = f'A1:I{max(1, total_row - 1)}'
+    sheet.auto_filter.ref = f'A1:J{max(1, total_row - 1)}'
     return workbook_bytes(workbook)

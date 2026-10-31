@@ -25,7 +25,7 @@ def test_full_workbook_keeps_all_saved_rows_original_dates_and_text_card_numbers
     sheet = load_workbook(BytesIO(result.content), data_only=False).active
     rows = list(sheet.values)
     assert len(rows) == 6
-    assert rows[0] == ('记录编号', '日期', '类型', '项目', '用卡账户', '实体卡号', '金额', '备注', '关联原充值')
+    assert rows[0] == ('记录编号', '日期', '类型', '项目', '用卡账户', '实体卡号', '金额', '备注', '关联原充值', '转账关联编号')
     assert [row[1] for row in rows[1:-1]] == ['原始数据', '2026-10-31', None, '退款待核']
     assert [to_money(row[6]) for row in rows[1:-1]] == [to_money('10000'), to_money('200'), to_money('-20'), to_money('-125.50')]
     assert rows[1][5] == '0001234567890123456789' and sheet['F2'].data_type == 's'

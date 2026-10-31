@@ -13,6 +13,7 @@ from app.core.errors import DataConflictError
 from app import export_registry
 from . import service
 from . import ledger
+from . import transfers
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
 
@@ -97,7 +98,7 @@ def update_account(account_id: int, req: AccountUpdate):
 
 class EntryFields(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    kind: Literal['recharge', 'adjustment', 'refund'] = 'recharge'
+    kind: Literal['recharge', 'adjustment', 'refund', 'transfer_out', 'transfer_in'] = 'recharge'
     project_id: int = Field(gt=0)
     account_id: int = Field(gt=0)
     date_text: StrictStr = Field(default='', max_length=128)
@@ -159,3 +160,23 @@ def update_entry(entry_id: int, req: EntryUpdate):
 @router.post('/ledger/refunds')
 def create_refund(req: RefundCreate):
     return _write(lambda session: ledger.refund(session, req.model_dump(mode='json')), ledger.entry_data)
+
+
+class TransferCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_id: UUID
+    out_project_id: int = Field(gt=0)
+    out_account_id: int = Field(gt=0)
+    in_project_id: int = Field(gt=0)
+    in_account_id: int = Field(gt=0)
+    amount: StrictStr
+    date_text: StrictStr = Field(default='', max_length=128)
+    out_remark: StrictStr = ''
+    in_remark: StrictStr = ''
+
+
+@router.post('/ledger/transfers')
+def create_transfer(req: TransferCreate):
+    with session_scope() as session:
+        rows = transfers.create(session, req.model_dump(mode='json'))
+        return {'ok': True, 'items': [ledger.entry_data(row) for row in rows]}

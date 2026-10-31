@@ -29,3 +29,9 @@
 .oilcard-calendar .ant-picker-suffix { margin: 0; }
 .oilcard-refund-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
 .oilcard-refund-dialog { max-width: min(calc(480px * var(--fscale)), calc(100vw - 24px)); }
+.oilcard-transfer-dialog { max-width: min(calc(860px * var(--fscale)), calc(100vw - 24px)); }
+.oilcard-transfer-sides, .oilcard-transfer-common { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.oilcard-transfer-sides fieldset { border: .5px solid var(--bd); border-radius: var(--radius-inner); padding: 12px; min-width: 0; }
+.oilcard-transfer-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
+.oilcard-transfer-dialog .ant-select { width: 100%; }
+@media (max-width: 700px) { .oilcard-transfer-sides, .oilcard-transfer-common { grid-template-columns: 1fr; } }

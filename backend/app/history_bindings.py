@@ -64,6 +64,7 @@ def configure():
         ('POST', '/api/m13/accounts', '建立用卡账户', [oil_account, oil_assignment]),
         ('PUT', r'/api/m13/accounts/\d+', '维护用卡账户', [oil_account, oil_assignment]),
         ('POST', '/api/m13/ledger/entries', '登记油卡充值或调整', [oil_entry]),
-        ('PUT', r'/api/m13/ledger/entries/\d+', '更正油卡充值或调整', [oil_entry]),
+        ('PUT', r'/api/m13/ledger/entries/\d+', '更正油卡账务', [oil_entry]),
         ('POST', '/api/m13/ledger/refunds', '登记油卡充值退款', [oil_entry]),
+        ('POST', '/api/m13/ledger/transfers', '登记油卡转账', [oil_entry]),
     ])

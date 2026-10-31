@@ -47,7 +47,7 @@ def _fields(session, values, row=None):
         if kind != 'refund' or (row.project_id, row.account_id) != (values['project_id'], values['account_id']):
             raise MustReportError('退款保留原充值的归属与关联，请只更正日期、金额或备注。')
     elif kind not in ('recharge', 'adjustment'):
-        raise MustReportError('退款请从原充值记录办理，普通类型请选择充值或调整。')
+        raise MustReportError('普通记录请选择充值或调整；退款、转账请使用对应操作。')
     if kind == 'recharge' and amount <= ZERO:
         raise MustReportError('充值金额必须大于0；增减调账请选择调整。')
     if kind == 'refund' and amount >= ZERO:
@@ -71,6 +71,10 @@ def save_entry(session, values, *, key=None, version=''):
         row = OilEntry(request_id=values['request_id'], **_fields(session, values))
         session.add(row)
     else:
+        current = session.get(OilEntry, key, populate_existing=True)
+        if current is not None and current.transfer_id is not None:
+            from .transfers import update_entry
+            return update_entry(session, current, values, version=version)
         row = _get(session, OilEntry, key)
         _check_version(row, version)
         fields = _fields(session, values, row)
@@ -106,12 +110,19 @@ def refund(session, values):
 
 def entry_data(row):
     return {**{key: getattr(row, key) for key in ('id', 'request_id', 'kind', 'account_id', 'project_id',
-        'card_id', 'date_text', 'remark', 'related_entry_id', 'version')}, 'amount': str(row.amount),
+        'card_id', 'date_text', 'remark', 'related_entry_id', 'transfer_id', 'version')}, 'amount': str(row.amount),
         'entry_date': row.entry_date.isoformat() if row.entry_date else None}
 
 
-def entries(session):
+def _saved_rows(session):
     rows = list(session.scalars(select(OilEntry).order_by(OilEntry.id)))
+    from .transfers import validate_transfers
+    validate_transfers(rows)
+    return rows
+
+
+def entries(session):
+    rows = _saved_rows(session)
     return {'entries': [entry_data(row) for row in rows], 'total_amount': str(sum_money(row.amount for row in rows))}
 
 
@@ -121,7 +132,7 @@ def export_snapshot(session):
     project_names = {p.id: p.disp.strip() or '未设置展示名' for p in projects.all_projects(session)}
     accounts = {a.id: a.name for a in session.scalars(select(OilAccount))}
     cards = {c.id: c.card_no or f'卡号待补 #{c.id}' for c in session.scalars(select(OilCard))}
-    kinds = {'recharge': '充值', 'adjustment': '调整', 'refund': '退款'}
+    kinds = {'recharge': '充值', 'adjustment': '调整', 'refund': '退款', 'transfer_out': '转出', 'transfer_in': '转入'}
     return {'total_amount': data['total_amount'], 'rows': [{**row,
         'project': project_names[row['project_id']], 'account': accounts[row['account_id']],
         'card': cards[row['card_id']] if row['card_id'] is not None else '未关联卡片',
@@ -161,7 +172,7 @@ def reconciliation(session):
         return groups[key]
     for account in accounts:
         group(account.id, account.project_id, account.card_id)
-    for entry in session.scalars(select(OilEntry)):
+    for entry in _saved_rows(session):
         group(entry.account_id, entry.project_id, entry.card_id)['recharge'].append(entry.amount)
     for opening in session.scalars(select(OilOpeningBalance).where(OilOpeningBalance.confirmed.is_(True))):
         group(opening.account_id, opening.project_id, opening.card_id)['opening'].append(opening.amount)

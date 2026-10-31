@@ -5,7 +5,7 @@ import { editOilEntry as editByKey, rebaseOilEntryDraft } from '../../src/oilcar
 // Cell props may keep an older row; the page forwards its stable identity only.
 const editOilEntry=(drafts,entries,rendered,...args)=>editByKey(drafts,entries,rendered.request_id,...args);
 
-const blank = { id:0,request_id:'stable-request',version:'',kind:'recharge',project_id:0,account_id:0,card_id:null,date_text:'',entry_date:null,amount:'',remark:'',related_entry_id:null };
+const blank = { id:0,request_id:'stable-request',version:'',kind:'recharge',project_id:0,account_id:0,card_id:null,date_text:'',entry_date:null,amount:'',remark:'',related_entry_id:null,transfer_id:null };
 const saved = { ...blank,id:1,version:'saved-v1',project_id:11,account_id:31,card_id:51,date_text:'原始数据',amount:'10000.00',remark:'原备注' };
 const accounts = [{id:31,project_id:11},{id:32,project_id:12},{id:33,project_id:13},{id:34,project_id:13}];
 
@@ -49,4 +49,17 @@ test('readback advances saved identity and version without replacing later input
   const drafts=editOilEntry({[saved.request_id]:rebased},[saved],blank,'date_text','2026-11-01',accounts,false);
   assert.equal(drafts[saved.request_id].remark,'下一格输入');
   assert.equal(drafts[saved.request_id].original.version,'saved-v1');
+});
+
+test('a paired write advances untouched amount/date while retaining the other side pending remark',()=>{
+  const original={...saved,kind:'transfer_in',transfer_id:'same-transfer',amount:'1000.00'};
+  const pending={...original,remark:'另侧尚未保存的备注',original,error:''};
+  const synced={...original,version:'pair-v2',amount:'750.00',date_text:'2026-11-01',entry_date:'2026-11-01'};
+  const rebased=rebaseOilEntryDraft(pending,synced);
+  assert.equal(rebased.amount,'750.00');
+  assert.equal(rebased.date_text,'2026-11-01');
+  assert.equal(rebased.remark,'另侧尚未保存的备注');
+  assert.equal(rebased.original.version,'pair-v2');
+  assert.equal(rebased.transfer_id,'same-transfer');
+  assert.equal(rebaseOilEntryDraft({...pending,amount:'2000'},synced).amount,'2000');
 });

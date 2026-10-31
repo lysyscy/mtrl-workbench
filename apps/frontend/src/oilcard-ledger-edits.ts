@@ -20,6 +20,7 @@ export function editOilEntry(drafts: Record<string, OilEntryDraft>, entries: rea
 }
 
 export function rebaseOilEntryDraft(draft: OilEntryDraft, saved: OilEntry): OilEntryDraft {
-  return { ...draft, id: saved.id, version: saved.version, card_id: saved.card_id,
-    entry_date: saved.entry_date, related_entry_id: saved.related_entry_id, original: saved };
+  const retained = Object.fromEntries((Object.keys(entryFields(saved)) as (keyof EntryFields)[])
+    .filter(field => !draft.original || draft[field] !== draft.original[field]).map(field => [field, draft[field]]));
+  return { ...saved, ...retained, error: draft.error, original: saved };
 }

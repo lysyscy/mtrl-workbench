@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -64,11 +64,14 @@ class OilEntry(Base):
     """每笔独立核算归属；date_text保原标记，entry_date仅存明确日期。"""
     __tablename__ = 'oil_entry'
     __table_args__ = (
-        CheckConstraint("kind IN ('recharge', 'adjustment', 'refund')", name='ck_oil_entry_kind'),
-        CheckConstraint("(kind = 'recharge' AND amount > 0 AND related_entry_id IS NULL) OR "
-            "(kind = 'adjustment' AND related_entry_id IS NULL) OR "
-            "(kind = 'refund' AND amount < 0 AND related_entry_id IS NOT NULL)", name='ck_oil_entry_amount'),
+        CheckConstraint("kind IN ('recharge', 'adjustment', 'refund', 'transfer_out', 'transfer_in')", name='ck_oil_entry_kind'),
+        CheckConstraint("(kind = 'recharge' AND amount > 0 AND related_entry_id IS NULL AND transfer_id IS NULL) OR "
+            "(kind = 'adjustment' AND related_entry_id IS NULL AND transfer_id IS NULL) OR "
+            "(kind = 'refund' AND amount < 0 AND related_entry_id IS NOT NULL AND transfer_id IS NULL) OR "
+            "(kind = 'transfer_out' AND amount < 0 AND related_entry_id IS NULL AND transfer_id IS NOT NULL) OR "
+            "(kind = 'transfer_in' AND amount > 0 AND related_entry_id IS NULL AND transfer_id IS NOT NULL)", name='ck_oil_entry_amount'),
         CheckConstraint('related_entry_id IS NULL OR related_entry_id <> id', name='ck_oil_entry_not_self'),
+        UniqueConstraint('transfer_id', 'kind', name='uq_oil_entry_transfer_direction'),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -82,6 +85,7 @@ class OilEntry(Base):
     amount: Mapped[Decimal] = mapped_column(MONEY)
     remark: Mapped[str] = mapped_column(Text, default='')
     related_entry_id: Mapped[int | None] = mapped_column(ForeignKey('oil_entry.id'), nullable=True, index=True)
+    transfer_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     version: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()))
     updated_by: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
