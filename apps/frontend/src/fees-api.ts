@@ -2,7 +2,7 @@ import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export interface FeeRow { kind: 'auto' | 'manual'; id: number; index: number; item: string; source: string; amount: string; share: string }
 export interface FeeData {
-  ym: string; project: string; project_display: string; auto: FeeRow; manuals: FeeRow[]; total: string; count: number; can_edit: boolean;
+  ym: string; project: string; project_display: string; auto: FeeRow; oil: FeeRow | null; manuals: FeeRow[]; total: string; count: number; can_edit: boolean;
   projects: { key: string; display: string; archived: boolean; placeholder: boolean }[];
 }
 export type FeeField = 'item' | 'amount';
@@ -19,8 +19,8 @@ export function readFees(value: unknown): FeeData {
     !moneyText(value.total) || !Array.isArray(value.manuals) || value.count !== value.manuals.length || !Array.isArray(value.projects) ||
     !value.projects.every(p => record(p) && typeof p.key === 'string' && typeof p.display === 'string' && typeof p.archived === 'boolean' && typeof p.placeholder === 'boolean')) throw new ApiError('费用读取不完整，请重读。');
   const manuals = value.manuals.map(x => row(x, true));
-  if (new Set(manuals.map(x => x.id)).size !== manuals.length || manuals.some((x, i) => x.index !== i)) throw new ApiError('费用记录顺序不完整，请重读。');
-  return { ...value, auto: row(value.auto, false), manuals } as FeeData;
+  if (new Set(manuals.map(x => x.id)).size !== manuals.length || new Set(manuals.map(x => x.index)).size !== manuals.length) throw new ApiError('费用记录顺序不完整，请重读。');
+  return { ...value, auto: row(value.auto, false), oil: value.oil === null ? null : row(value.oil, false), manuals } as FeeData;
 }
 export async function getFees(ym: string, project: string, signal?: AbortSignal) {
   const data = readFees(await requestJson(`/api/m09/fee?${new URLSearchParams({ ym, pj: project })}`, signal ? { signal } : {}));
@@ -34,7 +34,7 @@ export async function feeWrite(action: string, payload: unknown, signal: AbortSi
   return record(data) && typeof data.row_id === 'number' && Number.isSafeInteger(data.row_id) && data.row_id > 0 ? data.row_id : null;
 }
 
-export interface FeeYearRow { item: string; item_id?: number; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
+export interface FeeYearRow { item: string; business_key?: string; item_id?: number; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
 export interface FeeYearRecord { ym: string; id: number; index: number; item: string; amount: string }
 export interface FeeYearData { auto_name: string; records: FeeYearRecord[]; year: string; project: string; project_display: string; can_edit: boolean; rows: FeeYearRow[]; prior: string; months: string[]; total: string }
 export async function getFeeYear(year: string, project: string, signal?: AbortSignal): Promise<FeeYearData> {
@@ -44,6 +44,6 @@ export async function getFeeYear(year: string, project: string, signal?: AbortSi
   if (!record(data) || typeof data.auto_name !== 'string' || data.year !== year || typeof data.project !== 'string' || project && data.project !== project ||
     typeof data.project_display !== 'string' || typeof data.can_edit !== 'boolean' || !amounts(data,false) || !Array.isArray(data.records) || !data.records.every(r => record(r) && typeof r.ym === 'string' && new RegExp(`^${year}-(0[1-9]|1[0-2])$`).test(r.ym) && typeof r.id === 'number' && Number.isSafeInteger(r.id) && r.id > 0 && typeof r.index === 'number' && Number.isSafeInteger(r.index) && r.index >= 0 && typeof r.item === 'string' && moneyText(r.amount)) || new Set(data.records.map(r => r.id)).size !== data.records.length || !Array.isArray(data.rows) ||
     !data.rows.every(r => record(r) && typeof r.item === 'string' && typeof r.manual === 'boolean' && (!r.manual || typeof r.item_id === 'number' && Number.isSafeInteger(r.item_id) && r.item_id > 0) && amounts(r,true) && Array.isArray(r.periods) && r.periods.every(ym => typeof ym === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
-    new Set(data.rows.map(r => r.item)).size !== data.rows.length) throw new ApiError('费用年度数据读取不完整，请重读。');
+    new Set(data.rows.map(r => r.business_key ?? r.item)).size !== data.rows.length) throw new ApiError('费用年度数据读取不完整，请重读。');
   return data as unknown as FeeYearData;
 }

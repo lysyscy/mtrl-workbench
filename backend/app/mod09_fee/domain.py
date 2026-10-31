@@ -153,13 +153,14 @@ def total_amount(inv_rows: list[dict], items: list[dict] | None, *, ym: str, pro
 
 def annual_rows(*, year: str, project_key: str, items: list[dict], inv_rows: list[dict]) -> dict:
     """按原始项名汇总；空月与真实零分开，累计只加往年及所选年。"""
-    rows = {AUTO_NAME: {"item": AUTO_NAME, "manual": False, "prior": ZERO,
+    rows = {AUTO_NAME: {"item": AUTO_NAME, 'business_key': AUTO_NAME, "manual": False, "prior": ZERO,
                         "months": [ZERO for _ in range(12)], "periods": set()}}
 
-    def add(name, ym, amount, manual):
+    def add(name, ym, amount, manual, key=None):
         if not parse_ym(ym) or ym > f"{year}-12":
             return
-        row = rows.setdefault(name, {"item": name, "manual": True, "prior": None,
+        key = key or name
+        row = rows.setdefault(key, {"item": name, 'business_key': key, "manual": manual, "prior": None,
                                     "months": [None for _ in range(12)], "periods": set()})
         row["manual"] = row["manual"] or manual
         row["periods"].add(ym)
@@ -174,7 +175,7 @@ def annual_rows(*, year: str, project_key: str, items: list[dict], inv_rows: lis
         if r.get("warehouse") == project_key and r.get("cbs") == CBS_AWF and r.get("direction") == DIRECTION_OUT:
             add(AUTO_NAME, str(r.get("ym") or ""), r.get("amount"), False)
     for r in items:
-        add(str(r.get("name") or ""), str(r.get("ym") or ""), r.get("amount"), True)
+        add(str(r.get("name") or ""), str(r.get("ym") or ""), r.get("amount"), r.get('manual', True), r.get('key'))
     result = []
     for row in rows.values():
         row["total"] = (row["prior"] or ZERO) + sum((v or ZERO for v in row["months"]), ZERO)
@@ -188,11 +189,14 @@ def annual_rows(*, year: str, project_key: str, items: list[dict], inv_rows: lis
 def export_rows(*, end_ym: str, project_key: str, items: list[dict], inv_rows: list[dict]) -> dict:
     """从首个非零费用月连续展开到截止月，保留范围内的空值和真实零。"""
     amounts = {AUTO_NAME: {}}
+    names = {AUTO_NAME: AUTO_NAME}
 
-    def add(name, ym, amount):
+    def add(name, ym, amount, key=None):
         if not parse_ym(ym) or ym > end_ym:
             return
-        values = amounts.setdefault(name, {})
+        key = key or name
+        names[key] = name
+        values = amounts.setdefault(key, {})
         values[ym] = values.get(ym, ZERO) + Decimal(str(amount or 0))
 
     for row in inv_rows:
@@ -200,7 +204,7 @@ def export_rows(*, end_ym: str, project_key: str, items: list[dict], inv_rows: l
                 and row.get('direction') == DIRECTION_OUT):
             add(AUTO_NAME, str(row.get('ym') or ''), row.get('amount'))
     for row in items:
-        add(str(row.get('name') or ''), str(row.get('ym') or ''), row.get('amount'))
+        add(str(row.get('name') or ''), str(row.get('ym') or ''), row.get('amount'), row.get('key'))
     amounts = {name: {ym: sum_money([value]) for ym, value in values.items()}
                for name, values in amounts.items()}
     nonzero = [ym for values in amounts.values() for ym, value in values.items() if value != ZERO]
@@ -208,9 +212,9 @@ def export_rows(*, end_ym: str, project_key: str, items: list[dict], inv_rows: l
     while months and months[-1] < end_ym:
         months.append(shift_ym(months[-1], 1))
     rows = []
-    for name, values in amounts.items():
+    for key, values in amounts.items():
         cells = [values.get(month) for month in months]
-        rows.append({'item': name, 'months': cells,
+        rows.append({'item': names[key], 'months': cells,
                      'total': sum_money(v for v in cells if v is not None)
                      if any(v is not None for v in cells) else None})
     return {'months': months, 'rows': rows}

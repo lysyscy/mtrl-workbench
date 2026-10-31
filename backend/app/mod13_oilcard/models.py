@@ -120,6 +120,22 @@ class OilOpeningBalance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
+class OilFeeCustom(Base):
+    """项目/月发生的特殊费用补充额；不存派生充值或完整报表总额。"""
+    __tablename__ = 'oil_fee_custom'
+    __table_args__ = (UniqueConstraint('project_id', 'ym', name='uq_oil_fee_custom_month'),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), index=True)
+    ym: Mapped[str] = mapped_column(String(7), index=True)
+    amount: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    remark: Mapped[str] = mapped_column(Text, default='')
+    version: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()))
+    updated_by: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class OilInvoice(Base):
     """票据索引与人工确认结果；原件身份独立，不能经更正或撤销删除。"""
     __tablename__ = 'oil_invoice'

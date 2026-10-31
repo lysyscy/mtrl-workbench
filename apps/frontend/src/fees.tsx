@@ -16,7 +16,7 @@ import type { FeeYearData, FeeYearRow } from './fees-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { useCellSaveQueue } from './use-cell-save';
 
-const rowId=(row:FeeYearRow)=>row.item_id ? `item-${row.item_id}` : `auto-${encodeURIComponent(row.item)}`;
+const rowId=(row:FeeYearRow)=>row.item_id ? `item-${row.item_id}` : `auto-${encodeURIComponent(row.business_key ?? row.item)}`;
 type Draft={itemId:number; item:string; ym:string; field:'name'|'amount'; value:string; original:string; error:string};
 const keyOf=(itemId:number, field:string, ym='')=>`${itemId}:${field}:${ym}`;
 interface Cells { drafts:Record<string,Draft>; disabled:boolean; structuralDisabled:boolean;

@@ -17,6 +17,7 @@ from . import transfers
 from . import invoices
 from . import invoice_adjustments
 from . import invoice_batches
+from . import reporting
 from .invoice_pdf import MAX_PDF_BYTES, recognize_pdf
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
@@ -159,6 +160,36 @@ def read_ledger():
 def read_reconciliation():
     with session_scope() as session:
         return ledger.reconciliation(session)
+
+
+@router.get('/linkage')
+def read_linkage(ym: str):
+    reporting.month_bounds(ym)
+    with session_scope() as session:
+        return {'ym': ym, 'rows': [reporting.fee_month(session, project_id=project.id, ym=ym)
+            for project in service.projects.all_projects(session) if project.project_type != 'shell']}
+
+
+class FeeCustomUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    amount: StrictStr | None = None
+    remark: StrictStr = ''
+    version: UUID | None = None
+
+
+@router.put('/linkage/{project_id}/{ym}/fee')
+def save_fee_custom(project_id: int, ym: str, req: FeeCustomUpdate):
+    with session_scope() as session:
+        reporting.save_fee_custom(session, project_id=project_id, ym=ym, amount=req.amount,
+            remark=req.remark, version=str(req.version) if req.version else None)
+        return {'ok': True, 'item': reporting.fee_month(session, project_id=project_id, ym=ym)}
+
+
+@router.post('/linkage/{project_id}/enable')
+def enable_empty_linkage(project_id: int):
+    from app.mod09_fee import service as fees
+    with session_scope() as session:
+        return {'ok': True, **fees.enable_empty_oil_linkage(session, project_id=project_id)}
 
 
 @router.get('/ledger/export')

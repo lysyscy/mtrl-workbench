@@ -19,6 +19,7 @@ from app.mod01_projects import domain as PJ, service as PS
 from app.mod01_projects.models import Project
 from app.mod09_fee import domain as D
 from app.mod09_fee import repository as R
+from app.mod09_fee import oil_linkage as O
 
 
 def parse_state(params: dict | None = None) -> dict:
@@ -47,10 +48,13 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     st = dict(state or parse_state())
     cands, project, pj = _resolve(s, st)
     ym = st["ym"]
-    items = R.items_of(s, ym=ym, project_id=pj.id) if pj else []
+    originals = R.items_of(s, ym=ym, project_id=pj.id) if pj else []
+    binding = O.status(s, project_id=pj.id) if pj else {'enabled': False, 'fee_item_id': None}
+    items = [item for item in originals if not binding['enabled'] or item['fee_item_id'] != binding['fee_item_id']]
+    oil = next((row for row in O.effective_items(s, project_id=pj.id, end_ym=ym, items=[]) if row['ym'] == ym), None) if pj and binding['enabled'] else None
     inv = R.inv_rows(s, ym=ym)
     auto = D.auto_amount(inv, ym=ym, project_key=project)
-    total = D.total_amount(inv, items, ym=ym, project_key=project)
+    total = D.total_amount(inv, [*items, *([oil] if oil else [])], ym=ym, project_key=project)
     return {
         "state": {**st, "project": project},
         "ym": ym,
@@ -58,7 +62,9 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         "projects": cands,
         "project_display": next((c.display for c in cands if c.key == project), project or ""),
         "auto": D.auto_row(auto=auto, total=total),
-        "manuals": D.manual_rows(items, total=total),
+        "manuals": [{**row, 'index': next(i for i, item in enumerate(originals) if item['id'] == row['id'])} for row in D.manual_rows(items, total=total)],
+        "oil": {'kind': 'auto', 'item': O.OIL_NAME, 'source': '油卡联动', 'amount': oil['amount'] if oil else D.ZERO,
+                'share': D.share_text(oil['amount'] if oil else D.ZERO, total)} if binding['enabled'] else None,
         "summary": D.summary_row(total=total),
         "total": total,
         "count": len(items),
@@ -75,6 +81,7 @@ def build_export_data(s: Session, *, end_ym: str, project: str) -> dict:
     if pj is None:
         raise MustReportError('导出费用的项目不在档案里，请重新选择')
     items, inv = R.year_facts(s, year=end_ym[:4], project_id=pj.id, warehouse=key)
+    items = O.effective_items(s, project_id=pj.id, end_ym=end_ym, items=items)
     return {'ym': end_ym, 'project': key,
             **D.export_rows(end_ym=end_ym, project_key=key, items=items, inv_rows=inv)}
 
@@ -84,25 +91,34 @@ def build_year_data(s: Session, *, year: str, project: str) -> dict:
         raise ValueError("年份请写成 YYYY")
     cands, key, pj = _resolve(s, {"project": project})
     items, inv = R.year_facts(s, year=year, project_id=pj.id if pj else None, warehouse=key)
+    if pj:
+        items = O.effective_items(s, project_id=pj.id, end_ym=f'{year}-12', items=items)
     indexes: dict[str, int] = {}
     records = []
     for item in items:
         ym = item["ym"]
-        if not ym.startswith(f"{year}-") or not D.parse_ym(ym):
+        if not item.get('manual', True) or not ym.startswith(f"{year}-") or not D.parse_ym(ym):
             continue
         index = indexes.get(ym, 0)
         records.append({"ym": ym, "id": item["id"], "index": index,
                         "item": item["name"], "amount": item["amount"]})
         indexes[ym] = index + 1
     result = D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)
+    binding = O.status(s, project_id=pj.id) if pj else {'enabled': False, 'fee_item_id': None}
     definitions = [] if pj is None else list(s.execute(select(FeeItem).where(FeeItem.project_id == pj.id, FeeItem.deleted.is_(False)).order_by(FeeItem.id)).scalars())
-    by_name = {row["item"]: row for row in result["rows"]}
+    by_name = {row['business_key']: row for row in result["rows"]}
     for item in definitions:
-        if item.name not in by_name:
-            row = {"item": item.name, "manual": True, "prior": None, "months": [None] * 12, "periods": [], "total": D.ZERO}
+        if binding['enabled'] and item.id == binding['fee_item_id']:
+            continue
+        identity = f'fee:{item.id}'
+        if identity not in by_name:
+            row = {"item": item.name, 'business_key': identity, "manual": True, "prior": None, "months": [None] * 12, "periods": [], "total": D.ZERO}
             result["rows"].append(row)
-            by_name[item.name] = row
-        by_name[item.name]["item_id"] = item.id
+            by_name[identity] = row
+        by_name[identity]["item_id"] = item.id
+    if binding['enabled'] and O.OIL_KEY not in by_name:
+        result['rows'].append({'item': O.OIL_NAME, 'business_key': O.OIL_KEY, 'manual': False,
+            'prior': None, 'months': [None] * 12, 'periods': [], 'total': D.ZERO})
     return {"year": year, "project": key,
             "project_display": next((c.display for c in cands if c.key == key), key),
             "records": records, "auto_name": D.AUTO_NAME, "can_edit": pj is not None, **result}
@@ -117,6 +133,8 @@ def _flash(kind: str, message: str) -> dict:
 
 def _scope(s: Session, *, ym: str, project_key: str) -> tuple[Project | None, list[dict]]:
     pj = R.project_by_key(s, project_key)
+    if pj is not None:
+        pj = PS.get_project(s, pj.id, for_update=True)
     return pj, (R.items_of(s, ym=ym, project_id=pj.id) if pj else [])
 
 
@@ -129,7 +147,7 @@ def act_add(s: Session, *, ym: str, project_key: str, name: str = D.DEFAULT_ITEM
     pj, _ = _scope(s, ym=ym, project_key=project_key)
     if pj is None:
         return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
-    if str(name).strip() == D.AUTO_NAME:
+    if str(name).strip() in (D.AUTO_NAME, O.OIL_NAME):
         return _flash("err", "自动费用项不能由手填项覆盖")
     problem = D.amount_problem(raw)
     if problem:
@@ -147,7 +165,9 @@ def act_rename(s: Session, *, ym: str, project_key: str, index: int, value: str)
     row = _row_at(s, pj, items, index, ym)
     if row is None:
         return _flash("err", "这一条手填项已经不在了（可能被删或切了月份 / 项目）—— 请刷新后重试")
-    if str(value).strip() == D.AUTO_NAME:
+    if O.is_bound(s, row.fee_item_id):
+        return _flash('err', O.READONLY_MESSAGE)
+    if str(value).strip() in (D.AUTO_NAME, O.OIL_NAME):
         return _flash("err", "自动费用项不能由手填项覆盖")
     try:
         R.set_item_name(s, row, value)
@@ -162,6 +182,8 @@ def act_set_amount(s: Session, *, ym: str, project_key: str, index: int, raw) ->
     row = _row_at(s, pj, items, index, ym)
     if row is None:
         return _flash("err", "这一条手填项已经不在了（可能被删或切了月份 / 项目）—— 请刷新后重试")
+    if O.is_bound(s, row.fee_item_id):
+        return _flash('err', O.READONLY_MESSAGE)
     problem = D.amount_problem(raw)
     if problem:
         return _flash("err", problem)                 # ⛔ 不动库：原值不变
@@ -176,6 +198,8 @@ def act_delete(s: Session, *, ym: str, project_key: str, index: int) -> dict:
     row = _row_at(s, pj, items, index, ym)
     if row is None:
         return _flash("err", "这一条手填项已经不在了（可能被删或切了月份 / 项目）—— 请刷新后重试")
+    if O.is_bound(s, row.fee_item_id):
+        return _flash('err', O.READONLY_MESSAGE)
     name, before = str(items[int(index)]["name"] or ""), D.money_text(row.amount)
     R.delete_item(s, row)
     after = _total_after(s, ym=ym, project_key=project_key, project_id=pj.id)
@@ -197,9 +221,7 @@ def _row_at(s: Session, pj: Project | None, items: list[dict], index, ym: str):
 
 
 def _total_after(s: Session, *, ym: str, project_key: str, project_id: int):
-    inv = R.inv_rows(s, ym=ym)
-    items = R.items_of(s, ym=ym, project_id=project_id)
-    return D.total_amount(inv, items, ym=ym, project_key=project_key)
+    return build_page_data(s, {'ym': ym, 'project': project_key})['total']
 
 
 def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dict:
@@ -213,10 +235,14 @@ def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dic
     ⚠️ 金额判据**只走** `domain.amount_problem`（⛔ 本层不许自己判非数字）。
     """
     pj = R.project_by_key(s, project_key)
+    if pj is not None:
+        pj = PS.get_project(s, pj.id, for_update=True)
     if pj is None:
         return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
     names = [str(n or "").strip() for n in (items or [])]
-    if D.AUTO_NAME in [name.strip() for name in names]:
+    bound = O.status(s, project_id=pj.id)['fee_item_id']
+    bound_name = s.get(FeeItem, bound).name if bound is not None else None
+    if any(name in (D.AUTO_NAME, O.OIL_NAME, bound_name) for name in names):
         return _flash("err", "自动费用项不能由手填项覆盖")
     if not names:
         return _flash("err", "一项都没有 —— 先选一个「项名基准月」或加一列，再来填")
@@ -266,8 +292,10 @@ def project_by_key(session, key):
 
 def create_item(s: Session, *, project_key: str, name: str) -> dict:
     pj = R.project_by_key(s, project_key)
+    if pj is not None:
+        pj = PS.get_project(s, pj.id, for_update=True)
     name = name.strip()
-    if pj is None or not name or name == D.AUTO_NAME or len(name) > 128:
+    if pj is None or not name or name in (D.AUTO_NAME, O.OIL_NAME) or len(name) > 128:
         return _flash("err", "请选择项目并填写有效的费用项名称")
     if s.execute(select(FeeItem.id).where(FeeItem.project_id == pj.id, FeeItem.name == name, FeeItem.deleted.is_(False))).scalar_one_or_none() is not None:
         return _flash("err", "费用项名称已存在")
@@ -278,12 +306,16 @@ def create_item(s: Session, *, project_key: str, name: str) -> dict:
 
 def item_action(s: Session, *, project_key: str, item_id: int, action: str, value: str = "", ym: str = "") -> dict:
     pj = R.project_by_key(s, project_key)
+    if pj is not None:
+        pj = PS.get_project(s, pj.id, for_update=True)
     item = s.execute(select(FeeItem).where(FeeItem.id == item_id).with_for_update()).scalar_one_or_none()
     if pj is None or item is None or item.deleted or item.project_id != pj.id:
         return _flash("err", "费用项已不存在或不属于当前项目")
+    if O.is_bound(s, item.id):
+        return _flash('err', O.READONLY_MESSAGE)
     if action == "rename":
         name = value.strip()
-        if not name or name == D.AUTO_NAME or len(name) > 128:
+        if not name or name in (D.AUTO_NAME, O.OIL_NAME) or len(name) > 128:
             return _flash("err", "请填写有效的费用项名称")
         other = s.execute(select(FeeItem.id).where(FeeItem.project_id == pj.id, FeeItem.name == name, FeeItem.id != item.id, FeeItem.deleted.is_(False))).scalar_one_or_none()
         if other is not None:
@@ -320,6 +352,22 @@ def item_action(s: Session, *, project_key: str, item_id: int, action: str, valu
 def project_references(session, project_id, warehouse, *, lock=False):
     """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
     from app.core.references import project_references as read
-    from .models import FeeItem, FeeManualItem, LegacyFeeManualItem
+    from .models import FeeItem, FeeManualItem, FeeOilBinding, LegacyFeeManualItem
 
-    return read(session, ((FeeItem, '特殊费用项'), (FeeManualItem, '特殊费用'), (LegacyFeeManualItem, '特殊费用原始记录')), project_id, warehouse, lock=lock)
+    return read(session, ((FeeItem, '特殊费用项'), (FeeManualItem, '特殊费用'), (FeeOilBinding, '用油接续依据'), (LegacyFeeManualItem, '特殊费用原始记录')), project_id, warehouse, lock=lock)
+
+
+def oil_linkage_status(session, *, project_id):
+    return O.status(session, project_id=project_id)
+
+
+def review_oil_linkage(session, *, project_id):
+    return O.review(session, project_id=project_id)
+
+
+def enable_oil_linkage(session, **values):
+    return O.enable(session, **values)
+
+
+def enable_empty_oil_linkage(session, *, project_id):
+    return O.enable_empty(session, project_id=project_id)
