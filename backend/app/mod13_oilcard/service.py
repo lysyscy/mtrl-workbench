@@ -9,7 +9,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.references import project_references as collect_references
 from app.mod01_projects import service as projects
-from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance
+from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance, OilInvoiceAllocation
 
 
 def _lock(session):
@@ -46,7 +46,7 @@ def _card_fields(session, values, row=None):
         if kind == 'primary' and session.scalar(select(OilAccount.id).where(OilAccount.card_id == row.id).limit(1)):
             raise MustReportError('这张副卡仍关联用卡账户，不能改成主卡。')
         if kind == 'primary' and any(session.scalar(select(model.id).where(model.card_id == row.id).limit(1))
-                for model in (OilEntry, OilOpeningBalance)):
+                for model in (OilEntry, OilOpeningBalance, OilInvoiceAllocation)):
             raise MustReportError('这张副卡仍有历史账务，不能改成主卡。')
     if card_no is not None:
         duplicate = session.scalar(select(OilCard.id).where(OilCard.card_no == card_no))
@@ -178,4 +178,4 @@ def assignment_data(row):
 def project_references(session, project_id, warehouse_name, *, lock=False):
     return collect_references(session, ((OilAccount, '用卡账户'),
         (OilAccountAssignment, '油卡关联历史'), (OilEntry, '油卡充值与调整'),
-        (OilOpeningBalance, '油卡期初依据')), project_id, warehouse_name, lock=lock)
+        (OilOpeningBalance, '油卡期初依据'), (OilInvoiceAllocation, '油卡发票分配')), project_id, warehouse_name, lock=lock)

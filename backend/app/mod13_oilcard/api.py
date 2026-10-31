@@ -3,7 +3,7 @@ from typing import Literal
 from uuid import UUID
 from urllib.parse import quote
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +14,8 @@ from app import export_registry
 from . import service
 from . import ledger
 from . import transfers
+from . import invoices
+from .invoice_pdf import MAX_PDF_BYTES, recognize_pdf
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
 
@@ -215,3 +217,58 @@ def create_transfer(req: TransferCreate):
     with session_scope() as session:
         rows = transfers.create(session, req.model_dump(mode='json'))
         return {'ok': True, 'items': [ledger.entry_data(row) for row in rows]}
+
+
+@router.get('/invoices')
+def read_invoices():
+    with session_scope() as session:
+        return invoices.invoices(session)
+
+
+@router.post('/invoices/receive')
+def receive_invoice(file: UploadFile = File(...)):
+    content = file.file.read(MAX_PDF_BYTES + 1)
+    recognized = recognize_pdf(content)
+    with session_scope() as session:
+        original = invoices.receive_pdf(session, content, recognized)
+        return {'ok': True, 'original': invoices.original_data(original),
+                'item': invoices.invoice_data(session, session.get(invoices.OilInvoice, original.invoice_id))}
+
+
+@router.get('/invoices/receipts/{digest}')
+def invoice_receipt(digest: str):
+    with session_scope() as session:
+        return invoices.receipt(session, digest)
+
+
+class InvoiceRemark(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+    remark: StrictStr
+
+
+@router.put('/invoices/{invoice_id}/remark')
+def invoice_remark(invoice_id: int, req: InvoiceRemark):
+    with session_scope() as session:
+        row = invoices.save_remark(session, invoice_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.get('/invoices/originals/{original_id}')
+def invoice_original(original_id: int, download: bool = False):
+    with session_scope() as session:
+        content, filename = invoices.original_file(session, original_id)
+    name = quote(filename)
+    return Response(content=content, media_type='application/pdf', headers={'X-Export-Filename': name,
+        'Content-Disposition': f"{'attachment' if download else 'inline'}; filename*=UTF-8''{name}",
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@router.get('/invoices/export')
+def export_invoices():
+    with session_scope() as session:
+        snapshot = invoices.export_snapshot(session)
+    name = quote('油卡发票台账（全量）.xlsx')
+    return Response(content=export_registry.get('oilcard').build_invoices(snapshot),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'X-Export-Filename': name, 'Content-Disposition': f"attachment; filename*=UTF-8''{name}", 'Cache-Control': 'no-store'})

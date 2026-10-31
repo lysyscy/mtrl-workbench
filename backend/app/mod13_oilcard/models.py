@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -118,3 +118,51 @@ class OilOpeningBalance(Base):
     remark: Mapped[str] = mapped_column(Text, default='')
     updated_by: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class OilInvoice(Base):
+    """票据索引与人工确认结果；原件身份独立，不能经更正或撤销删除。"""
+    __tablename__ = 'oil_invoice'
+    __table_args__ = (CheckConstraint("status IN ('pending', 'registered')", name='ck_oil_invoice_status'),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_no: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    card_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default='pending')
+    reason: Mapped[str] = mapped_column(Text, default='')
+    remark: Mapped[str] = mapped_column(Text, default='')
+    version: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()))
+    updated_by: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class OilInvoiceOriginal(Base):
+    """不可变接收依据。bytea随现有pg_dump一起备份，不属于可删除的操作历史。"""
+    __tablename__ = 'oil_invoice_original'
+    __table_args__ = (CheckConstraint("outcome IN ('received', 'duplicate', 'conflict')", name='ck_oil_original_outcome'),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey('oil_invoice.id'), index=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    byte_size: Mapped[int] = mapped_column(Integer)
+    outcome: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(Text, default='')
+    recognized_json: Mapped[str] = mapped_column(Text)
+    received_by: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class OilInvoiceAllocation(Base):
+    __tablename__ = 'oil_invoice_allocation'
+    __table_args__ = (UniqueConstraint('invoice_id', 'account_id', name='uq_oil_invoice_account'),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey('oil_invoice.id'), index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey('oil_account.id'), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), index=True)
+    card_id: Mapped[int | None] = mapped_column(ForeignKey('oil_card.id'), nullable=True, index=True)
+    amount: Mapped[Decimal] = mapped_column(MONEY)

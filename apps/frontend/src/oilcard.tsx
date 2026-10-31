@@ -165,7 +165,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       {tab === 'account' && <><Button disabled={!selected || structuralDisabled} onClick={() => { const account = currentData.current?.accounts.find(item => item.id === selected); if (account) { saves.clearFeedback(); setReplacing(account); } }}>换卡</Button><Button disabled={!selected || blocked || busy} onClick={() => setHistoryAccount(selected)}>关联历史</Button></>}</div>
       {tab === 'account' && <label>账户状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label>}</div>}
     {!me && <p className="state">登录后可维护油卡档案。</p>}
-    {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值保存结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对充值结果</Button></p>}
+    {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值或收票结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对保存结果</Button></p>}
     {(error || query.isError || projects.isError) && <p className="notice" role="alert">{error || query.error?.message || projects.error?.message}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的档案变更后再继续。<Button disabled={!verified || blocked || busy} onClick={() => saves.confirm()}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>{fieldLabels[d.field]}：{d.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button></p>)}

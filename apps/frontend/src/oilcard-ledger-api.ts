@@ -8,8 +8,8 @@ export interface OilEntry {
 export const oilEntryKindLabels: Record<OilEntry['kind'], string> = { recharge: '充值', adjustment: '调整', refund: '退款', transfer_out: '转出', transfer_in: '转入' };
 export const isOilTransfer = (row: OilEntry) => row.kind === 'transfer_out' || row.kind === 'transfer_in';
 export interface OilLedger { entries: OilEntry[]; total_amount: string }
-export interface OilReconciliationRow { account_id: number; project_id: number; card_id: number | null; primary_card_id: number | null; current: boolean; recharge_amount: string; opening_amount: string; total_amount: string }
-export interface OilReconciliation { rows: OilReconciliationRow[]; total_amount: string }
+export interface OilReconciliationRow { account_id: number; project_id: number; card_id: number | null; primary_card_id: number | null; current: boolean; recharge_amount: string; opening_amount: string; total_amount: string; invoiced_amount: string; difference_amount: string }
+export interface OilReconciliation { rows: OilReconciliationRow[]; total_amount: string; invoiced_amount: string; difference_amount: string }
 export type EntryFields = Pick<OilEntry, 'kind' | 'project_id' | 'account_id' | 'date_text' | 'amount' | 'remark'>;
 export type OilAttributionFields = Pick<OilEntry, 'project_id' | 'account_id' | 'card_id'>;
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
@@ -44,10 +44,10 @@ function readOilTransferPair(rows: OilEntry[]): [OilEntry, OilEntry] {
   return [out, incoming];
 }
 export function readOilReconciliation(v: unknown): OilReconciliation {
-  if (!record(v) || !Array.isArray(v.rows) || !moneyText(v.total_amount) || !v.rows.every(row => record(row) && id(row.account_id) && id(row.project_id) && nullableId(row.card_id) && nullableId(row.primary_card_id) && typeof row.current === 'boolean' && moneyText(row.recharge_amount) && moneyText(row.opening_amount) && moneyText(row.total_amount) && cents(row.recharge_amount) + cents(row.opening_amount) === cents(row.total_amount))) throw new ApiError('账户充值核对读取不完整，请重读。');
+  if (!record(v) || !Array.isArray(v.rows) || !moneyText(v.total_amount) || !moneyText(v.invoiced_amount) || !moneyText(v.difference_amount) || !v.rows.every(row => record(row) && id(row.account_id) && id(row.project_id) && nullableId(row.card_id) && nullableId(row.primary_card_id) && typeof row.current === 'boolean' && moneyText(row.recharge_amount) && moneyText(row.opening_amount) && moneyText(row.total_amount) && moneyText(row.invoiced_amount) && moneyText(row.difference_amount) && cents(row.recharge_amount) + cents(row.opening_amount) === cents(row.total_amount) && cents(row.total_amount) - cents(row.invoiced_amount) === cents(row.difference_amount))) throw new ApiError('账户充值与开票核对读取不完整，请重读。');
   const rows = v.rows as OilReconciliationRow[];
-  if (new Set(rows.map(row => `${row.account_id}:${row.project_id}:${row.card_id}`)).size !== rows.length || rows.reduce((total, row) => total + cents(row.total_amount), 0n) !== cents(v.total_amount)) throw new ApiError('账户累计未能核对，请重读。');
-  return { rows, total_amount: v.total_amount };
+  if (new Set(rows.map(row => `${row.account_id}:${row.project_id}:${row.card_id}`)).size !== rows.length || rows.reduce((total, row) => total + cents(row.total_amount), 0n) !== cents(v.total_amount) || rows.reduce((total, row) => total + cents(row.invoiced_amount), 0n) !== cents(v.invoiced_amount) || cents(v.total_amount) - cents(v.invoiced_amount) !== cents(v.difference_amount)) throw new ApiError('账户累计未能核对，请重读。');
+  return { rows, total_amount: v.total_amount, invoiced_amount: v.invoiced_amount, difference_amount: v.difference_amount };
 }
 export async function getOilLedger(signal?: AbortSignal) { return readOilLedger(await requestJson('/api/m13/ledger', signal ? { signal } : {})); }
 export async function getOilReconciliation(signal?: AbortSignal) { return readOilReconciliation(await requestJson('/api/m13/reconciliation', signal ? { signal } : {})); }

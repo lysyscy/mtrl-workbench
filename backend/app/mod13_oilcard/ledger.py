@@ -207,7 +207,7 @@ def reconciliation(session):
         key = (account_id, project_id, card_id)
         if key not in groups:
             groups[key] = {'account_id': account_id, 'project_id': project_id, 'card_id': card_id,
-                          'recharge': [], 'opening': []}
+                          'recharge': [], 'opening': [], 'invoiced': []}
         return groups[key]
     for account in accounts:
         group(account.id, account.project_id, account.card_id)
@@ -215,12 +215,20 @@ def reconciliation(session):
         group(entry.account_id, entry.project_id, entry.card_id)['recharge'].append(entry.amount)
     for opening in session.scalars(select(OilOpeningBalance).where(OilOpeningBalance.confirmed.is_(True))):
         group(opening.account_id, opening.project_id, opening.card_id)['opening'].append(opening.amount)
+    from .invoices import registered_allocations
+    for allocation in registered_allocations(session):
+        group(allocation.account_id, allocation.project_id, allocation.card_id)['invoiced'].append(allocation.amount)
     current = {a.id: (a.project_id, a.card_id) for a in accounts}
     rows = []
     for item in groups.values():
         card = cards.get(item['card_id'])
         recharge, opening = sum_money(item.pop('recharge')), sum_money(item.pop('opening'))
+        invoiced = sum_money(item.pop('invoiced'))
+        total = sum_money((recharge, opening))
         rows.append({**item, 'primary_card_id': card.parent_card_id if card else None,
             'current': current.get(item['account_id']) == (item['project_id'], item['card_id']),
-            'recharge_amount': str(recharge), 'opening_amount': str(opening), 'total_amount': str(sum_money((recharge, opening)))})
-    return {'rows': rows, 'total_amount': str(sum_money(row['total_amount'] for row in rows))}
+            'recharge_amount': str(recharge), 'opening_amount': str(opening), 'total_amount': str(total),
+            'invoiced_amount': str(invoiced), 'difference_amount': str(total - invoiced)})
+    return {'rows': rows, 'total_amount': str(sum_money(row['total_amount'] for row in rows)),
+            'invoiced_amount': str(sum_money(row['invoiced_amount'] for row in rows)),
+            'difference_amount': str(sum_money(row['difference_amount'] for row in rows))}

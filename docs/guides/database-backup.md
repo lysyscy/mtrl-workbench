@@ -4,6 +4,8 @@
 
 脚本从项目配置读取两个不同本机库，不把口令放参数或回执。每轮在 var/backups/databases/.partial-* 生成两份 custom 归档，校验 SHA256、字节数及 pg_restore 目录后才发布日期目录，last-run.json 保存结果；失败非零且半成品保留调查。完成备份不覆盖，也不自动按日期删除，目录权限限制 SYSTEM/Administrators。
 
+油卡发票原件字节持久保存在`oil_invoice_original`，与票据索引、金额分配一起进入数据库归档，不依赖临时PDF缓存。恢复后通过原件接口核字节数及SHA256；备注或归属更正、撤销不删除原件。隔离演练证据归[TAIL-458](../../.scratch/oilcard-management/evidence/TAIL-458.md)，该专项演练不等于整机恢复或生产备份任务已执行。
+
 只读核一份备份，使用 backend/.venv/Scripts/python.exe -B -X utf8 ops/backup_databases.py --pg-bin <匹配版本bin> --verify <备份目录>。pg-bin 来自目标主机真实安装，不能照抄旧机器版本。
 
 恢复先创建隔离空库，用匹配 pg_restore；核各表行数、内容摘要、序列和相关业务读取后才考虑替换目标。目录/SHA 核对只证明归档可读及字节一致，不能代替完整恢复。pg_dump 不含集群角色、NSSM、机器环境、.env、会话及应用私有恢复材料；换机必须分别准备它们，单份 dump 不能代表整机恢复包。

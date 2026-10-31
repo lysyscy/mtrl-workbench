@@ -20,6 +20,7 @@ import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
 import { OilAttributionDialog } from './oilcard-association';
+import { OilInvoiceSheet } from './oilcard-invoices';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
 import { correctOilAttribution, getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, refundOilEntry, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
@@ -73,6 +74,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   const client = useQueryClient(), [selected, setSelected] = useState(''), [refund, setRefund] = useState<OilEntry | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [correcting, setCorrecting] = useState<OilEntry | null>(null);
+  const [invoiceLocked, setInvoiceLocked] = useState(false), [invoiceUncertain, setInvoiceUncertain] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [downloading, setDownloading] = useState(false), [exportError, setExportError] = useState('');
   const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
@@ -116,9 +118,9 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   }
   const { drafts, busy, uncertain, verified, error } = saves;
   draftRef.current = drafts;
-  useEffect(() => { onWriteLock(busy || uncertain); }, [busy, uncertain, onWriteLock]);
-  useEffect(() => { onUncertain(uncertain); }, [uncertain, onUncertain]);
-  const disabled = !active || blocked || !me || uncertain || !query.data || query.isError || archiveLocked;
+  useEffect(() => { onWriteLock(busy || uncertain || invoiceLocked); }, [busy, uncertain, invoiceLocked, onWriteLock]);
+  useEffect(() => { onUncertain(uncertain || invoiceUncertain); }, [uncertain, invoiceUncertain, onUncertain]);
+  const disabled = !active || blocked || !me || uncertain || invoiceLocked || !query.data || query.isError || archiveLocked;
   const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0;
   const filterOptions = useMemo<Record<Field, ValueFilterOptions<TableRow>>>(() => {
     const saved = (row: TableRow) => current.current?.entries.find(entry => entry.request_id === row.request_id);
@@ -205,7 +207,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       <Button disabled={blocked || busy || !Object.keys(drafts).length} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(() => ({}))}>取消未保存修改</Button></div></div>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button></p>)}
       {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'refund', label: '登记退款', disabled: structuralDisabled || selectedRow?.kind !== 'recharge' }, { key: 'attribution', label: '更正历史关联', disabled: structuralDisabled || !selectedRow }], onClick: ({ key }) => { if (!structuralDisabled && selectedRow) { saves.clearFeedback(); if (key === 'attribution') setCorrecting(selectedRow); else if (selectedRow.kind === 'recharge') setRefund(selectedRow); } } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>), onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
-    </section><section className="oilcard-ledger-pane oilcard-invoice-pending" aria-label="发票"><div data-page-chrome className="oilcard-toolbar"><h2>发票</h2></div><p className="state">发票接收与核对将在后续接入。</p></section></div>
+    </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     {refund && <RefundDialog row={refund} disabled={disabled} busy={busy} error={error} close={() => setRefund(null)} submit={async values => {
       const outcome = await saves.run(async signal => { await refundOilEntry({ ...values, original_id: refund.id }, signal); }, () => '', `原充值 #${refund.id} 退款 ${values.amount}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setRefund(null);
