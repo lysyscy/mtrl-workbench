@@ -1,8 +1,8 @@
 # 当前活动工作
 
-## 油卡管理已开工，首票453实施中
+## 油卡档案453已完成，充值基础454实施中
 
-2026-10-31用户在三轮grill-me及11票落票后明确授权派Sol xhigh开工。[TAIL-453](../.scratch/tails/issues/TAIL-453-实体油卡与用卡账户建档.md)现为in-progress，由指定gpt-6.1-sol/xhigh独立上下文子代理实现，父控负责整合与核验；分支codex/oilcard-management-20261031，基点e296e816。模型/effort未获运行元数据回显，配置未独立核实。业务与规格见[油卡需求](requirements/oil-cards.md)及[规格](../.scratch/oilcard-management/spec.md)，执行归属见[接续登记](../.scratch/oilcard-management/handoff.md)。总票452、8801原型及无关未提交成果保持。未执行真实接续或部署，实链、期初及历史核对仍按各自授权与条件。
+2026-10-31用户已授权Sol xhigh按11票开发与隔离验证。[TAIL-453](../.scratch/tails/issues/TAIL-453-实体油卡与用卡账户建档.md)的卡片/账户建档及历史机制已完成，19项后端检查、正式前端构建及隔离页面代表路径通过，[证据](../.scratch/oilcard-management/evidence/TAIL-453.md)随源码保存并推送300a0c27。现沿原依赖实施[TAIL-454](../.scratch/tails/issues/TAIL-454-充值调整与账户充值核对.md)，由同一Sol执行者承接，父控负责整合与核验；分支codex/oilcard-management-20261031。派发配置gpt-6.1-sol/xhigh，模型/effort运行元数据未独立核实。业务见[油卡需求](requirements/oil-cards.md)及[规格](../.scratch/oilcard-management/spec.md)，归属见[接续登记](../.scratch/oilcard-management/handoff.md)。总票452、8801原型及无关成果保持。未执行真实接续或部署；最终累计双轴审查、实链及期初核对仍按各自范围完成。
 
 已批准的11票及原依赖保持，按[连续执行批次](../.scratch/oilcard-management/ticket-plan.md)的就绪前沿推进。优先借鉴成熟实现，共用表头筛选先接充值/发票，其他页面后续按需接入，本期不推广。
 
