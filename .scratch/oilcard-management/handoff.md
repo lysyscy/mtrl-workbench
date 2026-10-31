@@ -45,7 +45,8 @@
 - 原台账：D:\工作\材料\台账\油卡\外租机械加油汇总清单（第四工程公司）.xlsx；只取油卡、油卡充值、油卡开票、转账四张活动表，排除存档及临时核对区。详见[research](research.md)。原件不修改、不提交Git。
 - PDF及旧脚本在同级开票目录；旧处理脚本会重命名原件，只借鉴流程，不对原件直接运行。float金额、当前映射及备注末个长数字不能照搬为可靠入账规则。
 - 代表PDF：开票/20260916/237 慧能 56997.84.pdf有完整卡号，也含银行账号；开票/2025/20251016/大连.pdf只有短卡尾号，应待确认。pypdf已声明并锁定6.21.4。已有PDF接续优先补关联，不重复记金额；永久原件已在数据库bytea随台账备份，不能借临时缓存。
-- 459有效交付链接已收到，完整私有输入仅在忽略文件.artifacts/active/oilcard-implementation/20261031-459/work/delivery-input.json。交付页曾打开，但新下载适配器未实施或实测，不算完成实链验收；完整链接/token不提交Git。
+- 459完整私有输入仅在忽略文件.artifacts/active/oilcard-implementation/20261031-459/work/delivery-input.json。当前聊天人类已直接确认“允许本次隔离下载测试”：令牌回送https://invoice.sinopec.com/api/invoice-digital-download-cos/delivery/getInvoiceDetail并按返回地址下载PDF，仅专用隔离验证；原件及完整链接/token不提交Git、不写正式账务。主控预检及新批次API实链专项通过（组133606-586725-25880，PDF65864字节与基线相同、跨批次下载仅1次、schema已清），前端及受控完整验收仍在进行。
+- 463只读准备在.artifacts/active/oilcard-implementation/20261031-463/reports：source-inventory/source-rows-private/pdf-facts-private/legacy-totals/project-candidates-private。29唯一完整卡、49充值1414851.25、101开票1126037.70、7转账、65PDF哈希未变；21PDF可靠识别，23份有唯一同卡日期金额候选但均未确认关联。源库revision mechauto261028，27费用项/52月值，7个工程用油名称候选共18月值，均未认定业务身份；大表旧oil非空0条。24个源归属名称仅6个有唯一精确名称候选，未据此确认或入账。待463实施时核输入变化并续用证据。
 - 456及457自有8065预览均已stop并清schema。457 PID37268、schema frontend_rewrite_397_c14318e3b82341ed8437f5aa5af20c39、revision oil457261031、stopped-disposable；本地证据在.artifacts/active/oilcard-implementation/20261031-457/reports。后续构建完成才启动，核源、构建和目标schema一致。
 - 458及460自有预览也已停并清schema；460最终PID22764、schema frontend_rewrite_397_bbda716cc5a543dd9dd7190344f1472d、revision oil460261031，owner stopped-disposable且已只读确认schema不存在。即时作废/撤销/重做及红冲标签无需刷新复验通过。
 - 8000为其他在用服务，8801为仍保留的用户原型，不因交接清理或接管；原型owner在.artifacts/active/oilcard-interaction/20261030-dsh/reports/owner.json，需用时重核。

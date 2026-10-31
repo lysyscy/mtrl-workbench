@@ -16,6 +16,7 @@ from . import ledger
 from . import transfers
 from . import invoices
 from . import invoice_adjustments
+from . import invoice_batches
 from .invoice_pdf import MAX_PDF_BYTES, recognize_pdf
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
@@ -232,8 +233,9 @@ def receive_invoice(file: UploadFile = File(...)):
     recognized = recognize_pdf(content)
     with session_scope() as session:
         original = invoices.receive_pdf(session, content, recognized)
-        return {'ok': True, 'original': invoices.original_data(original),
-                'item': invoices.invoice_data(session, session.get(invoices.OilInvoice, original.invoice_id))}
+        item = invoices.invoice_data(session, session.get(invoices.OilInvoice, original.invoice_id))
+        return {'ok': True, 'original': next(o for o in item['originals'] if o['id'] == original.id),
+                'item': item, **invoices.receipt_outcome(session, original)}
 
 
 @router.get('/invoices/receipts/{digest}')
@@ -344,3 +346,39 @@ def void_invoice(invoice_id: int, req: InvoiceVoid):
     with session_scope() as session:
         row = invoice_adjustments.void(session, invoice_id, req.model_dump(mode='json'))
         return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+class DeliveryBatchCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_id: UUID
+    links: StrictStr = Field(max_length=50000)
+
+
+@router.post('/invoice-batches')
+def create_delivery_batch(req: DeliveryBatchCreate):
+    with session_scope() as session:
+        batch = invoice_batches.create(session, str(req.request_id), req.links)
+        return {'ok': True, 'batch': invoice_batches.batch_data(session, batch)}
+
+
+@router.get('/invoice-batches')
+def recent_delivery_batches():
+    with session_scope() as session:
+        return invoice_batches.recent(session)
+
+
+@router.get('/invoice-batches/request/{request_id}')
+def delivery_batch_request(request_id: UUID):
+    with session_scope() as session:
+        return invoice_batches.by_request(session, str(request_id))
+
+
+@router.get('/invoice-batches/{batch_id}')
+def read_delivery_batch(batch_id: int):
+    with session_scope() as session:
+        return invoice_batches.read(session, batch_id)
+
+
+@router.post('/invoice-batches/{batch_id}/items/{item_id}/run')
+def run_delivery_item(batch_id: int, item_id: int):
+    return {'ok': True, 'batch': invoice_batches.run(batch_id, item_id)}

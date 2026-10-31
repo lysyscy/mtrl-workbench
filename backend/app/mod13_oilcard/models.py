@@ -180,3 +180,40 @@ class OilInvoiceNumber(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey('oil_invoice.id'), index=True)
     number: Mapped[str] = mapped_column(String(32), unique=True)
+
+
+class OilDeliveryLink(Base):
+    """Private provider token and durable receipt identity; never returned to the UI."""
+    __tablename__ = 'oil_delivery_link'
+    __table_args__ = (CheckConstraint("state IN ('queued', 'running', 'done', 'failed')", name='ck_oil_delivery_state'),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    link_key: Mapped[str] = mapped_column(String(64), unique=True)
+    token: Mapped[str] = mapped_column(String(128))
+    state: Mapped[str] = mapped_column(String(16), default='queued')
+    message: Mapped[str] = mapped_column(Text, default='')
+    original_id: Mapped[int | None] = mapped_column(ForeignKey('oil_invoice_original.id'), nullable=True)
+    duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempt: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class OilDeliveryBatch(Base):
+    __tablename__ = 'oil_delivery_batch'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(36), unique=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class OilDeliveryItem(Base):
+    __tablename__ = 'oil_delivery_item'
+    __table_args__ = (UniqueConstraint('batch_id', 'position', name='uq_oil_delivery_position'),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey('oil_delivery_batch.id'), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    link_id: Mapped[int | None] = mapped_column(ForeignKey('oil_delivery_link.id'), nullable=True)
+    reused: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str] = mapped_column(Text, default='')

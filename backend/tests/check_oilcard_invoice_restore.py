@@ -43,8 +43,16 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
     def cleanup():
         # Own rows only; do not leave a committed example for later tests.
         with engine.begin() as connection:
-            connection.execute(text('DELETE FROM oil_invoice_original WHERE invoice_id IN (SELECT invoice_id FROM oil_invoice_allocation WHERE project_id=:id)'), {'id': project_id})
             invoice_ids = list(connection.scalars(text('SELECT invoice_id FROM oil_invoice_allocation WHERE project_id=:id'), {'id': project_id}))
+            for invoice_id in invoice_ids:
+                link_ids = list(connection.scalars(text('SELECT id FROM oil_delivery_link WHERE original_id IN (SELECT id FROM oil_invoice_original WHERE invoice_id=:id)'), {'id': invoice_id}))
+                for link_id in link_ids:
+                    batch_ids = list(connection.scalars(text('SELECT batch_id FROM oil_delivery_item WHERE link_id=:id'), {'id': link_id}))
+                    connection.execute(text('DELETE FROM oil_delivery_item WHERE link_id=:id'), {'id': link_id})
+                    connection.execute(text('DELETE FROM oil_delivery_link WHERE id=:id'), {'id': link_id})
+                    for batch_id in batch_ids:
+                        connection.execute(text('DELETE FROM oil_delivery_batch WHERE id=:id AND NOT EXISTS (SELECT 1 FROM oil_delivery_item WHERE batch_id=:id)'), {'id': batch_id})
+            connection.execute(text('DELETE FROM oil_invoice_original WHERE invoice_id IN (SELECT invoice_id FROM oil_invoice_allocation WHERE project_id=:id)'), {'id': project_id})
             connection.execute(text('DELETE FROM oil_invoice_allocation WHERE project_id=:id'), {'id': project_id})
             for invoice_id in invoice_ids:
                 connection.execute(text('DELETE FROM oil_invoice_number WHERE invoice_id=:id'), {'id': invoice_id})
@@ -64,26 +72,54 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
         original_id = registered['original']['id']
         adjusted = correct(client, registered['item'], [allocation(account, '3000')], invoice_no='20261031000000000009')
         assert adjusted.status_code == 200, adjusted.text
+        from app.mod13_oilcard import delivery
+        from tests.test_oilcard_delivery import batch, run as run_item, LINK
+        calls = []
+        monkeypatch.setattr(delivery, 'download_pdf', lambda token: (calls.append(True) or content, '20261031000000000001'))
+        delivered = batch(client, LINK)
+        delivered = run_item(client, delivered, delivered['items'][0])
         archive = tmp_path / 'invoice-originals.dump'
         def run(executable, *args):
-            result = subprocess.run([str(pg_bin / executable), *args], env=env, check=True,
+            result = subprocess.run([str(pg_bin / executable), *args], env=env, check=False,
                 capture_output=True, text=True, encoding='utf-8')
+            assert result.returncode == 0, result.stderr
             return result.stdout
         run('pg_dump.exe', '--no-password', '--format=custom', '--no-owner', '--no-privileges',
-            '--schema', schema, '--table', schema + '.oil_invoice*', '--file', str(archive))
+            '--schema', schema, '--table', schema + '.oil_invoice*', '--table', schema + '.oil_delivery*', '--file', str(archive))
         toc = run('pg_restore.exe', '--list', str(archive))
         assert 'TABLE DATA' in toc and 'oil_invoice_original' in toc and archive.stat().st_size > 0
+        # This drill restores data into the migrated, constrained schema. A full
+        # archive normally adds FK constraints after data; retain that complete
+        # archive and explicitly order its data entries for this existing-schema
+        # drill instead of disabling constraints or dropping any archived rows.
+        table_order = ('oil_invoice', 'oil_invoice_number', 'oil_invoice_original', 'oil_invoice_allocation',
+                       'oil_delivery_batch', 'oil_delivery_link', 'oil_delivery_item')
+        entries = {}
+        sequences = []
+        for line in toc.splitlines():
+            match = re.search(r' TABLE DATA \S+ (\S+) ', line)
+            if match:
+                entries[match[1]] = line
+            elif ' SEQUENCE SET ' in line:
+                sequences.append(line)
+        assert set(entries) == set(table_order)
+        restore_list = tmp_path / 'invoice-restore-order.list'
+        restore_list.write_text('\n'.join([*(entries[name] for name in table_order), *sequences]) + '\n', encoding='utf-8')
         with engine.begin() as connection:
-            connection.execute(text('TRUNCATE oil_invoice_allocation, oil_invoice_original, oil_invoice_number, oil_invoice RESTART IDENTITY'))
+            connection.execute(text('TRUNCATE oil_delivery_item, oil_delivery_batch, oil_delivery_link, oil_invoice_allocation, oil_invoice_original, oil_invoice_number, oil_invoice RESTART IDENTITY'))
         assert client.get('/api/m13/invoices').json()['invoices'] == []
         run('pg_restore.exe', '--no-password', '--data-only', '--no-owner', '--no-privileges',
-            '--exit-on-error', '--dbname', url.database, str(archive))
+            '--exit-on-error', '--use-list', str(restore_list), '--dbname', url.database, str(archive))
         recovered = client.get(f'/api/m13/invoices/originals/{original_id}')
         assert recovered.status_code == 200
         assert recovered.content == content
         assert sha256(recovered.content).hexdigest() == registered['original']['sha256']
         assert client.get('/api/m13/invoices').json()['total_amount'] == '3000.00'
         assert client.get('/api/m13/reconciliation').json()['invoiced_amount'] == '3000.00'
+        resumed = client.get(f"/api/m13/invoice-batches/{delivered['id']}").json()
+        assert resumed['items'][0]['status'] == 'duplicate'
+        run_item(client, resumed, resumed['items'][0])
+        assert len(calls) == 1
         historical = receive(client, invoice_pdf(variant='restored old number metadata'))
         corrected = receive(client, invoice_pdf(number='20261031000000000009'))
         assert historical['item']['id'] == corrected['item']['id'] == registered['item']['id']

@@ -6,6 +6,8 @@
 
 油卡发票原件字节持久保存在`oil_invoice_original`，与票据索引、票号别名`oil_invoice_number`、金额分配一起进入数据库归档，不依赖临时PDF缓存。恢复后通过原件接口核字节数及SHA256，并核旧识别号和更正号仍指向同票；备注或归属更正、撤销不删除原件。隔离演练证据归[TAIL-458](../../.scratch/oilcard-management/evidence/TAIL-458.md)及[TAIL-460](../../.scratch/oilcard-management/evidence/TAIL-460.md)，该专项演练不等于整机恢复或生产备份任务已执行。
 
+交付收票续办记录在`oil_delivery_batch/link/item`，随同原件归档恢复；其中链接令牌属于受保护的业务输入，不导出到公共源码或回执。专项data-only恢复须在既有外键启用条件下按依赖先恢复发票/原件再恢复链接及条目，核完成批次重跑仍复用原件；完整库恢复继续沿下文空库流程。
+
 只读核一份备份，使用 backend/.venv/Scripts/python.exe -B -X utf8 ops/backup_databases.py --pg-bin <匹配版本bin> --verify <备份目录>。pg-bin 来自目标主机真实安装，不能照抄旧机器版本。
 
 恢复先创建隔离空库，用匹配 pg_restore；核各表行数、内容摘要、序列和相关业务读取后才考虑替换目标。目录/SHA 核对只证明归档可读及字节一致，不能代替完整恢复。pg_dump 不含集群角色、NSSM、机器环境、.env、会话及应用私有恢复材料；换机必须分别准备它们，单份 dump 不能代表整机恢复包。

@@ -101,7 +101,31 @@ def receive_pdf(session, content, recognized):
 
 def receipt(session, digest):
     source = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.sha256 == digest))
-    return {'received': source is not None, 'original': original_data(source) if source else None}
+    if source is None:
+        return {'received': False, 'original': None}
+    invoice = session.get(OilInvoice, source.invoice_id)
+    return {'received': True, 'original': original_data(source, json.loads(invoice.review_json)),
+            **receipt_outcome(session, source, repeated=True)}
+
+
+def receipt_outcome(session, source, *, repeated=False):
+    """A receipt is durable; its processing result follows the current invoice."""
+    invoice = session.get(OilInvoice, source.invoice_id)
+    review = json.loads(invoice.review_json).get(source.sha256)
+    duplicate = repeated or source.outcome == 'duplicate'
+    if invoice.status == 'voided':
+        return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': '该票已登记作废，原件保留，不计开票金额。'}
+    if invoice.status == 'pending':
+        return {'receipt_status': 'pending', 'receipt_message': invoice.reason or '原件已接收，请核对票面及归属。'}
+    if source.outcome == 'conflict' and not review:
+        return {'receipt_status': 'pending', 'receipt_message': source.reason}
+    if review:
+        message = '原件已核对：' + review['note']
+    elif invoice.kind == 'credit':
+        message = '红票已登记并关联原票，未重复计金额。'
+    else:
+        message = '原件已接收，未重复计金额。' if duplicate else '原件已接收并登记。'
+    return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': message}
 
 
 def invoices(session):
