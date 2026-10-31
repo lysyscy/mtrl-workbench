@@ -20,14 +20,14 @@
 - 分支：codex/oilcard-management-20261031；累计基点e296e816ed13a05e7572bae6bc6e88fb5a3dda66。起点尚含未提交规格/原型，最终范围不能假定HEAD已含全部目标文件。
 - 453～458技术验证、保存并done；证据在本目录evidence/TAIL-453.md至TAIL-458.md。458源码及证据450d8e80、状态b2dbc55c已正常推送，远端HEAD b2dbc55c68df97c6cbaca2c967fa29b1fca5b971已核一致。先前自动审批拦截已由用户明确答复“允许正常推送”解决，授权目的地为lysyscy/mtrl-workbench的codex/oilcard-management-20261031分支，范围为本次已批准油卡开发的代码、测试及验证文档。
 - 458的34项后端及最终受影响14项、4项前端、正式构建、PG原件恢复、IAB收票/去重/冲突/独立双表/刷新与实际文件下载通过；自有预览schema已退出。457共享history顺序缺陷已有有效回归，不再是待修缺项。
-- 460已技术验收并保存推送646d64a1，远端SHA一致；证据见evidence/TAIL-460.md，原票done。459实施中，461就绪；其余按原依赖继续。最终累计Standards/Spec独立双轴审查未完成。
+- 453～460均技术验收、保存推送并done。460源码646d64a1、459源码84daeead均核远端一致，证据分别见evidence/TAIL-460.md及TAIL-459.md。461实施中，其余按原依赖继续。最终累计Standards/Spec独立双轴审查未完成。
 - 接手从458持续推进剩余票，既有完成票的有效证据继续复用。
 
 ## 恢复入口与下一步
 
 先核AGENTS.md、CONTRIBUTING.md、分支/工作树、本交接编号和原票。目标读[spec](spec.md)、[当前需求](../../docs/requirements/oil-cards.md)及[map](map.md)。原票在.scratch/tails/issues；原依赖为453→454，454→455/456/457，455→458，458→459/460，456→461→462，457/460/462→463。
 
-下一步TAIL-459：交付链接批量下载、逐项结果与跨批次去重及结果未知续办，使用已提供私有有效输入完成实际下载验证。沿用Sol xhigh执行者的PDF上下文；主控仍持有预览、公共状态及Git。之后继续461→462→463，不新增依赖。每票按风险验证，源码及证据先入Git再关闭；提交后正常推送并核远端SHA。最终审查覆盖累计提交、未提交和新增内容，排除他人工作，修复实质发现。
+下一步TAIL-461特殊费用月度用油联动，再462会议大表累计，最后463接续核对/专用副本演练，不新增依赖。报表联动改用新独立上下文Sol xhigh执行者，主控仍持有预览、公共状态及Git；先确认稳定费用身份，不按旧名称猜配或将旧总额直接叠加。每票按风险验证，源码及证据先入Git再关闭；提交后正常推送并核远端SHA。最终审查覆盖累计提交、未提交和新增内容，排除他人工作，修复实质发现。
 
 ## 有效决定及授权边界
 
@@ -45,7 +45,7 @@
 - 原台账：D:\工作\材料\台账\油卡\外租机械加油汇总清单（第四工程公司）.xlsx；只取油卡、油卡充值、油卡开票、转账四张活动表，排除存档及临时核对区。详见[research](research.md)。原件不修改、不提交Git。
 - PDF及旧脚本在同级开票目录；旧处理脚本会重命名原件，只借鉴流程，不对原件直接运行。float金额、当前映射及备注末个长数字不能照搬为可靠入账规则。
 - 代表PDF：开票/20260916/237 慧能 56997.84.pdf有完整卡号，也含银行账号；开票/2025/20251016/大连.pdf只有短卡尾号，应待确认。pypdf已声明并锁定6.21.4。已有PDF接续优先补关联，不重复记金额；永久原件已在数据库bytea随台账备份，不能借临时缓存。
-- 459完整私有输入仅在忽略文件.artifacts/active/oilcard-implementation/20261031-459/work/delivery-input.json。当前聊天人类已直接确认“允许本次隔离下载测试”：令牌回送https://invoice.sinopec.com/api/invoice-digital-download-cos/delivery/getInvoiceDetail并按返回地址下载PDF，仅专用隔离验证；原件及完整链接/token不提交Git、不写正式账务。主控预检及新批次API实链专项通过（组133606-586725-25880，PDF65864字节与基线相同、跨批次下载仅1次、schema已清），前端及受控完整验收仍在进行。
+- 459完整私有输入仅在忽略文件.artifacts/active/oilcard-implementation/20261031-459/work/delivery-input.json。当前聊天人类已直接确认“允许本次隔离下载测试”：令牌回送https://invoice.sinopec.com/api/invoice-digital-download-cos/delivery/getInvoiceDetail并按返回地址下载PDF，仅专用隔离验证；原件及完整链接/token不提交Git、不写正式账务。新批次API实链专项通过（组133606-586725-25880，PDF65864字节与基线相同、跨批次下载仅1次）；实际IAB混合结果、跨批次重复、重载、旧批次、发票定位及上传/下载通过，原件逐字节一致。最终预览PID25964/revision oil459261031/schema frontend_rewrite_397_5aa399e7c9124ef78899fcd81dbe10a7正常stop退出0并cleaned，标签已关/视口已重置。
 - 463只读准备在.artifacts/active/oilcard-implementation/20261031-463/reports：source-inventory/source-rows-private/pdf-facts-private/legacy-totals/project-candidates-private。29唯一完整卡、49充值1414851.25、101开票1126037.70、7转账、65PDF哈希未变；21PDF可靠识别，23份有唯一同卡日期金额候选但均未确认关联。源库revision mechauto261028，27费用项/52月值，7个工程用油名称候选共18月值，均未认定业务身份；大表旧oil非空0条。24个源归属名称仅6个有唯一精确名称候选，未据此确认或入账。待463实施时核输入变化并续用证据。
 - 456及457自有8065预览均已stop并清schema。457 PID37268、schema frontend_rewrite_397_c14318e3b82341ed8437f5aa5af20c39、revision oil457261031、stopped-disposable；本地证据在.artifacts/active/oilcard-implementation/20261031-457/reports。后续构建完成才启动，核源、构建和目标schema一致。
 - 458及460自有预览也已停并清schema；460最终PID22764、schema frontend_rewrite_397_bbda716cc5a543dd9dd7190344f1472d、revision oil460261031，owner stopped-disposable且已只读确认schema不存在。即时作废/撤销/重做及红冲标签无需刷新复验通过。
