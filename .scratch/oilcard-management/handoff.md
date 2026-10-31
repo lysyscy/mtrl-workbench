@@ -9,7 +9,7 @@
 - 项目：D:\dev\mtrl-workbench，同一原目录接续。
 - 用户已确认：收完当前TAIL-457、核验并保存后自动新建对话，继续剩余开发。
 - 接手对话：01a19021-8c69-7053-a749-65fc1cb7b4bd（hostId=local）。
-- 状态：已接手。2026-10-31源对话完成登记及推送c5510c57后发出继续指令，接手核验一致并领取TAIL-458，开始核对现有PDF、文件持久化及备份接缝。
+- 状态：本接续开发范围已完成。2026-10-31源对话登记并推送c5510c57后由本对话接手，从458持续完成至463及最终累计双轴审查；源码/证据正常推送，真实业务接续及正式加载未执行。
 - 修改权：接手对话01a19021-8c69-7053-a749-65fc1cb7b4bd持有；源对话只观察，不再改业务文件或交接正文。
 - 运行核对：接手方因当前权限限制未独立重验端口；源对话已直接核457 stop退出0、schema清理及owner stopped-disposable，必要时按项目入口再核，不盲目操作8000/8801。
 
@@ -20,14 +20,14 @@
 - 分支：codex/oilcard-management-20261031；累计基点e296e816ed13a05e7572bae6bc6e88fb5a3dda66。起点尚含未提交规格/原型，最终范围不能假定HEAD已含全部目标文件。
 - 453～458技术验证、保存并done；证据在本目录evidence/TAIL-453.md至TAIL-458.md。458源码及证据450d8e80、状态b2dbc55c已正常推送，远端HEAD b2dbc55c68df97c6cbaca2c967fa29b1fca5b971已核一致。先前自动审批拦截已由用户明确答复“允许正常推送”解决，授权目的地为lysyscy/mtrl-workbench的codex/oilcard-management-20261031分支，范围为本次已批准油卡开发的代码、测试及验证文档。
 - 458的34项后端及最终受影响14项、4项前端、正式构建、PG原件恢复、IAB收票/去重/冲突/独立双表/刷新与实际文件下载通过；自有预览schema已退出。457共享history顺序缺陷已有有效回归，不再是待修缺项。
-- 453～462均技术验收、保存推送并done。460源码646d64a1、459源码84daeead、461源码60a8deb1、462源码b1d3957c均核远端一致，证据见各evidence原文件。463实施中。最终累计Standards/Spec独立双轴审查未完成。
+- 453～463均技术验收、保存推送并done。460源码646d64a1、459源码84daeead、461源码60a8deb1、462源码b1d3957c、463源码66bb4d30均核远端一致，证据见各evidence原文件。累计Standards/Spec独立双轴审查已闭环：Standards0，Spec1个P1已修、未关闭0，详见evidence/final-review.md。
 - 接手从458持续推进剩余票，既有完成票的有效证据继续复用。
 
 ## 恢复入口与下一步
 
 先核AGENTS.md、CONTRIBUTING.md、分支/工作树、本交接编号和原票。目标读[spec](spec.md)、[当前需求](../../docs/requirements/oil-cards.md)及[map](map.md)。原票在.scratch/tails/issues；原依赖为453→454，454→455/456/457，455→458，458→459/460，456→461→462，457/460/462→463。
 
-下一步463接续核对/专用副本演练，不新增依赖。462已完成累计及额外快照/同笔备注、零终止、清空和旧oil/history退出；跨月原大表页面及实际Excel15130通过。463保留原标记、稳定来源身份及未知归属，历史缺票号/日期不可伪造补齐；已有PDF只补关联不重复记金额。主控持有预览、公共状态、Git和核对工作簿。每票源码及证据先入Git再关闭；提交后正常推送并核远端SHA。最终审查覆盖累计提交、未提交和新增内容，排除他人工作。
+本次开发无剩余实施票。463保留原标记及稳定来源身份，缺票号/日期留待核，已有PDF只补关联不重复记金额；170项核对工作簿在463本机忽略run/outputs/本对话ID/油卡接续核对.xlsx，309真实来源证据全待确认，未正式入账。后续先由用户核期间/归属/旧总额，真实接续与正式加载各按当次授权，不自动继续。每票源码及证据先保存推送再关闭；累计审查包含原基点后全部提交、未提交与新增内容，已排除他人工作。
 
 ## 有效决定及授权边界
 
@@ -51,6 +51,7 @@
 - 458及460自有预览也已停并清schema；460最终PID22764、schema frontend_rewrite_397_bbda716cc5a543dd9dd7190344f1472d、revision oil460261031，owner stopped-disposable且已只读确认schema不存在。即时作废/撤销/重做及红冲标签无需刷新复验通过。
 - 461两预览已正常stop/cleaned；最终PID34556/revision oil461261031/schema frontend_rewrite_397_7c5e06f94b24415c90fedfe6b2173d4d。实际UI十月10250及备注重载、十一月不沿用、负数撤销/重做、原费用只读和实际九月三表Excel10250/排除十月通过；源码冻结后补回执检查导致初始副本退出重建，最终仅build-02用于验收。证据在461/reports。
 - 462预览PID28288/revision oil462261031/schema frontend_rewrite_397_3cfe89e90a4247d4bebeaf039f1e8683正常stop退出0并cleaned，标签关闭/视口重置；源码b1d3957c。实际GUI及下载证据在462/reports；原件未改，未接续真实旧数据。
+- 463首轮PID31508/schema frontend_rewrite_397_c014df19808c4160a13ee630db34fe68及最终PID35924/schema frontend_rewrite_397_4f8fc879d6524a899b4b8cfe65b13f42均revision oil463261031，正常stop退出0/cleaned，标签关闭、视口重置。合成接续两次重跑、公司15670/10000/5670、旧费12000/大表13000及11月17900、实际三Excel通过；独立审查修复后实际无PDF读取/右键/补档核对/下载同字节通过。人工原件核对后来源重跑拒绝覆盖现值，真实309证据仍全pending。证据在463与463-final/reports，见evidence/TAIL-463.md。
 - 8000为其他在用服务，8801为仍保留的用户原型，不因交接清理或接管；原型owner在.artifacts/active/oilcard-interaction/20261030-dsh/reports/owner.json，需用时重核。
 - 保护docs/guides/frontend-design.md改动及未跟踪.impeccable/、.tmp-fees-width.py、DESIGN.md、PRODUCT.md、debug.log；不全量暂存、reset、clean或stash。
 - 总票452基准SHA256：a1d9e8c048f77fff041fee3333235ca956c7ea42aa2e457dd43a753930b47290。
