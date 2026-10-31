@@ -12,10 +12,11 @@ import { readHistory } from './history';
 import { PageActivity } from './page-activity';
 import { randomUUID } from './random-id';
 import { useCellSaveQueue } from './use-cell-save';
-import { getOilArchives, getOilAssignments, saveOilAccount, saveOilCard } from './oilcard-api';
+import { getOilArchives, getOilAssignments, replaceOilCard, saveOilAccount, saveOilCard } from './oilcard-api';
 import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard } from './oilcard-api';
 import { OilLedgerSheet } from './oilcard-ledger';
 import { OilReconciliationSheet } from './oilcard-reconciliation';
+import { OilReplacementDialog } from './oilcard-association';
 
 type ArchiveKind = 'card' | 'account';
 type Field = 'card_no' | 'kind' | 'parent_card_id' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
@@ -24,7 +25,7 @@ type PendingAccount = OilAccount;
 const keyOf = (kind: ArchiveKind, id: number, field: Field) => `${kind}:${id}:${field}`;
 const text = (value: unknown) => value === null || value === undefined ? '' : String(value);
 const cardLabel = (card: OilCard) => card.card_no || `卡号待补 #${card.id}`;
-const fieldLabels: Record<Field, string> = { card_no: '完整卡号', kind: '主卡/副卡', parent_card_id: '所属主卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
+const fieldLabels: Record<Field, string> = { card_no: '完整卡号更正', kind: '主卡/副卡', parent_card_id: '所属主卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
 interface Cells {
   drafts: Record<string, Draft>; disabled: boolean; busy: boolean; projects: Project[]; cards: OilCard[]; accounts: OilAccount[]; pending: PendingAccount | null;
   change: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field, value: string) => void;
@@ -62,6 +63,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const [ledgerUncertain, setLedgerUncertain] = useState(false);
   const [pending, setPending] = useState<PendingAccount | null>(null), pendingRef = useRef(pending); pendingRef.current = pending;
   const [selected, setSelected] = useState(0), [historyAccount, setHistoryAccount] = useState(0);
+  const [replacing, setReplacing] = useState<OilAccount | null>(null);
   const query = useQuery({ queryKey: ['oilcard-archives'], enabled: active && !blocked, queryFn: ({ signal }) => getOilArchives(signal) });
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: active && !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const assignments = useQuery({ queryKey: ['oilcard-assignments', historyAccount], enabled: active && !blocked && historyAccount > 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
@@ -88,6 +90,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     await client.cancelQueries({ queryKey: ['oilcard-archives'], exact: true });
     const result = await client.fetchQuery({ queryKey: ['oilcard-archives'], staleTime: 0, queryFn: ({ signal }) => getOilArchives(signal) });
     currentData.current = result;
+    if (historyAccount) await client.fetchQuery({ queryKey: ['oilcard-assignments', historyAccount], staleTime: 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
     if (me) await client.fetchQuery({ queryKey: ['history', `${me.id}:${me.account}`], staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
     return result;
   }
@@ -159,7 +162,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     <div data-page-chrome className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'account', label: '用卡账户' }, { value: 'card', label: '实体油卡' }] as const).map(item => <Button key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} disabled={item.value === 'linkage'} title={item.value === 'linkage' ? '用油联动将在后续接入' : undefined} type={tab === item.value ? 'primary' : 'default'} onClick={() => { if (item.value !== 'linkage') chooseTab(item.value); }}>{item.label}</Button>)}</div>
     {(tab === 'account' || tab === 'card') && <div data-page-chrome className="oilcard-toolbar"><div><Button type="primary" disabled={structuralDisabled} onClick={() => tab === 'card' ? void addCard() : addAccount()}>{tab === 'card' ? '新增实体油卡' : '新增用卡账户'}</Button>
       <Button disabled={blocked || busy || !dirty && !pending} onMouseDown={e => e.preventDefault()} onClick={() => { saves.update(() => ({})); setPending(null); pendingRef.current = null; }}>取消未保存修改</Button>
-      {tab === 'account' && <Button disabled={!selected || blocked || busy} onClick={() => setHistoryAccount(selected)}>关联历史</Button>}</div>
+      {tab === 'account' && <><Button disabled={!selected || structuralDisabled} onClick={() => { const account = currentData.current?.accounts.find(item => item.id === selected); if (account) { saves.clearFeedback(); setReplacing(account); } }}>换卡</Button><Button disabled={!selected || blocked || busy} onClick={() => setHistoryAccount(selected)}>关联历史</Button></>}</div>
       {tab === 'account' && <label>账户状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label>}</div>}
     {!me && <p className="state">登录后可维护油卡档案。</p>}
     {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值保存结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对充值结果</Button></p>}
@@ -167,6 +170,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     {uncertain && <p className="notice" role="alert">核对刚才的档案变更后再继续。<Button disabled={!verified || blocked || busy} onClick={() => saves.confirm()}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>{fieldLabels[d.field]}：{d.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button></p>)}
     {pending && <p className="muted oilcard-pending-hint">填写账户名称并选择项目后自动建档。</p>}
+    {tab === 'card' && <p className="muted oilcard-pending-hint">卡号录错可直接更正；换卡请在用卡账户表选择账户后办理。</p>}
     {query.isPending || projects.isPending ? <p data-page-loading role="status">正在读取油卡档案…</p> : data && <ArchiveCells.Provider value={state}>
       <div role="tabpanel" id="oilcard-panel-overview" aria-labelledby="oilcard-tab-overview" hidden={tab !== 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} openLedger={() => chooseTab('ledger')} /></PageActivity.Provider></div>
       {ledgerVisited && <div role="tabpanel" id="oilcard-panel-ledger" aria-labelledby="oilcard-tab-ledger" hidden={tab !== 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></div>}
@@ -180,9 +184,15 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     {historyAccount > 0 && tab === 'account' && <section className="oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name} 关联历史</h2><Button onClick={() => setHistoryAccount(0)}>收起关联历史</Button></div>
       {assignments.isPending ? <p role="status">正在读取关联历史…</p> : assignments.isError ? <p role="alert" className="notice">{assignments.error.message}<Button disabled={blocked} onClick={() => void assignments.refetch()}>重读关联历史</Button></p> : <ReadGrid table="oilcard-assignments" label="账户关联历史" rows={assignments.data ?? []} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" columns={[
         { field: 'changed_at', headerName: '关联时间' },
+        { colId: 'change', headerName: '操作', valueGetter: p => p.data?.change_kind === 'replacement' ? '换卡' : '关联维护' },
         { colId: 'project', headerName: '项目', valueGetter: p => projects.data?.find(project => project.id === p.data?.project_id)?.disp || `项目 #${p.data?.project_id}` },
         { colId: 'card', headerName: '卡片', valueGetter: p => { const card = cards.find(c => c.id === p.data?.card_id); return card ? cardLabel(card) : '未关联卡片'; } },
+        { colId: 'previous_card', headerName: '换卡前卡片', valueGetter: p => { if (p.data?.change_kind !== 'replacement') return '—'; const card = cards.find(c => c.id === p.data?.previous_card_id); return card ? cardLabel(card) : '未关联卡片'; } },
         { field: 'changed_by', headerName: '操作人' },
       ]} />}</section>}
+    {replacing && data && <OilReplacementDialog account={replacing} archives={data} disabled={disabled} busy={busy} error={error} close={() => setReplacing(null)} submit={async fields => {
+      const outcome = await saves.run(async signal => { await replaceOilCard(fields, replacing, signal); }, () => '', `${replacing.name} 换卡：`);
+      if (outcome === 'saved' || outcome === 'uncertain') setReplacing(null);
+    }} />}
   </section>;
 }

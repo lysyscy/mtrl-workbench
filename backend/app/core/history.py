@@ -308,6 +308,28 @@ def replay(session, actor, direction, expected_id):
         prepared.append((rule, change))
     # 全部校验完成后按真实外键顺序分表 flush；失败仍回滚整个业务事务。
     tables = list(sort_tables({rule.model.__table__ for rule, _ in prepared}))
+    deleting = {(change['table'], change['id']) for _, change in prepared if change[target] is None}
+    detach = []
+    for rule, change in prepared:
+        if change[source] is None or change[target] is None:
+            continue
+        table = rule.model.__table__
+        if not any((fk.column.table.name, change[source][fk.parent.name]) in deleting for fk in table.foreign_keys):
+            continue
+        # 现存子行可能改挂到本次新建的父项。撤销时先解除它的引用，
+        # 但目标依赖必须仍存在；不能先删除父项，也不能猜建缺失的依赖。
+        for fk in table.foreign_keys:
+            key = change[target][fk.parent.name]
+            if key is not None and ((fk.column.table.name, key) in deleting or _read(session, fk.column.table, key, lock=True)[0] is None):
+                raise MustReportError('恢复所需的关联记录不存在，未修改数据')
+        detach.append((rule, change))
+    detached = {(change['table'], change['id']) for _, change in detach}
+    for rule, change in detach:
+        obj, values = session.get(rule.model, change['id']), _decode(rule.model.__table__, change[target])
+        for field in rule.fields:
+            if change[target][field] != change[source][field]:
+                setattr(obj, field, values[field])
+    session.flush()
     for table in reversed(tables):
         for rule, change in prepared:
             if rule.model.__table__ is table and change[target] is None:
@@ -315,7 +337,7 @@ def replay(session, actor, direction, expected_id):
         session.flush()
     for table in tables:
         for rule, change in prepared:
-            if rule.model.__table__ is not table or change[target] is None:
+            if rule.model.__table__ is not table or change[target] is None or (change['table'], change['id']) in detached:
                 continue
             wanted, current = change[target], change[source]
             if current is None:

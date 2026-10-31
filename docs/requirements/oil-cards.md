@@ -1,6 +1,6 @@
 # 油卡管理
 
-本功能整体设计已于2026-10-29获用户确认，2026-10-31用户明确授权派Sol xhigh开始开发与隔离验证，当前首票453实施中。实施范围及测试决策归[油卡管理规格](../../.scratch/oilcard-management/spec.md)，11张子票及连续执行方式归[票拆分与执行批次](../../.scratch/oilcard-management/ticket-plan.md)；[TAIL-452](../../.scratch/tails/issues/TAIL-452-油卡管理与用油报表联动.md)作为总票保持原状。探查证据归[活动研究](../../.scratch/oilcard-management/research.md)，术语归[油卡术语](../../GLOSSARY.md#油卡)。真实接续与正式加载尚未执行。
+本功能整体设计已于2026-10-29获用户确认，2026-10-31用户明确授权派Sol xhigh连续开发与隔离验证，当前进度以各原票为准。实施范围及测试决策归[油卡管理规格](../../.scratch/oilcard-management/spec.md)，11张子票及连续执行方式归[票拆分与执行批次](../../.scratch/oilcard-management/ticket-plan.md)；[TAIL-452](../../.scratch/tails/issues/TAIL-452-油卡管理与用油报表联动.md)作为总票保持原状。探查证据归[活动研究](../../.scratch/oilcard-management/research.md)，术语归[油卡术语](../../GLOSSARY.md#油卡)。真实接续与正式加载尚未执行。
 
 ## 管理范围
 

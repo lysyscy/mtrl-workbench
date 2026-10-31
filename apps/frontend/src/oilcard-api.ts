@@ -3,7 +3,7 @@ import { ApiError, body, confirmWrite, record, requestJson } from './api';
 export interface OilCard { id: number; request_id: string; card_no: string | null; kind: 'primary' | 'secondary'; parent_card_id: number | null; remark: string; version: string }
 export interface OilAccount { id: number; request_id: string; name: string; project_id: number; card_id: number | null; status: 'active' | 'archived'; remark: string; version: string }
 export interface OilArchives { cards: OilCard[]; accounts: OilAccount[] }
-export interface OilAssignment { id: number; account_id: number; project_id: number; card_id: number | null; changed_by: string; changed_at: string }
+export interface OilAssignment { id: number; account_id: number; project_id: number; card_id: number | null; previous_card_id: number | null; change_kind: 'assignment' | 'replacement'; request_id: string | null; changed_by: string; changed_at: string }
 export type CardFields = Omit<OilCard, 'id' | 'request_id' | 'version'>;
 export type AccountFields = Omit<OilAccount, 'id' | 'request_id' | 'version'>;
 const id = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
@@ -44,6 +44,23 @@ export async function saveOilAccount(fields: AccountFields, target: { id: number
 }
 export async function getOilAssignments(accountId: number, signal: AbortSignal): Promise<OilAssignment[]> {
   const data = await requestJson(`/api/m13/accounts/${accountId}/assignments`, { signal });
-  if (!Array.isArray(data) || !data.every(r => record(r) && id(r.id) && r.account_id === accountId && id(r.project_id) && nullableId(r.card_id) && typeof r.changed_by === 'string' && typeof r.changed_at === 'string')) throw new ApiError('关联历史读取不完整，请重读核对。');
+  if (!Array.isArray(data) || !data.every(r => validAssignment(r, accountId))) throw new ApiError('关联历史读取不完整，请重读核对。');
   return data as OilAssignment[];
+}
+
+function validAssignment(r: unknown, accountId: number): r is OilAssignment {
+  return record(r) && id(r.id) && r.account_id === accountId && id(r.project_id) && nullableId(r.card_id) && nullableId(r.previous_card_id) &&
+    ['assignment', 'replacement'].includes(String(r.change_kind)) && (r.request_id === null || uuid(r.request_id)) && typeof r.changed_by === 'string' && typeof r.changed_at === 'string';
+}
+export interface OilReplacementFields { request_id: string; card_id: number | null; new_card: Omit<CardFields, 'kind'> | null }
+export async function replaceOilCard(fields: OilReplacementFields, target: OilAccount, signal: AbortSignal) {
+  const result = await requestJson(`/api/m13/accounts/${target.id}/replace-card`, { method: 'POST', signal, ...body({ ...fields, version: target.version }) });
+  confirmWrite(record(result) && result.ok === true, '换卡保存回执待核实，请重读，勿重复换卡。');
+  const data = result as Record<string, unknown>, item = readOilAccount(data.item), event = data.assignment;
+  confirmWrite(validAssignment(event, target.id) && event.change_kind === 'replacement' && event.request_id === fields.request_id &&
+    event.previous_card_id === target.card_id && event.card_id === item.card_id && item.card_id !== target.card_id &&
+    (fields.card_id === null || item.card_id === fields.card_id) && item.id === target.id && item.request_id === target.request_id &&
+    item.name === target.name && item.project_id === target.project_id && item.status === target.status && item.remark === target.remark,
+  '换卡回执与本次选择不一致，请重读核对。');
+  return item;
 }

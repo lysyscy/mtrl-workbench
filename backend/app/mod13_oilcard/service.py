@@ -1,5 +1,7 @@
 """油卡档案业务出口；项目身份只通过项目域服务取得。"""
-from uuid import uuid4
+from hashlib import sha256
+import json
+from uuid import UUID, uuid4, uuid5
 
 from sqlalchemy import select, text
 
@@ -118,6 +120,35 @@ def save_account(session, values, *, key=None, version=''):
     return row
 
 
+def replace_card(session, account_id, values):
+    """换卡只修改选定账户；新卡、关联事件与账户在同一历史事务中保存。"""
+    _lock(session)
+    fingerprint = sha256(json.dumps({'account_id': account_id, **values}, sort_keys=True).encode('utf-8')).hexdigest()
+    existing = session.scalar(select(OilAccountAssignment).where(OilAccountAssignment.request_id == values['request_id']))
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise DataConflictError('这次换卡请求已保存且内容不同，请重读核对。')
+        return _get(session, OilAccount, account_id), existing
+    row = _get(session, OilAccount, account_id)
+    _check_version(row, values['version'])
+    if (values['card_id'] is None) == (values['new_card'] is None):
+        raise MustReportError('请选择已有副卡或建立一张新副卡。')
+    if values['new_card'] is not None:
+        card = save_card(session, {**values['new_card'], 'kind': 'secondary',
+            'request_id': str(uuid5(UUID(values['request_id']), 'replacement-card'))})
+    else:
+        card = _get(session, OilCard, values['card_id'])
+    if card.kind != 'secondary' or card.id == row.card_id:
+        raise MustReportError('换卡请选择另一张副卡；卡号录错请更正原卡号。')
+    event = OilAccountAssignment(account_id=row.id, project_id=row.project_id, previous_card_id=row.card_id,
+        card_id=card.id, change_kind='replacement', request_id=values['request_id'],
+        request_fingerprint=fingerprint, changed_by=current_operator())
+    session.add(event)
+    row.card_id, row.version, row.updated_by = card.id, str(uuid4()), current_operator()
+    session.flush()
+    return row, event
+
+
 def card_data(row):
     return {key: getattr(row, key) for key in ('id', 'request_id', 'card_no', 'kind', 'parent_card_id', 'remark', 'version')}
 
@@ -134,10 +165,14 @@ def archives(session):
 def assignments(session, account_id):
     if session.get(OilAccount, account_id) is None:
         raise MustReportError('用卡账户已不存在，请重读核对。')
-    return [{**{key: getattr(row, key) for key in ('id', 'account_id', 'project_id', 'card_id', 'changed_by')},
-             'changed_at': row.changed_at.isoformat()} for row in session.scalars(
+    return [assignment_data(row) for row in session.scalars(
                  select(OilAccountAssignment).where(OilAccountAssignment.account_id == account_id)
                  .order_by(OilAccountAssignment.id))]
+
+
+def assignment_data(row):
+    return {**{key: getattr(row, key) for key in ('id', 'account_id', 'project_id', 'card_id',
+        'previous_card_id', 'change_kind', 'request_id', 'changed_by')}, 'changed_at': row.changed_at.isoformat()}
 
 
 def project_references(session, project_id, warehouse_name, *, lock=False):

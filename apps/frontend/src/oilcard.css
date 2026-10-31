@@ -34,4 +34,7 @@
 .oilcard-transfer-sides fieldset { border: .5px solid var(--bd); border-radius: var(--radius-inner); padding: 12px; min-width: 0; }
 .oilcard-transfer-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
 .oilcard-transfer-dialog .ant-select { width: 100%; }
+.oilcard-association-dialog { max-width: min(calc(560px * var(--fscale)), calc(100vw - 24px)); }
+.oilcard-association-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
+.oilcard-association-dialog .ant-select { width: 100%; }
 @media (max-width: 700px) { .oilcard-transfer-sides, .oilcard-transfer-common { grid-template-columns: 1fr; } }

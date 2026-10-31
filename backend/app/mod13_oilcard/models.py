@@ -51,11 +51,19 @@ class OilAccount(Base):
 class OilAccountAssignment(Base):
     """每次当前关联变更的快照；不作为任何历史账务的动态归属映射。"""
     __tablename__ = 'oil_account_assignment'
+    __table_args__ = (
+        CheckConstraint("change_kind IN ('assignment', 'replacement')", name='ck_oil_assignment_kind'),
+        UniqueConstraint('request_id', name='uq_oil_assignment_request'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey('oil_account.id'), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), index=True)
     card_id: Mapped[int | None] = mapped_column(ForeignKey('oil_card.id'), nullable=True, index=True)
+    previous_card_id: Mapped[int | None] = mapped_column(ForeignKey('oil_card.id', name='oil_account_assignment_previous_card_id_fkey'), nullable=True)
+    change_kind: Mapped[str] = mapped_column(String(16), default='assignment', server_default='assignment')
+    request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     changed_by: Mapped[str] = mapped_column(Text, default='')
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

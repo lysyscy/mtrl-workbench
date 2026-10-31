@@ -96,6 +96,28 @@ def update_account(account_id: int, req: AccountUpdate):
         key=account_id, version=str(req.version)), service.account_data)
 
 
+class ReplacementCard(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    card_no: StrictStr | None = Field(default=None, max_length=128)
+    parent_card_id: int | None = Field(default=None, gt=0)
+    remark: StrictStr = ''
+
+
+class CardReplacement(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_id: UUID
+    version: UUID
+    card_id: int | None = Field(default=None, gt=0)
+    new_card: ReplacementCard | None = None
+
+
+@router.post('/accounts/{account_id}/replace-card')
+def replace_card(account_id: int, req: CardReplacement):
+    with session_scope() as session:
+        account, event = service.replace_card(session, account_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': service.account_data(account), 'assignment': service.assignment_data(event)}
+
+
 class EntryFields(BaseModel):
     model_config = ConfigDict(extra='forbid')
     kind: Literal['recharge', 'adjustment', 'refund', 'transfer_out', 'transfer_in'] = 'recharge'
@@ -155,6 +177,19 @@ def create_entry(req: EntryCreate):
 def update_entry(entry_id: int, req: EntryUpdate):
     return _write(lambda session: ledger.save_entry(session, req.model_dump(mode='json', exclude={'version'}),
         key=entry_id, version=str(req.version)), ledger.entry_data)
+
+
+class AttributionCorrection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+    project_id: int = Field(gt=0)
+    account_id: int = Field(gt=0)
+    card_id: int | None = Field(default=None, gt=0)
+
+
+@router.put('/ledger/entries/{entry_id}/attribution')
+def correct_attribution(entry_id: int, req: AttributionCorrection):
+    return _write(lambda session: ledger.correct_attribution(session, entry_id, req.model_dump(mode='json')), ledger.entry_data)
 
 
 @router.post('/ledger/refunds')

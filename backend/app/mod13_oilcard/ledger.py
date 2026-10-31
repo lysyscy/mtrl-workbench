@@ -10,7 +10,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, amount_text, sum_money, to_money
 from app.mod01_projects import service as projects
-from .models import OilAccount, OilCard, OilEntry, OilOpeningBalance
+from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance
 from .service import _check_version, _get, _lock
 
 
@@ -105,6 +105,45 @@ def refund(session, values):
         date_text=values['date_text'], entry_date=_date(values['date_text']), amount=-amount,
         remark=values['remark'], updated_by=current_operator())
     session.add(row); session.flush()
+    return row
+
+
+def correct_attribution(session, key, values):
+    """明确更正单笔历史快照，不改变账户当前关系或其他旧账。"""
+    _lock(session)
+    account = _get(session, OilAccount, values['account_id'])
+    project = projects.get_project(session, values['project_id'], for_update=True)
+    if project is None or project.project_type == 'shell':
+        raise MustReportError('请选择项目档案中的正式项目。')
+    current = session.get(OilEntry, key, populate_existing=True)
+    if current is None:
+        raise MustReportError('这条账务已不存在，请重读核对。')
+    historical = (current.account_id, current.project_id) == (account.id, project.id) or session.scalar(select(
+        OilAccountAssignment.id).where(OilAccountAssignment.account_id == account.id,
+        OilAccountAssignment.project_id == project.id).limit(1))
+    if account.project_id != project.id and not historical:
+        raise MustReportError('项目与账户没有当前或历史关联，请核对后成对选择。')
+    if values['card_id'] is not None and _get(session, OilCard, values['card_id']).kind != 'secondary':
+        raise MustReportError('账务关联请选择副卡；主卡只维护管理信息。')
+    if current.transfer_id:
+        from .transfers import _pair
+        rows = _pair(session, current.transfer_id)
+        row = next(item for item in rows if item.id == key)
+        if any(item.id != key and item.account_id == account.id for item in rows):
+            raise MustReportError('转入和转出不能改为同一用卡账户。')
+    else:
+        row = _get(session, OilEntry, key)
+        rows = (row,)
+    _check_version(row, values['version'])
+    fields = {field: values[field] for field in ('project_id', 'account_id', 'card_id')}
+    if all(getattr(row, field) == value for field, value in fields.items()):
+        return row
+    for field, value in fields.items():
+        setattr(row, field, value)
+    version = str(uuid4())
+    for item in rows:
+        item.version, item.updated_by = version, current_operator()
+    session.flush()
     return row
 
 

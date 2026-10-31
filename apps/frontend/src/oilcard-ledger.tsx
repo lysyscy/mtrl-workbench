@@ -19,9 +19,10 @@ import { readHistory } from './history';
 import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
+import { OilAttributionDialog } from './oilcard-association';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
-import { getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, refundOilEntry, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
+import { correctOilAttribution, getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, refundOilEntry, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
 import type { EntryFields, OilEntry, OilLedger } from './oilcard-ledger-api';
 import { editOilEntry, entryFields as fieldsOf, rebaseOilEntryDraft, sameEntryFields as sameFields } from './oilcard-ledger-edits';
 import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
@@ -71,6 +72,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
 }) {
   const client = useQueryClient(), [selected, setSelected] = useState(''), [refund, setRefund] = useState<OilEntry | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [correcting, setCorrecting] = useState<OilEntry | null>(null);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [downloading, setDownloading] = useState(false), [exportError, setExportError] = useState('');
   const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
@@ -198,10 +200,11 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button>
       {selectedRow?.kind === 'recharge' && <Button disabled={structuralDisabled} onClick={() => setRefund(selectedRow)}>登记退款</Button>}
+      {selectedRow && <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setCorrecting(selectedRow); }}>更正历史关联</Button>}
       <Button disabled={disabled || busy || downloading} loading={downloading} onClick={() => void download()}>导出全部已保存台账</Button>
       <Button disabled={blocked || busy || !Object.keys(drafts).length} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(() => ({}))}>取消未保存修改</Button></div></div>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button></p>)}
-      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'refund', label: '登记退款', disabled: structuralDisabled || selectedRow?.kind !== 'recharge' }], onClick: () => { if (selectedRow?.kind === 'recharge' && !structuralDisabled) setRefund(selectedRow); } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>), onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
+      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'refund', label: '登记退款', disabled: structuralDisabled || selectedRow?.kind !== 'recharge' }, { key: 'attribution', label: '更正历史关联', disabled: structuralDisabled || !selectedRow }], onClick: ({ key }) => { if (!structuralDisabled && selectedRow) { saves.clearFeedback(); if (key === 'attribution') setCorrecting(selectedRow); else if (selectedRow.kind === 'recharge') setRefund(selectedRow); } } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>), onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
     </section><section className="oilcard-ledger-pane oilcard-invoice-pending" aria-label="发票"><div data-page-chrome className="oilcard-toolbar"><h2>发票</h2></div><p className="state">发票接收与核对将在后续接入。</p></section></div>
     {refund && <RefundDialog row={refund} disabled={disabled} busy={busy} error={error} close={() => setRefund(null)} submit={async values => {
       const outcome = await saves.run(async signal => { await refundOilEntry({ ...values, original_id: refund.id }, signal); }, () => '', `原充值 #${refund.id} 退款 ${values.amount}：`);
@@ -212,6 +215,10 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       const to = archives.accounts.find(account => account.id === values.in_account_id)?.name ?? '转入账户';
       const outcome = await saves.run(async signal => { await transferOilEntries(values, signal); }, () => '', `${from} 转至 ${to}，${values.amount}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setTransferOpen(false);
+    }} />}
+    {correcting && <OilAttributionDialog row={correcting} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setCorrecting(null)} submit={async fields => {
+      const outcome = await saves.run(async signal => { await correctOilAttribution(fields, correcting, signal); }, () => '', `充值记录 #${correcting.id} 历史关联更正：`);
+      if (outcome === 'saved' || outcome === 'uncertain') setCorrecting(null);
     }} />}
   </section>;
 }
