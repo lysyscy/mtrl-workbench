@@ -1,6 +1,7 @@
 """接续真实服务：来源保真、隔离明确确认、重跑保护、补档不重记及成品导出。"""
 from copy import deepcopy
 from io import BytesIO
+import json
 from uuid import uuid4
 
 import openpyxl
@@ -10,7 +11,7 @@ from sqlalchemy import select
 from app.core.db import session_scope
 from app.core.errors import DataConflictError, MustReportError
 from app.mod13_oilcard import continuation, invoices, ledger, reporting
-from app.mod13_oilcard.models import OilEntry, OilInvoice
+from app.mod13_oilcard.models import OilContinuationSource, OilEntry, OilInvoice
 from tests.test_oilcard_archives import scene, create  # noqa: F401
 from tools.oneoff.oilcard_continuation import synthetic_manifest, build_manifest
 
@@ -140,6 +141,25 @@ def test_manual_correction_blocks_reimport_without_overwriting_it(enrolled):
             action()
     assert client.get('/api/m13/ledger').json()['entries'][0]['amount'] == '71.00'
     assert client.get('/api/m13/ledger').json()['entries'][0]['remark'] == '人工更正保留'
+
+
+def test_pre_delete_column_invoice_confirmation_keeps_identity_and_detects_deletion(enrolled):
+    _, source_id, manifest, decisions, _, _, _ = enrolled
+    invoice_decision = [d for d in decisions if d['key'] == 'invoice']
+    result = confirm(source_id, invoice_decision)
+    invoice_id = target(result, 'invoice')
+    with session_scope() as session:
+        source = session.get(OilContinuationSource, source_id)
+        saved = json.loads(source.confirmations_json)
+        saved['invoice']['targets'][0]['snapshot'].pop('deleted')
+        source.confirmations_json = json.dumps(saved)
+    assert stage(manifest)['confirmed_count'] == 1
+    assert confirm(source_id, invoice_decision)['confirmed_count'] == 1
+    with session_scope() as session:
+        assert json.loads(session.get(OilContinuationSource, source_id).confirmations_json) == saved
+        session.get(OilInvoice, invoice_id).deleted = True
+    with pytest.raises(DataConflictError, match='已更正'):
+        stage(manifest)
 
 
 def test_invalid_multi_allocation_and_undeclared_card_rollback_whole_confirmation(enrolled):

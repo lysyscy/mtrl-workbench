@@ -41,6 +41,8 @@ def _card_fields(session, values, row=None):
         parent = _get(session, OilCard, parent_id)
         if parent.kind != 'primary' or row is not None and parent.id == row.id:
             raise MustReportError('所属主卡请选择另一张主卡。')
+        if parent.status == 'archived' and (row is None or row.parent_card_id != parent_id):
+            raise MustReportError('这张主卡已归档，请选择在用主卡；已有关系可保留。')
     if row is not None and row.kind != kind:
         if session.scalar(select(OilCard.id).where(OilCard.parent_card_id == row.id).limit(1)):
             raise MustReportError('这张主卡仍有关联副卡，请先核对所属主卡。')
@@ -53,10 +55,11 @@ def _card_fields(session, values, row=None):
         duplicate = session.scalar(select(OilCard.id).where(OilCard.card_no == card_no))
         if duplicate is not None and (row is None or duplicate != row.id):
             raise MustReportError('完整卡号已建档，请选择已有卡片；尾号相同的不同卡可分别建档。')
-    return {'card_no': card_no, 'kind': kind, 'parent_card_id': parent_id, 'remark': values['remark']}
+    return {'card_no': card_no, 'kind': kind, 'parent_card_id': parent_id,
+        'status': values.get('status', row.status if row is not None else 'active'), 'remark': values['remark']}
 
 
-def _account_fields(session, values):
+def _account_fields(session, values, row=None):
     name = values['name'].strip()
     if not name:
         raise MustReportError('请填写用卡账户名称。')
@@ -67,6 +70,8 @@ def _account_fields(session, values):
         card = _get(session, OilCard, values['card_id'])
         if card.kind != 'secondary':
             raise MustReportError('用卡账户请选择副卡；主卡只维护管理信息。')
+        if card.status == 'archived' and (row is None or row.card_id != card.id):
+            raise MustReportError('这张副卡已归档，请选择在用副卡；已有账户关联可保留。')
     return {key: name if key == 'name' else values[key] for key in ('name', 'project_id', 'card_id', 'status', 'remark')}
 
 
@@ -108,7 +113,7 @@ def save_account(session, values, *, key=None, version=''):
     else:
         row = _get(session, OilAccount, key)
         _check_version(row, version)
-        fields = _account_fields(session, values)
+        fields = _account_fields(session, values, row)
         if all(getattr(row, k) == v for k, v in fields.items()):
             return row
         changed = any(getattr(row, k) != fields[k] for k in ('project_id', 'card_id'))
@@ -141,6 +146,8 @@ def replace_card(session, account_id, values):
         card = _get(session, OilCard, values['card_id'])
     if card.kind != 'secondary' or card.id == row.card_id:
         raise MustReportError('换卡请选择另一张副卡；卡号录错请更正原卡号。')
+    if card.status == 'archived':
+        raise MustReportError('这张副卡已归档，换卡请选择在用副卡。')
     event = OilAccountAssignment(account_id=row.id, project_id=row.project_id, previous_card_id=row.card_id,
         card_id=card.id, change_kind='replacement', request_id=values['request_id'],
         request_fingerprint=fingerprint, changed_by=current_operator())
@@ -151,7 +158,7 @@ def replace_card(session, account_id, values):
 
 
 def card_data(row):
-    return {key: getattr(row, key) for key in ('id', 'request_id', 'card_no', 'kind', 'parent_card_id', 'remark', 'version')}
+    return {key: getattr(row, key) for key in ('id', 'request_id', 'card_no', 'kind', 'status', 'parent_card_id', 'remark', 'version')}
 
 
 def account_data(row):
@@ -216,6 +223,7 @@ def total_export_snapshot(session):
     account_rows = [{**attribution({**row, 'account_id': row['id']}),
         'status_label': account_status(row['id'])} for row in archive['accounts']]
     card_rows = [{**row, 'kind_label': '主卡' if row['kind'] == 'primary' else '副卡',
+        'status_label': '在用' if row['status'] == 'active' else '归档',
         'parent_card': card_no(row['parent_card_id']) if row['parent_card_id'] is not None else ''}
         for row in archive['cards']]
     assignment_rows = [{**attribution(assignment_data(row)),

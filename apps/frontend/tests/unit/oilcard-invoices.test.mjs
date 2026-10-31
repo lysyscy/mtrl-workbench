@@ -5,7 +5,7 @@ import { uncertainWrite } from '../../src/api.ts';
 
 const digest = 'a'.repeat(64);
 const original = { id: 1, invoice_id: 1, sha256: digest, byte_size: 10, outcome: 'received', reason: '', resolution: null, recognized: { invoice_no: null, invoice_date: null, amount: null, card_no: null } };
-const invoice = { id: 1, invoice_no: '20261031000000000001', invoice_date: '2026-10-31', card_no: '1000111400012345678', amount: '3000.00', status: 'registered', kind: 'normal', related_invoice_id: null, change_note: '', void_date: null, reason: '', remark: '', version: '00000000-0000-4000-8000-000000000001', allocations: [{ id: 1, project_id: 1, account_id: 2, card_id: 3, amount: '3000.00' }], originals: [original] };
+const invoice = { id: 1, invoice_no: '20261031000000000001', invoice_date: '2026-10-31', card_no: '1000111400012345678', amount: '3000.00', status: 'registered', deleted: false, kind: 'normal', related_invoice_id: null, change_note: '', void_date: null, reason: '', remark: '', version: '00000000-0000-4000-8000-000000000001', allocations: [{ id: 1, project_id: 1, account_id: 2, card_id: 3, amount: '3000.00' }], originals: [original] };
 
 test('已登记票据与待确认票据分开核对，合计只取已确认金额', () => {
   const pending = { ...invoice, id: 2, status: 'pending', allocations: [], originals: [{ ...original, id: 2, invoice_id: 2, sha256: 'b'.repeat(64) }] };
@@ -15,7 +15,7 @@ test('已登记票据与待确认票据分开核对，合计只取已确认金�
 });
 
 test('票据原件及分配身份必须完整，缺失不当成已登记', () => {
-  for (const invalid of [{ ...invoice, originals: [{ ...original, invoice_id: 9 }] }, { ...invoice, amount: null }, { ...invoice, allocations: [] }]) {
+  for (const invalid of [{ ...invoice, originals: [{ ...original, invoice_id: 9 }] }, { ...invoice, amount: null }, { ...invoice, allocations: [] }, { ...invoice, deleted: true }]) {
     assert.throws(() => readOilInvoices({ invoices: [invalid], total_amount: '3000.00' }));
   }
 });
@@ -55,10 +55,26 @@ test('重读凭原件hash核对存在和未写入，不能把不完整结果当�
   try {
     for (const [value, expected] of [[{ received: true, original }, true], [{ received: false, original: null }, false]]) {
       globalThis.fetch = async () => new Response(JSON.stringify(value));
-      assert.equal(await readOilReceipt(digest), expected);
+      assert.deepEqual(await readOilReceipt(digest), { received: expected, deleted: false, message: '' });
     }
     globalThis.fetch = async () => new Response(JSON.stringify({ received: false }));
     await assert.rejects(readOilReceipt(digest));
+    globalThis.fetch = async () => new Response(JSON.stringify({ received: true, original, receipt_status: 'deleted', receipt_message: '该票已删除' }));
+    assert.deepEqual(await readOilReceipt(digest), { received: true, deleted: true, message: '该票已删除' });
+    globalThis.fetch = async () => new Response(JSON.stringify({ received: true, original, receipt_status: 'deleted' }));
+    await assert.rejects(readOilReceipt(digest));
+  } finally { globalThis.fetch = previous; }
+});
+
+test('删除回执必须明确对应已删除的同一发票，保留原件身份', async () => {
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, item: { ...invoice, deleted: true } }));
+    assert.equal((await changeOilInvoice(invoice, 'delete', {}, new AbortController().signal)).deleted, true);
+    for (const invalid of [invoice, { ...invoice, deleted: true, originals: [] }, { ...invoice, id: 2, deleted: true, originals: [{ ...original, invoice_id: 2 }] }]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, item: invalid }));
+      await assert.rejects(changeOilInvoice(invoice, 'delete', {}, new AbortController().signal), error => uncertainWrite(error));
+    }
   } finally { globalThis.fetch = previous; }
 });
 

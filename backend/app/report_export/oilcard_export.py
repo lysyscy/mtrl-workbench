@@ -117,8 +117,8 @@ def build_total(snapshot):
         ('当前项目', 'project'), ('实体卡编号', 'card_id'), ('当前实体卡号', 'card'),
         ('状态', 'status_label'), ('备注', 'remark')), snapshot['accounts'], widths=(12, 24, 12, 28, 12, 30, 12, 40))
     _sheet(workbook, '实体油卡', (('实体卡编号', 'id'), ('完整卡号', 'card_no'), ('类型', 'kind_label'),
-        ('所属主卡编号', 'parent_card_id'), ('所属主卡号', 'parent_card'), ('备注', 'remark')),
-        snapshot['cards'], widths=(12, 30, 12, 16, 30, 40))
+        ('所属主卡编号', 'parent_card_id'), ('所属主卡号', 'parent_card'), ('状态', 'status_label'), ('备注', 'remark')),
+        snapshot['cards'], widths=(12, 30, 12, 16, 30, 12, 40))
     _sheet(workbook, '期初核对', (('期初编号', 'id'), ('来源标识', 'source_key'), ('来源依据', 'source_note'),
         ('原日期标记', 'original_date_text'), ('截至月份', 'cutoff_ym'), ('确认状态', 'status'),
         ('项目编号', 'project_id'), ('核算项目', 'project'), ('账户编号', 'account_id'), ('用卡账户', 'account'),

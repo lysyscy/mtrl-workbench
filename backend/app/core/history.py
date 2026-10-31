@@ -32,6 +32,7 @@ class Rule:
     fields: frozenset[str]
     create_delete: bool = False
     retired_fields: frozenset[str] = frozenset()
+    introduced_defaults: tuple[tuple[str, object], ...] = ()
 
 
 @dataclass
@@ -98,6 +99,14 @@ def _same(a, b):
         return a is b
     return {k: v for k, v in a.items() if k not in _TECHNICAL} == {
         k: v for k, v in b.items() if k not in _TECHNICAL}
+
+
+def _historical_snapshot(rule, values):
+    """Read a pre-column snapshot using only explicitly registered migration defaults."""
+    if values is None:
+        return None
+    defaults = dict(rule.introduced_defaults)
+    return {**{key: value for key, value in defaults.items() if key not in values}, **values}
 
 
 def _read(session, table, key, *, lock=False):
@@ -278,7 +287,18 @@ def replay(session, actor, direction, expected_id):
         raise MustReportError('操作历史已变化，请刷新后再试；本次未修改数据')
     source, target = ('after', 'before') if direction == 'undo' else ('before', 'after')
     prepared = []
-    changes = json.loads(json.dumps(operation.changes))
+    recorded_changes = json.loads(json.dumps(operation.changes))
+    changes = json.loads(json.dumps(recorded_changes))
+    # Compatibility is local to replay. Stored business snapshots remain as recorded.
+    for change in changes:
+        rule = _rules.get(change['table'])
+        if rule is not None:
+            for side in ('before', 'after'):
+                change[side] = _historical_snapshot(rule, change[side])
+        for parent in change.get('parents', []):
+            parent_rule = _rules.get(parent['table'])
+            if parent_rule is not None:
+                parent['data'] = _historical_snapshot(parent_rule, parent['data'])
     # 先锁定并验证整批，任何一条冲突都不开始修改。
     parents = {(p['table'], p['id']): p for change in changes for p in change.get('parents', [])}
     for identity, parent in sorted(parents.items()):
@@ -360,7 +380,9 @@ def replay(session, actor, direction, expected_id):
         if 'target_version' in change:
             restored[(change['table'], change['id'])] = (row, version, change['target_version'])
         change['target_version'], change['version'] = change['version'], version
-    operation.changes = changes
+    for recorded, replayed in zip(recorded_changes, changes):
+        recorded['target_version'], recorded['version'] = replayed['target_version'], replayed['version']
+    operation.changes = recorded_changes
     session.flush()
     state = 'applied' if direction == 'undo' else 'undone'
     order = OperationHistory.id.desc() if direction == 'undo' else OperationHistory.id.asc()
@@ -380,7 +402,9 @@ def replay(session, actor, direction, expected_id):
                 trusted = restored.get(identity)
                 if trusted:
                     row, version, previous = trusted
-                    if _same(row, parent['data']) and parent['version'] == previous:
+                    parent_rule = _rules.get(parent['table'])
+                    expected = _historical_snapshot(parent_rule, parent['data']) if parent_rule else parent['data']
+                    if _same(row, expected) and parent['version'] == previous:
                         parent['version'] = version
                         changed = True
                     else:
@@ -389,7 +413,9 @@ def replay(session, actor, direction, expected_id):
             trusted = restored.pop(identity, None)
             if trusted:
                 row, version, previous = trusted
-                if _same(row, change[source]) and change['version'] == previous:
+                next_rule = _rules.get(change['table'])
+                expected = _historical_snapshot(next_rule, change[source]) if next_rule else change[source]
+                if _same(row, expected) and change['version'] == previous:
                     change['version'] = version
                     changed = True
                 # 到真正修改该行的动作即停止；它重放后负责下一段续接。

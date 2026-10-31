@@ -27,6 +27,7 @@ class CardFields(BaseModel):
     model_config = ConfigDict(extra='forbid')
     card_no: StrictStr | None = Field(default=None, max_length=128)
     kind: Literal['primary', 'secondary'] = 'secondary'
+    status: Literal['active', 'archived'] = 'active'
     parent_card_id: int | None = Field(default=None, gt=0)
     remark: StrictStr = ''
 
@@ -86,7 +87,8 @@ def create_card(req: CardCreate):
 
 @router.put('/cards/{card_id}')
 def update_card(card_id: int, req: CardUpdate):
-    return _write(lambda session: service.save_card(session, req.model_dump(mode='json', exclude={'version'}),
+    excluded = {'version'} | ({'status'} if 'status' not in req.model_fields_set else set())
+    return _write(lambda session: service.save_card(session, req.model_dump(mode='json', exclude=excluded),
         key=card_id, version=str(req.version)), service.card_data)
 
 
@@ -374,6 +376,18 @@ class InvoiceResolution(BaseModel):
 
 class InvoiceVoid(InvoiceResolution):
     date: StrictStr
+
+
+class InvoiceDelete(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+
+
+@router.post('/invoices/{invoice_id}/delete')
+def delete_invoice(invoice_id: int, req: InvoiceDelete):
+    with session_scope() as session:
+        row = invoice_adjustments.delete(session, invoice_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
 
 
 @router.put('/invoices/{invoice_id}/correct')

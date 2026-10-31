@@ -48,7 +48,7 @@ def invoice_data(session, row):
     if row.status == 'registered' and (row.amount is None or not allocations or sum_money(a.amount for a in allocations) != row.amount):
         raise MustReportError('发票分配合计未能核对，请核对票面和分配后再继续。')
     originals = list(session.scalars(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == row.id).order_by(OilInvoiceOriginal.id)))
-    return {**{key: getattr(row, key) for key in ('id', 'invoice_no', 'card_no', 'status', 'reason', 'remark', 'version', 'kind', 'related_invoice_id', 'change_note')},
+    return {**{key: getattr(row, key) for key in ('id', 'invoice_no', 'card_no', 'status', 'deleted', 'reason', 'remark', 'version', 'kind', 'related_invoice_id', 'change_note')},
         'void_date': row.void_date.isoformat() if row.void_date else None,
         'invoice_date': row.invoice_date.isoformat() if row.invoice_date else None,
         'amount': str(row.amount) if row.amount is not None else None,
@@ -85,7 +85,8 @@ def receive_pdf(session, content, recognized):
             session.add(OilInvoiceNumber(invoice_id=invoice.id, number=number))
         if recognized['reliable']:
             candidates = list(session.scalars(select(OilAccount).join(OilCard, OilAccount.card_id == OilCard.id).where(
-                OilCard.card_no == recognized['card_no'], OilCard.kind == 'secondary', OilAccount.status == 'active')))
+                OilCard.card_no == recognized['card_no'], OilCard.kind == 'secondary',
+                OilCard.status == 'active', OilAccount.status == 'active')))
             if len(candidates) == 1:
                 account = candidates[0]
                 invoice.status, invoice.reason = 'registered', ''
@@ -113,6 +114,9 @@ def receipt_outcome(session, source, *, repeated=False):
     invoice = session.get(OilInvoice, source.invoice_id)
     review = json.loads(invoice.review_json).get(source.sha256)
     duplicate = repeated or source.outcome == 'duplicate'
+    if invoice.deleted:
+        return {'receipt_status': 'deleted',
+            'receipt_message': '该票已从本地台账删除，原件和票号身份保留；如需恢复请撤销删除，不会再次登记金额。'}
     if invoice.status == 'voided':
         return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': '该票已登记作废，原件保留，不计开票金额。'}
     if invoice.status == 'pending':
@@ -131,14 +135,20 @@ def receipt_outcome(session, source, *, repeated=False):
 def invoices(session):
     from .invoice_adjustments import validate_credits
     validate_credits(session)
-    rows = [invoice_data(session, row) for row in session.scalars(select(OilInvoice).order_by(OilInvoice.id))]
+    rows = [invoice_data(session, row) for row in session.scalars(select(OilInvoice).where(OilInvoice.deleted.is_(False)).order_by(OilInvoice.id))]
     return {'invoices': rows, 'total_amount': str(sum_money(a['amount'] for row in rows if row['status'] == 'registered' for a in row['allocations']))}
+
+
+def require_editable(row):
+    if row.deleted:
+        raise MustReportError('这张发票已从本地台账删除，请先通过操作历史撤销删除。')
 
 
 def save_remark(session, invoice_id, values):
     _lock(session)
     row = _get(session, OilInvoice, invoice_id)
     _check_version(row, values['version'])
+    require_editable(row)
     if row.remark != values['remark']:
         row.remark, row.version, row.updated_by = values['remark'], str(uuid4()), current_operator()
         session.flush()
@@ -149,7 +159,7 @@ def registered_allocations(session):
     # Validate whole invoices before exposing any money to reconciliation.
     from .invoice_adjustments import validate_credits
     validate_credits(session)
-    rows = list(session.scalars(select(OilInvoice).where(OilInvoice.status == 'registered')))
+    rows = list(session.scalars(select(OilInvoice).where(OilInvoice.status == 'registered', OilInvoice.deleted.is_(False))))
     result = []
     for invoice in rows:
         allocations = _allocations(session, invoice.id)

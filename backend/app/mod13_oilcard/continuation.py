@@ -96,7 +96,11 @@ def _columns(row):
 def _verify_confirmations(session, confirmations):
     for key, result in confirmations.items():
         for target in result['targets']:
-            if _snapshot(session, target['kind'], target['id']) != target['snapshot']:
+            expected = target['snapshot']
+            if target['kind'] == 'invoice':
+                # Existing confirmation receipts predate the additive local-delete flag.
+                expected = {'deleted': 'False', **expected}
+            if _snapshot(session, target['kind'], target['id']) != expected:
                 raise DataConflictError(f'来源行 {key} 的已接续目标已更正或不存在；保留人工结果，请核对，不能重跑覆盖。')
 
 
@@ -176,6 +180,7 @@ def _apply(session, source_id, item, decision, contents):
         if decision.get('existing_invoice_id'):
             row = _get(session, OilInvoice, decision['existing_invoice_id'])
             _check_version(row, decision['version'])
+            invoices.require_editable(row)
             if owner != row.id or row.status != 'registered' or any(getattr(row, k) != v for k, v in facts.items()):
                 raise DataConflictError('已有发票的票号、日期、金额或卡号不一致，请先核对，不再记金额。')
         else:
@@ -196,6 +201,7 @@ def _apply(session, source_id, item, decision, contents):
         recognized = recognize_pdf(content)
         row = _get(session, OilInvoice, decision['invoice_id'])
         _check_version(row, decision['version'])
+        invoices.require_editable(row)
         facts = (recognized['invoice_no'], recognized['invoice_date'], recognized['amount'])
         if row.status != 'registered' or facts != (row.invoice_no,
                 row.invoice_date.isoformat() if row.invoice_date else None, str(row.amount)) or not all(facts):

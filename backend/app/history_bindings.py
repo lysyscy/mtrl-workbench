@@ -32,13 +32,15 @@ def configure():
         'contract_amt', 'trade_co', 'trade_contract_amt', 'tag', 'arch', 'arch_no',
         'ret_date', 'remark', 'payment_term', 'payment_method',
     }))
-    oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'parent_card_id', 'remark', 'version', 'updated_by'}), True)
+    oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'status', 'parent_card_id', 'remark', 'version', 'updated_by'}), True,
+        introduced_defaults=(('status', 'active'),))
     oil_account = Rule(OilAccount, frozenset({'name', 'project_id', 'card_id', 'status', 'remark', 'version', 'updated_by'}), True)
     oil_assignment = Rule(OilAccountAssignment, frozenset(), True)
     oil_entry = Rule(OilEntry, frozenset({'kind', 'account_id', 'project_id', 'card_id', 'date_text',
         'entry_date', 'amount', 'remark', 'version', 'updated_by'}), True)
     oil_invoice = Rule(OilInvoice, frozenset({'invoice_no', 'invoice_date', 'amount', 'card_no', 'status', 'reason', 'remark', 'version', 'updated_by',
-        'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date'}))
+        'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date', 'deleted'}),
+        introduced_defaults=(('deleted', False),))
     oil_allocation = Rule(OilInvoiceAllocation, frozenset({'account_id', 'project_id', 'card_id', 'amount'}), True)
     oil_number = Rule(OilInvoiceNumber, frozenset(), True)
     oil_fee_custom = Rule(OilFeeCustom, frozenset({'amount', 'remark', 'version', 'updated_by'}), True)
@@ -83,4 +85,5 @@ def configure():
         ('PUT', r'/api/m13/invoices/\d+/originals/\d+/resolve', '核对油卡发票原件', [oil_invoice]),
         ('POST', r'/api/m13/invoices/\d+/credit', '登记油卡发票红冲', [oil_invoice, oil_allocation, oil_number]),
         ('POST', r'/api/m13/invoices/\d+/void', '登记油卡发票作废', [oil_invoice]),
+        ('POST', r'/api/m13/invoices/\d+/delete', '删除油卡本地发票登记', [oil_invoice]),
     ])

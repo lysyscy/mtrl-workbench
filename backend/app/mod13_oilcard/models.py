@@ -13,6 +13,7 @@ class OilCard(Base):
     __tablename__ = 'oil_card'
     __table_args__ = (
         CheckConstraint("kind IN ('primary', 'secondary')", name='ck_oil_card_kind'),
+        CheckConstraint("status IN ('active', 'archived')", name='ck_oil_card_status'),
         CheckConstraint("kind <> 'primary' OR parent_card_id IS NULL", name='ck_oil_card_primary_parent'),
         CheckConstraint('parent_card_id IS NULL OR parent_card_id <> id', name='ck_oil_card_not_self'),
     )
@@ -21,6 +22,7 @@ class OilCard(Base):
     request_id: Mapped[str] = mapped_column(String(36), unique=True)
     card_no: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     kind: Mapped[str] = mapped_column(String(16), default='secondary')
+    status: Mapped[str] = mapped_column(String(16), default='active', server_default='active')
     parent_card_id: Mapped[int | None] = mapped_column(ForeignKey('oil_card.id'), nullable=True, index=True)
     remark: Mapped[str] = mapped_column(Text, default='')
     version: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()))
@@ -177,6 +179,7 @@ class OilInvoice(Base):
     amount: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
     card_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default='pending')
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
     kind: Mapped[str] = mapped_column(String(16), default='normal', server_default='normal')
     related_invoice_id: Mapped[int | None] = mapped_column(ForeignKey('oil_invoice.id'), nullable=True, index=True)
     review_json: Mapped[str] = mapped_column(Text, default='{}', server_default='{}')

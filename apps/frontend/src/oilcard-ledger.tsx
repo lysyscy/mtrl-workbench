@@ -1,7 +1,6 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
-import Dropdown from 'antd/es/dropdown';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
@@ -17,11 +16,10 @@ import { readHistory } from './history';
 import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
-import { OilAttributionDialog } from './oilcard-association';
 import { OilInvoiceSheet } from './oilcard-invoices';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
-import { correctOilAttribution, getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
+import { getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
 import type { EntryFields, OilEntry, OilLedger } from './oilcard-ledger-api';
 import { editOilEntry, entryFields as fieldsOf, rebaseOilEntryDraft, sameEntryFields as sameFields } from './oilcard-ledger-edits';
 import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
@@ -69,9 +67,8 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   onWriteLock: (locked: boolean) => void;
   onUncertain: (uncertain: boolean) => void;
 }) {
-  const client = useQueryClient(), [selected, setSelected] = useState('');
+  const client = useQueryClient();
   const [transferOpen, setTransferOpen] = useState(false);
-  const [correcting, setCorrecting] = useState<OilEntry | null>(null);
   const [invoiceLocked, setInvoiceLocked] = useState(false), [invoiceUncertain, setInvoiceUncertain] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({});
   const query = useQuery({ queryKey: ['oilcard-ledger'], enabled: active && !blocked, queryFn: ({ signal }) => getOilLedger(signal) });
@@ -164,7 +161,6 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     })));
   }
   const rows = useMemo<TableRow[]>(() => [...(query.data?.entries ?? []).map(row => drafts[row.request_id] ?? row), ...Object.values(drafts).filter(draft => !query.data?.entries.some(row => row.request_id === draft.request_id))], [query.data, drafts]);
-  const selectedRow = query.data?.entries.find(row => row.request_id === selected);
   const bounds = (query.data?.entries ?? []).reduce((sum, row) => {
     const value = cents(row.amount); if (value > 0n) sum.positive += value; else sum.negative += value; return sum;
   }, { positive: 0n, negative: 0n });
@@ -184,19 +180,15 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button>
       {Object.values(drafts).some(draft => !draft.id) && <Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = Object.fromEntries(Object.entries(ds).filter(([, draft]) => draft.id)); draftRef.current = next; return next; })}>取消新增</Button>}</div></div>
-      <div className="oilcard-selection-actions" aria-label="所选充值记录">{selectedRow && <><span>{selectedRow.date_text || '日期未知'}，{projects.find(project => project.id === selectedRow.project_id)?.disp || `项目 #${selectedRow.project_id}`}，{money(selectedRow.amount)} 元</span><Button size="small" disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setCorrecting(selectedRow); }}>更正本笔归属</Button></>}</div>
+      <div className="oilcard-selection-actions" aria-hidden="true" />
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
-      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'attribution', label: '更正本笔归属', disabled: structuralDisabled || !selectedRow }], onClick: () => { if (!structuralDisabled && selectedRow) { saves.clearFeedback(); setCorrecting(selectedRow); } } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>), onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
+      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider>}
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     {transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
       const from = archives.accounts.find(account => account.id === values.out_account_id)?.name ?? '转出账户';
       const to = archives.accounts.find(account => account.id === values.in_account_id)?.name ?? '转入账户';
       const outcome = await saves.run(async signal => { await transferOilEntries(values, signal); }, () => '', `${from} 转至 ${to}，${values.amount}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setTransferOpen(false);
-    }} />}
-    {correcting && <OilAttributionDialog row={correcting} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setCorrecting(null)} submit={async fields => {
-      const outcome = await saves.run(async signal => { await correctOilAttribution(fields, correcting, signal); }, () => '', `充值记录 #${correcting.id} 归属更正：`);
-      if (outcome === 'saved' || outcome === 'uncertain') setCorrecting(null);
     }} />}
   </section>;
 }

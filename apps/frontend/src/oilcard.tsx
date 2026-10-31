@@ -12,11 +12,10 @@ import { readHistory } from './history';
 import { PageActivity } from './page-activity';
 import { randomUUID } from './random-id';
 import { useCellSaveQueue } from './use-cell-save';
-import { getOilArchives, getOilAssignments, replaceOilCard, saveOilAccount, saveOilCard } from './oilcard-api';
+import { getOilArchives, getOilAssignments, saveOilAccount, saveOilCard } from './oilcard-api';
 import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard } from './oilcard-api';
 import { OilLedgerSheet } from './oilcard-ledger';
 import { OilReconciliationSheet } from './oilcard-reconciliation';
-import { OilReplacementDialog } from './oilcard-association';
 import { OilLinkageSheet } from './oilcard-linkage';
 import { OilTotalExport } from './oilcard-export';
 
@@ -26,13 +25,13 @@ type Draft = { kind: ArchiveKind; id: number; field: Field; original: string; va
 type PendingAccount = OilAccount;
 const keyOf = (kind: ArchiveKind, id: number, field: Field) => `${kind}:${id}:${field}`;
 const text = (value: unknown) => value === null || value === undefined ? '' : String(value);
-const cardLabel = (card: OilCard) => card.card_no || `卡号待补 #${card.id}`;
+const cardLabel = (card: OilCard) => `${card.card_no || `卡号待补 #${card.id}`}${card.status === 'archived' ? '（归档）' : ''}`;
 const fieldLabels: Record<Field, string> = { card_no: '完整卡号更正', kind: '主卡/副卡', parent_card_id: '所属主卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
 interface Cells {
   drafts: Record<string, Draft>; disabled: boolean; busy: boolean; projects: Project[]; cards: OilCard[]; accounts: OilAccount[]; pending: PendingAccount | null;
   change: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field, value: string) => void;
   save: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field) => void;
-  structuralDisabled: boolean; replace: (row: OilAccount) => void; showHistory: (row: OilAccount) => void;
+  showHistory: (row: OilAccount) => void;
 }
 const ArchiveCells = createContext<Cells | null>(null);
 function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row: OilCard | OilAccount; field: Field }) {
@@ -41,14 +40,14 @@ function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row:
   if (!row) return null;
   const key = keyOf(kind, row.id, field), draft = state.drafts[key];
   const original = text((row as unknown as Record<string, unknown>)[field]), value = draft?.value ?? original;
-  const label = `${fieldLabels[field]}：${'name' in row ? row.name || '新增账户' : cardLabel(row)}`;
+  const label = `${field === 'status' && kind === 'card' ? '油卡状态' : fieldLabels[field]}：${'name' in row ? row.name || '新增账户' : cardLabel(row)}`;
   const disabled = state.disabled || row.id === 0 && state.busy;
   const change = (next: string) => state.change(kind, row, field, next);
   let options: { value: string; label: string }[] | undefined;
   if (field === 'kind') options = [{ value: 'primary', label: '主卡' }, { value: 'secondary', label: '副卡' }];
   if (field === 'status') options = [{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }];
   if (field === 'project_id') options = [{ value: '', label: '请选择项目' }, ...state.projects.filter(p => p.project_type !== 'shell').map(p => ({ value: String(p.id), label: `${projectLabel(p)}${p.status === 'archived' ? '（项目归档）' : ''}` }))];
-  if (field === 'parent_card_id' || field === 'card_id') options = [{ value: '', label: field === 'parent_card_id' ? '无' : '未关联卡片' }, ...state.cards.filter(c => field === 'parent_card_id' ? c.kind === 'primary' && c.id !== row.id : c.kind === 'secondary').map(c => ({ value: String(c.id), label: cardLabel(c) }))];
+  if (field === 'parent_card_id' || field === 'card_id') options = [{ value: '', label: field === 'parent_card_id' ? '无' : '未关联卡片' }, ...state.cards.filter(c => (field === 'parent_card_id' ? c.kind === 'primary' && c.id !== row.id : c.kind === 'secondary') && (c.status === 'active' || String(c.id) === value)).map(c => ({ value: String(c.id), label: cardLabel(c) }))];
   if (field === 'parent_card_id' && 'kind' in row && (state.drafts[keyOf(kind, row.id, 'kind')]?.value ?? row.kind) === 'primary') return <span className="muted">—</span>;
   return <div className="oilcard-cell">{options ? <Select aria-label={label} value={field === 'project_id' && value === '0' ? '' : value} disabled={disabled} status={draft?.error ? 'error' : ''}
     showSearch={{ optionFilterProp: 'label' }} options={options} onChange={next => change(next)} /> : <Input aria-label={label} value={value} disabled={disabled} status={draft?.error ? 'error' : ''}
@@ -56,24 +55,24 @@ function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row:
     onBlur={() => state.save(kind, row, field)} onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />}
     {draft?.error && <p role="alert" className="oilcard-cell-error">{draft.error}</p>}</div>;
 }
-const cardFields = (row: OilCard): CardFields => ({ card_no: row.card_no, kind: row.kind, parent_card_id: row.parent_card_id, remark: row.remark });
+const cardFields = (row: OilCard): CardFields => ({ card_no: row.card_no, kind: row.kind, parent_card_id: row.parent_card_id, status: row.status, remark: row.remark });
 const accountFields = (row: OilAccount): AccountFields => ({ name: row.name, project_id: row.project_id, card_id: row.card_id, status: row.status, remark: row.remark });
 
 function AccountActions({ row }: { row: OilAccount }) {
   const state = useContext(ArchiveCells)!, current = state.accounts.find(item => item.id === row.id);
   if (!current) return null;
-  return <div className="oilcard-row-actions"><Button size="small" disabled={state.structuralDisabled} aria-label={`为${current.name}换卡`} onClick={() => state.replace(current)}>换卡</Button><Button size="small" disabled={state.busy} aria-label={`查看${current.name}的用卡记录`} onClick={() => state.showHistory(current)}>用卡记录</Button></div>;
+  return <Button size="small" disabled={state.busy} aria-label={`查看${current.name}的用卡记录`} onClick={() => state.showHistory(current)}>用卡记录</Button>;
 }
 
 export function OilCardPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
   const client = useQueryClient();
   const [tab, setTab] = useState<'overview' | 'ledger' | 'linkage' | 'archives'>('overview'), [status, setStatus] = useState('all');
+  const [cardStatus, setCardStatus] = useState('all');
   const [ledgerVisited, setLedgerVisited] = useState(false), [ledgerLocked, setLedgerLocked] = useState(false);
   const [ledgerUncertain, setLedgerUncertain] = useState(false);
   const [linkageVisited, setLinkageVisited] = useState(false), [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
   const [pending, setPending] = useState<PendingAccount | null>(null), pendingRef = useRef(pending); pendingRef.current = pending;
   const [historyAccount, setHistoryAccount] = useState(0);
-  const [replacing, setReplacing] = useState<OilAccount | null>(null);
   const query = useQuery({ queryKey: ['oilcard-archives'], enabled: active && !blocked, queryFn: ({ signal }) => getOilArchives(signal) });
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: active && !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const assignments = useQuery({ queryKey: ['oilcard-assignments', historyAccount], enabled: active && !blocked && historyAccount > 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
@@ -142,7 +141,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   async function addCard() {
     if (structuralDisabled) return;
     const request_id = randomUUID();
-    await saves.run(async signal => { await saveOilCard({ card_no: null, kind: 'secondary', parent_card_id: null, remark: '' }, { request_id }, signal); }, () => '', '新增实体油卡：');
+    await saves.run(async signal => { await saveOilCard({ card_no: null, kind: 'secondary', parent_card_id: null, status: 'active', remark: '' }, { request_id }, signal); }, () => '', '新增实体油卡：');
   }
   function addAccount() {
     if (structuralDisabled) return;
@@ -151,23 +150,24 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   }
   const accounts = useMemo(() => [...(data?.accounts ?? []).filter(a => status === 'all' || a.status === status), ...(pending && !data?.accounts.some(a => a.request_id === pending.request_id) ? [pending] : [])], [data, status, pending]);
   const cards = useMemo(() => data?.cards ?? [], [data]);
+  const visibleCards = useMemo(() => cards.filter(card => cardStatus === 'all' || card.status === cardStatus), [cards, cardStatus]);
   const cardNumberWidth = fullTextWidth(cards.map(c => c.card_no || '卡号待补 #000'), scale).minWidth;
   const cardColumns = useMemo<ColDef<OilCard>[]>(() => [
     { field: 'card_no', headerName: '完整卡号', ...contentWidth(Math.max(180, cardNumberWidth / scale), 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="card_no" /> },
-    { field: 'kind', headerName: '主卡/副卡', ...contentWidth(120, 160, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="kind" /> },
-    { field: 'parent_card_id', headerName: '所属主卡', ...contentWidth(200, 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="parent_card_id" /> },
-    { field: 'remark', headerName: '备注', ...contentWidth(200, 500, scale, 2), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="remark" /> },
+    { field: 'kind', headerName: '主卡/副卡', ...contentWidth(100, 130, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="kind" /> },
+    { field: 'parent_card_id', headerName: '所属主卡', ...contentWidth(150, 250, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="parent_card_id" /> },
+    { field: 'status', headerName: '状态', ...contentWidth(90, 120, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="status" /> },
+    { field: 'remark', headerName: '备注', ...contentWidth(130, 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="remark" /> },
   ], [scale, cardNumberWidth]);
   const accountColumns = useMemo<ColDef<OilAccount>[]>(() => [
-    { field: 'name', headerName: '账户名称', ...contentWidth(170, 300, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="name" /> },
-    { field: 'project_id', headerName: '项目', ...contentWidth(200, 360, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="project_id" /> },
-    { field: 'card_id', headerName: '关联卡片', ...contentWidth(200, 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="card_id" /> },
-    { field: 'status', headerName: '状态', ...contentWidth(100, 140, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="status" /> },
-    { field: 'remark', headerName: '备注', ...contentWidth(200, 440, scale, 2), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="remark" /> },
-    { colId: 'actions', headerName: '账户操作', ...contentWidth(160, 180, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row?.id ? <AccountActions row={row} /> : null },
+    { field: 'name', headerName: '账户名称', pinned: 'left', ...contentWidth(130, 220, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="name" /> },
+    { field: 'project_id', headerName: '项目', ...contentWidth(130, 240, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="project_id" /> },
+    { field: 'card_id', headerName: '关联卡片', ...contentWidth(190, 260, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="card_id" /> },
+    { field: 'status', headerName: '状态', ...contentWidth(90, 120, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="status" /> },
+    { field: 'remark', headerName: '备注', ...contentWidth(130, 280, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="remark" /> },
+    { colId: 'actions', headerName: '记录', pinned: 'right', ...contentWidth(90, 110, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row?.id ? <AccountActions row={row} /> : null },
   ], [scale]);
-  const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, structuralDisabled,
-    replace: row => { saves.clearFeedback(); setReplacing(row); }, showHistory: row => setHistoryAccount(row.id) };
+  const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, showHistory: row => setHistoryAccount(row.id) };
   const renderRemark = useCallback((kind: ArchiveKind, row: OilCard | OilAccount) => <ArchiveEditor kind={kind} row={row} field="remark" />, []);
   function chooseTab(value: typeof tab) { if (value === 'ledger') setLedgerVisited(true); if (value === 'linkage') setLinkageVisited(true); setTab(value); }
   return <section className="oilcard-page" aria-label="油卡管理">
@@ -183,10 +183,10 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       {ledgerVisited && <div role="tabpanel" id="oilcard-panel-ledger" aria-labelledby="oilcard-tab-ledger" hidden={tab !== 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></div>}
       {linkageVisited && <div role="tabpanel" id="oilcard-panel-linkage" aria-labelledby="oilcard-tab-linkage" hidden={tab !== 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></div>}
       <div role="tabpanel" id="oilcard-panel-archives" aria-labelledby="oilcard-tab-archives" hidden={tab !== 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
-        <section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>账户状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button>{pending && <Button disabled={blocked || busy || uncertain} onClick={() => { setPending(null); pendingRef.current = null; }}>取消新增</Button>}</div></div>
+        <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button>{pending && <Button disabled={blocked || busy || uncertain} onClick={() => { setPending(null); pendingRef.current = null; }}>取消新增</Button>}</div></div>
         {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="autoHeight" grid={{ rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount) } }} />}</section>
-        <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><Button disabled={structuralDisabled} onClick={() => void addCard()}>新增油卡</Button></div>
-        {!cards.length ? <p className="state">尚无实体油卡，可先建立卡号待补的档案。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={cards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" />}</section>
+        <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增油卡</Button></div></div>
+        {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" />}</section></div>
       </PageActivity.Provider></div>
     </ArchiveCells.Provider>}
     {historyAccount > 0 && tab === 'archives' && <section className="oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
@@ -198,9 +198,5 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
         { colId: 'previous_card', headerName: '换卡前卡片', valueGetter: p => { if (p.data?.change_kind !== 'replacement') return '—'; const card = cards.find(c => c.id === p.data?.previous_card_id); return card ? cardLabel(card) : '未关联卡片'; } },
         { field: 'changed_by', headerName: '操作人' },
       ]} />}</section>}
-    {replacing && data && <OilReplacementDialog account={replacing} archives={data} disabled={disabled} busy={busy} error={error} close={() => setReplacing(null)} submit={async fields => {
-      const outcome = await saves.run(async signal => { await replaceOilCard(fields, replacing, signal); }, () => '', `${replacing.name} 换卡：`);
-      if (outcome === 'saved' || outcome === 'uncertain') setReplacing(null);
-    }} />}
   </section>;
 }

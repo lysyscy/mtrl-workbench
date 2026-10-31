@@ -16,7 +16,7 @@ import type { DeliveryBatch, DeliveryItem } from './oilcard-batch-api';
 const BatchActions = createContext<{ disabled: boolean; open: (item: DeliveryItem) => void }>({ disabled: true, open: () => {} });
 function InvoiceAction({ data }: ICellRendererParams<DeliveryItem>) {
   const state = useContext(BatchActions);
-  return data?.invoice_id ? <Button size="small" disabled={state.disabled} onClick={() => state.open(data)}>核对发票</Button> : '';
+  return data?.invoice_id && data.status !== 'deleted' ? <Button size="small" disabled={state.disabled} onClick={() => state.open(data)}>核对发票</Button> : '';
 }
 export function OilReceiveDialog({ active, disabled, scale, close, onUpdated, onOpenInvoice, onLock, onUncertain }: {
   active: boolean; disabled: boolean; scale: number; close: () => void; onUpdated: () => Promise<unknown>;

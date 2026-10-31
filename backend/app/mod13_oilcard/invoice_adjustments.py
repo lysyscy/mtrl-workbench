@@ -10,13 +10,13 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from .ledger import _amount, _attribution
-from .invoices import number_owner
+from .invoices import number_owner, require_editable
 from .models import OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
 
 def validate_credits(session):
-    rows = {r.id: r for r in session.scalars(select(OilInvoice))}
+    rows = {r.id: r for r in session.scalars(select(OilInvoice).where(OilInvoice.deleted.is_(False)))}
     credited = {}
     for row in rows.values():
         if row.status != 'registered':
@@ -118,6 +118,7 @@ def correct(session, key, values, *, credit=False):
     _lock(session)
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
+    require_editable(row)
     if row.status == 'voided':
         raise MustReportError('这张票已登记作废，请先通过操作历史核对并撤销作废。')
     if not values['note'].strip():
@@ -128,7 +129,7 @@ def correct(session, key, values, *, credit=False):
     parent_id = values.get('related_invoice_id') if credit else row.related_invoice_id
     if kind == 'credit':
         parent = _get(session, OilInvoice, parent_id) if parent_id else None
-        if parent is None or parent.id == row.id or parent.kind != 'normal' or parent.status != 'registered':
+        if parent is None or parent.id == row.id or parent.deleted or parent.kind != 'normal' or parent.status != 'registered':
             raise MustReportError('红票请选择另一张已登记且未作废的普通原票。')
     _alias(session, row, facts['invoice_no'])
     for field, value in facts.items():
@@ -148,6 +149,7 @@ def allocate(session, key, values):
     _lock(session)
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
+    require_editable(row)
     if row.status == 'voided':
         raise MustReportError('作废票保留原分配，请先核对作废记录。')
     if not row.invoice_no or not row.invoice_date or row.amount is None or row.kind == 'normal' and row.amount <= ZERO:
@@ -165,6 +167,7 @@ def resolve_original(session, key, original_id, values):
     _lock(session)
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
+    require_editable(row)
     _review(session, row, original_id, 'keep', values['note'])
     _touch(row); session.flush()
     return row
@@ -174,9 +177,11 @@ def void(session, key, values):
     _lock(session)
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
+    require_editable(row)
     if row.kind != 'normal' or row.status != 'registered':
         raise MustReportError('请选择有效的普通原票登记作废；录错请使用更正。')
-    if session.scalar(select(OilInvoice.id).where(OilInvoice.related_invoice_id == row.id, OilInvoice.status == 'registered').limit(1)):
+    if session.scalar(select(OilInvoice.id).where(OilInvoice.related_invoice_id == row.id,
+            OilInvoice.status == 'registered', OilInvoice.deleted.is_(False)).limit(1)):
         raise MustReportError('原票已有有效红冲，不能在本台账再次作废冲减，请先核对关联红票。')
     try:
         row.void_date = date.fromisoformat(values['date'])
@@ -186,4 +191,21 @@ def void(session, key, values):
         raise MustReportError('请填写作废依据。')
     row.status, row.change_note, row.reason = 'voided', values['note'].strip(), '已登记作废'
     _touch(row); session.flush()
+    return row
+
+
+def delete(session, key, values):
+    """Remove one local ledger row from totals while retaining every receipt identity."""
+    _lock(session)
+    row = _get(session, OilInvoice, key)
+    _check_version(row, values['version'])
+    require_editable(row)
+    if session.scalar(select(OilInvoice.id).where(OilInvoice.related_invoice_id == row.id,
+            OilInvoice.status == 'registered', OilInvoice.deleted.is_(False)).limit(1)):
+        raise MustReportError('这张原票仍有关联的有效红票，请先逐张删除关联红票，再删除原票；本次未修改数据。')
+    row.deleted = True
+    _touch(row)
+    _parent_touch(session, (row.related_invoice_id,))
+    session.flush()
+    validate_credits(session)
     return row

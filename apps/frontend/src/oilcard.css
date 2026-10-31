@@ -11,14 +11,13 @@
 .oilcard-toolbar { justify-content: space-between; }
 .oilcard-toolbar h2 { font-size: calc(14px * var(--fscale, 1)); font-weight: 600; margin: 0; }
 .oilcard-toolbar + .grid-frame { margin-top: 12px; }
-.oilcard-archive-section + .oilcard-archive-section { margin-top: 28px; padding-top: 20px; border-top: .5px solid var(--bd); }
+.oilcard-archive-panes { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.oilcard-archive-section { min-width: 0; }
 .oilcard-archive-section > .oilcard-toolbar { margin-bottom: 12px; }
-.oilcard-row-actions { display: flex; align-items: center; gap: 8px; }
 .oilcard-selection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: var(--tx2); }
 .oilcard-ledger-panes:has(.oilcard-selection-actions > *) .oilcard-selection-actions { min-height: calc(44px * var(--fscale, 1)); padding: 4px 0 8px; }
 .oilcard-selection-actions > span { min-width: 0; overflow-wrap: anywhere; }
 .oilcard-selection-actions .ant-btn { flex: none; }
-.oilcard-menu-arrow { height: 12px; width: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .oilcard-toolbar label { display: flex; align-items: center; gap: 8px; }
 .oilcard-toolbar label > .ant-select { min-width: calc(100px * var(--fscale, 1)); }
 .oilcard-cell { width: 100%; padding-block: 2px; }
@@ -49,6 +48,7 @@
 .oilcard-invoice-parts { border: .5px solid var(--bd); padding: 12px; border-radius: var(--radius-inner); }
 .oilcard-invoice-part { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(100px, .7fr) auto; gap: 8px; align-items: end; }
 .oilcard-invoice-part > .ant-btn { margin-bottom: 12px; }
+.oilcard-invoice-part-single { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .oilcard-receive-dialog { width: min(calc(1000px * var(--fscale)), calc(100vw - 24px)); max-width: 100%; }
 .oilcard-receive-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
 .oilcard-receive-dialog .oilcard-toolbar > label { flex: 1; min-width: min(280px, 100%); }
@@ -65,10 +65,7 @@
 .oilcard-transfer-sides fieldset { border: .5px solid var(--bd); border-radius: var(--radius-inner); padding: 12px; min-width: 0; }
 .oilcard-transfer-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
 .oilcard-transfer-dialog .ant-select { width: 100%; }
-.oilcard-association-dialog { max-width: min(calc(560px * var(--fscale)), calc(100vw - 24px)); }
-.oilcard-association-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
-.oilcard-association-dialog .ant-select { width: 100%; }
-.business-modal :is(.oilcard-association-dialog, .oilcard-transfer-dialog, .oilcard-invoice-dialog, .oilcard-receive-dialog) { padding: calc(20px * var(--fscale)) calc(24px * var(--fscale)); font-size: calc(var(--font-ui-size) * 1px * var(--fscale)); overflow-wrap: anywhere; }
-.oilcard-association-dialog { width: min(calc(560px * var(--fscale)), calc(100vw - 24px)); }
+.business-modal :is(.oilcard-transfer-dialog, .oilcard-invoice-dialog, .oilcard-receive-dialog) { padding: calc(20px * var(--fscale)) calc(24px * var(--fscale)); font-size: calc(var(--font-ui-size) * 1px * var(--fscale)); overflow-wrap: anywhere; }
 @media (max-width: 700px) { .oilcard-transfer-sides, .oilcard-transfer-common { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .oilcard-workspace-bar { flex-wrap: wrap; gap: 8px 16px; } .oilcard-tabs { gap: 16px; } .oilcard-total-export { margin-inline-start: auto; } }
+@media (max-width: 900px) { .oilcard-archive-panes { grid-template-columns: minmax(0, 1fr); gap: 24px; } }

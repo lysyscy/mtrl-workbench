@@ -14,11 +14,13 @@ STORY：先看账户充值/开票/差额，再去并排明细记账；维护用�
 
 FIRST VIEWPORT：上方为账户核对、充值与发票、用油联动、账户与油卡四个原生工作区标签，右侧一个导出总台账。核对表直接显示记录与账户状态；双表各有标题及新增/收票，所选记录的次要操作在明确对象上下文内出现。
 
-FORM：既有主题内的定向任务重排，用户已固定关键结构，非开放全页概念竞赛，无视觉世界抽签。标志性交互是“行内明确对象的换卡”和“所选账务的明确归属更正”，不是装饰。
+FORM：既有主题内的定向任务重排，用户已固定关键结构，无视觉世界抽签。维护资料直接格内修改；当时卡片为隐藏快照；发票只用一个修改表单和一个可撤销删除入口，不为同一结果再设弹窗或菜单分类。
 
 FINISH：unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
 ## 实现与验证
+
+以下为首轮ab95d8c9的技术记录，界面裁定以下文“再次试用反馈”覆盖；首轮ship不等同用户接受其功能分类。
 
 - 工作区为账户核对、充值与发票、用油联动、账户与油卡；常驻导出仅一个。换卡和用卡记录放在账户行，归属更正和票据处理对应明确选择。日期入口为标准日历图标，仍可写文字/空值。未填完整的新增可取消，失败字段可就近还原，未知结果继续锁定。
 - `GET /api/m13/export`下载油卡总台账.xlsx，含核对汇总、充值台账、发票台账、发票分配、用卡账户、实体油卡、期初核对、账户关联历史、用油自定义9表。旧后台分项出口兼容；退款历史及服务保留，退出专属登记界面。
@@ -30,8 +32,21 @@ FINISH：unreviewed and undocumented is unfinished; this build ends with the fin
 
 ## 活动预览及材料归属
 
-- 原试用run仍为`.artifacts/active/oilcard-implementation/20261031-user-preview`，8065；当前PID31156，schema为`frontend_writable_51fcec25f7044cea8202b5afcece03b7`，`preserve_schema_on_stop=true`。最终资源取`20261031-ui-redesign/work/build-02`，不得删除在用构建。
+- 原试用run仍为`.artifacts/active/oilcard-implementation/20261031-user-preview`，8065，schema为`frontend_writable_51fcec25f7044cea8202b5afcece03b7`，`preserve_schema_on_stop=true`。首轮PID31156已停止，首轮资源为build-02；再次试用反馈的当前构建见下文，最新进程身份以real_owner/current登记为准。
 - 原副本通过原地更名保物理表和序列，保留用户11月6日日期、松绿主题及10条操作历史。原PID22852退出时拒绝旧名schema清理，为预期受控非零结果；之后`--existing`重启并验证59表/52序列的OID、ctid、xmin和内容无变。后续build-02正常停止/重启退出0，未重新复制/seed。
 - 恢复点在原run的`recovery/before-ui-redesign-20261031T082819053931Z/`，为活动试用恢复依据，不套通用30天删除。今后只按当前owner正常`--stop`，再原run `--existing`启动。
 - 截图及验证摘要登记于`oilcard-ui-20261031`组，保全技术证据于`oilcard-preview-preserve-20261031`组；读写使用短命令lease，用途结束封存30天。试用数据、恢复点及在用构建按专门生命周期保留。
 - 无关CONTRIBUTING.md、docs/agents/workflow.md、docs/guides/frontend-design.md、PRODUCT.md、DESIGN.md及原有.impeccable内容保持原样；仅本工作区brief属于此次保存。既有sidecar drift不随本次修复。总票452和453–463状态不改；本次未合并、未部署、未写正式账务。
+
+## 再次试用反馈（ab95d8c9后）
+
+- 用户否定重复功能：两张档案表需横排，油卡也要归档；归属弹窗与格内修改重叠；发票红冲/作废应为删除，票面和分配应合一。用户进一步提出当时卡应隐藏或按账户/时间绑定。当前将其作为既有隐藏快照，保同账户旧卡，不用操作时间冒充业务生效日期。
+- 原因核对：首轮保留后端功能分类，只调整入口/文案；未逐个验证独立结果和可替代性。此次退出归属弹窗、换卡弹窗及专用前端调用/测试，直接使用原格内修改；新卡从右侧卡表建立。发票只保一个修改表单，单账户金额只填一次；旧后台兼容入口及历史事实保留。
+- 油卡增在用/归档；本地删除整票退出列表、核对和总台账，原件/别名/分配保留，已有全局撤销可恢复。存在旧红票依赖时先处理关联票，避免净额损坏。迁移oil464261031只新增默认字段，历史兼容仅填两个已知缺省值的内存比较，保其他字段/xmin保护；接续旧确认同步兼容。
+- 后端29项加接续2项定向通过，均清理测试schema/work。前端首次检查因新字段旧夹具及已退出API专用测试失败；修正契约夹具、退役专属测试后最终44项通过；build-04类型/构建通过，检测一次`[]`。已稳定的后端组合不在GUI穷举。
+- 可丢弃副本frontend_rewrite_397_f59a978718204491bbac70739786952b中实际归档/撤销、1900/1100分配保存/读回/撤销、整票删除合计3000→0及撤销恢复通过；校验分配不等于总额拒绝，单账户无重复金额输入。此副本已正常停止并cleaned。
+- 原试用run经专门升级保恢复点recovery/before-oil464261031.dump，原58张业务表/旧列摘要保持，source_written=false，目标到oil464261031。原日期2026-11-06、松绿主题及旧操作历史保留；最终预览只在原run继续，不重复制/seed。
+- 本轮证据归oilcard-ui-distill-20261031；活动试用及在用构建单独保护。最终界面复核、文档与源码保存结果在本轮回执记录；原452及453–463不改状态。
+- 最终build-04运行于原run、PID33860、8065、oil464261031，product_digest为59ecd2b1e13010d98d05adb0e9aeacd5e829d638b0b7f9cca9b654fe9f7e501e。用户账号已回preview-admin/松绿，临时视口已复原，留在账户与油卡页。
+- 用户否定首轮ship后，新的独立impeccable_finish_distill已完整复核8张当前构建截图及单账户补充截图、源码和控件用途，五节结论为ship、实质修正0。其明确未证明390宽发票选择完整流程；档案适配和修改弹窗滚动/动作可达已核，不扩称全移动端验收。
+- 新独立documenter已对照当前源码及五张最终截图更新表面简报，退出失效association引用；根PRODUCT/DESIGN/sidecar保留。主控已读回，当前设计复核及文档已完成。

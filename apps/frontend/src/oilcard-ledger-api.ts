@@ -11,7 +11,6 @@ export interface OilLedger { entries: OilEntry[]; total_amount: string }
 export interface OilReconciliationRow { account_id: number; project_id: number; card_id: number | null; primary_card_id: number | null; current: boolean; recharge_amount: string; opening_amount: string; total_amount: string; invoiced_amount: string; difference_amount: string }
 export interface OilReconciliation { rows: OilReconciliationRow[]; total_amount: string; invoiced_amount: string; difference_amount: string }
 export type EntryFields = Pick<OilEntry, 'kind' | 'project_id' | 'account_id' | 'date_text' | 'amount' | 'remark'>;
-export type OilAttributionFields = Pick<OilEntry, 'project_id' | 'account_id' | 'card_id'>;
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const nullableId = (v: unknown) => v === null || id(v);
 const moneyText = (v: unknown): v is string => typeof v === 'string' && /^-?\d+\.\d{2}$/.test(v);
@@ -63,14 +62,6 @@ export async function refundOilEntry(fields: { request_id: string; original_id: 
   confirmWrite(record(result) && result.ok === true, '退款登记回执待核实，请重读，勿重复办理。');
   const row = readOilEntry((result as Record<string, unknown>).item);
   confirmWrite(row.kind === 'refund' && row.request_id === fields.request_id && row.related_entry_id === fields.original_id && row.date_text === fields.date_text && row.remark === fields.remark, '退款登记回执与输入不一致，请重读核对。');
-  return row;
-}
-
-export async function correctOilAttribution(fields: OilAttributionFields, target: OilEntry, signal: AbortSignal) {
-  const result = await requestJson(`/api/m13/ledger/entries/${target.id}/attribution`, { method: 'PUT', signal, ...body({ ...fields, version: target.version }) });
-  confirmWrite(record(result) && result.ok === true, '历史关联更正回执待核实，请重读，勿重复提交。');
-  const row = readOilEntry((result as Record<string, unknown>).item);
-  confirmWrite(Object.entries({ ...target, ...fields }).every(([key, value]) => key === 'version' || row[key as keyof OilEntry] === value), '历史关联更正回执与输入不一致，请重读核对。');
   return row;
 }
 
