@@ -20,14 +20,14 @@
 - 分支：codex/oilcard-management-20261031；累计基点e296e816ed13a05e7572bae6bc6e88fb5a3dda66。起点尚含未提交规格/原型，最终范围不能假定HEAD已含全部目标文件。
 - 453～458技术验证、保存并done；证据在本目录evidence/TAIL-453.md至TAIL-458.md。458源码及证据450d8e80、状态b2dbc55c已正常推送，远端HEAD b2dbc55c68df97c6cbaca2c967fa29b1fca5b971已核一致。先前自动审批拦截已由用户明确答复“允许正常推送”解决，授权目的地为lysyscy/mtrl-workbench的codex/oilcard-management-20261031分支，范围为本次已批准油卡开发的代码、测试及验证文档。
 - 458的34项后端及最终受影响14项、4项前端、正式构建、PG原件恢复、IAB收票/去重/冲突/独立双表/刷新与实际文件下载通过；自有预览schema已退出。457共享history顺序缺陷已有有效回归，不再是待修缺项。
-- 460实施中，459及461就绪；其余按原依赖继续。最终累计Standards/Spec独立双轴审查未完成。
+- 460已技术验收并保存推送646d64a1，远端SHA一致；证据见evidence/TAIL-460.md，原票done。459实施中，461就绪；其余按原依赖继续。最终累计Standards/Spec独立双轴审查未完成。
 - 接手从458持续推进剩余票，既有完成票的有效证据继续复用。
 
 ## 恢复入口与下一步
 
 先核AGENTS.md、CONTRIBUTING.md、分支/工作树、本交接编号和原票。目标读[spec](spec.md)、[当前需求](../../docs/requirements/oil-cards.md)及[map](map.md)。原票在.scratch/tails/issues；原依赖为453→454，454→455/456/457，455→458，458→459/460，456→461→462，457/460/462→463。
 
-下一步TAIL-460：人工补正、单一归属行内更正、多归属整体分配及红冲/作废追溯；保留原识别票号的去重身份，原件不随更正或撤销删除。之后继续461→462→463，459作为就绪支线插入，不新增依赖。每票按风险验证，源码及证据先入Git再关闭；提交后正常推送并核远端SHA。最终审查覆盖累计提交、未提交和新增内容，排除他人工作，修复实质发现。
+下一步TAIL-459：交付链接批量下载、逐项结果与跨批次去重及结果未知续办，使用已提供私有有效输入完成实际下载验证。沿用Sol xhigh执行者的PDF上下文；主控仍持有预览、公共状态及Git。之后继续461→462→463，不新增依赖。每票按风险验证，源码及证据先入Git再关闭；提交后正常推送并核远端SHA。最终审查覆盖累计提交、未提交和新增内容，排除他人工作，修复实质发现。
 
 ## 有效决定及授权边界
 
@@ -44,9 +44,10 @@
 
 - 原台账：D:\工作\材料\台账\油卡\外租机械加油汇总清单（第四工程公司）.xlsx；只取油卡、油卡充值、油卡开票、转账四张活动表，排除存档及临时核对区。详见[research](research.md)。原件不修改、不提交Git。
 - PDF及旧脚本在同级开票目录；旧处理脚本会重命名原件，只借鉴流程，不对原件直接运行。float金额、当前映射及备注末个长数字不能照搬为可靠入账规则。
-- 代表PDF：开票/20260916/237 慧能 56997.84.pdf有完整卡号，也含银行账号；开票/2025/20251016/大连.pdf只有短卡尾号，应待确认。可参考pypdf官方extract-text文档，尚未安装或锁定版本。已有PDF接续优先补关联，不重复记金额；永久原件需随台账备份，不能借临时缓存。
+- 代表PDF：开票/20260916/237 慧能 56997.84.pdf有完整卡号，也含银行账号；开票/2025/20251016/大连.pdf只有短卡尾号，应待确认。pypdf已声明并锁定6.21.4。已有PDF接续优先补关联，不重复记金额；永久原件已在数据库bytea随台账备份，不能借临时缓存。
 - 459有效交付链接已收到，完整私有输入仅在忽略文件.artifacts/active/oilcard-implementation/20261031-459/work/delivery-input.json。交付页曾打开，但新下载适配器未实施或实测，不算完成实链验收；完整链接/token不提交Git。
 - 456及457自有8065预览均已stop并清schema。457 PID37268、schema frontend_rewrite_397_c14318e3b82341ed8437f5aa5af20c39、revision oil457261031、stopped-disposable；本地证据在.artifacts/active/oilcard-implementation/20261031-457/reports。后续构建完成才启动，核源、构建和目标schema一致。
+- 458及460自有预览也已停并清schema；460最终PID22764、schema frontend_rewrite_397_bbda716cc5a543dd9dd7190344f1472d、revision oil460261031，owner stopped-disposable且已只读确认schema不存在。即时作废/撤销/重做及红冲标签无需刷新复验通过。
 - 8000为其他在用服务，8801为仍保留的用户原型，不因交接清理或接管；原型owner在.artifacts/active/oilcard-interaction/20261030-dsh/reports/owner.json，需用时重核。
 - 保护docs/guides/frontend-design.md改动及未跟踪.impeccable/、.tmp-fees-width.py、DESIGN.md、PRODUCT.md、debug.log；不全量暂存、reset、clean或stash。
 - 总票452基准SHA256：a1d9e8c048f77fff041fee3333235ca956c7ea42aa2e457dd43a753930b47290。
