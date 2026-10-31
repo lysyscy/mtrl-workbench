@@ -7,6 +7,7 @@ from sqlalchemy import select, text
 
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
+from app.core.money import ZERO, sum_money
 from app.core.references import project_references as collect_references
 from app.mod01_projects import service as projects
 from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance, OilInvoiceAllocation, OilFeeCustom, OilBigCustom
@@ -168,6 +169,68 @@ def assignments(session, account_id):
     return [assignment_data(row) for row in session.scalars(
                  select(OilAccountAssignment).where(OilAccountAssignment.account_id == account_id)
                  .order_by(OilAccountAssignment.id))]
+
+
+def total_export_snapshot(session):
+    """全量台账的同一业务快照；域锁只持有到调用方读完并退出事务。"""
+    from . import invoices, ledger
+
+    _lock(session)
+    archive = archives(session)
+    accounts = {row['id']: row for row in archive['accounts']}
+    cards = {row['id']: row for row in archive['cards']}
+    project_names = {p.id: p.disp.strip() or '未设置展示名' for p in projects.all_projects(session)}
+
+    def card_no(key):
+        return (cards[key]['card_no'] or f'卡号待补 #{key}') if key is not None else '未关联卡片'
+
+    def attribution(row):
+        return {**row, 'project': project_names[row['project_id']],
+            'account': accounts[row['account_id']]['name'], 'card': card_no(row['card_id'])}
+
+    def account_status(key):
+        return '在用' if accounts[key]['status'] == 'active' else '归档'
+
+    reconciliation = ledger.reconciliation(session)
+    reconciliation = {**reconciliation, 'rows': [{**attribution(row),
+        'account_status': account_status(row['account_id']),
+        'attribution': '当前归属' if row['current'] else '历史归属',
+        'primary_card': card_no(row['primary_card_id']) if row['primary_card_id'] is not None else '未关联主卡',
+        'account_remark': accounts[row['account_id']]['remark'],
+        'primary_remark': cards[row['primary_card_id']]['remark'] if row['primary_card_id'] is not None else ''}
+        for row in reconciliation['rows']]}
+    reconciliation['recharge_amount'] = str(sum_money(row['recharge_amount'] for row in reconciliation['rows']))
+    reconciliation['opening_amount'] = str(sum_money(row['opening_amount'] for row in reconciliation['rows']))
+    invoice_snapshot = invoices.export_snapshot(session)
+    allocation_rows = [{**attribution(allocation), 'invoice_id': invoice['id'],
+        'invoice_no': invoice['invoice_no'], 'invoice_date': invoice['invoice_date'],
+        'status': invoice['status'], 'kind': invoice['kind'],
+        'registered_amount': allocation['amount'] if invoice['status'] == 'registered' else str(ZERO)}
+        for invoice in invoice_snapshot['rows'] for allocation in invoice['allocations']]
+    opening_rows = [attribution({'id': row.id, 'source_key': row.source_key,
+        'source_note': row.source_note, 'account_id': row.account_id, 'project_id': row.project_id,
+        'card_id': row.card_id, 'original_date_text': row.original_date_text, 'cutoff_ym': row.cutoff_ym,
+        'status': '已确认' if row.confirmed else '待确认', 'amount': str(row.amount),
+        'booked_amount': str(row.amount if row.confirmed else ZERO), 'remark': row.remark})
+        for row in session.scalars(select(OilOpeningBalance).order_by(OilOpeningBalance.id))]
+    account_rows = [{**attribution({**row, 'account_id': row['id']}),
+        'status_label': account_status(row['id'])} for row in archive['accounts']]
+    card_rows = [{**row, 'kind_label': '主卡' if row['kind'] == 'primary' else '副卡',
+        'parent_card': card_no(row['parent_card_id']) if row['parent_card_id'] is not None else ''}
+        for row in archive['cards']]
+    assignment_rows = [{**attribution(assignment_data(row)),
+        'previous_card': card_no(row.previous_card_id) if row.previous_card_id is not None else '',
+        'change_label': '换卡' if row.change_kind == 'replacement' else '关联变更'}
+        for row in session.scalars(select(OilAccountAssignment).order_by(OilAccountAssignment.id))]
+    # 两类自定义额各自保存原快照；大表截至值不能跨月份求和。
+    custom_rows = [{'id': row.id, 'kind': label, 'project_id': row.project_id,
+        'project': project_names[row.project_id], 'ym': row.ym,
+        'amount': str(row.amount) if row.amount is not None else None, 'remark': row.remark}
+        for model, label in ((OilFeeCustom, '特殊费用当月自定义额'), (OilBigCustom, '大表截至月额外快照'))
+        for row in session.scalars(select(model).order_by(model.project_id, model.ym, model.id))]
+    return {'reconciliation': reconciliation, 'ledger': ledger.export_snapshot(session),
+        'invoices': invoice_snapshot, 'allocations': allocation_rows, 'openings': opening_rows,
+        'accounts': account_rows, 'cards': card_rows, 'assignments': assignment_rows, 'customs': custom_rows}
 
 
 def assignment_data(row):

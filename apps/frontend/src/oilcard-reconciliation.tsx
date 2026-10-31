@@ -13,9 +13,9 @@ import type { OilReconciliationRow } from './oilcard-ledger-api';
 import type { OilAccount, OilArchives, OilCard } from './oilcard-api';
 
 type Row = { key: string; group: string; kind: 'primary' | 'account' | 'total'; title: string; account?: OilAccount; card?: OilCard; primary?: OilCard; allocation?: OilReconciliationRow; amount: string | null; invoiced?: string; difference?: string };
-export function OilReconciliationSheet({ archives, projects, active, blocked, scale, remark, openLedger }: {
+export function OilReconciliationSheet({ archives, projects, active, blocked, scale, remark }: {
   archives: OilArchives; projects: Project[]; active: boolean; blocked: boolean; scale: number;
-  remark: (kind: 'card' | 'account', row: OilCard | OilAccount) => ReactNode; openLedger: () => void;
+  remark: (kind: 'card' | 'account', row: OilCard | OilAccount) => ReactNode;
 }) {
   const query = useQuery({ queryKey: ['oilcard-reconciliation'], enabled: active && !blocked, queryFn: ({ signal }) => getOilReconciliation(signal) });
   const [status, setStatus] = useState('active'), [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -50,8 +50,8 @@ export function OilReconciliationSheet({ archives, projects, active, blocked, sc
     { colId: 'remark', headerName: '备注', ...contentWidth(200, 500, scale, 2), cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.primary ? remark('card', data.primary) : data?.account ? remark('account', data.account) : '' },
   ], [scale, amountWidth, collapsed, remark, rows, sums]);
   const totals = useMemo<Row[]>(() => [{ key: 'total', group: '', kind: 'total', title: '合计', amount, ...sums }], [amount, sums]);
-  return <section aria-label="账户充值与开票核对"><div data-page-chrome className="oilcard-toolbar"><Button onClick={openLedger}>查看充值与发票</Button><label>账户状态<Select aria-label="核对账户状态" value={status} onChange={setStatus} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
+  return <section aria-label="账户充值与开票核对"><div data-page-chrome className="oilcard-toolbar"><h2>充值与开票核对</h2><label>账户状态<Select aria-label="核对账户状态" value={status} onChange={setStatus} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
     {query.isError && <p className="notice" role="alert">{query.error.message}<Button disabled={blocked} onClick={() => void query.refetch()}>重读账户累计</Button></p>}
-    {query.isPending ? <p role="status" data-page-loading>正在核对充值累计…</p> : query.data && (rows.length ? <BusinessGrid table="oilcard-reconciliation" rows={rows} columns={columns} totals={totals} rowId={row => row.key} scale={scale} label="账户充值累计" domLayout="autoHeight" grid={{ rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' } }} /> : <p className="state">尚无符合条件的用卡账户。可在用卡账户工作表建档。</p>)}
+    {query.isPending ? <p role="status" data-page-loading>正在核对充值累计…</p> : query.data && (rows.length ? <BusinessGrid table="oilcard-reconciliation" rows={rows} columns={columns} totals={totals} rowId={row => row.key} scale={scale} label="账户充值累计" domLayout="autoHeight" grid={{ rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' } }} /> : <p className="state">尚无符合条件的用卡账户。可在“账户与油卡”中建档。</p>)}
   </section>;
 }

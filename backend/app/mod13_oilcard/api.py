@@ -213,6 +213,17 @@ def enable_empty_big_linkage(project_id: int):
         return {'ok': True, **big.enable_empty_big_oil(session, project_id=project_id)}
 
 
+@router.get('/export')
+def export_total_ledger():
+    with session_scope() as session:
+        snapshot = service.total_export_snapshot(session)
+    filename = quote('油卡总台账.xlsx')
+    return Response(content=export_registry.get('oilcard').build_total(snapshot),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'X-Export-Filename': filename, 'Content-Disposition': f"attachment; filename*=UTF-8''{filename}",
+                 'Cache-Control': 'no-store'})
+
+
 @router.get('/ledger/export')
 def export_ledger():
     with session_scope() as session:
