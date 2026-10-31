@@ -123,7 +123,8 @@ class OilOpeningBalance(Base):
 class OilInvoice(Base):
     """票据索引与人工确认结果；原件身份独立，不能经更正或撤销删除。"""
     __tablename__ = 'oil_invoice'
-    __table_args__ = (CheckConstraint("status IN ('pending', 'registered')", name='ck_oil_invoice_status'),)
+    __table_args__ = (CheckConstraint("status IN ('pending', 'registered', 'voided')", name='ck_oil_invoice_status'),
+        CheckConstraint("kind IN ('normal', 'credit')", name='ck_oil_invoice_kind'))
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     invoice_no: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
@@ -131,6 +132,11 @@ class OilInvoice(Base):
     amount: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
     card_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default='pending')
+    kind: Mapped[str] = mapped_column(String(16), default='normal', server_default='normal')
+    related_invoice_id: Mapped[int | None] = mapped_column(ForeignKey('oil_invoice.id'), nullable=True, index=True)
+    review_json: Mapped[str] = mapped_column(Text, default='{}', server_default='{}')
+    change_note: Mapped[str] = mapped_column(Text, default='', server_default='')
+    void_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reason: Mapped[str] = mapped_column(Text, default='')
     remark: Mapped[str] = mapped_column(Text, default='')
     version: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()))
@@ -166,3 +172,11 @@ class OilInvoiceAllocation(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), index=True)
     card_id: Mapped[int | None] = mapped_column(ForeignKey('oil_card.id'), nullable=True, index=True)
     amount: Mapped[Decimal] = mapped_column(MONEY)
+
+
+class OilInvoiceNumber(Base):
+    """Historical recognized/corrected numbers keep cross-receipt identity."""
+    __tablename__ = 'oil_invoice_number'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey('oil_invoice.id'), index=True)
+    number: Mapped[str] = mapped_column(String(32), unique=True)

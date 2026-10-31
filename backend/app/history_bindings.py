@@ -7,7 +7,7 @@ from app.mod06_proc.models import ProcMaterialManual
 from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, WeldGasBalance
 from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
-from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation
+from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber
 
 
 def configure():
@@ -37,8 +37,10 @@ def configure():
     oil_assignment = Rule(OilAccountAssignment, frozenset(), True)
     oil_entry = Rule(OilEntry, frozenset({'kind', 'account_id', 'project_id', 'card_id', 'date_text',
         'entry_date', 'amount', 'remark', 'version', 'updated_by'}), True)
-    oil_invoice = Rule(OilInvoice, frozenset({'invoice_no', 'invoice_date', 'amount', 'card_no', 'status', 'reason', 'remark', 'version', 'updated_by'}))
+    oil_invoice = Rule(OilInvoice, frozenset({'invoice_no', 'invoice_date', 'amount', 'card_no', 'status', 'reason', 'remark', 'version', 'updated_by',
+        'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date'}))
     oil_allocation = Rule(OilInvoiceAllocation, frozenset({'account_id', 'project_id', 'card_id', 'amount'}), True)
+    oil_number = Rule(OilInvoiceNumber, frozenset(), True)
     bind_policies([
         ('POST', '/api/m03/actions/exclude', '剔除付款通知书', [notice]),
         ('POST', '/api/m03/actions/restore', '恢复付款通知书', [notice]),
@@ -72,4 +74,9 @@ def configure():
         ('POST', '/api/m13/ledger/refunds', '登记油卡充值退款', [oil_entry]),
         ('POST', '/api/m13/ledger/transfers', '登记油卡转账', [oil_entry]),
         ('PUT', r'/api/m13/invoices/\d+/remark', '修改油卡发票备注', [oil_invoice, oil_allocation]),
+        ('PUT', r'/api/m13/invoices/\d+/correct', '更正油卡发票票面', [oil_invoice, oil_allocation, oil_number]),
+        ('PUT', r'/api/m13/invoices/\d+/allocations', '更正油卡发票整体分配', [oil_invoice, oil_allocation]),
+        ('PUT', r'/api/m13/invoices/\d+/originals/\d+/resolve', '核对油卡发票原件', [oil_invoice]),
+        ('POST', r'/api/m13/invoices/\d+/credit', '登记油卡发票红冲', [oil_invoice, oil_allocation, oil_number]),
+        ('POST', r'/api/m13/invoices/\d+/void', '登记油卡发票作废', [oil_invoice]),
     ])

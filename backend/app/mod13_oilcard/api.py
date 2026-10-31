@@ -15,6 +15,7 @@ from . import service
 from . import ledger
 from . import transfers
 from . import invoices
+from . import invoice_adjustments
 from .invoice_pdf import MAX_PDF_BYTES, recognize_pdf
 
 router = APIRouter(prefix='/api/m13', tags=['oilcard'])
@@ -272,3 +273,74 @@ def export_invoices():
     return Response(content=export_registry.get('oilcard').build_invoices(snapshot),
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'X-Export-Filename': name, 'Content-Disposition': f"attachment; filename*=UTF-8''{name}", 'Cache-Control': 'no-store'})
+
+
+class InvoiceAllocation(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    project_id: int = Field(gt=0)
+    account_id: int = Field(gt=0)
+    amount: StrictStr
+
+
+class InvoiceAllocationUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+    allocations: list[InvoiceAllocation] = Field(max_length=100)
+
+
+class InvoiceCorrection(InvoiceAllocationUpdate):
+    invoice_no: StrictStr = Field(max_length=32)
+    invoice_date: StrictStr
+    amount: StrictStr
+    card_no: StrictStr | None = Field(default=None, max_length=128)
+    note: StrictStr
+    review_original_id: int | None = Field(default=None, gt=0)
+
+
+class InvoiceCredit(InvoiceCorrection):
+    related_invoice_id: int = Field(gt=0)
+
+
+class InvoiceResolution(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+    note: StrictStr
+
+
+class InvoiceVoid(InvoiceResolution):
+    date: StrictStr
+
+
+@router.put('/invoices/{invoice_id}/correct')
+def correct_invoice(invoice_id: int, req: InvoiceCorrection):
+    with session_scope() as session:
+        row = invoice_adjustments.correct(session, invoice_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.put('/invoices/{invoice_id}/allocations')
+def allocate_invoice(invoice_id: int, req: InvoiceAllocationUpdate):
+    with session_scope() as session:
+        row = invoice_adjustments.allocate(session, invoice_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.put('/invoices/{invoice_id}/originals/{original_id}/resolve')
+def resolve_invoice_original(invoice_id: int, original_id: int, req: InvoiceResolution):
+    with session_scope() as session:
+        row = invoice_adjustments.resolve_original(session, invoice_id, original_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.post('/invoices/{invoice_id}/credit')
+def credit_invoice(invoice_id: int, req: InvoiceCredit):
+    with session_scope() as session:
+        row = invoice_adjustments.correct(session, invoice_id, req.model_dump(mode='json'), credit=True)
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.post('/invoices/{invoice_id}/void')
+def void_invoice(invoice_id: int, req: InvoiceVoid):
+    with session_scope() as session:
+        row = invoice_adjustments.void(session, invoice_id, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}

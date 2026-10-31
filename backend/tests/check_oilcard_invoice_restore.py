@@ -15,6 +15,7 @@ from app.main import create_app
 from app.mod01_projects.models import Project
 from tests.oilcard_invoice_samples import invoice_pdf
 from tests.test_oilcard_invoices import receive, setup_account
+from tests.test_oilcard_invoice_adjustments import allocation, correct
 
 
 def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_path, request):
@@ -46,6 +47,7 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
             invoice_ids = list(connection.scalars(text('SELECT invoice_id FROM oil_invoice_allocation WHERE project_id=:id'), {'id': project_id}))
             connection.execute(text('DELETE FROM oil_invoice_allocation WHERE project_id=:id'), {'id': project_id})
             for invoice_id in invoice_ids:
+                connection.execute(text('DELETE FROM oil_invoice_number WHERE invoice_id=:id'), {'id': invoice_id})
                 connection.execute(text('DELETE FROM oil_invoice WHERE id=:id'), {'id': invoice_id})
             card_ids = list(connection.scalars(text('SELECT card_id FROM oil_account WHERE project_id=:id'), {'id': project_id}))
             connection.execute(text('DELETE FROM oil_account_assignment WHERE project_id=:id'), {'id': project_id})
@@ -57,9 +59,11 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
     content = invoice_pdf()
     with TestClient(create_app()) as client:
         client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_restore__'))
-        setup_account(client, project_id)
+        account = setup_account(client, project_id)
         registered = receive(client, content)
         original_id = registered['original']['id']
+        adjusted = correct(client, registered['item'], [allocation(account, '3000')], invoice_no='20261031000000000009')
+        assert adjusted.status_code == 200, adjusted.text
         archive = tmp_path / 'invoice-originals.dump'
         def run(executable, *args):
             result = subprocess.run([str(pg_bin / executable), *args], env=env, check=True,
@@ -70,7 +74,7 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
         toc = run('pg_restore.exe', '--list', str(archive))
         assert 'TABLE DATA' in toc and 'oil_invoice_original' in toc and archive.stat().st_size > 0
         with engine.begin() as connection:
-            connection.execute(text('TRUNCATE oil_invoice_allocation, oil_invoice_original, oil_invoice RESTART IDENTITY'))
+            connection.execute(text('TRUNCATE oil_invoice_allocation, oil_invoice_original, oil_invoice_number, oil_invoice RESTART IDENTITY'))
         assert client.get('/api/m13/invoices').json()['invoices'] == []
         run('pg_restore.exe', '--no-password', '--data-only', '--no-owner', '--no-privileges',
             '--exit-on-error', '--dbname', url.database, str(archive))
@@ -80,3 +84,8 @@ def test_custom_dump_restore_recovers_original_and_accounting(monkeypatch, tmp_p
         assert sha256(recovered.content).hexdigest() == registered['original']['sha256']
         assert client.get('/api/m13/invoices').json()['total_amount'] == '3000.00'
         assert client.get('/api/m13/reconciliation').json()['invoiced_amount'] == '3000.00'
+        historical = receive(client, invoice_pdf(variant='restored old number metadata'))
+        corrected = receive(client, invoice_pdf(number='20261031000000000009'))
+        assert historical['item']['id'] == corrected['item']['id'] == registered['item']['id']
+        assert len(client.get('/api/m13/invoices').json()['invoices']) == 1
+        assert client.get('/api/m13/invoices').json()['total_amount'] == '3000.00'

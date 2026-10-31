@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readOilInvoices, receiveOilInvoice, readOilReceipt } from '../../src/oilcard-invoice-api.ts';
+import { changeOilInvoice, readOilInvoices, receiveOilInvoice, readOilReceipt } from '../../src/oilcard-invoice-api.ts';
 import { uncertainWrite } from '../../src/api.ts';
 
 const digest = 'a'.repeat(64);
-const original = { id: 1, invoice_id: 1, sha256: digest, byte_size: 10, outcome: 'received', reason: '' };
-const invoice = { id: 1, invoice_no: '20261031000000000001', invoice_date: '2026-10-31', card_no: '1000111400012345678', amount: '3000.00', status: 'registered', reason: '', remark: '', version: '00000000-0000-4000-8000-000000000001', allocations: [{ id: 1, project_id: 1, account_id: 2, card_id: 3, amount: '3000.00' }], originals: [original] };
+const original = { id: 1, invoice_id: 1, sha256: digest, byte_size: 10, outcome: 'received', reason: '', resolution: null, recognized: { invoice_no: null, invoice_date: null, amount: null, card_no: null } };
+const invoice = { id: 1, invoice_no: '20261031000000000001', invoice_date: '2026-10-31', card_no: '1000111400012345678', amount: '3000.00', status: 'registered', kind: 'normal', related_invoice_id: null, change_note: '', void_date: null, reason: '', remark: '', version: '00000000-0000-4000-8000-000000000001', allocations: [{ id: 1, project_id: 1, account_id: 2, card_id: 3, amount: '3000.00' }], originals: [original] };
 
 test('已登记票据与待确认票据分开核对，合计只取已确认金额', () => {
   const pending = { ...invoice, id: 2, status: 'pending', allocations: [], originals: [{ ...original, id: 2, invoice_id: 2, sha256: 'b'.repeat(64) }] };
@@ -18,6 +18,15 @@ test('票据原件及分配身份必须完整，缺失不当成已登记', () =>
   for (const invalid of [{ ...invoice, originals: [] }, { ...invoice, originals: [{ ...original, invoice_id: 9 }] }, { ...invoice, amount: null }, { ...invoice, allocations: [] }]) {
     assert.throws(() => readOilInvoices({ invoices: [invalid], total_amount: '3000.00' }));
   }
+});
+
+test('实际红冲只计算关联负数，作废票保留但退出合计', () => {
+  const red = { ...invoice, id: 2, kind: 'credit', related_invoice_id: 1, amount: '-1000.00', allocations: [{ ...invoice.allocations[0], id: 2, amount: '-1000.00' }], originals: [{ ...original, id: 2, invoice_id: 2 }] };
+  assert.equal(readOilInvoices({ invoices: [invoice, red], total_amount: '2000.00' }).total_amount, '2000.00');
+  assert.equal(readOilInvoices({ invoices: [{ ...invoice, status: 'voided' }], total_amount: '0.00' }).invoices.length, 1);
+  assert.throws(() => readOilInvoices({ invoices: [{ ...invoice, status: 'voided' }, red], total_amount: '-1000.00' }));
+  const excessive = { ...red, amount: '-3001.00', allocations: [{ ...red.allocations[0], amount: '-3001.00' }] };
+  assert.throws(() => readOilInvoices({ invoices: [invoice, excessive], total_amount: '-1.00' }));
 });
 
 test('收票回执须对应本次字节身份，不完整回执保持结果未知', async () => {
@@ -38,5 +47,14 @@ test('重读凭原件hash核对存在和未写入，不能把不完整结果当�
     }
     globalThis.fetch = async () => new Response(JSON.stringify({ received: false }));
     await assert.rejects(readOilReceipt(digest));
+  } finally { globalThis.fetch = previous; }
+});
+
+test('整体分配回执必须对应每项归属，合计相同也不能吞掉某一项', async () => {
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, item: invoice }));
+    await assert.rejects(changeOilInvoice(invoice, 'allocations', { allocations: [{ project_id: 1, account_id: 2, amount: '2000' }, { project_id: 1, account_id: 4, amount: '1000' }] }, new AbortController().signal), error => uncertainWrite(error));
+    await changeOilInvoice(invoice, 'allocations', { allocations: [{ project_id: 1, account_id: 2, amount: '3000' }] }, new AbortController().signal);
   } finally { globalThis.fetch = previous; }
 });
