@@ -253,10 +253,10 @@ def test_上次值带入_最近一次_清空回带入态_无记录留空():
     assert all(c["value"] is None and c["from"] == "" for c in d.values()), "丁仓被硬凑了值"
     # **清空 ⇒ 回到带入态**
     s = _session()
-    R.save_cell(s, ym=YM_NOW, warehouse=WH_A, key="oil", value=None)
+    R.save_cell(s, ym=YM_NOW, warehouse=WH_A, key="contract", value=None)
     row = _rows(_data(s))[WH_A]
-    assert _money(row["manual"]["oil"]["value"]) == Decimal("100.00"), "清空后没回到带入态"
-    assert row["manual"]["oil"]["from"] == YM_PREV
+    assert _money(row["manual"]["contract"]["value"]) == Decimal("10000.00"), "清空后没回到带入态"
+    assert row["manual"]["contract"]["from"] == YM_PREV
 
 
 def test_带入是只读派生_历史月份录入值不被改写():
@@ -371,7 +371,7 @@ def test_fixed_month_keeps_archived_and_editable_while_inheritance_excludes_it_a
     next(p for p in s.by_model[Project] if p.warehouse_name == WH_C).status = STATUS_ARCHIVED
     s.add(Project(id=99, project_type='normal', name_full='新项目', warehouse_name='新仓', disp='新增', ord=1))
     assert _data(s, month=YM_PREV)['selected'] == [WH_C, WH_A]
-    assert S.save_manual_cell(s, month=YM_PREV, warehouse=WH_C, key='oil', raw='123')['ok']
+    assert S.save_manual_cell(s, month=YM_PREV, warehouse=WH_C, key='mech_est', raw='123')['ok']
     assert _data(s)['selected'] == [WH_A]
     assert '新仓' in [c['warehouse'] for c in _data(s)['candidates']]
     assert S.save_selection(s, _data(s)['selected'], month=YM_NOW)['ok']
@@ -396,10 +396,10 @@ def test_only_valid_month_and_valid_cell_materialize_selection_and_legacy_reques
     for model in (CellRequest, MoveRequest, SelectionRequest):
         with pytest.raises(ValidationError):
             model()
-    assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key='oil', raw='0')['ok']
+    assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key='mech_est', raw='0')['ok']
     assert _data(s)['selection'] == {'fixed': True, 'source': YM_NOW}
-    assert _rows(_data(s))[WH_A]['manual']['oil'] == {'value': Decimal('0.00'), 'from': ''}
-    assert _rows(_data(s, month=YM_PREV))[WH_A]['manual']['oil']['value'] == Decimal('100.00')
+    assert _rows(_data(s))[WH_A]['manual']['mech_est'] == {'value': Decimal('0.00'), 'from': ''}
+    assert _rows(_data(s, month=YM_PREV))[WH_A]['manual']['mech_est']['value'] == Decimal('1000.00')
 
 
 # ============================================================ 边界（001-14 / 001-15）
@@ -419,7 +419,7 @@ def test_手填值不参与欠款计算():
     s = _session()
     cands = _data(s)["candidates"]
     with patch("app.mod05_flow.repository.sync_stat_paid", _spy):
-        for key, raw in (("mech_est", "888.00"), ("oil", "0"), ("note", "手改")):
+        for key, raw in (("mech_est", "888.00"), ("contract", "0"), ("note", "手改")):
             assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key=key, raw=raw)["ok"]
     assert calls == [], "手填值触发了欠款重算（付款域的重算出口被调用了）"
 

@@ -15,6 +15,8 @@ FeeOilBinding持久表示已启用，指定旧FeeItem或明确无旧项；旧项
 - 前一组`141029-636904-38092`为23失败/33通过，旧离线会话桩不执行LIMIT导致存在性查询取多行；改用同样有界的first后上述56项全过。原失败报告/日志保留，不报首轮全绿。首次受限权限/缓存环境检查未启动，正常权限重跑使用既有工具及配置。
 - 前端类型、44项单元及Impeccable detector（[]）通过。首次冻结后执行者补一行写回执完整性检查（enabled及非空version），主控已开始的build-01/初始副本不用于最终验收，未seed或GUI写入即正常stop/清schema；重新冻结后正式build-02通过。后端输入未受该前端修正影响。
 
+前端实际在apps/frontend执行`corepack pnpm typecheck`及`corepack pnpm test:unit`，后者为package.json现有15个文件共44项，覆盖共用保存/身份/金额及既有油卡边界，不声称新增联动专属前端单元。最后一行回执修正后另typecheck成功，实际UI由下文承担。
+
 报告归本机`AgentArtifacts/projects/mtrl-workbench/groups/<组>/files`，实际GUI/文件证据归`.artifacts/active/oilcard-implementation/20261031-461/reports`。覆盖重叠，不相加冒称独立总数。
 
 ## 实际页面与下载
@@ -34,3 +36,5 @@ FeeOilBinding持久表示已启用，指定旧FeeItem或明确无旧项；旧项
 最终PID34556、revision`oil461261031`、schema`frontend_rewrite_397_7c5e06f94b24415c90fedfe6b2173d4d`正常stop退出0并确认cleaned；初始schema`frontend_rewrite_397_358a45954a1a4b1eb6159ee50e4f6cc9`也正常退出/清理。浏览器标签已关闭，视口覆盖已重置。8000及8801未操作。
 
 执行者调用参数gpt-6.1-sol/xhigh/独立上下文，工具未回显实际运行元数据；主控整合和实际验证如上。真实旧费用身份/转换及期初仍留463核对，不做真实接续、生产迁移或加载。最终累计独立双轴审查尚未完成。
+
+源码`60a8deb1d5c6ca5d6a99009867643cf4ee9c85e2`的GitHub push工作流[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41176867096)已实际读取为completed/success；关票接续`11fae34d7f2974bb2c80756a20a87161691ca8bc`亦已正常推送且远端一致。

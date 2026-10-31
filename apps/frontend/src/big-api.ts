@@ -10,7 +10,7 @@ export const totalKeys = [...autoKeys,'total_cum','mech_est','contract','output_
 export type TotalKey = typeof totalKeys[number];
 export type Amount = string | null;
 export interface BigRow {
-  seq: number; warehouse: string; display: string; carry_n: number;
+  seq: number; warehouse: string; display: string; carry_n: number; oil_linked: boolean;
   manual: Record<ManualKey, { value: Amount; from: string }>;
   auto: Record<AutoKey, Amount>; derived: Record<DerivedKey, Amount>;
 }
@@ -33,7 +33,7 @@ export function readBig(value: unknown, ym: string): BigData {
   for (const c of value.candidates) if (!record(c) || typeof c.warehouse !== 'string' || !c.warehouse || typeof c.display !== 'string') throw invalid();
   for (const row of value.rows) {
     if (!record(row) || typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || typeof row.warehouse !== 'string' || typeof row.display !== 'string' ||
-        typeof row.carry_n !== 'number' || !record(row.manual) || !record(row.auto) || !record(row.derived) ||
+        typeof row.carry_n !== 'number' || typeof row.oil_linked !== 'boolean' || !record(row.manual) || !record(row.auto) || !record(row.derived) ||
         !autoKeys.every(k => amount((row.auto as Record<string,unknown>)[k])) || !derivedKeys.every(k => amount((row.derived as Record<string,unknown>)[k]))) throw invalid();
     for (const k of manualKeys) {
       const cell = row.manual[k];

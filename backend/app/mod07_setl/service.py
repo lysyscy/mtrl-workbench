@@ -210,9 +210,9 @@ def extract_year_totals(amounts: dict, balances: dict) -> dict:
 def project_references(session, project_id, warehouse, *, lock=False):
     """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
     from app.core.references import project_references as read
-    from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigMonthProject, AnalysisBigManual
+    from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigMonthProject, AnalysisBigManual, BigOilBinding
 
-    return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigMonthProject, '大表月度项目排序'), (AnalysisBigManual, '大表手录'),), project_id, warehouse, lock=lock)
+    return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigMonthProject, '大表月度项目排序'), (AnalysisBigManual, '大表手录'), (BigOilBinding, '大表用油接续依据')), project_id, warehouse, lock=lock)
 
 
 def opening_months(session, warehouses, months):
@@ -221,3 +221,23 @@ def opening_months(session, warehouses, months):
     own = R.load_manual(session)
     return {wh: {ym: B.parse_month(B.manual_cell(own, ym, wh, 'open_ym')['value'])
                  for ym in months} for wh in warehouses}
+
+
+def big_oil_status(session, *, project_id):
+    from .oil_linkage import status
+    return status(session, project_id=project_id)
+
+
+def review_big_oil(session, *, project_id):
+    from .oil_linkage import review
+    return review(session, project_id=project_id)
+
+
+def enable_big_oil(session, **values):
+    from .oil_linkage import enable
+    return enable(session, **values)
+
+
+def enable_empty_big_oil(session, *, project_id):
+    from .oil_linkage import enable_empty
+    return enable_empty(session, project_id=project_id)

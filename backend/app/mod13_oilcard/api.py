@@ -166,7 +166,7 @@ def read_reconciliation():
 def read_linkage(ym: str):
     reporting.month_bounds(ym)
     with session_scope() as session:
-        return {'ym': ym, 'rows': [reporting.fee_month(session, project_id=project.id, ym=ym)
+        return {'ym': ym, 'rows': [reporting.linkage_month(session, project_id=project.id, ym=ym)
             for project in service.projects.all_projects(session) if project.project_type != 'shell']}
 
 
@@ -182,7 +182,7 @@ def save_fee_custom(project_id: int, ym: str, req: FeeCustomUpdate):
     with session_scope() as session:
         reporting.save_fee_custom(session, project_id=project_id, ym=ym, amount=req.amount,
             remark=req.remark, version=str(req.version) if req.version else None)
-        return {'ok': True, 'item': reporting.fee_month(session, project_id=project_id, ym=ym)}
+        return {'ok': True, 'item': reporting.linkage_month(session, project_id=project_id, ym=ym)}
 
 
 @router.post('/linkage/{project_id}/enable')
@@ -190,6 +190,27 @@ def enable_empty_linkage(project_id: int):
     from app.mod09_fee import service as fees
     with session_scope() as session:
         return {'ok': True, **fees.enable_empty_oil_linkage(session, project_id=project_id)}
+
+
+class BigCustomUpdate(FeeCustomUpdate):
+    source_ym: StrictStr | None = None
+    source_version: UUID | None = None
+
+
+@router.put('/linkage/{project_id}/{ym}/big')
+def save_big_custom(project_id: int, ym: str, req: BigCustomUpdate):
+    with session_scope() as session:
+        reporting.save_big_custom(session, project_id=project_id, ym=ym, amount=req.amount, remark=req.remark,
+            version=str(req.version) if req.version else None, source_ym=req.source_ym,
+            source_version=str(req.source_version) if req.source_version else None)
+        return {'ok': True, 'item': reporting.linkage_month(session, project_id=project_id, ym=ym)}
+
+
+@router.post('/linkage/{project_id}/big/enable')
+def enable_empty_big_linkage(project_id: int):
+    from app.mod07_setl import service as big
+    with session_scope() as session:
+        return {'ok': True, **big.enable_empty_big_oil(session, project_id=project_id)}
 
 
 @router.get('/ledger/export')

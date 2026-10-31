@@ -9,7 +9,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.references import project_references as collect_references
 from app.mod01_projects import service as projects
-from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance, OilInvoiceAllocation, OilFeeCustom
+from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance, OilInvoiceAllocation, OilFeeCustom, OilBigCustom
 
 
 def _lock(session):
@@ -179,7 +179,7 @@ def project_references(session, project_id, warehouse_name, *, lock=False):
     return collect_references(session, ((OilAccount, '用卡账户'),
         (OilAccountAssignment, '油卡关联历史'), (OilEntry, '油卡充值与调整'),
         (OilOpeningBalance, '油卡期初依据'), (OilInvoiceAllocation, '油卡发票分配'),
-        (OilFeeCustom, '用油自定义额')), project_id, warehouse_name, lock=lock)
+        (OilFeeCustom, '用油自定义额'), (OilBigCustom, '大表用油额外值')), project_id, warehouse_name, lock=lock)
 
 
 def fee_facts(session, *, project_id, end_ym):
@@ -194,3 +194,13 @@ def save_fee_custom(session, **values):
 
 def lock_reporting(session):
     _lock(session)
+
+
+def big_oil_amount(session, *, project_id, ym):
+    from .reporting import big_amount
+    return big_amount(session, project_id=project_id, ym=ym)
+
+
+def stage_big_custom(session, **values):
+    from .reporting import stage_big_custom as stage
+    return stage(session, **values)

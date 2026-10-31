@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -125,7 +125,7 @@ class AnalysisBigMonthProject(Base):
 
 
 class AnalysisBigManual(Base):
-    """活动大表的**手填 6 列**（§5.7.1），粒度 = **核算月 × 仓库**。
+    """活动大表手填及保留的旧用油完整总额，粒度 = **核算月 × 仓库**。
 
     ⭐ **未录入 = 该列为 `NULL`**（不是 0）—— 「上次值带入」（§5.7.2）就靠这个区分：
        `NULL` ⇒ 向前取最近一次录入值；**0 是合法录入值**，会终止带入（001-09）。
@@ -151,10 +151,21 @@ class AnalysisBigManual(Base):
     mech_est: Mapped[float | None] = mapped_column(MONEY, nullable=True)               # 机械费测算
     contract_price: Mapped[float | None] = mapped_column(MONEY, nullable=True)         # 合同（预估）价
     output_cum: Mapped[float | None] = mapped_column(MONEY, nullable=True)             # 产值累计（含税）
-    oil: Mapped[float | None] = mapped_column(MONEY, nullable=True)                    # 工程用油
+    oil: Mapped[float | None] = mapped_column(MONEY, nullable=True)                    # 旧完整总额，仅供明确接续核对
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)               # 备注
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class BigOilBinding(Base):
+    """大表用油明确接续的项目身份；完整旧值继续留在analysis_big_manual。"""
+    __tablename__ = 'big_oil_binding'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), unique=True)
+    reviewed_json: Mapped[str] = mapped_column(Text)
+    source_note: Mapped[str] = mapped_column(Text)
+    enabled_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 __all__ = ["SetlDetail", "WeldGasBalance", "AnalysisBigProject", "AnalysisBigMonthProject", "AnalysisBigManual",

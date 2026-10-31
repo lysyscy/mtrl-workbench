@@ -53,6 +53,7 @@ def _big_row(r: dict) -> dict:
         "warehouse": str(r.get("warehouse") or ""),
         "display": str(r.get("display") or ""),
         "carry_n": _i(r.get("carry_n")),
+        "oil_linked": bool(r.get('oil_linked')),
         "manual": {
             k: {"value": _s(c.get("value")), "from": str(c.get("from") or "")}
             for k, c in (r.get("manual") or {}).items()
@@ -181,7 +182,7 @@ def api_big(request: Request) -> dict:
     - `selected` = **大表自己的顺序**（未选题时 = 全部候选，与原型同款）。
     - `manual` = `{核算月: {仓库: {列 key: 值}}}` —— ⚠️ **全量**（不只当月）：
       壳的「上次值带入」（`OPEN-05`）要**向更早月份取最近一次录入值**，只给当月就带不进来。
-    - `manual_keys` / `manual_fmts` = 手填 6 列的**顺序与格式**（**唯一主人 = `big_domain.BIG_MANUAL`**）——
+    - `manual_keys` / `manual_fmts` = 兼容读取槽的顺序与格式，含只读oil（**唯一主人 = `big_domain.BIG_MANUAL`**）——
       壳适配层据它把对象转成与原型同序的数组（并据此判断哪几列是金额、要转数字），
       ⛔ 前端**不硬编码**列序或列型。
     - `mat_available` = 「主材累计（含税）」的取数口**是否已接入**（集采台账属 `M5`）——

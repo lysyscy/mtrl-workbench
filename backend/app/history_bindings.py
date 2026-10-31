@@ -7,7 +7,7 @@ from app.mod06_proc.models import ProcMaterialManual
 from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, WeldGasBalance
 from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
-from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilFeeCustom
+from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilFeeCustom, OilBigCustom
 
 
 def configure():
@@ -22,8 +22,8 @@ def configure():
     fee = Rule(FeeManualItem, frozenset({'item_name', 'amount'}), True)
     fee_item = Rule(FeeItem, frozenset({'name', 'deleted'}), True)
     big = Rule(AnalysisBigManual, frozenset({
-        'open_ym', 'mech_est', 'contract_price', 'output_cum', 'oil', 'note',
-    }), True)
+        'open_ym', 'mech_est', 'contract_price', 'output_cum', 'note',
+    }), True, retired_fields=frozenset({'oil'}))
     big_projects = Rule(AnalysisBigMonthProject, frozenset({'seq'}), True)
     balance = Rule(WeldGasBalance, frozenset({'amount'}), True)
     material = Rule(ProcMaterialManual, frozenset({'amount'}), True)
@@ -42,6 +42,7 @@ def configure():
     oil_allocation = Rule(OilInvoiceAllocation, frozenset({'account_id', 'project_id', 'card_id', 'amount'}), True)
     oil_number = Rule(OilInvoiceNumber, frozenset(), True)
     oil_fee_custom = Rule(OilFeeCustom, frozenset({'amount', 'remark', 'version', 'updated_by'}), True)
+    oil_big_custom = Rule(OilBigCustom, frozenset({'amount', 'remark', 'version', 'updated_by'}), True)
     bind_policies([
         ('POST', '/api/m03/actions/exclude', '剔除付款通知书', [notice]),
         ('POST', '/api/m03/actions/restore', '恢复付款通知书', [notice]),
@@ -75,6 +76,7 @@ def configure():
         ('POST', '/api/m13/ledger/refunds', '登记油卡充值退款', [oil_entry]),
         ('POST', '/api/m13/ledger/transfers', '登记油卡转账', [oil_entry]),
         ('PUT', r'/api/m13/linkage/\d+/\d{4}-\d{2}/fee', '维护特殊费用用油自定义额', [oil_fee_custom]),
+        ('PUT', r'/api/m13/linkage/\d+/\d{4}-\d{2}/big', '维护大表用油额外值', [oil_big_custom]),
         ('PUT', r'/api/m13/invoices/\d+/remark', '修改油卡发票备注', [oil_invoice, oil_allocation]),
         ('PUT', r'/api/m13/invoices/\d+/correct', '更正油卡发票票面', [oil_invoice, oil_allocation, oil_number]),
         ('PUT', r'/api/m13/invoices/\d+/allocations', '更正油卡发票整体分配', [oil_invoice, oil_allocation]),

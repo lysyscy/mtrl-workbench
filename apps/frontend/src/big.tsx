@@ -127,7 +127,9 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       {headerName:'辅材使用（不含税）',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('hw_cum','焊材累计','提取合计：历史值＋所选年12个月，原单入库金额')),number('hw_mon','焊材当月'),number('qt_cum','三气累计','气体提取合计：历史值＋所选年12个月，原单入库金额'),number('qt_mon','三气当月')]},
       {headerName:'机械使用与测算',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('rent_cum','外租机械开工累计','有效零租含税＋包月含税，开工累计')),number('rent_mon','外租机械当月'),number('lease_cum','设备租赁开工累计','有效内租设备，开工累计'),number('lease_mon','设备租赁当月'),number('total_cum','合计','外租机械开工累计＋设备租赁开工累计'),manual('mech_est'),number('use_rate','使用率','合计÷机械费测算；零分母留空')]},
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
-      boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),boundary(manual('oil')),boundary(manual('note')),
+      boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),
+      boundary({colId:'oil',headerName:labels.oil,headerTooltip:'油卡累计充值＋累计特殊费用自定义额＋截至月大表额外值；在油卡管理维护',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value('oil',p),...amountWidth('oil'),
+        cellRenderer:(p:ICellRendererParams<BigRow>)=>p.node.rowPinned ? p.value==null?'':money(String(p.value)) : p.data?.oil_linked ? money(String(p.value)) : <span title="旧用油完整总额，待接续核对；请在油卡管理查看">{p.value==null?'':money(String(p.value))}<span className="muted"> 待接续核对</span></span>}),boundary(manual('note')),
     ];
   },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);

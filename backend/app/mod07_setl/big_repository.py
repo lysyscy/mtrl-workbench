@@ -1,4 +1,4 @@
-"""`MOD-07` 活动大表的**持久化**（手填 6 列 ＋ 大表自己的项目顺序）。
+"""`MOD-07` 活动大表持久化（现行手填、只读旧oil依据与项目顺序）。
 
 ⚠️ 旧全局名单只读；只写本月名单与手填，自动列及派生列一律现场算。
 ⚠️ 列名映射**唯一处** = `big_domain.MANUAL_COLUMN`（本文件不写第二份）。
@@ -59,6 +59,13 @@ def save_cell(s: Session, *, ym: str, warehouse: str, key: str,
 
     ⭐ **只动这一格** —— 同行其它格保持原样（**编辑一格不连带确认同行其他格**，001-06）。
     """
+    if key == 'oil':
+        from app.core.errors import MustReportError
+        raise MustReportError('工程用油请在油卡管理的用油联动维护。')
+    from app.mod01_projects import service as projects
+    project = projects.warehouse_index(s).get(warehouse)
+    if project is not None:
+        projects.get_project(s, project.id, for_update=True)
     column = B.MANUAL_COLUMN[key]
     fmt = B.MANUAL_FMT[key]
     if value is not None and fmt == B.FMT_MONEY:

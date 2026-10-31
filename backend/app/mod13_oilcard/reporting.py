@@ -11,7 +11,7 @@ from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from app.mod01_projects import service as projects
 from .ledger import _amount
-from .models import OilEntry, OilFeeCustom
+from .models import OilEntry, OilFeeCustom, OilBigCustom, OilOpeningBalance
 from .service import _lock
 
 
@@ -81,3 +81,81 @@ def save_fee_custom(session, *, project_id, ym, amount, remark, version):
     row.version, row.updated_by = str(uuid4()), current_operator()
     session.flush()
     return row
+
+
+def _big_parts(session, *, project_id, ym):
+    _, end = month_bounds(ym)
+    recharge = sum_money(session.scalars(select(OilEntry.amount).where(
+        OilEntry.project_id == project_id, OilEntry.entry_date <= end)))
+    opening = sum_money(session.scalars(select(OilOpeningBalance.amount).where(
+        OilOpeningBalance.project_id == project_id, OilOpeningBalance.confirmed.is_(True),
+        OilOpeningBalance.cutoff_ym <= ym)))
+    custom = sum_money(value for value in session.scalars(select(OilFeeCustom.amount).where(
+        OilFeeCustom.project_id == project_id, OilFeeCustom.ym <= ym)) if value is not None)
+    return sum_money([recharge, opening]), custom
+
+
+def _big_source(session, *, project_id, ym):
+    return session.scalar(select(OilBigCustom).where(OilBigCustom.project_id == project_id,
+        OilBigCustom.ym <= ym).order_by(OilBigCustom.ym.desc()).limit(1))
+
+
+def big_month(session, *, project_id, ym):
+    recharge, custom = _big_parts(session, project_id=project_id, ym=ym)
+    source = _big_source(session, project_id=project_id, ym=ym)
+    own = source if source is not None and source.ym == ym else None
+    from app.mod07_setl import service as big
+    return {**big.big_oil_status(session, project_id=project_id),
+        'recharge_amount': str(recharge), 'fee_custom_amount': str(custom),
+        'own_amount': str(own.amount) if own else None, 'version': own.version if own else None,
+        'extra_amount': str(source.amount) if source else None, 'remark': source.remark if source else '',
+        'source_ym': source.ym if source else None, 'source_version': source.version if source else None,
+        'amount': str(sum_money([recharge, custom, source.amount if source else ZERO]))}
+
+
+def big_amount(session, *, project_id, ym):
+    recharge, custom = _big_parts(session, project_id=project_id, ym=ym)
+    source = _big_source(session, project_id=project_id, ym=ym)
+    return sum_money([recharge, custom, source.amount if source else ZERO])
+
+
+def linkage_month(session, *, project_id, ym):
+    return {**fee_month(session, project_id=project_id, ym=ym),
+        'big': big_month(session, project_id=project_id, ym=ym)}
+
+
+def save_big_custom(session, *, project_id, ym, amount, remark, version, source_ym, source_version):
+    month_bounds(ym)
+    _lock(session)
+    project = projects.get_project(session, project_id, for_update=True)
+    from app.mod07_setl import service as big
+    if project is None or not big.big_oil_status(session, project_id=project_id)['enabled']:
+        raise MustReportError('此项目大表用油尚未接续核对，额外值暂不能保存。')
+    own = session.scalar(select(OilBigCustom).where(OilBigCustom.project_id == project_id,
+        OilBigCustom.ym == ym).with_for_update().execution_options(populate_existing=True))
+    source = _big_source(session, project_id=project_id, ym=ym)
+    if (own.version if own else None) != version or (source.ym if source else None, source.version if source else None) != (source_ym, source_version):
+        raise DataConflictError('这个项目的大表额外值或沿用来源已变化，请重读核对后处理保留输入。')
+    if amount is None or not amount.strip():
+        if own is not None:
+            session.delete(own); session.flush()
+        return
+    value = _amount(amount)
+    if own is not None and (own.amount, own.remark) == (value, remark):
+        return
+    if own is None:
+        own = OilBigCustom(project_id=project_id, ym=ym)
+        session.add(own)
+    own.amount, own.remark, own.version, own.updated_by = value, remark, str(uuid4()), current_operator()
+    session.flush()
+
+
+def stage_big_custom(session, *, project_id, ym, amount, remark):
+    """首次接续只接收明确核对的额外值；不从旧总额或通用备注推导。"""
+    if amount is None or not amount.strip():
+        raise MustReportError('大表旧值接续必须明确额外金额，允许填0。')
+    current = big_month(session, project_id=project_id, ym=ym)
+    if current['version'] is not None:
+        raise MustReportError('此月份已有大表额外值，请先核对，不能覆盖接续。')
+    save_big_custom(session, project_id=project_id, ym=ym, amount=amount, remark=remark,
+        version=None, source_ym=current['source_ym'], source_version=current['source_version'])

@@ -31,6 +31,7 @@ class Rule:
     model: type
     fields: frozenset[str]
     create_delete: bool = False
+    retired_fields: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -300,6 +301,8 @@ def replay(session, actor, direction, expected_id):
                       if change['before'][key] != change['after'][key]} - _TECHNICAL
             if not fields <= rule.fields:
                 raise MustReportError('这项历史的恢复规则已变化，未修改数据')
+        elif any((change['before'] or change['after']).get(field) is not None for field in rule.retired_fields):
+            raise MustReportError('这项历史包含已退出编辑的字段，未修改数据')
         current, version = _read(session, table, change['id'], lock=True)
         if not _same(current, change[source]) or version != change['version']:
             raise MustReportError('相关记录已被后续操作修改，未撤销或重做；请刷新后核对')

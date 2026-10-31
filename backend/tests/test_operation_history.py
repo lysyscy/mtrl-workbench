@@ -330,7 +330,7 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
         opening = OpeningBalance(project_id=data['project'], category='material', cutoff_ym='2025-11',
                                  settle_amount=100, paid_amount=0, remark='', entry_kind='manual')
         note = LedgerRemark(project_id=data['project'], category='material', ym='2026-01', remark='原备注')
-        big = AnalysisBigManual(project_id=data['project'], warehouse_name='__undo__', ym='2026-10', oil=1)
+        big = AnalysisBigManual(project_id=data['project'], warehouse_name='__undo__', ym='2026-10', oil=1, mech_est=1)
         balance = WeldGasBalance(warehouse_name='__undo__', kind='焊材', amount=1)
         contract = JcContract(project_id=data['project'], contract_no='__undo_contract__', tag=TAG_IN, remark='原备注')
         s.add_all([opening, note, big, balance, contract])
@@ -352,8 +352,8 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
                        LedgerRemark, note.id, 'remark', '原备注', '新备注'),
             'fee': ('POST', '/api/m09/fee/amount', {'ym': '2026-10', 'project': '__undo__', 'index': 0, 'value': '12.34'},
                     FeeManualItem, data['fee'], 'amount', Decimal(1), Decimal('12.34')),
-            'big': ('POST', '/api/m07/big/cell', {'month': '2026-10', 'warehouse': '__undo__', 'key': 'oil', 'raw': '12.34'},
-                    AnalysisBigManual, big.id, 'oil', Decimal(1), Decimal('12.34')),
+            'big': ('POST', '/api/m07/big/cell', {'month': '2026-10', 'warehouse': '__undo__', 'key': 'mech_est', 'raw': '12.34'},
+                    AnalysisBigManual, big.id, 'mech_est', Decimal(1), Decimal('12.34')),
             'balance': ('POST', '/api/m07/extract/balance', {'warehouse': '__undo__', 'kind': '焊材', 'raw': '12.34'},
                         WeldGasBalance, balance.id, 'amount', Decimal(1), Decimal('12.34')),
             'contract_tag': ('POST', '/api/m11/tag', {'id': contract.id, 'tag': TAG_OUT},
@@ -416,7 +416,7 @@ def test_monthly_big_actions_restore_snapshot_and_keep_legacy_baseline(data, mon
     actions = {
         'selection': ('/api/m07/big/selection', {'month': month, 'selected': ['__monthly_other__', '__undo__']}),
         'move': ('/api/m07/big/move', {'month': month, 'warehouse': '__undo__', 'direction': 'down'}),
-        'cell': ('/api/m07/big/cell', {'month': month, 'warehouse': '__undo__', 'key': 'oil', 'raw': '0'}),
+        'cell': ('/api/m07/big/cell', {'month': month, 'warehouse': '__undo__', 'key': 'mech_est', 'raw': '0'}),
         'export': (f'/api/m07/big/export?period={month}', None),
     }
     path, body = actions[action]
@@ -444,7 +444,7 @@ def test_monthly_big_actions_restore_snapshot_and_keep_legacy_baseline(data, mon
         assert state() == (fixed, baseline)
         if action == 'cell':
             with session_scope() as s:
-                assert s.scalar(select(AnalysisBigManual).where(AnalysisBigManual.ym == month)).oil == Decimal('0')
+                assert s.scalar(select(AnalysisBigManual).where(AnalysisBigManual.ym == month)).mech_est == Decimal('0')
         if action == 'selection':
             response = client.post('/api/m07/big/selection', json={'month': month, 'selected': ['__undo__']})
             assert response.headers['X-Operation-History'] == 'recorded'
