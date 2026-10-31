@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, amount_text, sum_money, to_money
+from app.mod01_projects import service as projects
 from .models import OilAccount, OilCard, OilEntry, OilOpeningBalance
 from .service import _check_version, _get, _lock
 
@@ -112,6 +113,19 @@ def entry_data(row):
 def entries(session):
     rows = list(session.scalars(select(OilEntry).order_by(OilEntry.id)))
     return {'entries': [entry_data(row) for row in rows], 'total_amount': str(sum_money(row.amount for row in rows))}
+
+
+def export_snapshot(session):
+    """全量已保存充值台账；不接受页面筛选，也不把期初当明细重复导出。"""
+    data = entries(session)
+    project_names = {p.id: p.disp.strip() or '未设置展示名' for p in projects.all_projects(session)}
+    accounts = {a.id: a.name for a in session.scalars(select(OilAccount))}
+    cards = {c.id: c.card_no or f'卡号待补 #{c.id}' for c in session.scalars(select(OilCard))}
+    kinds = {'recharge': '充值', 'adjustment': '调整', 'refund': '退款'}
+    return {'total_amount': data['total_amount'], 'rows': [{**row,
+        'project': project_names[row['project_id']], 'account': accounts[row['account_id']],
+        'card': cards[row['card_id']] if row['card_id'] is not None else '未关联卡片',
+        'kind_label': kinds[row['kind']]} for row in data['entries']]}
 
 
 def stage_opening(session, *, source_key, source_note, account_id, project_id, amount,

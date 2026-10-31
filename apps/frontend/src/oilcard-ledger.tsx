@@ -7,12 +7,16 @@ import dayjs from 'dayjs';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, money, projectLabel, requestJson } from './api';
+import { ApiError, cents, decimal, money, projectLabel, requestFile, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { BusinessGrid } from './business-grid';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contentWidth, fullTextWidth } from './grid';
+import { valueFilterColumn } from './grid-value-filter';
+import type { ValueFilterOptions } from './grid-value-filter';
+import { valueFilterPasses } from './grid-value-filter-model';
+import type { ValueFilterModel } from './grid-value-filter-model';
 import { readHistory } from './history';
 import { randomUUID } from './random-id';
 import { useCellSaveQueue } from './use-cell-save';
@@ -70,6 +74,10 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   onUncertain: (uncertain: boolean) => void;
 }) {
   const client = useQueryClient(), [selected, setSelected] = useState(''), [refund, setRefund] = useState<OilEntry | null>(null);
+  const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [downloading, setDownloading] = useState(false), [exportError, setExportError] = useState('');
+  const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
+  useEffect(() => { if (!active || blocked) downloadRequest.current?.abort(); }, [active, blocked]);
   const query = useQuery({ queryKey: ['oilcard-ledger'], enabled: active && !blocked, queryFn: ({ signal }) => getOilLedger(signal) });
   const current = useRef(query.data); current.current = query.data;
   const draftRef = useRef<Record<string, Draft>>({});
@@ -102,6 +110,34 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   useEffect(() => { onUncertain(uncertain); }, [uncertain, onUncertain]);
   const disabled = !active || blocked || !me || uncertain || !query.data || query.isError || archiveLocked;
   const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0;
+  const filterOptions = useMemo<Record<Field, ValueFilterOptions<TableRow>>>(() => {
+    const saved = (row: TableRow) => current.current?.entries.find(entry => entry.request_id === row.request_id);
+    const common = { includeCandidate: (row: TableRow) => Boolean(saved(row)), keepVisible: (row: TableRow) => Boolean(draftRef.current[row.request_id]) };
+    return {
+      date_text: { ...common, kind: 'date', value: row => saved(row)?.date_text },
+      kind: { ...common, kind: 'text', value: row => { const kind = saved(row)?.kind; return kind ? { recharge: '充值', adjustment: '调整', refund: '退款' }[kind] : null; } },
+      project_id: { ...common, kind: 'text', value: row => { const project = projects.find(project => project.id === saved(row)?.project_id); return project ? projectLabel(project) : null; } },
+      account_id: { ...common, kind: 'text', value: row => archives.accounts.find(account => account.id === saved(row)?.account_id)?.name },
+      amount: { ...common, kind: 'number', value: row => saved(row)?.amount, format: value => money(String(value)) },
+      remark: { ...common, kind: 'text', value: row => saved(row)?.remark },
+    };
+  }, [archives, projects]);
+  const filteredAmount = useMemo(() => decimal((query.data?.entries ?? []).filter(row => Object.entries(filters).every(([field, model]) => {
+    const options = filterOptions[field as Field];
+    return !options || valueFilterPasses(model, options.value(row), options.kind);
+  })).reduce((total, row) => total + cents(row.amount), 0n)), [query.data, filters, filterOptions]);
+  async function download() {
+    if (disabled || busy || downloading) return;
+    const controller = new AbortController(); downloadRequest.current = controller;
+    setDownloading(true); setExportError('');
+    try {
+      const file = await requestFile('/api/m13/ledger/export', controller.signal);
+      if (controller.signal.aborted || !alive.current) return;
+      const url = URL.createObjectURL(file.blob), link = document.createElement('a');
+      link.href = url; link.download = file.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (failure) { if (!controller.signal.aborted && alive.current) setExportError(failure instanceof Error ? failure.message : '台账导出失败，请重试。'); }
+    finally { if (alive.current) setDownloading(false); }
+  }
   function save(key: string) {
     const draft = draftRef.current[key];
     if (draft && draft.project_id && draft.account_id && draft.amount.trim()) saves.save(key);
@@ -134,24 +170,29 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   }
   const rows = useMemo<TableRow[]>(() => [...(query.data?.entries ?? []).map(row => drafts[row.request_id] ?? row), ...Object.values(drafts).filter(draft => !query.data?.entries.some(row => row.request_id === draft.request_id))], [query.data, drafts]);
   const selectedRow = query.data?.entries.find(row => row.request_id === selected);
-  const amountWidth = fullTextWidth([money(query.data?.total_amount ?? '0.00'), ...(query.data?.entries ?? []).map(row => money(row.amount))], scale).minWidth;
-  const columns = useMemo<ColDef<TableRow>[]>(() => [
+  const bounds = (query.data?.entries ?? []).reduce((sum, row) => {
+    const value = cents(row.amount); if (value > 0n) sum.positive += value; else sum.negative += value; return sum;
+  }, { positive: 0n, negative: 0n });
+  const amountWidth = fullTextWidth([money(decimal(bounds.positive)), money(decimal(bounds.negative)), ...(query.data?.entries ?? []).map(row => money(row.amount))], scale).minWidth;
+  const columns = useMemo<ColDef<TableRow>[]>(() => ([
     { field: 'date_text', headerName: '日期', ...contentWidth(190, 240, scale), cellRenderer: EntryCell },
     { field: 'kind', headerName: '类型', ...contentWidth(100, 130, scale), cellRenderer: EntryCell },
     { field: 'project_id', headerName: '项目', ...contentWidth(180, 320, scale, 1), cellRenderer: EntryCell },
     { field: 'account_id', headerName: '用卡账户', ...contentWidth(160, 300, scale, 1), cellRenderer: EntryCell },
     { field: 'amount', headerName: '金额', cellClass: 'money', ...contentWidth(Math.max(130, amountWidth / scale), 200, scale), cellRenderer: EntryCell },
     { field: 'remark', headerName: '备注', ...contentWidth(160, 360, scale, 1), cellRenderer: EntryCell },
-  ], [scale, amountWidth]);
-  const totals = useMemo<TableRow[]>(() => query.data ? [{ id: -1, request_id: 'total', version: '', kind: 'adjustment', project_id: 0, account_id: 0, card_id: null, date_text: '合计', entry_date: null, amount: query.data.total_amount, remark: '', related_entry_id: null, total: true }] : [], [query.data]);
+  ] satisfies ColDef<TableRow>[]).map(column => valueFilterColumn<TableRow>(column, filterOptions[column.field as Field])), [scale, amountWidth, filterOptions]);
+  const totals = useMemo<TableRow[]>(() => query.data ? [{ id: -1, request_id: 'total', version: '', kind: 'adjustment', project_id: 0, account_id: 0, card_id: null, date_text: '合计', entry_date: null, amount: filteredAmount, remark: '', related_entry_id: null, total: true }] : [], [query.data, filteredAmount]);
   return <section className="oilcard-ledger-sheet" aria-label="充值与发票">
     {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    {exportError && <p className="notice" role="alert">{exportError}</p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '核对刚才的充值或退款登记后再继续。' : '已读取当前记录，请核对保留的输入。'}<Button disabled={!verified || blocked || busy} onClick={confirm}>已核对，保留输入继续</Button></p>}
     <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       {selectedRow?.kind === 'recharge' && <Button disabled={structuralDisabled} onClick={() => setRefund(selectedRow)}>登记退款</Button>}
+      <Button disabled={disabled || busy || downloading} loading={downloading} onClick={() => void download()}>导出全部已保存台账</Button>
       <Button disabled={blocked || busy || !Object.keys(drafts).length} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(() => ({}))}>取消未保存修改</Button></div></div>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button></p>)}
-      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'refund', label: '登记退款', disabled: structuralDisabled || selectedRow?.kind !== 'recharge' }], onClick: () => { if (selectedRow?.kind === 'recharge' && !structuralDisabled) setRefund(selectedRow); } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
+      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'refund', label: '登记退款', disabled: structuralDisabled || selectedRow?.kind !== 'recharge' }], onClick: () => { if (selectedRow?.kind === 'recharge' && !structuralDisabled) setRefund(selectedRow); } }}><div><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>), onRowClicked: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) setSelected(e.data.request_id); }, rowClassRules: { 'oilcard-selected': p => p.data?.request_id === selected } }} /></div></Dropdown></div></LedgerCells.Provider>}
     </section><section className="oilcard-ledger-pane oilcard-invoice-pending" aria-label="发票"><div data-page-chrome className="oilcard-toolbar"><h2>发票</h2></div><p className="state">发票接收与核对将在后续接入。</p></section></div>
     {refund && <RefundDialog row={refund} disabled={disabled} busy={busy} error={error} close={() => setRefund(null)} submit={async values => {
       const outcome = await saves.run(async signal => { await refundOilEntry({ ...values, original_id: refund.id }, signal); }, () => '', `原充值 #${refund.id} 退款 ${values.amount}：`);

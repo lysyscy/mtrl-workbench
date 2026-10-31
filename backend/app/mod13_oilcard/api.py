@@ -1,13 +1,16 @@
 """油卡档案 API；写入身份与事务历史沿应用统一机制。"""
 from typing import Literal
 from uuid import UUID
+from urllib.parse import quote
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db import session_scope
 from app.core.errors import DataConflictError
+from app import export_registry
 from . import service
 from . import ledger
 
@@ -129,6 +132,17 @@ def read_ledger():
 def read_reconciliation():
     with session_scope() as session:
         return ledger.reconciliation(session)
+
+
+@router.get('/ledger/export')
+def export_ledger():
+    with session_scope() as session:
+        snapshot = ledger.export_snapshot(session)
+    filename = quote('油卡充值台账（全量）.xlsx')
+    return Response(content=export_registry.get('oilcard').build(snapshot),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'X-Export-Filename': filename, 'Content-Disposition': f"attachment; filename*=UTF-8''{filename}",
+                 'Cache-Control': 'no-store'})
 
 
 @router.post('/ledger/entries')
