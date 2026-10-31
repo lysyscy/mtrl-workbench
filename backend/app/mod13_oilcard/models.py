@@ -120,6 +120,19 @@ class OilOpeningBalance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
+class OilContinuationSource(Base):
+    """不可变首次接续清单；稳定来源身份与已确认目标独立于自由备注。"""
+    __tablename__ = 'oil_continuation_source'
+
+    source_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
+    manifest_json: Mapped[str] = mapped_column(Text)
+    confirmations_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_by: Mapped[str] = mapped_column(Text, default='')
+    updated_by: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
 class OilFeeCustom(Base):
     """项目/月发生的特殊费用补充额；不存派生充值或完整报表总额。"""
     __tablename__ = 'oil_fee_custom'

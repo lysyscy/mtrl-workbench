@@ -15,9 +15,21 @@ test('已登记票据与待确认票据分开核对，合计只取已确认金�
 });
 
 test('票据原件及分配身份必须完整，缺失不当成已登记', () => {
-  for (const invalid of [{ ...invoice, originals: [] }, { ...invoice, originals: [{ ...original, invoice_id: 9 }] }, { ...invoice, amount: null }, { ...invoice, allocations: [] }]) {
+  for (const invalid of [{ ...invoice, originals: [{ ...original, invoice_id: 9 }] }, { ...invoice, amount: null }, { ...invoice, allocations: [] }]) {
     assert.throws(() => readOilInvoices({ invoices: [invalid], total_amount: '3000.00' }));
   }
+});
+
+test('历史已记开票可先无PDF读取，补原件不改变金额，收票仍必须核到本次原件', async () => {
+  const before = readOilInvoices({ invoices: [{ ...invoice, originals: [] }], total_amount: '3000.00' });
+  const after = readOilInvoices({ invoices: [invoice], total_amount: '3000.00' });
+  assert.equal(before.invoices[0].originals.length, 0);
+  assert.equal(after.total_amount, before.total_amount);
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, original, item: { ...invoice, originals: [] } }));
+    await assert.rejects(receiveOilInvoice(new File(['1234567890'], 'synthetic.pdf'), digest, new AbortController().signal), error => uncertainWrite(error));
+  } finally { globalThis.fetch = previous; }
 });
 
 test('实际红冲只计算关联负数，作废票保留但退出合计', () => {

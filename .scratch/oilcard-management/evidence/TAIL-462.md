@@ -28,3 +28,5 @@ BigOilBinding按项目持久明确启用，先要求费用接续；旧完整oil�
 ## 资源及边界
 
 最终PID28288、revision oil462261031、schema frontend_rewrite_397_3cfe89e90a4247d4bebeaf039f1e8683正常stop，进程退出0并ISOLATION cleaned；标签关闭/视口重置。gui-verification保存源/构建与实际owner绑定。8000及8801未操作。执行者明确指定gpt-6.1-sol/xhigh/独立上下文，工具未回显实际运行元数据。真实旧数据未接续，未迁移或加载正式服务。最终累计独立双轴审查待完成。
+
+源码与本证据b1d3957ccbf2c3e13ac8f818281e19aa1987b5a2正常推送并核远端一致；GitHub push [Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41179480330)已实际读取completed/success。关票及463接续8041d36099421b29f5e9139c0ae203fde4366097亦已推送并核远端一致。
