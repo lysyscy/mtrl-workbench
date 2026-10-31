@@ -9,6 +9,7 @@
 | 库存、调整、过程资料、费用和报表 | [材料与报表](requirements/materials-reports.md) |
 | 明细、确认、有效月值与当前累计 | [机械费](requirements/machinery-fees.md) |
 | 合同、发票、付款关联与账期 | [集采](requirements/central-procurement.md) |
+| 油卡、充值、发票登记与历史接续（规格就绪） | [油卡](requirements/oil-cards.md) |
 
 ## 跨主题原则
 

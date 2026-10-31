@@ -7,6 +7,7 @@ from app.mod06_proc.models import ProcMaterialManual
 from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, WeldGasBalance
 from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
+from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard
 
 
 def configure():
@@ -31,6 +32,9 @@ def configure():
         'contract_amt', 'trade_co', 'trade_contract_amt', 'tag', 'arch', 'arch_no',
         'ret_date', 'remark', 'payment_term', 'payment_method',
     }))
+    oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'parent_card_id', 'remark', 'version', 'updated_by'}), True)
+    oil_account = Rule(OilAccount, frozenset({'name', 'project_id', 'card_id', 'status', 'remark', 'version', 'updated_by'}), True)
+    oil_assignment = Rule(OilAccountAssignment, frozenset(), True)
     bind_policies([
         ('POST', '/api/m03/actions/exclude', '剔除付款通知书', [notice]),
         ('POST', '/api/m03/actions/restore', '恢复付款通知书', [notice]),
@@ -53,4 +57,8 @@ def configure():
         ('POST', '/api/m06/material', '编辑过程资料历史材料', [material]),
         ('POST', '/api/m11/tag', '修改集采台账标记', [contract]),
         ('POST', '/api/m11/fields', '编辑集采合同字段', [contract]),
+        ('POST', '/api/m13/cards', '建立实体油卡', [oil_card]),
+        ('PUT', r'/api/m13/cards/\d+', '维护实体油卡', [oil_card]),
+        ('POST', '/api/m13/accounts', '建立用卡账户', [oil_account, oil_assignment]),
+        ('PUT', r'/api/m13/accounts/\d+', '维护用卡账户', [oil_account, oil_assignment]),
     ])

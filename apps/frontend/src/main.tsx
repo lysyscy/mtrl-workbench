@@ -42,6 +42,7 @@ const pages: { path: string; title: string; mod: string; group: string; loading?
   { path: '/inventory', title: '库存单据与调整单', mod: '08', group: 'materials', loading: '正在读取库存单据…', component: lazy(() => import('./inventory').then(module => ({ default: module.InventoryPage }))) },
   { path: '/fees', title: '特殊费用', mod: '09', group: 'materials', loading: '正在读取费用…', component: lazy(() => import('./fees').then(module => ({ default: module.FeesPage }))) },
   { path: '/mechanical', title: '机械费', mod: '10', group: 'materials', loading: '正在读取机械费…', component: lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage }))) },
+  { path: '/oilcard', title: '油卡管理', mod: '13', group: 'materials', loading: '正在读取油卡档案…', component: lazy(() => import('./oilcard').then(module => ({ default: module.OilCardPage }))) },
   { path: '/rules', title: '规则配置', mod: '14', group: 'global', loading: '正在读取规则配置…', component: lazy(() => import('./rules').then(module => ({ default: module.RulesPage }))) },
   { path: '/users', title: '用户管理', mod: '15', group: 'global', loading: '正在读取用户管理…', component: lazy(() => import('./users').then(module => ({ default: module.UsersPage }))) },
 ];

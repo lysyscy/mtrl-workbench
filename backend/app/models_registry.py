@@ -20,6 +20,7 @@ from app.mod07_setl import models as _m07  # noqa: F401  ← M4 报表域 2026-0
 from app.mod08_inv import models as _m08  # noqa: F401  ← M4 报表域 2026-09-16 启用
 from app.mod09_fee import models as _m09  # noqa: F401  ← M4 报表域 2026-09-17 启用
 from app.mod11_jc import models as _m11  # noqa: F401  ← M5 切片 5 启用（2026-09-19：集采台账三张表）
+from app.mod13_oilcard import models as _oilcard  # noqa: F401
 # ⛔ `MOD-12` 差异登**已取消**（2026-09-20 用户裁定）⇒ 此处原有一行 `mod12_diff` 导入**已删除**。
 #    依据：《说明书》§5.8.3「差异归属恒为「**库存单据**」（**不独立成模块**）」
 #    ⇒ 差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06` 按调整单算）⇒ ⛔ 无独立模块。

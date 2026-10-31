@@ -1,5 +1,11 @@
 # 当前活动工作
 
+## 油卡管理已开工，首票453实施中
+
+2026-10-31用户在三轮grill-me及11票落票后明确授权派Sol xhigh开工。[TAIL-453](../.scratch/tails/issues/TAIL-453-实体油卡与用卡账户建档.md)现为in-progress，由指定gpt-6.1-sol/xhigh独立上下文子代理实现，父控负责整合与核验；分支codex/oilcard-management-20261031，基点e296e816。模型/effort未获运行元数据回显，配置未独立核实。业务与规格见[油卡需求](requirements/oil-cards.md)及[规格](../.scratch/oilcard-management/spec.md)，执行归属见[接续登记](../.scratch/oilcard-management/handoff.md)。总票452、8801原型及无关未提交成果保持。未执行真实接续或部署，实链、期初及历史核对仍按各自授权与条件。
+
+已批准的11票及原依赖保持，按[连续执行批次](../.scratch/oilcard-management/ticket-plan.md)的就绪前沿推进。优先借鉴成熟实现，共用表头筛选先接充值/发票，其他页面后续按需接入，本期不推广。
+
 ## React重写已验收，旧壳已退役
 
 用户2026-10-28明确签收当前已上线React重写；[TAIL-423](../.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md)为done，后续具体问题按正常缺陷处理。

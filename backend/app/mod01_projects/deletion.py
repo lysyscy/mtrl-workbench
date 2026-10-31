@@ -15,6 +15,7 @@ def impact(session, project_id, *, lock=False):
     from app.mod08_inv import service as inv
     from app.mod09_fee import service as fee
     from app.mod11_jc import service as jc
+    from app.mod13_oilcard import service as oilcard
 
     if lock:
         session.execute(text("SET LOCAL lock_timeout = '3s'"))
@@ -25,7 +26,7 @@ def impact(session, project_id, *, lock=False):
         raise MustReportError('项目档案已不存在，请刷新列表。')
     groups = project_references(session, ((ProjectFieldLog, '项目修改留痕'),),
                                 p.id, p.warehouse_name, lock=lock)
-    for provider in (notice, plan, flow, proc, setl, inv, fee, jc):
+    for provider in (notice, plan, flow, proc, setl, inv, fee, jc, oilcard):
         groups += provider.project_references(session, p.id, p.warehouse_name, lock=lock)
     children = session.execute(select(Project).where(Project.parent_shell_id == p.id)).scalars().all()
     groups.append({'table': 'project', 'label': '所属小微', 'count': len(children),
