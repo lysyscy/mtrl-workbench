@@ -50,3 +50,16 @@ FINISH：unreviewed and undocumented is unfinished; this build ends with the fin
 - 最终build-04运行于原run、PID33860、8065、oil464261031，product_digest为59ecd2b1e13010d98d05adb0e9aeacd5e829d638b0b7f9cca9b654fe9f7e501e。用户账号已回preview-admin/松绿，临时视口已复原，留在账户与油卡页。
 - 用户否定首轮ship后，新的独立impeccable_finish_distill已完整复核8张当前构建截图及单账户补充截图、源码和控件用途，五节结论为ship、实质修正0。其明确未证明390宽发票选择完整流程；档案适配和修改弹窗滚动/动作可达已核，不扩称全移动端验收。
 - 新独立documenter已对照当前源码及五张最终截图更新表面简报，退出失效association引用；根PRODUCT/DESIGN/sidecar保留。主控已读回，当前设计复核及文档已完成。
+
+## 三项评审反馈（2026-11-01收尾）
+
+用户确认三项一起处理，并选择筛选排除所选发票时清除选择及操作按钮，保留所有试用修改。实现只涉及修改发票表单、发票表筛选回调和局部汇总样式；当前行为归油卡需求的工作区约定。保既有说明留痕、服务端校验、整体保存与静默格内维护。
+
+- 修改说明标示必填及短提示；多账户分配展示票面、已分配、待分配/超分或分配一致。使用现有cents/BigInt，负票按票面方向解释差额，未填完整保未知。
+- 筛选回调使用AG Grid原生过滤后节点集合判断所选票；不可见时同时清除发票和原件选择，仍可见时保持，清除筛选不复活旧选择。
+- 类型检查、正式构建通过；现有发票及集合筛选单测12/12；本次Impeccable静态检测一次为[]。Sol high独立源码复核无实质发现。未新建永久视觉/实现形状测试，也未重跑旧完整回归。
+- 原试用副本中仅操作表单草稿并取消：说明为空禁用/填写后启用、10000票面对应9000已分配/1000待分配、11000已分配/1000超分、空金额不冒零、恢复10000分配一致，以及1920桌面和390窄窗的汇总与动作可达通过。未点击保存或删除。
+- 试用账务只有一张发票，筛除选择采用独立IAB标签的临时Fetch读取响应增加第二个候选，仅证明前端筛选/选择行为：可见选择保留、筛除后修改/删除入口消失、清除筛选不恢复旧选择。未生成数据库记录；响应替换已解除、诊断标签已关闭、视口已复原，不将此模拟读取说成真实业务写入验证。
+- 原run `20261031-user-preview` 的更新前后摘要保存在reports/critique-fixes-preservation-before.json与critique-fixes-preservation-after.json：58表中57表一致（含账务及操作历史）；user_account有差异，验看登录会更新最近登录时间，不能据整表摘要断言其每列均未变化。全部现值保留，未重置或回填账号表。
+- 当前8065使用原schema `frontend_writable_51fcec25f7044cea8202b5afcece03b7`、revision `oil464261031`、preserve_schema_on_stop=true；2026-11-01恢复后的PID27404。构建为原run/work/build-critique-01，product_digest `75f079b5ce98f5f0293b545fef1ff5a005a908e7829b759372438e0f4d2b512f`，registered_preview已核源码、完整资源和HTTP身份一致。两次启动均仅--existing，无复制、seed或迁移；原恢复点及build-04继续保留。
+- 原critique快照三项已关闭，评分历史仍为30/40，未重评分。根PRODUCT/DESIGN/sidecar、既有handoff03及其他未提交文件保留；人工验收、合并和生产加载单独办理。

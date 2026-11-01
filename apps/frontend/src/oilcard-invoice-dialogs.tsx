@@ -39,8 +39,15 @@ export function OilInvoiceDialog({ row, mode, source, archives, projects, disabl
       return { ...p, [field]: field === 'account_id' ? Number(value) : value };
     })));
   }
-  let allocated = '';
-  try { allocated = parts.length === 1 ? decimal(cents(invoiceAmountText(amount))) : decimal(parts.reduce((n, p) => n + cents(invoiceAmountText(p.amount)), 0n)); } catch { /* An incomplete draft is not zero. */ }
+  let allocated = '', invoiceTotal = '', remaining: bigint | null = null;
+  try { invoiceTotal = decimal(cents(invoiceAmountText(amount))); } catch { /* An incomplete draft is not zero. */ }
+  try {
+    allocated = parts.length === 1 ? invoiceTotal : decimal(parts.reduce((n, p) => n + cents(invoiceAmountText(p.amount)), 0n));
+    if (invoiceTotal && allocated) {
+      const target = cents(invoiceTotal);
+      remaining = (target < 0n ? -1n : 1n) * (target - cents(allocated));
+    }
+  } catch { /* Keep the invoice target visible while allocations are incomplete. */ }
   async function save(factsOnly = false) {
     if (disabled || busy) return;
     const allocations = factsOnly ? [] : parts.map(part => ({ project_id: part.project_id, account_id: part.account_id, amount: invoiceAmountText(parts.length === 1 ? amount : part.amount) }));
@@ -65,8 +72,11 @@ export function OilInvoiceDialog({ row, mode, source, archives, projects, disabl
         <label>项目 {index + 1}<Select aria-label={`分配项目 ${index + 1}`} value={part.project_id || null} disabled={disabled || busy} showSearch={{ optionFilterProp: 'label' }} options={projects.filter(p => p.project_type !== 'shell').map(p => ({ value: p.id, label: projectLabel(p) }))} onChange={value => changePart(part.key, 'project_id', String(value))} /></label>
         <label>用卡账户<Select aria-label={`分配账户 ${index + 1}`} value={part.account_id || null} disabled={disabled || busy} showSearch={{ optionFilterProp: 'label' }} options={archives.accounts.filter(a => a.project_id === part.project_id || a.id === part.account_id).map(a => ({ value: a.id, label: `${a.name}${a.status === 'archived' ? '（归档）' : ''}` }))} onChange={value => changePart(part.key, 'account_id', String(value))} /></label>
         {parts.length > 1 && <><label>分配金额<Input aria-label={`分配金额 ${index + 1}`} value={part.amount} disabled={disabled || busy} onChange={e => changePart(part.key, 'amount', e.target.value)} /></label><Button disabled={disabled || busy} onClick={() => edit(() => setParts(ps => ps.filter(p => p.key !== part.key)))}>移除</Button></>}
-      </div>)}<div className="oilcard-toolbar"><Button disabled={disabled || busy} onClick={() => edit(() => setParts(ps => [...ps.map(p => ps.length === 1 ? { ...p, amount } : p), { key: randomUUID(), project_id: 0, account_id: 0, amount: '' }]))}>分给更多账户</Button>{parts.length > 1 && <span>分配合计 {allocated ? money(allocated) : '待填写'}</span>}</div></fieldset>}
-      {mode !== 'delete' && <label>{mode === 'resolve' ? '核对结论' : '修改说明'}<Input.TextArea aria-label="发票处理说明" value={note} disabled={disabled || busy} onChange={e => edit(() => setNote(e.target.value))} autoSize={{ minRows: 2, maxRows: 4 }} /></label>}
+      </div>)}<div className="oilcard-toolbar"><Button disabled={disabled || busy} onClick={() => edit(() => setParts(ps => [...ps.map(p => ps.length === 1 ? { ...p, amount } : p), { key: randomUUID(), project_id: 0, account_id: 0, amount: '' }]))}>分给更多账户</Button>{parts.length > 1 && <div className="oilcard-allocation-summary" role="status">
+        <span>已分配 {allocated ? money(allocated) : '待填写'}</span><span>票面 {invoiceTotal ? money(invoiceTotal) : '待填写'}</span>
+        {remaining !== null && <span className={remaining === 0n ? undefined : 'oilcard-allocation-gap'}>{remaining === 0n ? '分配一致' : `${remaining > 0n ? '待分配' : '超分'} ${money(decimal(remaining < 0n ? -remaining : remaining))}`}</span>}
+      </div>}</div></fieldset>}
+      {mode !== 'delete' && <label>{mode === 'resolve' ? '核对结论' : '修改说明'}（必填）<Input.TextArea aria-label="发票处理说明" aria-required="true" placeholder={mode === 'edit' ? '请填写本次修改原因' : undefined} value={note} disabled={disabled || busy} onChange={e => edit(() => setNote(e.target.value))} autoSize={{ minRows: 2, maxRows: 4 }} /></label>}
       {mode === 'delete' && <p>从台账删除这张发票并扣除对应开票金额，原件保留。可用顶部“撤销”恢复。</p>}
       {(localError || error) && <p className="notice" role="alert">{localError || error}</p>}
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button>{mode === 'edit' && row.status === 'pending' && <Button disabled={disabled || busy || !note.trim()} onClick={() => void save(true)}>暂不分配</Button>}<Button type="primary" danger={mode === 'delete'} htmlType="submit" disabled={disabled || busy || mode !== 'delete' && !note.trim()}>{mode === 'delete' ? '删除' : mode === 'resolve' ? '确认保留原票' : '保存修改'}</Button></div>
