@@ -71,11 +71,43 @@ def test_complete_empty_lists_keep_old_project_in_reduction_preview():
     empty = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
     result = preview_payload(empty, [project(1, '甲', phid='old-id'), project(2, '乙', phid='new-id')],
                              {'甲': {'old-id'}})
-    assert len(result['projects']) == 1
-    item = result['projects'][0]
+    assert len(result['projects']) == 2
+    item = next(p for p in result['projects'] if p['warehouse'] == '甲')
     assert item['warehouse'] == '甲'
     assert item['sources'] == {'usage': [], 'project': [], 'team': []}
     assert all(item['complete'].values())
+    assert 'source_status' not in item
+    new = next(p for p in result['projects'] if p['warehouse'] == '乙')
+    assert new['source_status'] == 'no-records'
+    assert new['sources'] == {'usage': [], 'project': [], 'team': []}
+    assert all(new['complete'].values())
+
+
+def test_empty_source_checks_cover_only_active_unique_unadopted_projects():
+    lists = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
+    projects = [project(1, '新项目', phid='new'), project(2, '归档', phid='archived', status='archived'),
+                project(3, '共享甲', phid='shared'), project(4, '共享乙', phid='shared'),
+                project(5, '身份变更', phid='changed'), project(6, '无i8身份', phid='')]
+    result = preview_payload(lists, projects, {'身份变更': {'old'}})
+    assert [item['warehouse'] for item in result['projects']] == ['新项目']
+    assert result['projects'][0]['source_status'] == 'no-records'
+
+
+@pytest.mark.parametrize('missing_kind', ['usage', 'project', 'team'])
+def test_incomplete_lists_do_not_claim_first_project_has_no_records(missing_kind):
+    lists = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
+    del lists[missing_kind]
+    assert preview_payload(lists, [project(1, '新项目')])['projects'] == []
+
+
+def test_unmapped_source_facts_never_create_empty_candidates_for_same_identity():
+    from app.mod06_proc.workbench_i8 import normalize
+    lists = {kind: {'total': 1, 'rows': [normalize(raw(kind), kind)]}
+             for kind in ('usage', 'project', 'team')}
+    projects = [project(1, '共享甲'), project(2, '共享乙')]
+    result = preview_payload(lists, projects)
+    assert result['projects'] == []
+    assert len(result['unmapped_projects']) == 1
 
 
 def small_family():
@@ -130,3 +162,9 @@ def test_empty_complete_shell_sources_offer_separate_old_small_project_reduction
     assert result['unmapped_projects'] == []
     assert {p['warehouse'] for p in result['projects']} == {'大唐', '佰利'}
     assert all(all(p['complete'].values()) for p in result['projects'])
+    assert all('source_status' not in p for p in result['projects'])
+
+
+def test_first_empty_shell_read_does_not_claim_individual_small_ownership():
+    lists = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
+    assert preview_payload(lists, small_family())['projects'] == []

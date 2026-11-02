@@ -9,6 +9,50 @@ from test_preview import server,browser_page
 from live_data import get,open_page,grid_row
 
 
+def test_new_project_cumulative_opening_saves_and_preserves_real_months(server,browser_page,api,projects,disposable,preview_screenshot):
+    state=get(api,'/api/m06/workbench')
+    eligible={b['warehouse'] for b in state['history_bases'] if b['can_initialize']}
+    relation=next((r for r in state['reconciliations'] if r['warehouse'] in eligible and r['relation']=='report'
+                   and r['recorded_months']==['2026-10'] and r['i8_usage'] is not None),None)
+    assert relation,'真实副本没有单月已录入且已采用i8、累计起点待补的项目'
+    wh=relation['warehouse'];project=next(p for p in projects if p['warehouse_name']==wh);name=project['disp']
+    before_details=[d for d in state['details'] if d['warehouse']==wh]
+    before_months=[e for e in state['effective'] if e['warehouse']==wh]
+    page,_=browser_page;open_page(page,server,'mechanical','机械费')
+    page.get_by_role('button',name='显示项目',exact=True).click()
+    picker=page.get_by_role('dialog',name='选择显示项目及顺序',exact=True)
+    picker.get_by_role('button',name='全不选',exact=True).click()
+    picker.get_by_role('checkbox',name=name,exact=True).check()
+    picker.get_by_role('button',name='应用项目选择',exact=True).click()
+    page.get_by_role('button',name='核对工作台',exact=True).click()
+    expect(page.get_by_text('累计起点待补',exact=True).first).to_be_visible()
+    expect(page.get_by_text('已采用i8 '+format(Decimal(relation['i8_usage']),',.2f'),exact=False)).to_be_visible()
+    preview_screenshot('cumulative-opening-missing')
+    page.get_by_role('button',name='补齐累计起点',exact=True).click()
+    dialog=page.get_by_role('dialog',name='补齐累计起点，'+name,exact=True)
+    save=dialog.get_by_role('button',name='保存累计起点',exact=True)
+    expect(save).to_be_disabled()
+    dialog.get_by_label('累计截止月',exact=True).fill('2026-09')
+    for label in ['零租累计（元）','包月累计（元）','租赁公司内租累计（元）','固定i6（元）']:
+        field=dialog.get_by_label(label,exact=True);expect(field).to_have_value('');field.fill('0')
+    expect(save).to_be_disabled()
+    dialog.get_by_label('累计起点来源说明',exact=True).fill('可丢弃真实副本的累计起点录入验证')
+    preview_screenshot('cumulative-opening-form')
+    with page.expect_response('**/api/m06/workbench/history-initialize') as response:save.click()
+    assert response.value.ok
+    expect(dialog).to_have_count(0)
+    expect(page.get_by_role('button',name='补齐累计起点',exact=True)).to_have_count(0)
+    after=get(api,'/api/m06/workbench')
+    report=next(r for r in after['reconciliations'] if r['warehouse']==wh and r['relation']=='report')
+    assert report['left']==relation['recorded_total'] and report['right']==relation['i8_usage']
+    assert Decimal(report['raw'])==Decimal(relation['recorded_total'])-Decimal(relation['i8_usage'])
+    assert [d for d in after['details'] if d['warehouse']==wh]==before_details
+    assert [e for e in after['effective'] if e['warehouse']==wh]==before_months
+    page.reload();page.get_by_role('button',name='核对工作台',exact=True).click()
+    expect(page.get_by_text('累计起点待补',exact=True)).to_have_count(0)
+    preview_screenshot('cumulative-opening-saved')
+
+
 def test_actual_four_sheet_download_and_independent_project_preferences(server,browser_page,api,projects,disposable,tmp_path):
     page,_=browser_page;state=get(api,'/api/m06/workbench');assert state['projects']
     eligible=[p for p in projects if p['project_type']=='normal' and p['status']=='active' and p['warehouse_name'] in [v['warehouse'] for v in state['projects']]]

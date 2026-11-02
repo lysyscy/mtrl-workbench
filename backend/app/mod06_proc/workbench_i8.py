@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 
 from app.core.errors import MustReportError
 from app.mod01_projects.domain import resolve_ownership
-from app.mod01_projects.models import TYPE_NORMAL, TYPE_SHELL
+from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_NORMAL, TYPE_SHELL
 from app.mod02_i8.client import I8Client, serialize_fetch
 
 # Observed on all three Fourth Engineering Company list pages on 2026-10-19.
@@ -85,7 +85,7 @@ def preview_payload(lists, projects, previous=None):
             by_id.setdefault(str(project.phid), []).append(project)
             if project.warehouse_name:
                 candidates.setdefault(str(project.phid), set()).add(project.warehouse_name)
-    groups, unresolved = {}, {}
+    groups, unresolved, observed_ids = {}, {}, set()
 
     def new_group(project_id, project_name):
         return {'projectId': project_id, 'projectName': project_name, 'sources': {k: [] for k in SOURCES}}
@@ -93,6 +93,7 @@ def preview_payload(lists, projects, previous=None):
     for kind, source in lists.items():
         for row in source['rows']:
             project_id = row['projectId']
+            observed_ids.add(project_id)
             archives = by_id.get(project_id, [])
             shells = [p for p in archives if p.project_type == TYPE_SHELL]
             owner = None
@@ -121,6 +122,13 @@ def preview_payload(lists, projects, previous=None):
             if project.warehouse_name and project_id and (previous or {}).get(project.warehouse_name) == {project_id}:
                 item = groups.setdefault((project_id, project.warehouse_name), new_group(project_id, project.name_full))
                 item['warehouse'] = project.warehouse_name
+            elif (project.warehouse_name and project_id and project_id not in observed_ids
+                  and not (previous or {}).get(project.warehouse_name)
+                  and getattr(project, 'status', None) != STATUS_ARCHIVED
+                  and project.project_type == TYPE_NORMAL and len(by_id[project_id]) == 1):
+                # A complete empty read is a checked source state, not an adopted zero.
+                item = groups.setdefault((project_id, project.warehouse_name), new_group(project_id, project.name_full))
+                item.update(warehouse=project.warehouse_name, source_status='no-records')
     now = datetime.now(timezone.utc).isoformat()
     known, unmapped = [], []
     for item in [*groups.values(), *unresolved.values()]:

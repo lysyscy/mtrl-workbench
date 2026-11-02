@@ -4,8 +4,9 @@ import { requestJson } from './api';
 import { randomUUID } from './random-id';
 import { body } from './notices-api';
 import { MechanicalDialog } from './mechanical-details';
-import { detailSum, mechanicalMoney as money, readI8Preview, readWorkResult } from './mechanical-api';
-import type { Workbench, Relation, SourceRow, Discovery, Matter, I8Preview } from './mechanical-api';
+import { detailSum, historyInitialization, mechanicalMoney as money, readI8Preview, readWorkResult } from './mechanical-api';
+import type { Workbench, Relation, SourceRow, Discovery, Matter, I8Preview, HistoryBase, HistoryBaseDraft } from './mechanical-api';
+import { useHistoryGuard } from './history';
 import { ReadGrid } from './business-grid';
 import { numberColumnWidth, textWidth } from './grid';
 import { EllipsisText } from './grid-text';
@@ -20,7 +21,7 @@ function AdoptionCheckbox({data:project}:{data:I8Preview['projects'][number]}) {
 }
 const text = (value: unknown) => typeof value === 'string' ? value : value == null ? '未取得' : JSON.stringify(value);
 const nonzero = (value: string | null | undefined) => value != null && Number(value) !== 0;
-function snapshotTime(value: string | undefined) {
+function snapshotTime(value: string | null | undefined) {
   if (!value) return;
   const date = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? new Date(value) : null;
   if (!date || !Number.isFinite(date.getTime())) return value;
@@ -47,12 +48,15 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
 }) {
   const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
   const [filter,setFilter]=useState<'pending'|'findings'|'all'>('pending');
-  const [dialog,setDialog]=useState<'fetch'|'history'|'matters'|'edit'|'discovery'|null>(null);
+  const [dialog,setDialog]=useState<'fetch'|'history'|'initialize'|'matters'|'edit'|'discovery'|null>(null);
   const [warehouse,setWarehouse]=useState('');
   const [preview,setPreview]=useState<I8Preview|null>(null);
   const [selected,setSelected]=useState<string[]>([]);
   const [allowReduction,setAllowReduction]=useState(false),[reason,setReason]=useState('');
   const [matter,setMatter]=useState<Partial<Matter>>({}),[discovery,setDiscovery]=useState<Discovery|null>(null),[note,setNote]=useState('');
+  const [historyBase,setHistoryBase]=useState<HistoryBase|null>(null);
+  const [historyDraft,setHistoryDraft]=useState<HistoryBaseDraft>({base_month:'',zero:'',monthly:'',internal:'',i6:'',note:''});
+  const historyDirty=dialog==='initialize'&&Object.values(historyDraft).some(Boolean);
   const [feedback,setFeedback]=useState('');
   const [feedbackKind,setFeedbackKind]=useState<'success'|'error'>('success');
   function failed(message:string){setFeedbackKind('error');setFeedback(message);}
@@ -60,6 +64,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
   const lock=useRef(false),mounted=useRef(true);
   const scopeKey=JSON.stringify(warehouses),currentScope=useRef(scopeKey);currentScope.current=scopeKey;
   const blocked=busy||working;
+  useHistoryGuard('mechanical-history-base',()=>working?'累计起点正在保存，请稍候。':historyDirty?'请先处理累计起点未保存的修改。':'');
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{setDialog(null);setPreview(null);setSelected([]);setFeedback('');},[scopeKey]);
   const findings=data.discoveries.filter(d=>d.status==='pending');
@@ -74,6 +79,11 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
   const rows=filter==='pending'?scope.filter(pending):scope;
   const normal=filter==='pending'?scope.filter(wh=>hasData(wh)&&!pending(wh)):[];
   function open(next:typeof dialog,wh='') {if(blocked)return;setFeedback('');setWarehouse(wh);setDialog(next);}
+  function initialize(wh:string) {
+    const base=data.history_bases.find(item=>item.warehouse===wh&&item.can_initialize);
+    if(!base||!writable||blocked)return;
+    setHistoryBase(base);setHistoryDraft({base_month:'',zero:'',monthly:'',internal:'',i6:'',note:''});open('initialize',wh);
+  }
   async function post(action:string,payload:Record<string,unknown>) {
     readWorkResult(await requestJson('/api/m06/workbench/'+action,{method:'POST',...body(payload)}),action,payload);
   }
@@ -107,16 +117,29 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
   function table(items:string[]) {
     type WorkRow={warehouse:string};
     const columns:(ColDef<WorkRow>|ColGroupDef<WorkRow>)[]=[
-      {colId:'project',headerName:'项目',pinned:'left',...textWidth(180,260,scale),valueGetter:p=>label(p.data!.warehouse),cellRenderer:({data}:{data:WorkRow})=>{const wh=data.warehouse;return <><EllipsisText text={label(wh)}/><small>{snapshotTime(relations(wh)[0]?.fetched_at)||(hasData(wh)?'尚未取数':'尚未录入')}</small>{filter==='findings'&&findings.filter(d=>d.warehouse===wh).map(d=><Button key={d.id} className="mechanical-link" disabled={blocked} onClick={()=>{setDiscovery(d);setNote(d.note||'');open('discovery',wh);}}>{d.kind==='first'?'首次取数，核实':'取数变化，核实'}</Button>)}</>;}},
-      ...(['report','internal'] as const).map(relation=>({headerName:relation==='report'?'报表核对':'i8内部核对',children:(['left','right','pending'] as const).map((field,index):ColDef<WorkRow>=>({colId:relation+'-'+field,headerName:relation==='report'?['报表费用累计','班组使用累计（含i6历史数据）','待处理差额'][index]!:['班组使用累计','项目结算＋班组审批','待处理差额'][index]!,...numberColumnWidth(items.map(wh=>money(relations(wh).find(r=>r.relation===relation)?.[field]))),minWidth:Math.max(108*scale,numberColumnWidth(items.map(wh=>money(relations(wh).find(r=>r.relation===relation)?.[field]))).minWidth),cellClass:'money',valueGetter:p=>money(relations(p.data!.warehouse).find(r=>r.relation===relation)?.[field]),...(field==='pending'?{cellRenderer:({data}:{data:WorkRow})=>{const wh=data.warehouse,row=relations(wh).find(r=>r.relation===relation);return <div className={nonzero(row?.pending)?'mechanical-difference':''}>{money(row?.pending)}{row?.pending==null?hasData(wh)&&<small>{row?.fetched_at?'待核对':'待取数'}</small>:nonzero(row.pending)?<Button className="mechanical-link" disabled={!writable||blocked} onClick={()=>ignore(row,false)}>忽略新增差额</Button>:nonzero(row.ignored)?<Button className="mechanical-link" disabled={!writable||blocked} onClick={()=>ignore(row,true)}>已忽略，撤销</Button>:null}</div>;}}:{})}))})),
+      {colId:'project',headerName:'项目',pinned:'left',...textWidth(180,260,scale),valueGetter:p=>label(p.data!.warehouse),cellRenderer:({data}:{data:WorkRow})=>{const wh=data.warehouse,row=relations(wh).find(r=>r.relation==='report');return <><EllipsisText text={label(wh)}/>{row?.fetched_at?<small>已采用 {snapshotTime(row.fetched_at)}</small>:<small>{hasData(wh)?'i8尚未采用':'尚未录入'}</small>}{row?.i8_checked_at&&<small>本次检查 {snapshotTime(row.i8_checked_at)}{row.i8_source_status==='no-records'?'，来源无记录':''}</small>}{filter==='findings'&&findings.filter(d=>d.warehouse===wh).map(d=><Button key={d.id} className="mechanical-link" disabled={blocked} onClick={()=>{setDiscovery(d);setNote(d.note||'');open('discovery',wh);}}>{d.kind==='first'?'首次取数，核实':'取数变化，核实'}</Button>)}</>;}},
+      ...(['report','internal'] as const).map(relation=>({headerName:relation==='report'?'报表核对':'i8内部核对',children:(['left','right','pending'] as const).map((field,index):ColDef<WorkRow>=>({
+        colId:relation+'-'+field,headerName:relation==='report'?['报表费用累计','班组使用累计（含i6历史数据）','待处理差额'][index]!:['班组使用累计','项目结算＋班组审批','待处理差额'][index]!,
+        ...numberColumnWidth(items.map(wh=>money(relations(wh).find(r=>r.relation===relation)?.[field]))),
+        minWidth:Math.max((field==='pending'?150:108)*scale,numberColumnWidth(items.map(wh=>money(relations(wh).find(r=>r.relation===relation)?.[field]))).minWidth),cellClass:'money',
+        valueGetter:p=>money(relations(p.data!.warehouse).find(r=>r.relation===relation)?.[field]),
+        cellRenderer:({data}:{data:WorkRow})=>{
+          const wh=data.warehouse,row=relations(wh).find(r=>r.relation===relation);
+          if(field==='left'&&relation==='report'&&row?.left==null)return <><span>累计起点待补</span>{row?.recorded_total!=null&&<small>已录入 {money(row.recorded_total)}（{row.recorded_months.join('、')}）</small>}</>;
+          if(field==='right'&&relation==='report'&&row?.right==null)return <>{money(row?.right)}{row?.i8_usage!=null&&<small>已采用i8 {money(row.i8_usage)}</small>}{row?.i6==null&&<small>固定i6待补</small>}</>;
+          if(field!=='pending')return money(row?.[field]);
+          return <div className={nonzero(row?.pending)?'mechanical-difference':''}>{money(row?.pending)}{row?.pending==null?<small>{row?.missing_reasons.length?row.missing_reasons.join('；'):hasData(wh)?'来源待核实':'尚未录入'}</small>:nonzero(row.pending)?<Button className="mechanical-link" disabled={!writable||blocked} onClick={()=>ignore(row,false)}>忽略新增差额</Button>:nonzero(row.ignored)?<Button className="mechanical-link" disabled={!writable||blocked} onClick={()=>ignore(row,true)}>已忽略，撤销</Button>:null}</div>;
+        },
+      }))})),
       {colId:'documents',headerName:'结算／审批不同',minWidth:180,initialFlex:1,cellRenderer:({data}:{data:WorkRow})=>{const wh=data.warehouse;return <>{documents(wh).map(document=><div className={document.ignored?'':'mechanical-difference'} key={document.fact}><div>结 {money(document.settlement)}<br/>审 {money(document.approval)}</div><Button className="mechanical-link" disabled={!writable||blocked} onClick={()=>void commit(()=>post('document-ignore',{warehouse:wh,document_id:document.document_id,fact:document.fact,revision:document.revision,undo:document.ignored}),document.ignored?'已恢复该单差额提醒。':'已忽略该单这次结算／审批差额。')}>{document.ignored?'已忽略，撤销':'忽略此单差额'}</Button><small>{document.bill||document.id}，{document.periodName||document.periodKey||'周期未取得'}</small></div>)}</>;}},
       {colId:'matters',headerName:'跟进事项',cellRenderer:({data}:{data:WorkRow})=><><Button className="mechanical-link" disabled={blocked} onClick={()=>open('matters',data.warehouse)}>{matters(data.warehouse).some(m=>!m.completed)?matters(data.warehouse).filter(m=>!m.completed).length+'项未完成':'记录跟进'}</Button><small><EllipsisText text={matters(data.warehouse).find(m=>!m.completed)?.text??''}/></small></>},
-      {colId:'actions',headerName:'操作',minWidth:160,cellRenderer:({data:entry}:{data:WorkRow})=>{const wh=entry.warehouse;return <><Button disabled={!writable||blocked} onClick={()=>void fetchPreview(wh)}>更新i8</Button>{filter==='findings'&&!warehouses.includes(wh)&&<Button disabled={!writable||blocked} onClick={()=>void commit(()=>post('settings',{revision:data.settings.revision,shown_projects:[...new Set([...data.shown,wh])]}),'已加入显示名单，金额保持原样。',()=>added(wh))}>加入显示</Button>}</>;}},
+      {colId:'actions',headerName:'操作',minWidth:160,cellRenderer:({data:entry}:{data:WorkRow})=>{const wh=entry.warehouse;return <><Button disabled={!writable||blocked} onClick={()=>void fetchPreview(wh)}>更新i8</Button>{data.history_bases.some(base=>base.warehouse===wh&&base.can_initialize)&&<Button disabled={!writable||blocked} onClick={()=>initialize(wh)}>补齐累计起点</Button>}{filter==='findings'&&!warehouses.includes(wh)&&<Button disabled={!writable||blocked} onClick={()=>void commit(()=>post('settings',{revision:data.settings.revision,shown_projects:[...new Set([...data.shown,wh])]}),'已加入显示名单，金额保持原样。',()=>added(wh))}>加入显示</Button>}</>;}},
     ];
     return <ReadGrid table="mechanical-reconciliation" className="mechanical-work-table" label={items===normal?'已对平／已忽略':'当前累计核对'} domLayout="autoHeight" rows={items.map(warehouse=>({warehouse}))} rowId={row=>row.warehouse} columns={columns} grid={{overlayNoRowsTemplate:'当前范围没有此类项目。'}}/>;
   }
   const reduction=preview?.projects.some(p=>selected.includes(p.warehouse)&&p.reduction)??false;
   const reviewProjects=preview?.projects??[];
+  const initialization=historyInitialization(historyBase??undefined,historyDraft);
   return <div className="mechanical-work">
     <div className="mechanical-work-tools"><div role="group" aria-label="核对筛选">{([['pending','待处理'],['findings',`取数变化（${findings.length}）`],['all','全部显示项目']] as const).map(([id,name])=><Button key={id} disabled={blocked} aria-pressed={filter===id} onClick={()=>setFilter(id)}>{name}</Button>)}</div><div><Button disabled={blocked} onClick={()=>open('history')}>i6历史数据</Button><Button disabled={!writable||blocked} onClick={()=>void fetchPreview()}>抓取i8</Button></div></div>
     <p className="muted">核对当前累计，不随查看月份截断。累计差额与单据差额分别处理。抓取可能重新登录 i8，并使该账号其他会话下线。</p>
@@ -127,14 +150,14 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
     ]}/></section>}
     {table(rows)}{normal.length>0&&<details><summary>已对平／已忽略（{normal.length}）</summary>{table(normal)}</details>}
     {feedback&&!dialog&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
-    {dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} paused={paused} close={()=>setDialog(null)}>
+    {dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='initialize'?'mechanical-history-base-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='initialize'?'补齐累计起点，'+label(warehouse):dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} dirty={historyDirty} paused={paused} close={()=>setDialog(null)}>{requestClose=><>
       {dialog==='fetch'&&(!preview?<><p>{blocked?'正在抓取 i8 当前累计…':'本次未取得可采用的预览。'}</p><footer><Button disabled={blocked} onClick={()=>setDialog(null)}>关闭</Button>{!blocked&&<Button disabled={!writable} onClick={()=>void fetchPreview(warehouse)}>重新抓取</Button>}</footer></>:<>
         <p>已读取班组使用 {preview.counts.usage} 条、项目结算 {preview.counts.project} 条、班组消耗 {preview.counts.team} 条。确认只更新勾选项目。</p>
         <AdoptionSelection.Provider value={{selected,disabled:!writable||blocked,label,toggle:(warehouse,checked)=>setSelected(previous=>checked?[...new Set([...previous,warehouse])]:previous.filter(wh=>wh!==warehouse))}}><ReadGrid table="mechanical-i8-review" className="mechanical-work-table mechanical-i8-review" label="i8累计采用预览" domLayout="autoHeight" rows={reviewProjects} rowId={p=>p.warehouse} columns={[
       {colId:'pick',headerName:'采用',minWidth:60,maxWidth:80,cellRenderer:AdoptionCheckbox},
       {colId:'project',headerName:'项目',valueGetter:p=>label(p.data!.warehouse)},
       ...kinds.map(([kind,name])=>({headerName:name,children:(['old','new','delta'] as const).map((field,index)=>({colId:kind+'-'+field,headerName:['原值','本次取得','变化额'][index]!,...numberColumnWidth(reviewProjects.map(p=>field==='old'?money(p.before?.totals?.[kind]):field==='new'?money(p.totals[kind]):change(p.before?.totals?.[kind],p.totals[kind],p.complete))),cellClass:'money',valueGetter:(p:{data:I8Preview['projects'][number]|undefined})=>field==='old'?money(p.data!.before?.totals?.[kind]):field==='new'?money(p.data!.totals[kind]):change(p.data!.before?.totals?.[kind],p.data!.totals[kind],p.data!.complete)}))})),
-      {colId:'status',headerName:'状态',valueGetter:p=>{const row=p.data!;return (!row.complete?'来源未齐，保留旧值':row.reduction?'含减少，需核实':!row.before||!Object.keys(row.before).length?'首次发现':row.changed?'单据或金额有变化':'未变化')+(row.missing.length?'，单据减少 '+row.missing.length+' 条':'');}},
+      {colId:'status',headerName:'状态',minWidth:200,valueGetter:p=>{const row=p.data!;return (row.source_status==='no-records'?'本次来源无记录，未按0采用':!row.complete?'来源未齐，保留旧值':row.reduction?'含减少，需核实':!row.before||!Object.keys(row.before).length?'首次发现':row.changed?'单据或金额有变化':'未变化')+(row.missing.length?'，单据减少 '+row.missing.length+' 条':'');}},
     ]}/></AdoptionSelection.Provider>
         {!reviewProjects.length&&<p>本次没有可采用的项目。</p>}{preview.unmapped_projects.length>0&&<p>发现 {preview.unmapped_projects.length} 个未对应档案的项目；在“取数变化”核实来源。</p>}
         {reduction&&<div className="mechanical-reduction-fields"><label><Checkbox checked={allowReduction} disabled={blocked} onChange={e=>setAllowReduction(e.target.checked)}/>已核实查询范围及单据减少</label><label>减少采用依据<Input.TextArea value={reason} disabled={blocked} onChange={e=>setReason(e.target.value)}/></label></div>}
@@ -144,6 +167,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
       {colId:'project',headerName:'项目',valueGetter:p=>label(p.data!.warehouse)},
       {field:'i6',headerName:'固定i6（元）',...numberColumnWidth(data.relations.filter(r=>r.relation==='report').map(r=>money(r.i6))),cellClass:'money',valueFormatter:p=>money(p.value)},
     ]}/></>}
+      {dialog==='initialize'&&<><p>填写截至该月的累计，须已包含现有月值；之后按月增量接续。未知金额请先核实，明确为零时填写0。</p><div className="mechanical-history-base-fields"><label>累计截止月<Input aria-label="累计截止月" type="month" value={historyDraft.base_month} disabled={blocked} onChange={e=>setHistoryDraft({...historyDraft,base_month:e.target.value})}/></label>{([['zero','零租累计（元）'],['monthly','包月累计（元）'],['internal','租赁公司内租累计（元）'],['i6','固定i6（元）']] as const).map(([field,name])=><label key={field}>{name}<Input aria-label={name} inputMode="decimal" value={historyDraft[field]} disabled={blocked} onChange={e=>setHistoryDraft({...historyDraft,[field]:e.target.value})}/></label>)}</div><label className="mechanical-history-base-note">来源说明<Input.TextArea aria-label="累计起点来源说明" autoSize={{minRows:3,maxRows:6}} value={historyDraft.note} disabled={blocked} onChange={e=>setHistoryDraft({...historyDraft,note:e.target.value})}/></label><footer><Button disabled={blocked} onClick={()=>requestClose()}>取消</Button><Button type="primary" disabled={!writable||blocked||!initialization||!data.history_bases.some(base=>base.warehouse===warehouse&&base.can_initialize)} onClick={()=>{if(initialization)void commit(()=>post('history-initialize',initialization),'已补齐累计起点。',()=>{setHistoryDraft({base_month:'',zero:'',monthly:'',internal:'',i6:'',note:''});setDialog(null);});}}>保存累计起点</Button></footer></>}
       {dialog==='matters'&&<><div className="mechanical-work-tools"><span>事项保存／完成不改变费用或忽略记录。</span><Button disabled={!writable||blocked} onClick={()=>{setMatter({warehouse,text:''});setDialog('edit');}}>新增跟进</Button></div><ReadGrid table="mechanical-matters" label="跟进事项" domLayout="autoHeight" rows={matters(warehouse)} rowId={item=>String(item.id)} columns={[
       {field:'text',headerName:'事项／处理备注',cellRenderer:({data:item}:{data:Matter})=><>{item.text}{Object.entries(metadataLabels).filter(([key])=>item.metadata?.[key]!=null&&item.metadata[key]!=='').map(([key,name])=><small key={key}>{name}：{text(item.metadata[key])}</small>)}</>},
       {colId:'status',headerName:'状态',valueGetter:p=>p.data!.completed?'已确认完成':'未完成'},
@@ -152,6 +176,6 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
       {dialog==='edit'&&<><label>项目<Select aria-label="跟进事项项目" value={matter.warehouse||undefined} placeholder="请选择项目" disabled={blocked} options={data.warehouses.map(wh=>({value:wh,label:label(wh)}))} onChange={value=>setMatter({...matter,warehouse:value??''})}/></label><label>事项／处理备注<Input.TextArea value={matter.text||''} disabled={blocked} onChange={e=>setMatter({...matter,text:e.target.value})}/></label><footer><Button disabled={blocked} onClick={()=>setDialog('matters')}>返回跟进</Button>{[false,true].map(completed=><Button key={String(completed)} disabled={!writable||blocked||!matter.warehouse||!matter.text?.trim()} onClick={()=>void commit(()=>post('matter-save',{id:matter.id,revision:matter.revision??0,warehouse:matter.warehouse,text:matter.text?.trim(),completed}),completed?'事项已确认完成，金额保持原样。':'事项已保存。',()=>{setWarehouse(matter.warehouse!);setDialog('matters');})}>{completed?'确认完成':'保存'}</Button>)}</footer></>}
       {dialog==='discovery'&&discovery&&<><p>{discovery.kind==='unmapped'?'归属尚未唯一确定，金额未分配；请先核实对应项目。':discovery.kind==='first'?'首次发现，不据历史非零直接认定漏报。':discovery.kind==='missing-project'?'原有项目本轮未返回，旧值保留。':'i8单据或金额有变化，请核实报表是否覆盖。'}</p>{discovery.sources&&<Sources sources={discovery.sources}/>}<label>本轮无需补报的核实说明<Input.TextArea value={note} disabled={blocked} onChange={e=>setNote(e.target.value)}/></label><footer><Button disabled={blocked} onClick={()=>setDialog(null)}>返回</Button><Button disabled={!writable||blocked||!note.trim()} onClick={()=>void commit(()=>post('discovery-resolve',{id:discovery.id,revision:discovery.revision,note:note.trim()}),'本轮取数变化已核实，以后有新变化仍会提示。',()=>setDialog(null))}>已核实，本轮无需补报</Button></footer></>}
       {feedback&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
-    </MechanicalDialog>}
+    </>}</MechanicalDialog>}
   </div>;
 }

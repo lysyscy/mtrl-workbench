@@ -270,6 +270,133 @@ def test_empty_month_has_signature_and_unknown_cumulative(session):
     assert result['summary'][0]['cumulative']['zero'] is None
 
 
+def opening(s, **changes):
+    basis = next(b for b in W.state(s)['history_bases'] if b['warehouse'] == '甲')
+    return {'warehouse': '甲', 'revision': basis['revision'], 'effective_signature': basis['signature'],
+            'base_month': '2026-09', 'category_totals': {'zero': '0', 'monthly': '0', 'internal': '0'},
+            'i6': '0', 'note': '用户确认开工前无机械费及i6', **changes}
+
+
+def test_new_project_details_opening_i8_and_reconciliation_form_one_chain(session):
+    save(session, [row(amount='9600')], ym='2026-10')
+    adopt_i8(session, [i8_project(usage='9599', approval='9599', settlement='9599')])
+    report = W.reconciliations(session, ['甲'])[0][0]
+    assert report['left'] is report['right'] is None
+    assert report['recorded_total'] == '9600.00'
+    assert report['recorded_months'] == ['2026-10']
+    assert report['i8_usage'] == '9599.00'
+    assert report['missing_reasons'] == ['累计起点待补', '固定i6待补']
+    details_before = W.read(session, W.key('details', '甲', '2026-10', 'zero'))
+    effective_before = W.effective(session, '甲', '2026-10')
+    W.action(session, 'history-initialize', opening(session), 'test-operator')
+    report = W.reconciliations(session, ['甲'])[0][0]
+    assert (report['left'], report['right'], report['raw']) == ('9600.00', '9599.00', '1.00')
+    assert report['missing_reasons'] == []
+    assert W.cumulative(session, '甲', '2026-10')['zero'] == '9600.00'
+    assert W.cumulative(session, '甲', '2026-08')['zero'] is None
+    assert W.read(session, W.key('details', '甲', '2026-10', 'zero')) == details_before
+    assert W.effective(session, '甲', '2026-10') == effective_before
+    assert W.read(session, W.key('history', '甲'))[0]['source']['operator'] == 'test-operator'
+    save(session, [row(amount='9700')], revision=1, ym='2026-10')
+    assert W.report_total(session, '甲') == '9700.00'
+
+
+def test_opening_requires_confirmed_values_and_current_month_signature(session):
+    save(session, ym='2026-10')
+    payload = opening(session)
+    save(session, [row(amount='206')], revision=1, ym='2026-10')
+    with pytest.raises(MustReportError, match='月值已变化'):
+        W.action(session, 'history-initialize', payload)
+    with pytest.raises(MustReportError, match='金额不能为空'):
+        W.action(session, 'history-initialize', opening(session, i6=None))
+    with pytest.raises(MustReportError, match='金额不能为空'):
+        W.action(session, 'history-initialize', opening(session, category_totals={'zero': '0', 'monthly': '0'}))
+    assert W.read(session, W.key('history', '甲'))[1] == 0
+    payload = opening(session)
+    W.action(session, 'history-initialize', payload)
+    with pytest.raises(MustReportError, match='已有累计起点'):
+        W.action(session, 'history-initialize', payload)
+
+
+def test_opening_preserves_annual_reference_and_new_old_month_revisions(session):
+    save(session, [row(amount='0')], ym='2026-02')
+    W.initialize_history(session, opening(session, category_totals={'zero': '4850', 'monthly': '0', 'internal': '0'}),
+                         reference_months={'2026-02': {'mech_2': '4850'}})
+    assert W.report_total(session, '甲') == '4850.00'
+    save(session, [row(amount='5000')], revision=1, ym='2026-02')
+    assert W.report_total(session, '甲') == '5000.00'
+    assert W.cumulative(session, '甲', '2026-09')['zero'] == '5000.00'
+    W.repo.save_mech(session, ym='2026-03', warehouse='甲', values={'mech_2': Decimal('100')})
+    assert W.report_total(session, '甲') == '5100.00'
+    assert W.cumulative(session, '甲', '2026-09')['zero'] == '5100.00'
+
+
+def test_opening_captures_only_the_validated_months_when_another_writer_inserts(session, monkeypatch):
+    save(session, [row(amount='100')], ym='2026-09')
+    session.commit()
+    payload = opening(session, category_totals={'zero': '100', 'monthly': '0', 'internal': '0'})
+    original = W.history_basis
+
+    def insert_after_signature(*args, **kwargs):
+        basis = original(*args, **kwargs)
+        with Session(session.bind) as other:
+            W.repo.save_mech(other, ym='2026-08', warehouse='甲', values={'mech_2': Decimal('50')})
+            other.commit()
+        return basis
+
+    monkeypatch.setattr(W, 'history_basis', insert_after_signature)
+    W.action(session, 'history-initialize', payload)
+    assert W.report_total(session, '甲') == '150.00'
+    assert W.cumulative(session, '甲', '2026-09')['zero'] == '150.00'
+
+
+def test_preopening_adoptions_do_not_apply_until_that_column_is_adopted_again(session):
+    save(session, [row(amount='0')], ym='2026-02')
+    W.initialize_history(session, opening(session, category_totals={'zero': '4850', 'monthly': '0', 'internal': '0'}),
+                         reference_months={'2026-02': {'mech_2': '4850'}})
+    save(session, [row(amount='50')], cat='monthly', ym='2026-02')
+    assert W.report_total(session, '甲') == '4900.00'
+    assert W.cumulative(session, '甲', '2026-09')['zero'] == '4850.00'
+    W.mark_adoption(session, '甲', '2026-02', ['mech_2'])
+    assert W.report_total(session, '甲') == '50.00'
+    assert W.cumulative(session, '甲', '2026-09')['zero'] == '0.00'
+
+
+def test_opening_includes_a_later_filled_category_in_an_existing_old_month(session):
+    save(session, [row(amount='100')], ym='2026-09')
+    W.action(session, 'history-initialize', opening(session, category_totals={'zero': '100', 'monthly': '0', 'internal': '0'}))
+    save(session, [row(amount='50')], cat='monthly', ym='2026-09')
+    assert W.report_total(session, '甲') == '150.00'
+    assert W.cumulative(session, '甲', '2026-09')['monthly'] == '50.00'
+
+
+def test_first_empty_i8_is_checked_but_never_adopted_as_zero(session):
+    empty = {'warehouse': '甲', 'projectId': '1', 'sources': {k: [] for k in ('usage', 'project', 'team')},
+             'complete': {k: True for k in ('usage', 'project', 'team')},
+             'fetched_at': '2026-11-02T00:00:00+00:00', 'scope': 'full', 'source_status': 'no-records'}
+    preview = W.i8_preview(session, {'request_id': 'first-empty', 'projects': [empty]})
+    assert not preview['projects'][0]['complete']
+    assert set(preview['projects'][0]['totals'].values()) == {None}
+    with pytest.raises(MustReportError, match='来源无记录'):
+        W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': ['甲']})
+    assert W.read(session, W.key('i8', '甲'))[1] == 0
+    checks = W.state(session)['reconciliations']
+    report = next(r for r in checks if r['warehouse'] == '甲' and r['relation'] == 'report')
+    assert report['i8_source_status'] == 'no-records'
+    assert report['i8_checked_at'] == empty['fetched_at']
+    assert '本次i8来源无记录' in report['missing_reasons']
+    assert not W.state(session)['discoveries']
+    adopt_i8(session, [i8_project()], 'later-available')
+    assert W.reconciliations(session, ['甲'])[0][0]['i8_source_status'] == 'available'
+    # Empty returns for an existing adopted identity remain an explicit reduction.
+    preview = W.i8_preview(session, {'request_id': 'old-empty', 'projects': [empty]})
+    assert preview['projects'][0]['complete'] and preview['projects'][0]['reduction']
+    assert preview['projects'][0]['totals']['usage'] == '0.00'
+    W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': ['甲'],
+                          'allow_reduction': True, 'reduction_reason': '已核实全部单据作废'})
+    assert W.reconciliations(session, ['甲'])[0][0]['i8_usage'] == '0.00'
+
+
 def test_i8_one_preview_can_confirm_projects_separately(session):
     preview = W.i8_preview(session, {'projects': [i8_project(), i8_project('乙')]})
     W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': ['甲']})

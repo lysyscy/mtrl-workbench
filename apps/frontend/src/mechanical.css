@@ -100,3 +100,9 @@
 .mechanical-detail-table .mechanical-group-label strong .grid-ellipsis{font-weight:600;color:var(--tx)}
 .mechanical-detail-table .mechanical-group-label>span{flex:none}
 .mechanical-detail-table .mechanical-detail-group-row .money small{display:inline;white-space:nowrap}
+.business-modal .mechanical-history-base-dialog{width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
+.mechanical-history-base-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
+.mechanical-history-base-fields .ant-input{margin-top:calc(6px * var(--fscale))}
+.mechanical-history-base-note{margin-top:calc(16px * var(--fscale))}
+.mechanical-history-base-note textarea{min-height:0;margin-block:calc(6px * var(--fscale)) 0}
+@media(max-width:520px){.mechanical-history-base-fields{grid-template-columns:1fr}}

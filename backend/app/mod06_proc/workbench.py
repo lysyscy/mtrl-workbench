@@ -454,7 +454,10 @@ def internal_save(s, data):
 def mark_adoption(s, wh, ym, columns):
     record_key = key('adoption', wh, ym)
     old, revision = read(s, record_key)
-    write(s, record_key, {'columns': sorted(set(old.get('columns', [])) | set(columns))}, revision)
+    versions = {c: old.get('versions', {}).get(c, revision) for c in old.get('columns', [])}
+    for column in columns:
+        versions[column] = versions.get(column, 0) + 1
+    write(s, record_key, {'columns': sorted(versions), 'versions': versions}, revision)
 
 
 def merge_rows(baseline, incoming, current):
@@ -628,7 +631,16 @@ def i8_preview(s, data):
         old, revision = read(s, key('i8', wh))
         complete = all(item.get('complete', {}).get(kind) is True and kind in item.get('sources', {})
                        for kind in ('usage', 'project', 'team'))
+        no_records = complete and not old and not any(sources.values())
+        source_status = 'no-records' if no_records else 'available' if complete else 'incomplete'
         totals = source_totals(sources)
+        if no_records:
+            totals = dict.fromkeys(('usage', 'project', 'team'))
+        check_key = key('i8-check', wh)
+        _, check_revision = read(s, check_key)
+        write(s, check_key, {'warehouse': wh, 'projectId': str(item.get('projectId') or ''),
+                            'source_status': source_status, 'fetched_at': item.get('fetched_at'),
+                            'scope': deepcopy(item.get('scope', data.get('scope')))}, check_revision)
         missing = []
         if old:
             for kind in ('usage', 'project', 'team'):
@@ -641,8 +653,9 @@ def i8_preview(s, data):
         fact = digest([wh, sources])
         observe_discovery(s, 'warehouse:' + wh, fact, {'id': fact, 'warehouse': wh,
                           'kind': 'changed' if old else 'first', 'status': 'pending',
-                          'fetched_at': item.get('fetched_at'), 'totals': totals}, actionable=changed)
-        projects.append({'warehouse': wh, 'sources': sources, 'totals': totals, 'complete': complete,
+                          'fetched_at': item.get('fetched_at'), 'totals': totals}, actionable=changed and not no_records)
+        projects.append({'warehouse': wh, 'sources': sources, 'totals': totals, 'complete': complete and not no_records,
+                         'source_status': source_status,
                          'projectId': str(item.get('projectId') or ''),
                          'unknown_documents': [{'kind': kind, **r} for kind, rows in sources.items() for r in rows
                                                if r.get('approval' if kind == 'team' else 'amount') is None],
@@ -685,6 +698,8 @@ def i8_confirm(s, data):
         return deepcopy(preview.result)
     projects = [p for p in preview.payload['projects'] if p['warehouse'] in selected - adopted]
     for item in projects:
+        if item.get('source_status') == 'no-records':
+            raise MustReportError('本次来源无记录，不能将首次未取得的累计按0采用')
         if not item['complete']:
             raise MustReportError('三类来源未完整取得，项目旧值保持不变')
         if read(s, key('i8', item['warehouse']))[1] != item['revision']:
@@ -720,6 +735,76 @@ def resolve_adopted_discoveries(s):
                   'resolved_at': datetime.now().isoformat()}, record.revision)
 
 
+def history_basis(s, wh, *, records=None, manual_rows=None):
+    history, revision = read(s, key('history', wh), records=records)
+    rows = (list(s.scalars(select(ProcMechManual).where(ProcMechManual.warehouse_name == wh)))
+            if manual_rows is None else manual_rows.get(wh, []))
+    values = {r.ym: {f'mech_{i}': money(getattr(r, f'mech_{i}')) for i in range(6)} for r in rows}
+    adoptions = {r.ym: adoption_versions(s, wh, r.ym, records=records) for r in rows}
+    return {'warehouse': wh, 'revision': revision, 'signature': digest([values, adoptions]), 'can_initialize': not revision,
+            'base_month': history.get('base_month', ''), 'category_totals': deepcopy(history.get('category_totals', {})),
+            'i6': history.get('i6'), 'note': str(history.get('source', {}).get('note') or '')}
+
+
+def initialize_history(s, data, operator='', *, reference_months=None, source=None):
+    """Establish an explicitly confirmed cumulative opening; never rewrite monthly facts.
+
+    File-based repairs may supply the source's included monthly components. The
+    interactive action anchors the entered cumulative to the current saved months.
+    Existing imported references cannot be replaced through this entry point.
+    """
+    wh = warehouse(s, data.get('warehouse'))
+    # Validate and anchor the exact same captured rows. A later concurrent monthly
+    # change is then a delta, never swallowed by a second read into the opening.
+    rows = list(s.scalars(select(ProcMechManual).where(ProcMechManual.warehouse_name == wh)))
+    records = {r.key: r for r in s.scalars(select(Record).where(
+        (Record.key == key('history', wh)) | Record.key.like('adoption:%')))}
+    basis = history_basis(s, wh, records=records, manual_rows={wh: rows})
+    if not basis['can_initialize'] or data.get('revision') != 0:
+        raise MustReportError('已有累计起点，不能重复初始化或覆盖原历史参考')
+    if not data.get('effective_signature') or basis['signature'] != data['effective_signature']:
+        raise MustReportError('已录入月值已变化，请刷新后重新核对累计起点')
+    month = normalize_ym(data.get('base_month'))
+    note = str(data.get('note') or '').strip()
+    if not month or not note:
+        raise MustReportError('请填写累计截止月和已确认的来源说明')
+    categories = data.get('category_totals') or {}
+    amounts = {k: money(categories.get(k), nullable=k not in ('zero', 'monthly', 'internal'))
+               for k in ('zero', 'monthly', 'internal', 'company', 'weekly')}
+    i6 = money(data.get('i6'), nullable=False)
+    rows = [r for r in rows if r.ym <= month]
+    initial = {r.ym: {f'mech_{i}': money(getattr(r, f'mech_{i}')) for i in range(6)} for r in rows}
+    refs = deepcopy(initial)
+    if reference_months is not None:
+        refs = {}
+        for ym, values in reference_months.items():
+            if normalize_ym(ym) != ym or ym > month:
+                raise MustReportError('原累计已含月份须为截止月以内的有效月份')
+            if any(k not in {f'mech_{i}' for i in range(6)} for k in values):
+                raise MustReportError('原累计月份字段无效')
+            refs[ym] = {k: money(v) for k, v in values.items()}
+    payload = {'warehouse': wh, 'base_month': month, 'category_totals': amounts, 'i6': i6,
+               'report_total': total(amounts[k] for k in ('zero', 'monthly', 'internal')),
+               'reference_months': refs, 'effective_base': initial,
+               'adoption_base': {r.ym: adoption_versions(s, wh, r.ym, records=records) for r in rows},
+               'source': {**deepcopy(source or {}), 'kind': 'cumulative-opening', 'note': note,
+                          'operator': operator, 'confirmed_at': datetime.now().isoformat()}}
+    revision = write(s, key('history', wh), payload, 0)
+    return {'warehouse': wh, 'revision': revision}
+
+
+def adoption_versions(s, wh, ym, *, records=None):
+    adopted, revision = read(s, key('adoption', wh, ym), records=records)
+    return {c: adopted.get('versions', {}).get(c, revision) for c in adopted.get('columns', [])}
+
+
+def adopted_after_history(s, history, wh, ym, column, *, records=None):
+    versions = adoption_versions(s, wh, ym, records=records)
+    if history.get('source', {}).get('kind') == 'cumulative-opening':
+        return versions.get(column, 0) != history.get('adoption_base', {}).get(ym, {}).get(column, 0)
+    return column in versions
+
+
 def report_total(s, wh, *, records=None, manual_rows=None):
     history, _ = read(s, key('history', wh), records=records)
     rows = (list(s.scalars(select(ProcMechManual).where(ProcMechManual.warehouse_name == wh)))
@@ -732,17 +817,20 @@ def report_total(s, wh, *, records=None, manual_rows=None):
     refs = history.get('reference_months', {})
     delta = Decimal(0)
     for row in rows:
-        adopted, _ = read(s, key('adoption', wh, row.ym), records=records)
         for column in ('mech_1', 'mech_2', 'mech_3'):
             reference = refs.get(row.ym, {}).get(column)
             current = money(getattr(row, column))
             initial = history.get('effective_base', {}).get(row.ym, {}).get(column)
-            if row.ym <= str(history.get('base_month') or '') and current == initial and column not in adopted.get('columns', []):
+            if (row.ym <= str(history.get('base_month') or '') and current == initial
+                    and not adopted_after_history(s, history, wh, row.ym, column, records=records)):
                 continue
             if reference is None:
-                if row.ym <= str(history.get('base_month') or ''):
+                if history.get('source', {}).get('kind') == 'cumulative-opening':
+                    reference = initial or '0.00'
+                elif row.ym <= str(history.get('base_month') or ''):
                     continue
-                reference = '0.00'
+                else:
+                    reference = '0.00'
             delta += Decimal(current or '0') - Decimal(str(reference))
     return format(to_money(Decimal(base) + delta), '.2f')
 
@@ -769,12 +857,14 @@ def cumulative(s, wh, ym, *, records=None, manual_rows=None):
                 old = refs.get(row.ym, {}).get(column)
                 if old is None and column == 'mech_0':
                     old = history.get('original_months', {}).get(row.ym, {}).get(column)
-                adopted, _ = read(s, key('adoption', wh, row.ym), records=records)
                 initial = history.get('effective_base', {}).get(row.ym, {}).get(column)
-                if money(getattr(row, column)) == initial and column not in adopted.get('columns', []):
+                if (money(getattr(row, column)) == initial
+                        and not adopted_after_history(s, history, wh, row.ym, column, records=records)):
                     continue
                 if old is not None:
                     amount += Decimal(str(getattr(row, column) or 0)) - Decimal(str(old))
+                elif history.get('source', {}).get('kind') == 'cumulative-opening':
+                    amount += Decimal(str(getattr(row, column) or 0)) - Decimal(str(initial or 0))
                 elif row.ym > str(history.get('base_month') or '~'):
                     amount += Decimal(str(getattr(row, column) or 0))
         result[category] = format(to_money(amount), '.2f')
@@ -786,21 +876,42 @@ def reconciliations(s, warehouses, *, records=None, manual_rows=None):
     for wh in warehouses:
         history, _ = read(s, key('history', wh), records=records)
         snapshot, revision = read(s, key('i8', wh), records=records)
+        check, _ = read(s, key('i8-check', wh), records=records)
         totals = snapshot.get('totals', {})
         usage, project, team = (totals.get(k) for k in ('usage', 'project', 'team'))
         i6 = money(history.get('i6'), precise=True)
         report_left = report_total(s, wh, records=records, manual_rows=manual_rows)
+        rows = (list(s.scalars(select(ProcMechManual).where(ProcMechManual.warehouse_name == wh)))
+                if manual_rows is None else manual_rows.get(wh, []))
+        known = [money(getattr(r, column)) for r in rows for column in ('mech_1', 'mech_2', 'mech_3')
+                 if getattr(r, column) is not None]
+        recorded_months = sorted({r.ym for r in rows if any(getattr(r, c) is not None for c in ('mech_1', 'mech_2', 'mech_3'))})
         for relation, left, right in [('report', report_left, total([i6, usage])),
                                       ('internal', usage, total([project, team]))]:
             raw = money(Decimal(left) - Decimal(right), nonnegative=False) if left is not None and right is not None else None
             ignored, ignore_revision = read(s, key('ignore', wh, relation), records=records)
             ignored_amount = ignored.get('amount', '0.00')
             pending = ('0.00' if raw == '0.00' else money(Decimal(raw) - Decimal(ignored_amount), nonnegative=False)) if raw is not None else None
+            missing = []
+            if relation == 'report':
+                if report_left is None:
+                    missing.append('累计起点待补')
+                if i6 is None:
+                    missing.append('固定i6待补')
+            if (usage is None if relation == 'report' else any(v is None for v in (usage, project, team))):
+                missing.append('来源金额待补' if snapshot else
+                               '本次i8来源无记录' if check.get('source_status') == 'no-records' else
+                               'i8本次取数待采用' if check.get('source_status') == 'available' else
+                               '本次i8来源未齐' if check else 'i8尚未取得')
             result.append({'warehouse': wh, 'relation': relation, 'left': left, 'right': right,
                            'raw': raw, 'ignored': ignored_amount, 'pending': pending,
                            'revision': ignore_revision, 'i8_revision': revision,
                            'fetched_at': snapshot.get('fetched_at'), 'scope': deepcopy(snapshot.get('scope')),
                            'unknown_documents': deepcopy(snapshot.get('unknown_documents', [])),
+                           'recorded_total': total(known) if relation == 'report' and known else None,
+                           'recorded_months': recorded_months if relation == 'report' else [],
+                           'i8_usage': usage, 'missing_reasons': missing,
+                           'i8_checked_at': check.get('fetched_at'), 'i8_source_status': check.get('source_status'),
                            'i6': i6 if relation == 'report' else None})
         for row in snapshot.get('sources', {}).get('team', []):
             a, b = row.get('amount'), row.get('approval')
@@ -902,6 +1013,7 @@ def state(s, ym=''):
             'ym': ym, 'details': details, 'effective': amounts, 'histories': histories,
             'reconciliations': checks, 'billDifferences': bills, 'discoveries': discoveries,
             'matters': matters, 'i8': snapshots,
+            'history_bases': [history_basis(s, p['warehouse'], records=records, manual_rows=manual_rows) for p in projects],
             'summary': [{'warehouse': p['warehouse'], 'ym': month,
                          'start_year': int(openings[p['warehouse']][month][:4]) if openings[p['warehouse']][month] else None,
                          'start_month': int(openings[p['warehouse']][month][5:]) if openings[p['warehouse']][month] else None,
@@ -916,7 +1028,7 @@ def snapshot(s, ym, warehouses):
     result['annual_effective'] = [r for r in result['effective'] if r['warehouse'] in selected]
     for name in ('details', 'effective'):
         result[name] = [r for r in result[name] if r['warehouse'] in selected and r['ym'] == ym]
-    for name in ('histories', 'reconciliations', 'billDifferences', 'discoveries', 'matters', 'i8', 'summary'):
+    for name in ('histories', 'history_bases', 'reconciliations', 'billDifferences', 'discoveries', 'matters', 'i8', 'summary'):
         result[name] = [r for r in result[name] if r['warehouse'] in selected]
     return result
 
@@ -936,10 +1048,10 @@ def action(s, name, payload, operator=''):
         return {'ok': True, **value, 'revision': revision}
     handlers = {'details-save': save_details, 'source-manual': source_manual,
                 'empty-month-remove': empty_month_remove,
-                'internal-save': internal_save, 'i8-preview': i8_preview,
+                'internal-save': internal_save, 'history-initialize': initialize_history, 'i8-preview': i8_preview,
                 'i8-confirm': i8_confirm, 'ignore': ignore, 'document-ignore': document_ignore,
                 'matter-save': matter_save, 'discovery-resolve': discovery_resolve}
     if name not in handlers:
         raise MustReportError('不支持的机械费操作')
-    args = {'operator': operator} if name in ('details-save', 'source-manual', 'empty-month-remove') else {}
+    args = {'operator': operator} if name in ('details-save', 'source-manual', 'empty-month-remove', 'history-initialize') else {}
     return {'ok': True, **handlers[name](s, payload, **args)}
