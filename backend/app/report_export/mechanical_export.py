@@ -9,6 +9,7 @@ from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
 from app.core.errors import MustReportError
+from app.mod06_proc.workbench_view import company_rows
 from app.report_export.resources import MECHANICAL_TEMPLATE, require_template
 from app.report_export.save import Formula, save_workbook, set_formula
 
@@ -160,17 +161,10 @@ def build(data, *, project_rows=None):
     put(summary, 5, 7, '累计周材费')
     put(summary, 5, 12, '当月周材费')
     summary.row_dimensions[5].height = 33
-    for i, project in enumerate(data['projects'], 6):
+    for i, project in enumerate(company_rows(data), 6):
         wh = project['warehouse']
         mark_project(summary, wh, i)
-        values = [i - 5, project['name'], None, None,
-                  cumulative(data, wh, 'mech_2', ym), cumulative(data, wh, 'mech_3', ym),
-                  None, cumulative(data, wh, 'mech_1', ym), cumulative(data, wh, 'mech_0', ym),
-                  amount(data, wh, ym, 'mech_2'), amount(data, wh, ym, 'mech_3'), None,
-                  amount(data, wh, ym, 'mech_1'), amount(data, wh, ym, 'mech_0'), None]
-        metadata = next((r for r in data.get('summary', []) if r['warehouse'] == wh and r['ym'] == ym), {})
-        values[2:4] = [metadata.get('start_year'), metadata.get('start_month')]
-        append_row(summary, i, values, styles[0][6], range(5, 15))
+        append_row(summary, i, project['values'], styles[0][6], range(5, 15))
     total_row = 6 + len(data['projects'])
     append_row(summary, total_row, [None] * 15, styles[0][7])
     put(summary, total_row, 1, '合计')

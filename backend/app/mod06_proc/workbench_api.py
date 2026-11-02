@@ -25,6 +25,12 @@ def get_state(ym: str = ''):
         return workbench.state(session, ym)
 
 
+@router.get('/api/m06/workbench/page')
+def get_page_state(ym: str = ''):
+    with session_scope() as session:
+        return workbench.page_state(session, ym)
+
+
 def report_snapshot(ym, projects):
     ym = normalize_ym(ym)
     if not ym:

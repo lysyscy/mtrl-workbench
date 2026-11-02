@@ -1,6 +1,8 @@
 """Public workbench behavior on the guarded PostgreSQL rollback fixture."""
 
 from decimal import Decimal
+from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, text
@@ -47,6 +49,87 @@ def row(**values):
 def save(s, rows=None, revision=0, cat='zero', ym='2026-09'):
     return W.action(s, 'details-save', {'warehouse': '甲', 'ym': ym, 'category': cat,
                                       'revision': revision, 'rows': [row()] if rows is None else rows})
+
+
+def test_page_state_preserves_amounts_signatures_and_all_month_reconciliation_without_source_copies(monkeypatch):
+    """A captured read model exercises historical/future facts without a database."""
+    from app.mod07_setl import service as meetings
+
+    projects = [SimpleNamespace(warehouse_name=wh, disp=wh + '项目', phid='', ord=i, id=i)
+                for i, wh in enumerate(('甲', '乙'))]
+    monkeypatch.setattr(W.project_service, 'all_projects', lambda s: projects)
+    monkeypatch.setattr(meetings, 'opening_months', lambda s, warehouses, months: {
+        wh: {month: '2024-03' if wh == '甲' else None for month in months} for wh in warehouses})
+    sources = {'__detail_sources': {'mech_2': {'mode': 'detail', 'basis': {'rows': [row()], 'source': {'file': '原报.xlsx'}}}},
+               'archive': {'original': ['raw']}}
+    manual = [ProcMechManual(warehouse_name='甲', ym=month, mech_1=Decimal('0'), mech_2=Decimal(value),
+                             mech_3=Decimal('0'), source_batches=sources, updated_at=datetime(2026, 11, 2))
+              for month, value in [('2026-08', '10'), ('2026-09', '103'), ('2026-10', '20')]]
+    current_row = row(source={'file': '原报.xlsx', 'sheet': '零租'}, lineage={'stable_id': 'original-a'})
+    detail = {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero', 'rows': [current_row],
+              'baseline_rows': [row()], 'versions': [{'rows': [row()]}], 'source': {'file': '原报.xlsx'}}
+    history = {'warehouse': '甲', 'base_month': '2026-08', 'category_totals': {
+        'zero': '10.00', 'monthly': '0.00', 'internal': '0.00', 'company': None, 'weekly': None},
+        'report_total': '10.00', 'i6': '1.00', 'source': {'kind': 'cumulative-opening', 'note': '已核'},
+        'effective_base': {'2026-08': {'mech_2': '10.00', 'mech_1': '0.00', 'mech_3': '0.00'}},
+        'reference_months': {'2026-08': {'mech_2': '10.00', 'mech_1': '0.00', 'mech_3': '0.00'}},
+        'original_months': {'2026-08': {'weekly': '9.00'}, '2026-09': {'weekly': '7.00'}},
+        'annual_rows': [{'cells': {'A': 'raw'}}]}
+    document = {'id': 't', 'bill': '单据1', 'periodKey': 'unknown', 'amount': '3.00', 'approval': '4.00',
+                'source': {'raw': ['original response']}}
+    i8 = {'warehouse': '甲', 'sources': {'usage': [], 'project': [], 'team': [document]},
+          'totals': {'usage': '1.00', 'project': '0.00', 'team': '4.00'}, 'unknown_documents': [document]}
+    payloads = [(W.key('details', '甲', '2026-09', 'zero'), detail),
+                (W.key('details', '甲', '2026-08', 'zero'), {**detail, 'ym': '2026-08'}),
+                (W.key('history', '甲'), history), (W.key('i8', '甲'), i8),
+                (W.key('adoption', '甲', '2026-10'), {'columns': ['mech_2'], 'versions': {'mech_2': 3}})]
+    records = [SimpleNamespace(key=key, payload=payload, revision=1) for key, payload in payloads]
+
+    class CapturedSession:
+        def scalars(self, statement):
+            return records if statement.column_descriptions[0]['entity'] is W.Record else manual
+
+    captured = CapturedSession()
+    full = W.state(captured, '2026-09')
+
+    class SourceWithoutCopies(dict):
+        def __deepcopy__(self, memo):
+            raise AssertionError('page tried to clone discarded source/history facts')
+
+    for field in ('baseline_rows', 'versions', 'source'):
+        # Only the row-level provenance is editable and must still be copied.
+        detail[field] = SourceWithoutCopies({'unused': detail[field]})
+    history['annual_rows'] = SourceWithoutCopies({'unused': history['annual_rows']})
+    document['source'] = SourceWithoutCopies(document['source'])
+    manual[0].source_batches = SourceWithoutCopies(sources)
+    manual[1].source_batches = SourceWithoutCopies(sources)
+    page = W.page_state(captured, '2026-09')
+    assert page['months'] == full['months'] == ['2026-08', '2026-09', '2026-10']
+    assert page['projects'] == full['projects'] and page['settings'] == full['settings']
+    assert len(page['details']) == 1
+    assert page['details'][0] == {field: full['details'][0][field] for field in (
+        'warehouse', 'ym', 'category', 'rows', 'revision', 'totals', 'issues')}
+    assert page['details'][0]['rows'][0]['source'] == current_row['source']
+    assert page['details'][0]['rows'][0]['lineage'] == current_row['lineage']
+    full_current = [item for item in full['effective'] if item['ym'] == '2026-09']
+    assert [{key: item[key] for key in ('warehouse', 'ym', 'values', 'signature')} for item in page['effective']] == [
+        {key: item[key] for key in ('warehouse', 'ym', 'values', 'signature')} for item in full_current]
+    assert all(set(item) == {'warehouse', 'ym', 'values', 'signature', 'sources'} for item in page['effective'])
+    assert page['effective'][0]['sources']['mech_2'] == {'mode': 'detail'}
+    assert page['summary'] == [item for item in full['summary'] if item['ym'] == '2026-09']
+    assert page['history_bases'] == full['history_bases']
+    report = next(item for item in page['reconciliations'] if item['warehouse'] == '甲' and item['relation'] == 'report')
+    assert report['left'] == '133.00'  # October still participates when September is displayed.
+    assert report['left'] == full['reconciliations'][0]['left']
+    assert page['billDifferences'][0]['difference'] == full['billDifferences'][0]['difference'] == '1.00'
+    assert 'source' not in page['billDifferences'][0] and 'source' not in page['i8'][0]['sources']['team'][0]
+    assert page['histories'] == [{'warehouse': '甲', 'revision': 1, 'original_months': {'2026-09': {'weekly': '7.00'}}}]
+    assert page['company_rows'][0]['values'] == ['1', '甲项目', '2024', '3', '113.00', '0.00', None,
+                                               '0.00', None, '103.00', '0.00', None, '0.00', None, None]
+    assert page['company_rows'][1]['values'][4:] == [None] * 11
+    # Initialization protection must notice a non-displayed month's per-column adoption.
+    records[-1].payload['versions']['mech_2'] = 4
+    assert W.page_state(captured, '2026-09')['history_bases'][0]['signature'] != page['history_bases'][0]['signature']
 
 
 def test_saved_details_and_unique_effective_source_roundtrip(session):

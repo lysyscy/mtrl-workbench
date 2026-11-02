@@ -21,6 +21,7 @@ from app.mod01_projects import service as project_service
 from app.mod06_proc.domain import normalize_ym
 from app.mod06_proc.models import ProcMechManual
 from app.mod06_proc import repository as repo
+from app.mod06_proc import workbench_view as view
 from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord as Record
 from app.mod06_proc.workbench_models import MechanicalWorkbenchPreview as Preview
 
@@ -177,8 +178,9 @@ def row_net(row):
     return format(to_money(Decimal(gross) / (1 + Decimal(match[1]) / 100)), '.2f')
 
 
-def detail_view(s, payload, revision, *, keywords=None):
-    data = deepcopy(payload)
+def detail_view(s, payload, revision, *, keywords=None, page_only=False):
+    data = deepcopy({field: payload[field] for field in ('warehouse', 'ym', 'category', 'rows')
+                     if field in payload} if page_only else payload)
     if keywords is None:
         keywords = settings(s)['plate_keywords']
     issues = []
@@ -871,7 +873,7 @@ def cumulative(s, wh, ym, *, records=None, manual_rows=None):
     return result
 
 
-def reconciliations(s, warehouses, *, records=None, manual_rows=None):
+def reconciliations(s, warehouses, *, records=None, manual_rows=None, page_only=False):
     result, bill_differences = [], []
     for wh in warehouses:
         history, _ = read(s, key('history', wh), records=records)
@@ -907,7 +909,8 @@ def reconciliations(s, warehouses, *, records=None, manual_rows=None):
                            'raw': raw, 'ignored': ignored_amount, 'pending': pending,
                            'revision': ignore_revision, 'i8_revision': revision,
                            'fetched_at': snapshot.get('fetched_at'), 'scope': deepcopy(snapshot.get('scope')),
-                           'unknown_documents': deepcopy(snapshot.get('unknown_documents', [])),
+                           'unknown_documents': deepcopy([view.source_row(row) for row in snapshot.get('unknown_documents', [])]
+                                                         if page_only else snapshot.get('unknown_documents', [])),
                            'recorded_total': total(known) if relation == 'report' and known else None,
                            'recorded_months': recorded_months if relation == 'report' else [],
                            'i8_usage': usage, 'missing_reasons': missing,
@@ -918,7 +921,7 @@ def reconciliations(s, warehouses, *, records=None, manual_rows=None):
             if a is not None and b is not None and a != b:
                 fact = digest([wh, row['id'], a, b])
                 ignored, ignore_revision = read(s, key('document-ignore', wh, fact), records=records)
-                bill_differences.append({**deepcopy(row), 'warehouse': wh, 'document_id': row['id'],
+                bill_differences.append({**deepcopy(view.source_row(row) if page_only else row), 'warehouse': wh, 'document_id': row['id'],
                                          'fact': fact, 'settlement': a, 'approval': b,
                                          'difference': money(Decimal(b) - Decimal(a), nonnegative=False),
                                          'ignored': bool(ignored.get('ignored')), 'revision': ignore_revision})
@@ -1019,6 +1022,65 @@ def state(s, ym=''):
                          'start_month': int(openings[p['warehouse']][month][5:]) if openings[p['warehouse']][month] else None,
                          'cumulative': cumulative(s, p['warehouse'], month, records=records, manual_rows=manual_rows)}
                         for p in projects for month in months]}
+
+
+def page_state(s, ym):
+    """Current-month UI state; full source/history contracts remain in state/snapshot.
+
+    Read all saved month/adoption facts for cumulative reconciliation and optimistic
+    initialization signatures, but construct only the projections the page consumes.
+    """
+    ym = normalize_ym(ym)
+    if not ym:
+        raise MustReportError('请选择有效报表月份')
+    projects = [{'warehouse': p.warehouse_name, 'name': p.disp or p.warehouse_name, 'phid': p.phid}
+                for p in sorted(project_service.all_projects(s), key=lambda p: (p.ord, p.id)) if p.warehouse_name]
+    records = {record.key: record for record in s.scalars(select(Record))}
+    manual = list(s.scalars(select(ProcMechManual)))
+    cached_rows = {(row.warehouse_name, row.ym): row for row in manual}
+    manual_rows = {}
+    for row in manual:
+        manual_rows.setdefault(row.warehouse_name, []).append(row)
+    config = settings(s, records=records)
+    details, histories, discoveries, matters, snapshots = [], [], [], [], []
+    months = {row.ym for row in manual}
+    months.add(ym)
+    for record in records.values():
+        payload = record.payload
+        if record.key.startswith('details:'):
+            months.add(payload['ym'])
+            if payload['ym'] == ym:
+                details.append(detail_view(s, payload, record.revision, keywords=config['plate_keywords'], page_only=True))
+        elif record.key.startswith('history:'):
+            monthly = payload.get('original_months', {}).get(ym, {})
+            histories.append({'warehouse': payload['warehouse'], 'revision': record.revision,
+                              'original_months': {ym: {'weekly': monthly.get('weekly')}}})
+        elif record.key.startswith('discovery:'):
+            discoveries.append({**deepcopy(view.source_payload(payload)), 'revision': record.revision})
+        elif record.key.startswith('matter:'):
+            matters.append({**deepcopy(payload), 'revision': record.revision})
+        elif record.key.startswith('i8:'):
+            snapshots.append({**deepcopy(view.source_payload(payload)), 'revision': record.revision})
+    amounts = [repo.mech_effective(row, row.warehouse_name, ym, compact=True) for row in manual if row.ym == ym]
+    present = {row['warehouse'] for row in amounts}
+    amounts.extend(repo.mech_effective(cached_rows.get((p['warehouse'], ym)), p['warehouse'], ym, compact=True)
+                   for p in projects if p['warehouse'] not in present)
+    from app.mod07_setl import service as meetings
+    openings = meetings.opening_months(s, [p['warehouse'] for p in projects], [ym])
+    checks, bills = reconciliations(s, [p['warehouse'] for p in projects], records=records,
+                                   manual_rows=manual_rows, page_only=True)
+    result = {'ok': True, 'settings': config, 'projects': projects, 'months': sorted(months),
+              'ym': ym, 'details': details, 'effective': amounts, 'histories': histories,
+              'reconciliations': checks, 'billDifferences': bills, 'discoveries': discoveries,
+              'matters': matters, 'i8': snapshots,
+              'history_bases': [history_basis(s, p['warehouse'], records=records, manual_rows=manual_rows) for p in projects],
+              'summary': [{'warehouse': p['warehouse'], 'ym': ym,
+                           'start_year': int(openings[p['warehouse']][ym][:4]) if openings[p['warehouse']][ym] else None,
+                           'start_month': int(openings[p['warehouse']][ym][5:]) if openings[p['warehouse']][ym] else None,
+                           'cumulative': cumulative(s, p['warehouse'], ym, records=records, manual_rows=manual_rows)}
+                          for p in projects]}
+    result['company_rows'] = view.company_rows(result)
+    return result
 
 
 def snapshot(s, ym, warehouses):

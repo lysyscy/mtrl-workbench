@@ -45,6 +45,19 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     wb.close()
 
 
+def test_company_rows_match_excel_initial_values_and_leave_unknowns_blank():
+    data = sample()
+    rows = export.company_rows(data)
+    assert rows == [{'warehouse': '甲', 'values': ['1', '甲项目', '2024', '3', '150.00', '0.00', None,
+                                                '0.00', None, '100.00', '0.00', None, None, None, None]}]
+    wb = export.build(data)
+    values = [cell.value.result if isinstance(cell.value, export.Formula) else cell.value for cell in wb.worksheets[0][6]]
+    assert [str(value) for value in values[:4]] == rows[0]['values'][:4]
+    assert [export.numeric(value) for value in values[4:14]] == [export.numeric(value) for value in rows[0]['values'][4:14]]
+    assert values[14] == '' and rows[0]['values'][14] is None
+    wb.close()
+
+
 def test_preview_matches_frozen_file_and_next_export_does_not_modify_first(tmp_path):
     data = sample()
     preview = export.preview(data)

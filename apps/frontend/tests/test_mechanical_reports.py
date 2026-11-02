@@ -9,6 +9,26 @@ from test_preview import server,browser_page
 from live_data import get,open_page,grid_row
 
 
+def test_page_reads_current_month_without_building_excel(server,browser_page,api):
+    page,_=browser_page;requests=[]
+    page.on('request',lambda request:requests.append(request.url) if '/api/m06/workbench' in request.url else None)
+    open_page(page,server,'mechanical','机械费')
+    grid=page.get_by_role('region',name='公司汇总',exact=True)
+    expect(grid).to_have_attribute('data-layout-state','ready')
+    ym=page.get_by_label('月份',exact=True).input_value()
+    assert any('/workbench/page?ym='+ym in url for url in requests)
+    assert not any('/workbench/preview?' in url for url in requests)
+    state=get(api,'/api/m06/workbench/page',ym=ym)
+    assert state['company_rows'] and all(row['ym']==ym for name in ('details','effective','summary') for row in state[name])
+    assert all('source' not in row for row in state['effective'])
+    assert all(not {'baseline_rows','versions','source'} & set(row) for row in state['details'])
+    page.get_by_role('button',name='表2 零租明细',exact=True).click()
+    expect(page.locator('.mechanical-detail-table .business-grid')).to_have_attribute('data-layout-state','ready')
+    page.get_by_role('button',name='核对工作台',exact=True).click()
+    expect(page.get_by_role('button',name='i6历史数据',exact=True)).to_be_visible()
+    assert not any('/workbench/preview?' in url for url in requests)
+
+
 def test_new_project_cumulative_opening_saves_and_preserves_real_months(server,browser_page,api,projects,disposable,preview_screenshot):
     state=get(api,'/api/m06/workbench')
     eligible={b['warehouse'] for b in state['history_bases'] if b['can_initialize']}
@@ -120,9 +140,10 @@ def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,
         values={cell['column']-1:cell['value'] for cell in cells}
         for column in [4,5,7,8,9,10,12,13]:
             expected=values[column].replace(',','');cell=dom.locator('[col-id="c'+str(column)+'"]')
-            actual=(cell.locator('input').input_value() if cell.locator('input').count() else cell.inner_text()).replace(',','')
+            editable=bool(cell.locator('input').count())
+            actual=(cell.locator('input').input_value() if editable else cell.inner_text()).replace(',','')
             if re.fullmatch(r'-?\d+(?:\.\d+)?',expected):assert Decimal(actual)==Decimal(expected)
-            else:assert actual=='—'
+            else:assert actual==('' if editable else '—')
     page.set_viewport_size({'width':2400,'height':500})
     page.wait_for_function("document.querySelector('.mechanical-grid').getBoundingClientRect().height<340")
     header=grid.locator('.ag-header').bounding_box();grid.locator('[row-index="'+str(count-1)+'"]').scroll_into_view_if_needed()
@@ -131,15 +152,15 @@ def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,
     field=grid.locator('[col-id=c12] input').first
     field.scroll_into_view_if_needed();field.fill('321.09');field.focus()
     label=field.get_attribute('aria-label');held=[]
-    page.route('**/api/m06/workbench/preview?*',lambda route:held.append(route))
-    with page.expect_request('**/api/m06/workbench/preview?*'):
+    page.route('**/api/m06/workbench/page?*',lambda route:held.append(route))
+    with page.expect_request('**/api/m06/workbench/page?*'):
         page.evaluate("window.dispatchEvent(new Event('offline'));window.dispatchEvent(new Event('online'))")
     try:
         expect(grid).to_be_visible();expect(field).to_be_focused();expect(field).to_have_value('321.09')
         assert held
     finally:
         for route in held:route.continue_()
-        page.unroute('**/api/m06/workbench/preview?*')
+        page.unroute('**/api/m06/workbench/page?*')
     page.wait_for_load_state('networkidle')
     expect(page.get_by_label(label,exact=True)).to_have_value('321.09')
     expect(page.get_by_label(label,exact=True)).to_be_focused()

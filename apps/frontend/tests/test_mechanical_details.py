@@ -242,12 +242,12 @@ def test_unknown_settings_receipt_keeps_input_and_rereads_without_repeat_write(s
     page.go_back();expect(page.locator('#page-title')).to_have_text('项目档案')
     page.go_forward();expect(dialog.get_by_role('button',name='重新读取',exact=True)).to_be_visible()
     if receipt=='mismatch':
-        page.route('**/api/m06/workbench?*',lambda route:route.abort('failed'))
+        page.route('**/api/m06/workbench/page?*',lambda route:route.abort('failed'))
         dialog.get_by_role('button',name='重新读取',exact=True).click()
         expect(dialog.get_by_role('alert')).to_contain_text('待核实')
         expect(dialog.get_by_role('alert')).not_to_contain_text('修改已保存')
         expect(save).to_be_disabled();assert len(writes)==1
-        page.unroute('**/api/m06/workbench?*')
+        page.unroute('**/api/m06/workbench/page?*')
     dialog.get_by_role('button',name='重新读取',exact=True).click()
     expect(save).to_be_enabled();assert len(writes)==1
     actual=get(api,'/api/m06/workbench')['settings']

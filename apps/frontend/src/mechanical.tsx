@@ -9,7 +9,7 @@ import { ApiError, readProjects, record, requestFile, requestJson, uncertainWrit
 import type { Identity, Project } from './api';
 import { pageGridGeometry, fixedWidth, gridTheme, textWidth } from './grid';
 import { EllipsisText, completeColumnWidth } from './grid-text';
-import { detailSum, internalAmount, mechanicalMoney as money, readDetail, readInternalSave, readMechanicalReport, readWorkbench, readWorkResult } from './mechanical-api';
+import { companySummaryRows, internalAmount, mechanicalMoney as money, readDetail, readInternalSave, readWorkbenchPage, readWorkResult } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { useCellSaveQueue } from './use-cell-save';
 import { TimePicker } from './time-picker';
@@ -18,7 +18,7 @@ import { useHistoryGuard } from './history';
 import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
-import type { Category, InternalColumn, Workbench, MechanicalReport } from './mechanical-api';
+import type { Category, CompanySummaryRow, InternalColumn, WorkbenchPage } from './mechanical-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ProjectExport, ProjectSelectionOrder } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
@@ -36,9 +36,9 @@ function InternalCell({ id, column, value, label, editing }: { id: string; colum
   useEffect(()=>{setText(editing.current.value(id,column)??value);},[value,id,column,editing]);
   return <Input aria-label={label} inputMode="decimal" className="mechanical-internal-input money" disabled={!editing.current.writable} value={text} onChange={event=>{setText(event.target.value);editing.current.change(id,column,event.target.value);}} onBlur={()=>editing.current.save(id,column)} onKeyDown={event=>{event.stopPropagation();if(event.key==='Enter'&&!event.nativeEvent.isComposing){event.preventDefault();event.currentTarget.blur();}}} />;
 }
-interface SummaryRow { id: string; [column: string]: string }
+type SummaryRow = CompanySummaryRow;
 const groupLabels = ['零租', '包月', '周材', '内租（租赁公司）', '内租（工程公司）'];
-function Summary({ scale, report, projectIds, detail, internal, data, warehouses, active }: { active: boolean; scale: number; data:Workbench; warehouses:string[]; internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
+function Summary({ scale, ym, projects, detail, internal, data, warehouses, active }: { active: boolean; scale: number; ym: string; data:WorkbenchPage; warehouses:string[]; internal: InternalEditing; projects: {warehouse:string;id:number}[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const fitHeight = useCallback(() => {
@@ -60,14 +60,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   }, [fitHeight]);
   const current=useRef(internal);current.current=internal;
   useEffect(()=>{api.current?.refreshCells({force:true});},[internal.writable]);
-  const rows = useMemo(() => report.sheets[0]!.rows.slice(5, 6+projectIds.length).map((cells, index) => {
-    const row: SummaryRow = { id: String(projectIds[index] ?? 'total') };
-    for (const cell of cells) row[`c${cell.column - 1}`] = cell.value;
-    const warehouse=warehouses[index];
-    if(warehouse){const summary=data.summary.find(item=>item.warehouse===warehouse&&item.ym===report.ym),history=data.histories.find(item=>item.warehouse===warehouse);const monthly=history&&record(history.original_months)&&record(history.original_months[report.ym])?history.original_months[report.ym]:null;row.c6=summary?.cumulative.weekly??'';row.c11=record(monthly)&&typeof monthly.weekly==='string'?monthly.weekly:'';row.c14=summary?.note??'';}
-    else if(index===warehouses.length){row.c6=detailSum(data.summary.filter(item=>item.ym===report.ym&&warehouses.includes(item.warehouse)).map(item=>item.cumulative.weekly))??'';row.c11=detailSum(data.effective.filter(item=>item.ym===report.ym&&warehouses.includes(item.warehouse)).map(item=>item.values.weekly))??'';}
-    return row;
-  }), [report, projectIds, data, warehouses]);
+  const rows = useMemo(() => companySummaryRows(data, ym, projects), [data, ym, projects]);
   const openDetail = useRef(detail); openDetail.current = detail;
   const renderInternal = useCallback((params: ICellRendererParams<SummaryRow,string>) => {
     const index = params.colDef?.field === 'c12' ? 3 : 4;
@@ -89,7 +82,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     { field: 'c14', headerName: '备注', ...textWidth(72, 144, scale), wrapText: false, autoHeight: false, cellRenderer: (p: ICellRendererParams<SummaryRow,string>) => <EllipsisText text={p.value ?? ''} /> },
   ], [scale, rows, renderInternal, renderDetail]);
   const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
-  const scope = `${report.ym}:${warehouses.join('\0')}`;
+  const scope = `${ym}:${warehouses.join('\0')}`;
   const presentation = useGridPresentation({table: 'mechanical-summary', root, active, rows: bodyRows, totals: total, columns, measurement:summaryMeasurement, rowId: summaryRowId, scale, scope, identity: scope});
   useLayoutEffect(() => { if (presentation.state === 'ready') fitHeight(); }, [presentation.state, fitHeight]);
   return <PreparedGrid presentation={presentation} className="mechanical-grid grid-single-line" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
@@ -135,14 +128,14 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const [pickerBaseline,setPickerBaseline]=useState<number[]>([]),[keywordsBaseline,setKeywordsBaseline]=useState('');
   const [message, setMessage] = useState('');
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
-  const state = useQuery({ queryKey: ['mechanical-state',month], enabled: !blocked, queryFn: async ({ signal }) => readWorkbench(await requestJson('/api/m06/workbench?ym='+encodeURIComponent(month), { signal })) });
+  const state = useQuery({ queryKey: ['mechanical-state',month], enabled: !blocked, queryFn: async ({ signal }) => readWorkbenchPage(await requestJson('/api/m06/workbench/page?ym='+encodeURIComponent(month), { signal }), month) });
   const candidates = useMemo(() => projects.data?.filter(project => state.data?.warehouses.includes(project.warehouse_name ?? '')) ?? [], [projects.data, state.data]);
   const selected = useMemo(() => ids ?? (state.data?.shown.flatMap(warehouse => candidates.filter(project => project.warehouse_name === warehouse).map(project => project.id)) ?? []), [ids, state.data, candidates]);
   const warehouses = useMemo(() => selected.flatMap(id => candidates.find(project => project.id === id)?.warehouse_name ?? []), [selected, candidates]);
+  const summaryProjects = useMemo(() => selected.flatMap(id => { const warehouse = candidates.find(project => project.id === id)?.warehouse_name; return warehouse ? [{ warehouse, id }] : []; }), [selected, candidates]);
   const ym = month;
   const scopeError = selected.length !== warehouses.length ? '所选项目范围已变化，请重新选择。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : '';
   const scope = JSON.stringify([ym, warehouses]);
-  const report = useQuery({ queryKey: ['mechanical-report', ym, warehouses], enabled: !blocked && !scopeError && Boolean(ym) && warehouses.length > 0, queryFn: async ({ signal }) => readMechanicalReport(await requestJson(`/api/m06/workbench/preview?${new URLSearchParams({ ym, projects: JSON.stringify(warehouses) })}`, { signal }), ym, warehouses) });
   useEffect(() => { setMessage(''); }, [scope, blocked, exportGuard, scopeError]);
   const [tab, setTab] = useState<'summary' | 'zero' | 'monthly' | 'work'>('summary');
   const [temporary, setTemporary] = useState(''); const [problemsOnly, setProblemsOnly] = useState(false);
@@ -152,12 +145,14 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const [dialog,setDialog] = useState<'discard' | 'plate' | 'projects' | null>(null); const [keywords,setKeywords] = useState('');
   const internalDrafts=useRef(new Map<string,InternalDraft>());
   const internalSubmitted=useRef<{draft:InternalDraft;signature:string}|null>(null);
-  const saves=useCellSaveQueue<MechanicalDraft,Workbench>({
+  const submittedMonth=useRef<string|null>(null);
+  const saves=useCellSaveQueue<MechanicalDraft,WorkbenchPage>({
     enabled:Boolean(me)&&active&&!blocked,canWrite:!operating&&!needsRead&&!state.isError&&Boolean(state.data),
     read:readDetails,
     write:async(draft,signal)=>{
+      submittedMonth.current=draft.ym;
       if(isInternalDraft(draft)){
-        const effective=client.getQueryData<Workbench>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
+        const effective=client.getQueryData<WorkbenchPage>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
         if(!effective)throw new Error('内租原金额尚未取得，请重新读取后重试。');
         const value=internalAmount(draft.value)!;
         internalSubmitted.current={draft,signature:effective.signature};
@@ -171,10 +166,11 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
       let saved;try{saved=readDetail(response);if(!record(response)||response.ok!==true||saved.warehouse!==draft.warehouse||saved.ym!==draft.ym||saved.category!==draft.category||saved.revision!==draft.revision+1)throw new Error();}
       catch{throw new ApiError('明细保存回执不完整，请重读核对。',0,'invalid_receipt');}
       draft.revision=saved.revision;savedRevisions.current.set(detailKey(draft.warehouse,draft.ym,draft.category),saved.revision);
-      await client.cancelQueries({queryKey:['mechanical-state']});
-      client.setQueriesData<Workbench>({queryKey:['mechanical-state']},old=>old?{...old,details:[...old.details.filter(detail=>detailKey(detail.warehouse,detail.ym,detail.category)!==detailKey(saved.warehouse,saved.ym,saved.category)),saved]}:old);
+      await client.cancelQueries({queryKey:['mechanical-state',saved.ym],exact:true});
+      client.setQueryData<WorkbenchPage>(['mechanical-state',saved.ym],old=>old?{...old,details:[...old.details.filter(detail=>detailKey(detail.warehouse,detail.ym,detail.category)!==detailKey(saved.warehouse,saved.ym,saved.category)),saved]}:old);
     },
     acknowledge:(current,submitted)=>{
+      submittedMonth.current=null;
       if(isInternalDraft(submitted)){
         internalSubmitted.current=null;
         const key=internalKey(submitted.warehouse,submitted.ym,submitted.column),latest=internalDrafts.current.get(key);
@@ -204,15 +200,18 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     saves.update(current=>{const entry=current[key],previous=entry&&!isInternalDraft(entry)?entry:undefined;return {...current,[key]:{warehouse,ym,category,revision:previous?.revision??Math.max(saved?.revision??0,savedRevisions.current.get(key)??0),rows,version:(previous?.version??0)+1,error:''}};});
   }
   async function readDetails(){
-    const readMonth=internalSubmitted.current?.draft.ym??month;
+    return readMonth(submittedMonth.current??month);
+  }
+  async function readMonth(readMonth:string){
+    // Other kept-alive pages read their stale data when next activated.
     await client.invalidateQueries({refetchType:'none'});
-    await client.cancelQueries({queryKey:['mechanical-state']});
-    const data=await client.fetchQuery({queryKey:['mechanical-state',readMonth],staleTime:0,queryFn:({signal})=>requestJson('/api/m06/workbench?ym='+encodeURIComponent(readMonth),{signal}).then(readWorkbench)});
-    await Promise.all([client.invalidateQueries({queryKey:['mechanical-report',readMonth]}),client.invalidateQueries({queryKey:['history',me?`${me.id}:${me.account}`:'anonymous']})]);
+    await client.cancelQueries({queryKey:['mechanical-state',readMonth],exact:true});
+    const data=await client.fetchQuery({queryKey:['mechanical-state',readMonth],staleTime:0,queryFn:async({signal})=>readWorkbenchPage(await requestJson('/api/m06/workbench/page?ym='+encodeURIComponent(readMonth),{signal}),readMonth)});
+    await client.invalidateQueries({queryKey:['history',me?`${me.id}:${me.account}`:'anonymous'],exact:true},{throwOnError:true});
     return data;
   }
   async function refresh() {
-    try {await client.invalidateQueries({}, {throwOnError:true});setNeedsRead(false);if(needsRead){setMessage('');void toast.success('已重新读取');}return true;}
+    try {await readMonth(month);setNeedsRead(false);if(needsRead){setMessage('');void toast.success('已重新读取');}return true;}
     catch {setNeedsRead(true);setMessage('修改已保存，但重新读取失败。请重新读取后再办理，未保存输入保留。');return false;}
   }
   async function operate(action: () => Promise<void>) {
@@ -238,7 +237,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   async function rereadSettings() {
     if(writing||state.isFetching)return;
     if(!await refresh()){setMessage('设置保存结果仍待核实，重新读取失败；输入已保留。');return;}
-    const latest=client.getQueryData<Workbench>(['mechanical-state',month]);
+    const latest=client.getQueryData<WorkbenchPage>(['mechanical-state',month]);
     // An explicit recovery read may acknowledge an already-saved draft; background reads never reset it.
     if(latest&&dialog==='plate'&&JSON.stringify(plateKeywords(keywords))===JSON.stringify(latest.settings.plate_keywords))setKeywordsBaseline(JSON.stringify(plateKeywords(keywords)));
     if(latest&&dialog==='projects'&&JSON.stringify(pickerOrder.filter(id=>pickerIds.includes(id)).flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[]))===JSON.stringify(latest.shown)){const selected=pickerOrder.filter(id=>pickerIds.includes(id));setPickerBaseline(selected);setIds(selected);setTemporary('');}
@@ -259,12 +258,13 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     if(!saves.verified||writing||blocked)return;
     const submitted=internalSubmitted.current;
     saves.confirm();
+    submittedMonth.current=null;
     if(!submitted||internalSubmitted.current!==submitted)return;
     internalSubmitted.current=null;
     saves.update(current=>{
       const next={...current};
       const draft=submitted.draft,key=internalKey(draft.warehouse,draft.ym,draft.column),expected=internalAmount(draft.value);
-      const effective=client.getQueryData<Workbench>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
+      const effective=client.getQueryData<WorkbenchPage>(['mechanical-state',draft.ym])?.effective.find(item=>item.warehouse===draft.warehouse&&item.ym===draft.ym);
       if(internalDrafts.current.get(key)?.version===draft.version&&effective&&effective.signature!==submitted.signature&&expected!==null&&internalAmount(effective.values[draft.column]??'')===expected){
         internalDrafts.current.delete(key);delete next[key];
       }
@@ -278,7 +278,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const exportUnavailable = !me ? '登录后可导出。' : exportGuard || (blocked ? '账号待核实，请稍候。' : writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请先重新读取。' : Object.keys(saves.drafts).length||internalDrafts.current.size ? '请先处理机械费未保存输入。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : projects.isFetching || state.isFetching ? '正在核对项目和月份，请稍候。' : !ym ? '请选择报表月份。' : '');
   function exportControl(){const owner=me ? `${me.id}:${me.account}` : 'anonymous';return <MechanicalExport key={owner} owner={owner} month={ym} projects={candidates} defaults={selected} unavailable={exportUnavailable} paused={blocked||!active} message={text=>{void toast.success(text);}}/>;}
   useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead||saves.uncertain ? '机械费操作结果待核实，请返回重新读取。' : Object.keys(saves.drafts).length || internalDrafts.current.size || settingsDirty ? '请先处理机械费未保存修改。' : '');
-  const error = projects.error || state.error || report.error;
+  const error = projects.error || state.error;
   return <section className="mechanical-card" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
     <div className="mechanical-month"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked||writing} onChange={value=>{setMonth(value);}} /></div>
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id} onClick={()=>{setTab(id);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
@@ -294,8 +294,8 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     </>}
     {tab==='work'&&state.data&&!state.isError&&<MechanicalWork data={state.data} warehouses={warehouses} label={label} writable={writable} busy={writing} paused={blocked||!active} operate={operate} refresh={refresh} added={warehouse=>{const project=candidates.find(p=>p.warehouse_name===warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);}} />}
     {scopeError && !error && <p className="notice" role="alert">{scopeError}</p>}
-    {error && !needsRead ? <p className="notice" role="alert">{error.message}<Button onClick={() => { void projects.refetch(); void state.refetch(); void report.refetch(); }}>重新读取</Button></p> : state.isPending || projects.isPending || report.isFetching && !report.data ? <p className="state" role="status">正在读取机械报表…</p> : !ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length ? <p className="state" role="status">请选择项目查看报表。</p> : null}
-    {report.data && !scopeError && !report.isError && warehouses.length > 0 && tab==='summary' && <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} />}
+    {error && !needsRead ? <p className="notice" role="alert">{error.message}<Button onClick={() => { void projects.refetch(); void state.refetch(); }}>重新读取</Button></p> : state.isPending || projects.isPending ? <p className="state" role="status">正在读取机械报表…</p> : !ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length ? <p className="state" role="status">请选择项目查看报表。</p> : null}
+    {state.data && !scopeError && !state.isError && warehouses.length > 0 && tab==='summary' && <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} ym={ym} projects={summaryProjects} detail={detail} internal={internal} data={state.data} warehouses={warehouses} />}
     {dialog==='projects'&&<MechanicalDialog className="mechanical-project-dialog" title="选择显示项目及顺序" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><>
       <p>按勾选项目显示，顺序可调整；其他项目的数据保留。</p>
       <ProjectSelectionOrder projects={pickerOrder.flatMap(id=>candidates.filter(project=>project.id===id))} selected={pickerSelection} choose={setPickerIds} move={(index,offset)=>{const next=[...pickerOrder];[next[index+offset],next[index]]=[next[index]!,next[index+offset]!];setPickerOrder(next);}} disabled={writing} label="显示项目选择与顺序" />

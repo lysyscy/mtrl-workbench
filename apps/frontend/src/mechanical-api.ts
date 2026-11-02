@@ -29,6 +29,9 @@ export function historyInitialization(base:HistoryBase|undefined,draft:HistoryBa
   return {warehouse:base.warehouse,revision:0,effective_signature:base.signature,base_month:draft.base_month,category_totals:{zero,monthly,internal,weekly:null,company:null},i6,note:draft.note.trim()};
 }
 export interface Workbench { months: string[]; shown: string[]; warehouses: string[]; details: Detail[]; effective: Effective[]; relations: Relation[]; billDifferences: BillDifference[]; discoveries: Discovery[]; matters: Matter[]; i8: I8Snapshot[]; histories: Record<string,unknown>[]; history_bases:HistoryBase[]; summary:WorkbenchSummary[]; settings: { revision: number; plate_keywords: string[] } }
+export interface CompanyRow { warehouse: string; values: (string | null)[] }
+export interface WorkbenchPage extends Workbench { company_rows: CompanyRow[] }
+export interface CompanySummaryRow { id: string; [column: string]: string | null }
 export function readDetail(value: unknown): Detail {
   if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !nullableAmount(value.totals.gross) || !nullableAmount(value.totals.net)) throw invalid();
   return value as unknown as Detail;
@@ -87,6 +90,41 @@ export function readWorkbench(value: unknown): Workbench {
   const history_bases=value.history_bases===undefined?[]:value.history_bases;
   if(!Array.isArray(history_bases)||history_bases.some(item=>!record(item)||typeof item.warehouse!=='string'||!revision(item.revision)||typeof item.signature!=='string'||typeof item.can_initialize!=='boolean'||(item.can_initialize&&!item.signature)||typeof item.base_month!=='string'||!record(item.category_totals)||!Object.values(item.category_totals).every(nullableAmount)||!nullableAmount(item.i6)||typeof item.note!=='string'))throw invalid();
   return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective, relations: value.reconciliations as Relation[], billDifferences: value.billDifferences as BillDifference[], discoveries: value.discoveries as Discovery[], matters: value.matters as Matter[], i8: value.i8 as I8Snapshot[], histories: value.histories as Record<string,unknown>[], history_bases:history_bases as HistoryBase[], summary:value.summary as WorkbenchSummary[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
+}
+export function readWorkbenchPage(value: unknown, ym: string): WorkbenchPage {
+  const data = readWorkbench(value);
+  if (!record(value) || !Array.isArray(value.company_rows) || value.company_rows.length !== data.warehouses.length) throw invalid();
+  const company_rows = value.company_rows.map((row: unknown): CompanyRow => {
+    if (!record(row) || typeof row.warehouse !== 'string' || !data.warehouses.includes(row.warehouse) || !Array.isArray(row.values) || row.values.length !== 15
+      || row.values.some((cell, index) => index >= 4 && index <= 13 ? !nullableAmount(cell) : cell !== null && typeof cell !== 'string')) throw invalid();
+    return { warehouse: row.warehouse, values: row.values as (string | null)[] };
+  });
+  if (new Set(company_rows.map(row => row.warehouse)).size !== company_rows.length || [...data.details, ...data.effective, ...data.summary].some(item => item.ym !== ym)) throw invalid();
+  return { ...data, company_rows };
+}
+export function companySummaryRows(data: WorkbenchPage, ym: string, projects: { warehouse: string; id: number }[]): CompanySummaryRow[] {
+  const company = new Map(data.company_rows.map(row => [row.warehouse, row]));
+  const summaries = new Map(data.summary.filter(item => item.ym === ym).map(item => [item.warehouse, item]));
+  const histories = new Map(data.histories.map(item => [item.warehouse, item]));
+  const rows = projects.map(({ warehouse, id }, index) => {
+    const source = company.get(warehouse);
+    if (!source) throw invalid();
+    const row: CompanySummaryRow = { id: String(id) };
+    source.values.forEach((value, column) => { row[`c${column}`] = value; });
+    row.c0 = String(index + 1);
+    const summary = summaries.get(warehouse), history = histories.get(warehouse);
+    const monthly = history && record(history.original_months) ? history.original_months[ym] : null;
+    row.c6 = summary?.cumulative.weekly ?? null;
+    row.c11 = record(monthly) && typeof monthly.weekly === 'string' ? monthly.weekly : null;
+    row.c14 = summary?.note ?? '';
+    return row;
+  });
+  const total: CompanySummaryRow = { id: 'total', c0: '合计', c1: null, c2: null, c3: null, c14: null };
+  for (let column = 4; column <= 13; column++) total[`c${column}`] = detailSum(rows.map(row => row[`c${column}`]));
+  // The existing total uses effective weekly amounts; project cells show the historical original month.
+  const warehouses = new Set(projects.map(project => project.warehouse));
+  total.c11 = detailSum(data.effective.filter(item => item.ym === ym && warehouses.has(item.warehouse)).map(item => item.values.weekly));
+  return [...rows, total];
 }
 export function readMechanicalReport(value: unknown, ym: string, warehouses: string[]): MechanicalReport {
   if (!record(value) || value.ok !== true || value.ym !== ym || !Array.isArray(value.projects) || value.projects.length !== warehouses.length || value.projects.some((project: unknown, index: number) => !record(project) || project.warehouse !== warehouses[index]) || !Array.isArray(value.sheets) || value.sheets.length !== 4) throw invalid();

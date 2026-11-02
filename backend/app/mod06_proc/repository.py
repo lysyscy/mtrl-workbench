@@ -36,15 +36,25 @@ def mech_sources(row):
     return {column: deepcopy(stored.get(column, {'mode': 'manual'})) for column in MECH_KEYS}
 
 
-def mech_effective(row, warehouse, ym):
+def mech_effective(row, warehouse, ym, *, compact=False):
     from app.core.money import to_money
     values = {column: format(to_money(getattr(row, column)), '.2f')
               if row and getattr(row, column) not in (None, '') else None for column in MECH_KEYS}
-    sources = mech_sources(row)
+    if compact:
+        # The page needs the same source-sensitive signature, without cloning
+        # detail batches that it cannot edit or inspect through this read model.
+        stored = (row.source_batches or {}).get('__detail_sources', {}) if row else {}
+        sources = {column: stored.get(column, {'mode': 'manual'}) for column in MECH_KEYS}
+    else:
+        sources = mech_sources(row)
     signature = hashlib.sha256(json.dumps([values, sources, str(row.updated_at) if row else None],
                                          ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
-    return {'warehouse': warehouse, 'ym': ym, 'values': values, 'sources': sources,
-            'signature': signature, 'source': deepcopy(row.source_batches or {}) if row else {}}
+    result = {'warehouse': warehouse, 'ym': ym, 'values': values, 'sources': sources, 'signature': signature}
+    if compact:
+        result['sources'] = {column: {'mode': source.get('mode', 'manual')} for column, source in sources.items()}
+    else:
+        result['source'] = deepcopy(row.source_batches or {}) if row else {}
+    return result
 
 
 def lock_mech_month(s, warehouse, ym):

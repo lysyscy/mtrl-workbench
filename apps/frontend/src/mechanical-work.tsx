@@ -72,7 +72,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
   const documents=(wh:string)=>data.billDifferences.filter(d=>d.warehouse===wh);
   const matters=(wh:string)=>data.matters.filter(m=>m.warehouse===wh);
   function hasData(wh:string) {
-    return relations(wh).some(r=>r.left!=null||r.right!=null)||documents(wh).length>0||data.effective.some(e=>e.warehouse===wh&&Object.values(e.values).some(v=>v!=null))||data.details.some(d=>d.warehouse===wh&&d.rows.length>0)||data.i8.some(s=>s.warehouse===wh&&Object.values(s.sources).some(rows=>rows.length>0));
+    return relations(wh).some(r=>r.left!=null||r.right!=null||r.recorded_total!=null)||documents(wh).length>0||data.effective.some(e=>e.warehouse===wh&&Object.values(e.values).some(v=>v!=null))||data.details.some(d=>d.warehouse===wh&&d.rows.length>0)||data.i8.some(s=>s.warehouse===wh&&Object.values(s.sources).some(rows=>rows.length>0));
   }
   const pending=(wh:string)=>(hasData(wh)&&relations(wh).some(r=>r.pending==null||nonzero(r.pending)))||documents(wh).some(d=>!d.ignored)||matters(wh).some(m=>!m.completed);
   const scope=filter==='findings'?data.warehouses.filter(wh=>findings.some(d=>d.warehouse===wh)):warehouses;

@@ -208,11 +208,21 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         // Header text uses the actual header structure and final width, including sort space.
         const headerKey = `${key}:${headerMinimum}:${displayed.map(c => c.getColDef().headerName ?? '').join('|')}`;
         let header = headerSize.current.key === headerKey ? headerSize.current.height : headerMinimum;
-        if (headerSize.current.key !== headerKey) for (const element of node!.querySelectorAll<HTMLElement>('.ag-header-cell')) {
-          const clone = element.cloneNode(true) as HTMLElement;
-          Object.assign(clone.style, { position: 'relative', height: 'auto', minHeight: '0', width: `${widthById.get(element.getAttribute('col-id')!) ?? element.offsetWidth}px` });
-          for (const label of clone.querySelectorAll<HTMLElement>('.ag-header-cell-label,.ag-header-cell-comp-wrapper')) Object.assign(label.style, { height: 'auto', minHeight: '0' });
-          host.append(clone); header = Math.max(header, Math.ceil(clone.getBoundingClientRect().height)); clone.remove();
+        if (headerSize.current.key !== headerKey) {
+          // Read fallback widths before inserting any clones, then measure the
+          // complete batch to avoid forcing one layout for every header.
+          const headers = [...node!.querySelectorAll<HTMLElement>('.ag-header-cell')].map(element => ({
+            element, width: widthById.get(element.getAttribute('col-id')!) ?? element.offsetWidth,
+          }));
+          const clones = headers.map(({element, width}) => {
+            const clone = element.cloneNode(true) as HTMLElement;
+            Object.assign(clone.style, { position: 'relative', height: 'auto', minHeight: '0', width: `${width}px` });
+            for (const label of clone.querySelectorAll<HTMLElement>('.ag-header-cell-label,.ag-header-cell-comp-wrapper')) Object.assign(label.style, { height: 'auto', minHeight: '0' });
+            host!.append(clone);
+            return clone;
+          });
+          for (const clone of clones) header = Math.max(header, Math.ceil(clone.getBoundingClientRect().height));
+          host.replaceChildren();
         }
         headerSize.current = { key: headerKey, height: header };
         if (cancelled(run) || editable()) return;

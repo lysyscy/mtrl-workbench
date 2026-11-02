@@ -102,6 +102,23 @@ def test_get_post_public_contract_and_persisted_detail_totals(api):
         assert str(session.scalar(select(ProcMechManual)).mech_4) == '100.00'
 
 
+def test_page_route_is_current_month_while_full_state_keeps_saved_contract(api):
+    assert api.client.post('/api/m06/workbench/details-save', json=draft()).status_code == 200
+    assert api.client.post('/api/m06/workbench/details-save', json=draft(ym='2026-08')).status_code == 200
+    page = api.client.get('/api/m06/workbench/page', params={'ym': '2026-09'})
+    assert page.status_code == 200
+    page = page.json()
+    full = api.client.get('/api/m06/workbench', params={'ym': '2026-09'}).json()
+    assert page['months'] == full['months'] == ['2026-08', '2026-09']
+    assert len(page['details']) == 1 and len(full['details']) == 2
+    assert page['details'][0]['rows'] == next(row for row in full['details'] if row['ym'] == '2026-09')['rows']
+    assert 'source' not in page['effective'][0] and 'source' in full['effective'][0]
+    assert page['history_bases'] == full['history_bases']
+    assert len(page['company_rows']) == 2 and all(len(row['values']) == 15 for row in page['company_rows'])
+    response = api.client.get('/api/m06/workbench/page', params={'ym': 'invalid'})
+    assert response.status_code == 400
+
+
 @pytest.mark.parametrize('name,payload', [('unsupported-action', {}), ('details-save', draft(warehouse='未知项目'))])
 def test_illegal_action_and_unmapped_warehouse_do_not_write(api, name, payload):
     response = api.client.post('/api/m06/workbench/' + name, json=payload)

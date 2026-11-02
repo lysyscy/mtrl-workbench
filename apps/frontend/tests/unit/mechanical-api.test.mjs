@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {historyInitialization,internalAmount,readInternalSave,readI8Preview,readMechanicalReport,readWorkbench,readWorkResult} from '../../src/mechanical-api.ts';
+import {companySummaryRows,historyInitialization,internalAmount,readInternalSave,readI8Preview,readMechanicalReport,readWorkbench,readWorkbenchPage,readWorkResult} from '../../src/mechanical-api.ts';
 
 const cell=(value,column=1,colspan=1)=>({value,column,colspan,rowspan:1});
 function report(){return {ok:true,ym:'2026-10',projects:[{warehouse:'甲'}],sheets:[
@@ -56,6 +56,44 @@ test('history initialization acknowledges only the submitted project and first r
 });
 
 function workbench(){return {ok:true,months:['2026-10'],settings:{shown_projects:['甲'],plate_keywords:[],revision:0},projects:[{warehouse:'甲'}],details:[],effective:[],reconciliations:[{warehouse:'甲',relation:'report',left:null,right:null,pending:null,raw:null,ignored:'0.00',revision:0,i8_revision:0,i6:null,recorded_total:'9600.00',recorded_months:['2026-10'],i8_usage:'9599.00',missing_reasons:['累计起点待补','固定i6待补'],i8_checked_at:'2026-11-02T00:00:00Z',i8_source_status:'no-records'}],billDifferences:[],discoveries:[],matters:[],i8:[],histories:[],summary:[],history_bases:[base]};}
+function page(){return {...workbench(),company_rows:[{warehouse:'甲',values:['1','甲项目','2025','06',...Array(10).fill(null),'原备注']}]};}
+test('page reads require one complete company row per project and only the requested financial month',()=>{
+  const data=page();data.months.unshift('2026-09');
+  assert.deepEqual(readWorkbenchPage(data,'2026-10').months,['2026-09','2026-10']);
+  for(const corrupt of [
+    value=>delete value.company_rows,
+    value=>value.company_rows[0].values.pop(),
+    value=>value.company_rows[0].values[4]='NaN',
+    value=>value.company_rows[0].values[2]=2025,
+    value=>value.company_rows[0].warehouse='乙',
+    value=>{value.projects.push({warehouse:'乙'});value.company_rows.push(structuredClone(value.company_rows[0]));},
+    value=>value.summary.push({warehouse:'甲',ym:'2026-09',cumulative:{weekly:null}}),
+  ]){const data=page();corrupt(data);assert.throws(()=>readWorkbenchPage(data,'2026-10'));}
+});
+
+test('company rows follow display selection and real project ids while preserving weekly and note overrides',()=>{
+  const source=page();source.projects.push({warehouse:'乙'});
+  source.company_rows[0].values[4]='125.125';
+  source.company_rows.push({warehouse:'乙',values:['2','乙项目',null,null,'20.125',null,'999',null,null,null,null,'888',null,null,'旧备注']});
+  source.histories=[{warehouse:'乙',original_months:{'2026-10':{weekly:'12.50'}}}];
+  source.summary=[{warehouse:'乙',ym:'2026-10',cumulative:{weekly:'33.00'},note:'当前备注'}];
+  source.effective=[{warehouse:'乙',ym:'2026-10',signature:'current',values:{weekly:'10.00'},sources:{}}];
+  const data=readWorkbenchPage(source,'2026-10');
+  const rows=companySummaryRows(data,'2026-10',[{warehouse:'乙',id:42},{warehouse:'甲',id:7}]);
+  assert.deepEqual(rows.map(row=>[row.id,row.c0,row.c1]),[['42','1','乙项目'],['7','2','甲项目'],['total','合计',null]]);
+  assert.equal(rows[0].c6,'33.00');assert.equal(rows[0].c11,'12.50');assert.equal(rows[0].c14,'当前备注');
+  assert.equal(rows[2].c4,'145.25');assert.equal(rows[2].c5,null);assert.equal(rows[2].c6,'33.00');assert.equal(rows[2].c11,'10.00');
+  assert.equal(source.company_rows[1].values[6],'999');
+  assert.throws(()=>companySummaryRows(data,'2026-10',[{warehouse:'不存在',id:99}]));
+});
+
+test('company totals preserve explicit zero and empty display selection',()=>{
+  const source=page();source.company_rows[0].values[4]='0.00';
+  const data=readWorkbenchPage(source,'2026-10');
+  assert.equal(companySummaryRows(data,'2026-10',[{warehouse:'甲',id:7}])[1].c4,'0.00');
+  const empty=companySummaryRows(data,'2026-10',[]);
+  assert.equal(empty.length,1);assert.equal(empty[0].c4,null);assert.equal(empty[0].c11,null);
+});
 test('workbench keeps recorded totals and checked source states separate from unknown cumulative amounts',()=>{
   const data=readWorkbench(workbench());
   assert.equal(data.relations[0].left,null);
