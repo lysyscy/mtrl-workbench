@@ -1,6 +1,6 @@
 # 机械页性能优化验证
 
-2026-11-02。按用户批准的[诊断方案](diagnosis.md)实施；本节为发布前证据，最终加载另记部署回执。
+2026-11-02。按用户批准的[诊断方案](diagnosis.md)实施；以下区分发布前验证和最终正式加载。
 
 ## 最终变更
 
@@ -33,3 +33,9 @@
 - 独立只读审查未发现实质问题；GUI规则检查无发现。原始业务文件、正式业务数据、i8及正式配置未参与写入验证。
 
 候选实例、schema与临时构建已退出，证据归`.artifacts/archive/mechanical-performance/20261102-opt`；受管证据组`mechanical-performance-opt-20261102`保`same-source-comparison.json`，已按30天结项。截图及CPU profile仅供本次性能对照，按既定证据规则退出。永久研究/诊断/验证说明归本目录。
+
+## 正式加载
+
+2026-11-02 14:39，正式前后端已加载性能提交`fbb42d23b0e3ed5b6fbce64ff34b5bc1e7c6e1fa`，远端分支已核同SHA，[CI通过](https://github.com/lysyscy/mtrl-workbench/actions/runs/41401141543)。标准发布重新类型检查/构建，并核实际索引、37份资源、健康200及实际HTTP连接的监听归属。前端资源`var/frontend/releases/fbb42d23b0e3`，保留`e822612e221b`供回退。
+
+正式`/api/m06/workbench/page?ym=2026-10`两次421/337ms、1,192,714B；与完整状态接口逐项比较月额及来源敏感签名一致，兰考/茂名/宜昌累计读回正确，未知i8仍为未知。发布/读回回执归`.artifacts/archive/frontend-release/20261102-mechanical-performance/reports`，临时发布构建已退出；本次未迁移或写正式业务数据、未调用i8。延迟为本机定向样本，不扩称其他电脑或真实用户INP分位数。

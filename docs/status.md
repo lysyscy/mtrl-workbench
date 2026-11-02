@@ -1,10 +1,12 @@
 # 当前活动工作
 
-## 机械页性能优化已验证，待正式加载
+## 机械页性能优化已正式加载
 
 2026-11-02，按[性能诊断及方案](../.scratch/mechanical-performance/diagnosis.md)实施轻量当前月page接口、共享公司汇总业务投影、移除页面Excel预览查询、表头批量测量及保存定向重读。保留完整来源/历史接口、原来源敏感签名、明细行级溯源、全月累计和缓存统一标脏。相同只读快照下响应11.23MB→1.19MB，金额/签名/行级来源一致，四表7,421格的值、公式和数字格式一致；真实副本HTTP约327/341ms，零租布局准备约169–243ms（原约946ms）。
 
-前端29项unit、类型检查/构建、后端六文件隔离回归、六项真实副本保存/未知回执/下载/共享表头代表均通过，独立审查无实质发现。详细边界见[验证说明](../.scratch/mechanical-performance/verification.md)；界面/CPU证据归`.artifacts/archive/mechanical-performance/20261102-opt`，同源对照归受管组`mechanical-performance-opt-20261102`。临时实例、schema和构建已退出，未改正式业务数据或调用i8；本节为部署前记录。
+前端29项unit、类型检查/构建、后端六文件隔离回归、六项真实副本保存/未知回执/下载/共享表头代表均通过，独立审查无实质发现。详细边界见[验证说明](../.scratch/mechanical-performance/verification.md)；界面/CPU证据归`.artifacts/archive/mechanical-performance/20261102-opt`，同源对照归受管组`mechanical-performance-opt-20261102`。临时实例、schema和构建已退出。
+
+2026-11-02 14:39，正式`/app`及后端已加载`fbb42d23`，提交已推送并核远端SHA，尚未合并master。[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41401141543)通过；标准发布实际索引、37份资源、健康200及监听进程归属通过。正式page接口421/337ms、1,192,714B，逐项金额及原来源敏感签名与完整接口一致；兰考/茂名/宜昌累计保持正确，后两项目i8仍未知。回退资源为`e822612e221b`，回执及正式接口读回归`.artifacts/archive/frontend-release/20261102-mechanical-performance/reports`。本轮未迁移或写正式业务数据，未调用i8。
 
 ## 新项目机械费累计接续与空取数修复已正式加载
 
@@ -44,7 +46,7 @@
 
 2026-10-29 15:35，按用户新裁定追加加载`5ed0045f`：通知书、集采及其已启用子表的可拖业务列取消手动业务min/max，金额、编号和状态控件同样由用户决定宽度，仅保AG原生技术底线；自动建议布局及固定不可拖列保持。原金额手动下限验收不再适用。类型检查、构建、2项定向单测及对应CI通过；真实副本存档情况113→50、存档号73→50、审批金额109→50，刷新保持50且复位回原宽。无业务写入或键盘专项。正式健康、36份资源与服务进程归属通过；发布回执归`.artifacts/archive/frontend-release/153448-089471-9116/reports/deployment.json`，GUI证据归`.artifacts/archive/manual-widths/20261029-unrestricted/reports/gui-unrestricted-widths.json`，临时预览及work已退出。
 
-当前完整产物为`var/frontend/releases/e822612e221b`，发布器记录的上一版为`67a6dd171324`；实际回退前须核用户裁定与目标差异，旧包由正式运行负责人核实际消费者和回退用途后退出。此前停服备份`var/backups/databases/20261029-093354-d035de05`已核SHA与归档目录，未做整库恢复演练，归现有数据库备份管理。回退保留当前数据库和后续正常录入，不能用旧库覆盖新业务；配置与加载方法回[部署](guides/deployment.md)。
+当前完整产物为`var/frontend/releases/fbb42d23b0e3`，发布器记录的上一版为`e822612e221b`；实际回退前须核用户裁定与目标差异，旧包由正式运行负责人核实际消费者和回退用途后退出。此前停服备份`var/backups/databases/20261029-093354-d035de05`已核SHA与归档目录，未做整库恢复演练，归现有数据库备份管理。回退保留当前数据库和后续正常录入，不能用旧库覆盖新业务；配置与加载方法回[部署](guides/deployment.md)。
 
 ## 后续工作
 
