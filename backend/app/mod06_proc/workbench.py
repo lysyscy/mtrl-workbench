@@ -215,26 +215,57 @@ def amount_inputs(rows, *, net=False):
         for row in rows if row.get('amount') is not None])
 
 
+def apply_detail_amounts(s, payload, revision, columns, operator=''):
+    wh, ym, cat = (payload[field] for field in ('warehouse', 'ym', 'category'))
+    view = detail_view(s, payload, revision)
+    current = effective(s, wh, ym)
+    basis = {'category': cat, 'detail_revision': revision, 'rows': deepcopy(payload['rows']),
+             'source': deepcopy(payload.get('source')), 'operator': operator,
+             'at': datetime.now().isoformat(), 'previous_effective': current['values']}
+    values = {column: view['totals']['net' if column == CATEGORY_COLUMNS[cat][1] else 'gross']
+              for column in columns}
+    repo.save_mech(s, ym=ym, warehouse=wh, values=values,
+                   detail_sources={column: {**basis, 'amount': value} for column, value in values.items()})
+    if not amount_inputs(payload['rows']):
+        repo.source_manual(s, warehouse=wh, ym=ym, columns=columns, operator=operator)
+    mark_adoption(s, wh, ym, columns)
+
+
+def restore_missing_detail_month(s, wh, ym, operator='', *, expected_detail_signature=None):
+    """Initialize an absent month from both saved categories; existing rows are decisions."""
+    wh = warehouse(s, wh)
+    ym = normalize_ym(ym)
+    if not ym:
+        raise MustReportError('请选择有效月份')
+    if repo.mech_row(s, wh, ym) is not None:
+        if expected_detail_signature is not None:
+            raise MustReportError('月金额已存在，请重新核对，不能按缺失月份修复')
+        return []
+    if (expected_detail_signature is not None and
+            expected_detail_signature != detail_signatures(s).get(wh, {}).get(ym, '')):
+        raise MustReportError('明细已变化，请重新读取并核对修复范围')
+    # Read both categories before creating the shared month carrier.
+    saved = [(cat, *read(s, key('details', wh, ym, cat))) for cat in CATEGORY_COLUMNS]
+    restored = []
+    for cat, payload, revision in saved:
+        if amount_inputs(payload.get('rows', [])):
+            apply_detail_amounts(s, payload, revision, list(CATEGORY_COLUMNS[cat]), operator)
+            restored.append(cat)
+    return restored
+
+
 def store_details(s, wh, ym, cat, old, revision, rows, operator='', extra=None):
     payload = {**old, 'warehouse': wh, 'ym': ym, 'category': cat, 'rows': rows, **(extra or {})}
     for field in ('confirmed_signature', 'confirmation_request', 'confirmation_result', 'previous_effective'):
         payload.pop(field, None)
     new_revision = write(s, key('details', wh, ym, cat), payload, revision)
     view = detail_view(s, payload, new_revision)
+    restored = restore_missing_detail_month(s, wh, ym, operator)
     gross, net = CATEGORY_COLUMNS[cat]
     changed = [column for column in (gross, net)
                if amount_inputs(old.get('rows', []), net=column == net) != amount_inputs(rows, net=column == net)]
-    if changed:
-        current = effective(s, wh, ym)
-        basis = {'category': cat, 'detail_revision': new_revision, 'rows': deepcopy(rows),
-                 'source': deepcopy(payload.get('source')), 'operator': operator,
-                 'at': datetime.now().isoformat(), 'previous_effective': current['values']}
-        values = {column: view['totals']['net' if column == net else 'gross'] for column in changed}
-        repo.save_mech(s, ym=ym, warehouse=wh, values=values,
-                       detail_sources={column: {**basis, 'amount': value} for column, value in values.items()})
-        if not amount_inputs(rows):
-            repo.source_manual(s, warehouse=wh, ym=ym, columns=changed, operator=operator)
-        mark_adoption(s, wh, ym, changed)
+    if changed and cat not in restored:
+        apply_detail_amounts(s, payload, new_revision, changed, operator)
     return view
 
 
