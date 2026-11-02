@@ -192,7 +192,7 @@ def test_settings_mouse_close_and_navigation_keep_only_effective_drafts(server,b
     expect(page.get_by_role('dialog')).to_have_count(0)
     page.get_by_role('button',name='显示项目',exact=True).click()
     # Reordering an unselected project changes no effective display setting.
-    picker.locator('li').nth(2).get_by_role('button',name='下移',exact=True).click()
+    picker.locator('.export-project-row').nth(2).get_by_role('button',name='下移',exact=False).click()
     picker.get_by_role('button',name='取消',exact=True).click()
     expect(page.get_by_role('dialog')).to_have_count(0)
     page.get_by_role('button',name='显示项目',exact=True).click()
@@ -202,7 +202,7 @@ def test_settings_mouse_close_and_navigation_keep_only_effective_drafts(server,b
     picker.get_by_role('button',name='取消',exact=True).click()
     expect(page.get_by_role('dialog')).to_have_count(0)
     page.get_by_role('button',name='显示项目',exact=True).click()
-    picker.locator('li').first.get_by_role('button',name='下移',exact=True).click()
+    picker.locator('.export-project-row').first.get_by_role('button',name='下移',exact=False).click()
     picker.get_by_role('button',name='关闭弹窗',exact=True).click()
     confirmation.get_by_role('button',name='放弃并关闭',exact=True).click()
     expect(page.get_by_role('dialog')).to_have_count(0)
