@@ -116,8 +116,12 @@ def _by_warehouse(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 def _load_report_data(s: Session) -> dict:
-    """一次读取有效来源与材料截止月；导入候选和机械导入截止不参与报表资格。"""
-    inv, manual, history = load_inv_rows(s), load_mech(s), load_history(s)
+    """一次读取有效来源与材料截止月；导入候选和机械导入截止不参与报表资格。
+
+    报表装配只取机械 6 列原值（`domain.mech_by_month`），既不读 `sources` 也不读
+    `effective_signature` ⇒ 这里要 `with_sources=False`，别让整包来源副本白做一遍。
+    """
+    inv, manual, history = load_inv_rows(s), load_mech(s, with_sources=False), load_history(s)
     return {"inv": _by_warehouse(inv), "manual": _by_warehouse(manual), "history": _by_warehouse(history),
             "projects": projects_of(inv, history + manual), "cutoffs": load_cutoffs(s)}
 

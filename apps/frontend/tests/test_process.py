@@ -54,7 +54,7 @@ def test_real_process_enter_saves_without_clicking_elsewhere(server,browser_page
     saved(field)
     expect(field.locator('..').locator('small')).to_have_count(0)
     expect(field).to_have_value(money(value))
-    assert not set(reads)-{'m06/matrix','m06/mech','history/status'}, reads
+    assert not set(reads)-{'m06/matrix','m06/mech-screen','history/status'}, reads
     fresh=get(api,'/api/m06/mech')['effective_values'][project['warehouse_name']][row['ym']]
     assert Decimal(fresh['mech_0'])==value
 

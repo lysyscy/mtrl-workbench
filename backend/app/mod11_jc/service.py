@@ -216,7 +216,7 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
     }
 
 
-def debt_of_ledger(s: Session) -> Decimal:
+def debt_of_ledger(s: Session, *, rows: list[dict] | None = None) -> Decimal:
     """**集采欠款合计**（⭐ **只计「纳入台账」**的合同）—— 供付款域**注入**用（`TAIL-100`）。
 
     ⚠️ **为什么必须有它**：付款域的口径是「集采欠款**不在本域算** —— 由集采台账负责」
@@ -225,9 +225,10 @@ def debt_of_ledger(s: Session) -> Decimal:
        （少算 7444 万级、页面还完全看不出来 —— 典型的「看着正常的错数」）。
     ⭐ **唯一出口**：算法留在集采域（⛔ 付款域不自己 sum），取值走 `build_list`
        ⇒ 与**集采台账页**显示的「集采欠款」**必然是同一个数**。
+    `rows` 可传入同一请求已装配的集采行，避免为合计再次读取。
     """
     total = D.ZERO
-    for r in build_list(s)["rows"]:
+    for r in build_list(s)["rows"] if rows is None else rows:
         if str(r.get("tag") or "") == TAG_IN:
             total += Decimal(str(r.get("debt") or 0))
     return total.quantize(Decimal("0.01"))

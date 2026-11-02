@@ -193,7 +193,7 @@ def test_bucketed_matrices_keep_precedence_null_zero_order_and_document_trace(mo
                {"warehouse": "A", "ym": "2025-10", "in_主辅材": "0"}]
     manual = [{"warehouse": "C", "ym": "2026-01", "mech_0": "0"}]
     for name, value in (("load_inv_rows", inv), ("load_history", history), ("load_mech", manual)):
-        monkeypatch.setattr(R, name, lambda s, value=value: value)
+        monkeypatch.setattr(R, name, lambda s, value=value, **kw: value)
     monkeypatch.setattr(M6, "load_cutoffs", lambda s: {"A": "2025-11"})
     original = M6.D.build_matrix
     seen = []

@@ -142,6 +142,22 @@ class OpeningView:
     opening_id: int = 0
 
 
+@dataclass
+class DebtFacts:
+    """欠款视图在一次请求内共用的事实；计算仍归各业务出口。"""
+
+    #: `service.notice_debt_views(s)` 的窄投影行（含零 / 负数 / 剔除 / 未判定归属）
+    rows: list[NoticeDebtView] = field(default_factory=list)
+    #: `history.adjustments(期初行, rows)` —— 期初占位行**已按当月通知书差额修正**
+    openings: list[OpeningView] = field(default_factory=list)
+    #: `project_index(s)`：`{项目 id: 档案行}`（展示名与仓库键的唯一主人）
+    index: dict = field(default_factory=dict)
+    #: `{项目 id: {YYYY-MM: 机械费结算金额}}` —— 与 `service.mechanical_settlements` 同口径
+    mech_by_month: dict = field(default_factory=dict)
+    #: `mod11_jc.service.build_list(s)["rows"]` —— 集采行（**数值口径留在集采域**）
+    jc_rows: list = field(default_factory=list)
+
+
 def debt_by_category(
     rows: list[NoticeDebtView],
     openings: list[OpeningView],
@@ -470,7 +486,8 @@ __all__ = [
     "classify", "BIZ_TYPE_LEASE", "PAYEE_JC",
     "payment_status", "effective_total", "revoke_flow", "filter_flows",
     "default_flow_period", "FLOW_PAGINATED", "empty_state_colspan",
-    "NoticeDebtView", "OpeningView", "debt_by_category", "total_debt", "debt_by_project", "UNASSIGNED",
+    "NoticeDebtView", "OpeningView", "DebtFacts", "debt_by_category", "total_debt", "debt_by_project",
+    "UNASSIGNED",
     "next_month", "prev_month", "months_span", "LedgerRow", "monthly_aggregate", "build_ledger",
     "LEDGER_SIDES", "SHARED_PROJECT_SELECTOR", "SHARED_EXPORT_ENTRY",
     "HAS_SWITCH_CALIBER_BUTTON", "MECH_HAS_MANUAL_INPUT", "ledger_remarks_key", "opening_defaults",

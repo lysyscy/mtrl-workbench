@@ -120,7 +120,7 @@ def _export_root(tmp_path, monkeypatch):
 
     monkeypatch.setattr(EX, "EXPORT_ROOT", tmp_path / "exports")
     monkeypatch.setattr(R, "load_inv_rows", lambda s: inv_rows())
-    monkeypatch.setattr(R, "load_mech", lambda s: manual_rows())
+    monkeypatch.setattr(R, "load_mech", lambda s, **kw: manual_rows())
     monkeypatch.setattr(R, "load_history", lambda s=None: [])
     monkeypatch.setattr(R, "load_cutoff", lambda s, warehouse="": "")
     monkeypatch.setattr(R, "load_cutoffs", lambda s: {})

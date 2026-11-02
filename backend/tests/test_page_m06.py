@@ -81,3 +81,39 @@ def test_接口按分界月给机械值_历史段读快照(session, monkeypatch)
     assert got['sections']['历史仓']['2026-05'] == D.SECTION_HISTORY
     assert got['sections']['正式仓']['2026-09'] == D.SECTION_FORMAL
     assert snapshot.mech_0 == Decimal('11')
+
+
+def test_屏幕读模型与完整机械接口逐值同签名_只少来源明细(session, monkeypatch):
+    """`/api/m06/mech-screen` 是屏幕读模型：值、月份、分段、两张签名、模式必须与完整接口相同，
+    只有 `sources` 少了 `basis`/`history`（导出与明细回执才读那些）。"""
+    from contextlib import contextmanager
+    from app.mod06_proc import router
+
+    @contextmanager
+    def scope():
+        yield session
+
+    monkeypatch.setattr(router, 'session_scope', scope)
+    session.add(ProcCutoff(warehouse_name='历史仓', cutoff_ym='2026-06'))
+    session.add(ProcHistoryBatch(batch_no='old', warehouse_name='历史仓', status='active'))
+    session.add(ProcHistorySnapshot(batch_no='old', warehouse_name='历史仓', ym='2026-05', mech_0=11))
+    repo.save_mech(session, ym='2026-05', warehouse='历史仓', values={'mech_0': '99'})
+    repo.save_mech(session, ym='2026-09', warehouse='正式仓', values={'mech_0': '22'},
+                   detail_sources={'mech_0': {'batch': '已确认明细'}})
+    full = router.api_mech()
+    screen = router.api_mech_screen()
+    assert screen['mech'] == full['mech']
+    assert screen['count'] == full['count'] and screen['columns'] == full['columns']
+    assert screen['sections'] == full['sections']
+    assert screen['effective_signatures'] == full['effective_signatures']
+    assert screen['detail_signatures'] == full['detail_signatures']
+    assert screen['effective_values'] == full['effective_values']
+    for warehouse, months in full['sources'].items():
+        for ym, columns in months.items():
+            full_modes = {k: v['mode'] for k, v in columns.items()}
+            screen_modes = {k: v['mode'] for k, v in screen['sources'][warehouse][ym].items()}
+            assert full_modes == screen_modes
+    assert list(screen['sources']) == list(full['sources'])
+    assert full['sources']['正式仓']['2026-09']['mech_0']['basis'] == {'batch': '已确认明细'}
+    assert screen['sources']['正式仓']['2026-09']['mech_0']['mode'] == 'detail'
+    assert 'basis' not in screen['sources']['正式仓']['2026-09']['mech_0']

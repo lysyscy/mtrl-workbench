@@ -192,18 +192,24 @@ def build_flows(
 # ---------------------------------------------------------------- ② 欠款（三类 + 按项目）
 
 
-def build_debt(s: Session, *, jc_debt=None, mech_settle_total=Decimal("0")) -> dict:
+def build_debt(s: Session, *, jc_debt=None, mech_settle_total=Decimal("0"),
+               facts: dom.DebtFacts | None = None) -> dict:
     """「按项目看欠款」+ 三类合计（§4.5.1）。
 
     - 辅材 = Σ辅助统计结算 − Σ辅助统计付款 ＋ 辅材期初
     - 机械 = **机械费结算金额** − Σ机械统计付款 ＋ 机械期初
     - 集采 = **不在本域计算**（由集采台账负责）⇒ 本域只作**合计展示**（`jc_debt` 由调用方注入）
+
+    `facts` 可复用本次请求已读取的事实；未提供时保持独立取数出口。
     """
-    rows = notice_debt_views(s)
-    openings = opening_views(s)
+    if facts is not None:
+        rows, openings, index = facts.rows, facts.openings, facts.index
+    else:
+        rows = notice_debt_views(s)
+        openings = opening_views(s)
+        index = project_index(s)                   # ⚠️ 取一次（`names` 与 `openings` 共用）
     by_cat = dom.debt_by_category(rows, openings, mech_settle_total=mech_settle_total, jc_debt=jc_debt)
     by_project = dom.debt_by_project(rows)
-    index = project_index(s)                       # ⚠️ 取一次（`names` 与 `openings` 共用）
     names = {pid: project_label(p) for pid, p in index.items()}
 
     items = []
@@ -243,7 +249,7 @@ def build_debt(s: Session, *, jc_debt=None, mech_settle_total=Decimal("0")) -> d
     }
 
 
-def build_debt_live(s: Session, **kw) -> dict:
+def build_debt_live(s: Session, *, facts: dom.DebtFacts | None = None, **kw) -> dict:
     """⭐ **生产用的欠款组装件** = `build_debt` ＋ **注入集采欠款**（`TAIL-100`）。
 
     ⚠️ **为什么单开一个函数、⛔ 不让 `build_debt` 自己取**：
@@ -251,8 +257,15 @@ def build_debt_live(s: Session, **kw) -> dict:
       ⇒ 它里面**不能连库**）；而"**谁去把集采那一格拿回来**"是**装配问题**。
     ⇒ 收在**这一个出口**：看板端点（`/api/m05/debt`）与手改统计金额的回执**都调它**。
       ⛔ 别在各自那里 `build_debt(...)` 一次 —— 那就又成了两处、迟早漏一处（这正是 `TAIL-100` 的成因）。
+
+    `facts` 只复用输入，集采合计仍由集采域计算。
     """
-    from app.mod11_jc import service as M11      # 局部导入：mod11 ⇄ mod05 不成环（同 `total_debt_rows` 写法）
+    from app.mod11_jc import service as M11      # 局部导入：mod11 ⇄ mod05 不成环
+    if facts is not None:
+        kw["facts"] = facts
+        kw.setdefault("jc_debt", M11.debt_of_ledger(s, rows=facts.jc_rows))
+        kw.setdefault("mech_settle_total", sum_money(_mech_totals_of(facts.mech_by_month).values()))
+        return build_debt(s, **kw)
     kw.setdefault("jc_debt", M11.debt_of_ledger(s))
     kw.setdefault("mech_settle_total", sum_money(mechanical_totals(s).values()))
     return build_debt(s, **kw)
@@ -261,10 +274,15 @@ def build_debt_live(s: Session, **kw) -> dict:
 def mechanical_settlements(s: Session) -> dict[int, dict[str, Decimal]]:
     from app.mod06_proc import service as proc
     index = {project_key(p): pid for pid, p in project_index(s).items() if project_key(p)}
-    totals = {}
     if not index:
-        return totals
-    for row in proc.load_mech(s):
+        return {}
+    return _mechanical_settlements_of(index, proc.load_mech(s))
+
+
+def _mechanical_settlements_of(index: dict, rows: list[dict]) -> dict[int, dict[str, Decimal]]:
+    """将已有机械事实按档案身份归集，供独立读取与请求内复用共用。"""
+    totals = {}
+    for row in rows:
         pid = index.get(row.get("warehouse"))
         if pid is not None and row.get("ym"):
             amounts = [row[column] for column in ("mech_2", "mech_3") if row.get(column) is not None]
@@ -274,7 +292,29 @@ def mechanical_settlements(s: Session) -> dict[int, dict[str, Decimal]]:
 
 
 def mechanical_totals(s: Session) -> dict[int, Decimal]:
-    return {pid: sum_money(months.values()) for pid, months in mechanical_settlements(s).items()}
+    return _mech_totals_of(mechanical_settlements(s))
+
+
+# ---------------------------------------------------------------- ① 请求内一次装配（TAIL-467）
+
+
+def _mech_totals_of(mech_by_month: dict[int, dict[str, Decimal]]) -> dict[int, Decimal]:
+    """`{项目 id: {YYYY-MM: 金额}}` → `{项目 id: 合计}`（与 `mechanical_totals` 同口径）。"""
+    return {pid: sum_money(months.values()) for pid, months in mech_by_month.items()}
+
+
+def assemble_debt_facts(s: Session) -> dom.DebtFacts:
+    """一次读取欠款各视图所需事实；仅在调用者的本次请求内复用。"""
+    from app.mod06_proc import service as proc
+    from app.mod11_jc import service as M11
+
+    rows = notice_debt_views(s)
+    openings = history.adjustments(repo.list_openings(s, project_id=None), rows)
+    index = project_index(s)
+    wh2pid = {project_key(p): pid for pid, p in index.items() if project_key(p)}
+    mech = _mechanical_settlements_of(wh2pid, proc.load_mech(s, with_sources=False)) if wh2pid else {}
+    return dom.DebtFacts(rows=rows, openings=openings, index=index,
+                         mech_by_month=mech, jc_rows=list(M11.build_list(s)["rows"]))
 
 
 # ---------------------------------------------------------------- ③ 逐月台账
@@ -305,7 +345,8 @@ def order_project_ids(cand: set[int], by_wh: dict[str, int], order: list[str], l
     return out
 
 
-def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
+def total_debt_rows(s: Session, *, order: list[str] | None = None,
+                    facts: dom.DebtFacts | None = None) -> dict:
     """**总欠款**（按项目 × 集采 / 辅材 / 机械）—— 供 `debt_export.build_xlsx` 写表。
 
     ⭐ **口径一律复用现场那两个函数**（⛔ 绝不在这里另写一套算钱的）：
@@ -318,13 +359,26 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
     ⚠️ 集采只计「**纳入台账**」的行（「待确认 / 不纳入」按定义不进台账）；
        排除了几条**一并回出来**（⛔ 禁静默少算）。
     ⚠️ 项目**只从名册里认**（`project_index`）—— 展示名的主人是档案，⛔ 不自己拼名字。
-    """
-    rows = notice_debt_views(s)
-    openings = opening_views(s)
-    index = project_index(s)
-    mechanical = mechanical_totals(s)
-    by_wh = {str(getattr(p, "warehouse_name", "") or ""): pid for pid, p in index.items()}
 
+    ⭐ `TAIL-467`：`facts` 给了就用**同一份**装配事实（欠款页一个请求只装配一次），
+       ⛔ 不再二次 `opening_views` / `mechanical_totals` / `build_list`；不给 = 老路径自取
+       （`export_total_debt` 与离线桩件走这一支，行为逐字不变）。
+    """
+    if facts is not None:
+        rows, openings, index = facts.rows, facts.openings, facts.index
+        mechanical = _mech_totals_of(facts.mech_by_month)
+        jc_rows = facts.jc_rows
+    else:
+        rows = notice_debt_views(s)
+        openings = opening_views(s)
+        index = project_index(s)
+        mechanical = mechanical_totals(s)
+
+        # 集采：与集采台账页同一个函数（`build_list` 不给筛选 = 全量）
+        from app.mod11_jc import service as M11
+
+        jc_rows = M11.build_list(s)["rows"]
+    by_wh = {str(getattr(p, "warehouse_name", "") or ""): pid for pid, p in index.items()}
     # ① 辅材 / 机械：**逐项目**复用 `debt_by_category`（⚠️ 是内存里切行，不是逐条查库 = 无 N+1）
     per: dict[int, dict[str, Decimal]] = {}
     for pid in index:
@@ -337,12 +391,11 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
                     CATEGORY_MECH: by_cat[CATEGORY_MECH]}
 
     # ② 集采：与集采台账页同一个函数（`build_list` 不给筛选 = 全量）
-    from app.mod11_jc import service as M11
     from app.mod11_jc.models import TAG_IN
 
     jc: dict[int, Decimal] = {}
     jc_skipped = 0
-    for r in M11.build_list(s)["rows"]:
+    for r in jc_rows:
         pid = by_wh.get(str(r.get("project_key") or ""))
         if str(r.get("tag") or "") != TAG_IN or pid is None:
             jc_skipped += 1                             # 不是"纳入台账" / 项目不在名册 ⇒ 不计
@@ -542,6 +595,7 @@ __all__ = ["project_references",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
     "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats",
     "total_debt_rows", "export_total_debt", "order_project_ids",
+    "assemble_debt_facts",
 ]
 
 

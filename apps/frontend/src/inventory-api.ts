@@ -53,7 +53,11 @@ export function readInventory(value:unknown):Inventory {
     if (!record(a) || !Number.isSafeInteger(a.id) || !Number.isSafeInteger(a.row_id) || !['remark','operator','changed_at'].every(k => typeof a[k] === 'string')) throw invalid();
     return {...a,before_amount:numeric(a.before_amount),amount:numeric(a.amount),values:readValues(a.values,true),before_values:a.before_values===null?null:readValues(a.before_values,true)} as unknown as Adjustment;
   });
-  if (new Set(rows.map(r => r.id)).size !== rows.length || new Set(adjustments.map(a => a.row_id)).size !== adjustments.length || rows.some(r => r.adjusted !== adjustments.some(a => a.row_id === r.id))) throw invalid();
+  // The row-id index answers the adjusted→adjustment correspondence once per row instead of rescanning every adjustment.
+  const rowIds = new Set(rows.map(r => r.id));
+  if (rowIds.size !== rows.length) throw invalid();
+  const adjustmentRowIds = new Set(adjustments.map(a => a.row_id));
+  if (adjustmentRowIds.size !== adjustments.length || rows.some(r => r.adjusted !== adjustmentRowIds.has(r.id))) throw invalid();
   return {rows,adjustments,projects:value.projects as string[],materialProperties:value.material_properties as string[]};
 }
 export const getInventory = async (signal?:AbortSignal) => readInventory(await requestJson('/api/m08/inventory',signal ? {signal} : {}));

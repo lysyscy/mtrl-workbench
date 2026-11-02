@@ -74,7 +74,9 @@ export function readProcess(value:unknown,mechanical:unknown):ProcessData {
 }
 export async function getProcess(signal?:AbortSignal) {
   const init=signal ? {signal} : {};
-  const [matrix,mechanical]=await Promise.all([requestJson('/api/m06/matrix',init),requestJson('/api/m06/mech',init)]);
+  // 屏幕只要 mode/签名/有效值；`/api/m06/mech-screen` 与 `/api/m06/mech` 同值同签名，
+  // 只是不带 `basis`/`history`（那是导出与明细回执才用的完整来源）。
+  const [matrix,mechanical]=await Promise.all([requestJson('/api/m06/matrix',init),requestJson('/api/m06/mech-screen',init)]);
   return readProcess(matrix,mechanical);
 }
 export async function saveProcess(warehouse:string,ym:string,column:string,value:string,expected:string|null,signal:AbortSignal,confirmation?:Confirmation) {

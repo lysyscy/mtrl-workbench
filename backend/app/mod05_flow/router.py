@@ -48,16 +48,18 @@ def get_flows_data() -> PageData:
 def get_debt_data() -> PageData:
     def _load(**kw) -> dict:
         with session_scope() as s:
+            # 各欠款视图共用本次请求的事实，下一请求仍重新读取。
+            facts = svc.assemble_debt_facts(s)
             # ⭐ `TAIL-100`：走 `build_debt_live`（＝ `build_debt` ＋ **注入集采欠款**）——
             #   原先这里直接 `build_debt(s)` ⇒ `jc_debt` 恒 `None` ⇒ 「集采欠款」恒 ¥0.00。
-            data = svc.build_debt_live(s, **kw)
+            data = svc.build_debt_live(s, facts=facts, **kw)
             # Same project/category amounts as the existing total-debt export.
             data["by_project_category"] = [
                 {"project": row["project"], **{key: f"{row[key]:.2f}" for key in ("jc", "material", "mech")}}
-                for row in svc.total_debt_rows(s)["items"]
+                for row in svc.total_debt_rows(s, facts=facts)["items"]
             ]
             from app.mod05_flow import domain
-            unassigned = [row for row in svc.notice_debt_views(s) if row.ownership_id is None]
+            unassigned = [row for row in facts.rows if row.ownership_id is None]
             values = domain.debt_by_category(unassigned, [])
             if any(values[c] for c in ("material", "mechanical")):
                 data["by_project_category"].append({"project": "待指定归属", "jc": "0.00",

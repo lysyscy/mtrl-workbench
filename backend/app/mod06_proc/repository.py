@@ -36,7 +36,8 @@ def mech_sources(row):
     return {column: deepcopy(stored.get(column, {'mode': 'manual'})) for column in MECH_KEYS}
 
 
-def mech_effective(row, warehouse, ym, *, compact=False):
+def mech_effective(row, warehouse, ym, *, compact=False, with_source=True):
+    """有效六列值 ＋ 来源 ＋ 签名；`compact` 只投影 `mode`，`with_source` 控制整包副本。"""
     from app.core.money import to_money
     values = {column: format(to_money(getattr(row, column)), '.2f')
               if row and getattr(row, column) not in (None, '') else None for column in MECH_KEYS}
@@ -52,7 +53,7 @@ def mech_effective(row, warehouse, ym, *, compact=False):
     result = {'warehouse': warehouse, 'ym': ym, 'values': values, 'sources': sources, 'signature': signature}
     if compact:
         result['sources'] = {column: {'mode': source.get('mode', 'manual')} for column, source in sources.items()}
-    else:
+    elif with_source:
         result['source'] = deepcopy(row.source_batches or {}) if row else {}
     return result
 
@@ -88,11 +89,31 @@ def writable_mech_values(row, values):
     return writable
 
 
-def load_mech(s: Session) -> list[dict]:
-    """Effective six-column amounts and independently editable cell sources."""
+def load_mech(s: Session, *, with_sources: bool = True) -> list[dict]:
+    """Effective six-column amounts and independently editable cell sources.
+
+    `with_sources=False` 供只用原值的装配（报表矩阵）跳过来源签名：它既不读 `sources`
+    也不读 `effective_signature`。默认 `True` 保持包间出口的完整契约。
+    """
     out = []
     for row in s.execute(select(ProcMechManual)).scalars():
-        state = mech_effective(row, row.warehouse_name or '', row.ym or '')
+        base = {'ym': row.ym or '', 'warehouse': row.warehouse_name or '', 'project_id': row.project_id,
+                **{column: getattr(row, column) for column in MECH_KEYS}}
+        if not with_sources:
+            out.append(base)
+            continue
+        # 完整来源仍在；`with_source=False` 只省掉 `load_mech` 自己就丢弃的整包副本。
+        state = mech_effective(row, base['warehouse'], base['ym'] or '', with_source=False)
+        out.append({**base, 'sources': state['sources'],
+                    'effective_signature': state['signature']})
+    return out
+
+
+def load_mech_screen(s: Session) -> list[dict]:
+    """屏幕读模型：来源只带 `mode`（投影在复制前），签名仍按完整原来源计算。"""
+    out = []
+    for row in s.execute(select(ProcMechManual)).scalars():
+        state = mech_effective(row, row.warehouse_name or '', row.ym or '', compact=True)
         out.append({'ym': state['ym'], 'warehouse': state['warehouse'], 'project_id': row.project_id,
                     **{column: getattr(row, column) for column in MECH_KEYS},
                     'sources': state['sources'], 'effective_signature': state['signature']})
@@ -262,5 +283,5 @@ def load_cutoffs(s: Session) -> dict[str, str]:
     return out
 
 
-__all__ = ["load_inv_rows", "load_mech", "save_mech",
+__all__ = ["load_inv_rows", "load_mech", "load_mech_screen", "save_mech",
            "load_history", "load_batches", "load_cutoff", "load_cutoffs", "MATERIAL_KEYS"]

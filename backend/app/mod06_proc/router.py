@@ -119,6 +119,37 @@ def api_mech() -> dict:
                     rows.append({'warehouse': wh, 'ym': ym, **state['values'],
                                  'sources': state['sources'], 'effective_signature': state['signature']})
 
+    return _mech_payload(rows, snaps, cutoffs, details)
+
+
+@router.get("/api/m06/mech-screen")
+def api_mech_screen() -> dict:
+    """屏幕保完整金额、月份与来源敏感签名，仅投影来源模式。"""
+    with session_scope() as s:
+        rows = repo.load_mech_screen(s)
+        snaps = repo.load_history(s)
+        cutoffs = repo.load_cutoffs(s)
+        from app.mod06_proc import workbench
+        details = workbench.detail_signatures(s)
+        existing = {(row['warehouse'], row['ym']) for row in rows}
+        for wh, months in details.items():
+            for ym in months:
+                if (wh, ym) not in existing:
+                    # 只有明细、没有手录行 ⇒ 仍走同一条有效值出口，签名逐字一致；
+                    # 这些月份极少，投影放在这里发生即可。
+                    state = workbench.effective(s, wh, ym)
+                    rows.append({'warehouse': wh, 'ym': ym, **state['values'],
+                                 'effective_signature': state['signature'],
+                                 'sources': {column: {'mode': source.get('mode', 'manual')}
+                                             for column, source in state['sources'].items()}})
+
+    return _mech_payload(rows, snaps, cutoffs, details)
+
+
+def _mech_payload(rows: list[dict], snaps: list[dict], cutoffs: dict,
+                  details: dict) -> dict:
+    """两路（完整/屏幕）共用的装配：值、分段、来源、签名、有效值。"""
+
     zeros = [0.0] * len(D.MECH_COLUMNS)
 
     def _vals(src: dict) -> list[float]:

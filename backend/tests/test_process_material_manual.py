@@ -19,7 +19,7 @@ def test_save_readback_and_export(rollback_db, monkeypatch, tmp_path):
     wh = '__material_' + uuid4().hex
     batch = '__batch_' + uuid4().hex
     monkeypatch.setattr(R, 'load_inv_rows', lambda s: [])
-    monkeypatch.setattr(R, 'load_mech', lambda s: [])
+    monkeypatch.setattr(R, 'load_mech', lambda s, **kw: [])
     monkeypatch.setattr(M6, 'load_cutoffs', lambda s: {})
     monkeypatch.setattr(M6, 'displays_by_key', lambda s: {wh: '测试项目'})
     monkeypatch.setattr(EX, 'EXPORT_ROOT', tmp_path)
@@ -148,7 +148,7 @@ def test_http_save_and_matrix_readback(rollback_db, monkeypatch):
     ProcMaterialManual.__table__.create(rollback_db, checkfirst=True)
     monkeypatch.setattr(SESS, 'secret', lambda: b'material-test-only')
     monkeypatch.setattr(R, 'load_inv_rows', lambda s: [])
-    monkeypatch.setattr(R, 'load_mech', lambda s: [])
+    monkeypatch.setattr(R, 'load_mech', lambda s, **kw: [])
     monkeypatch.setattr(M6, 'load_cutoffs', lambda s: {})
     wh = '__material_http_' + uuid4().hex
     with TestClient(create_app()) as client:
