@@ -224,7 +224,9 @@ def api_big(request: Request) -> dict:
     st = BS.parse_state(flatten_query(request.query_params))
     with session_scope() as s:
         data = BS.build_big_data(s, st)
-        manual = load_manual(s)
+        # ⭐ 手填历史与行装配**同一份**（`build_big_data` 已读），这里不再全表取第二遍；
+        #    只给没带这份数据的桩/旧调用留回退，真实路径恒走已装配的那一份。
+        manual = data["manual"] if "manual" in data else load_manual(s)
     return {
         "month": data["month"],
         "selected": list(data["selected"]),

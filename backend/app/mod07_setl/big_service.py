@@ -68,9 +68,14 @@ def _extract_amounts(s: Session) -> dict:
 
 
 def _mech_amounts(s: Session) -> dict[str, dict[str, dict[str, object]]]:
-    """机械：`{仓库: {月份: [6 列]}}`（过程资料机械 6 列的手录旁路表，§5.2.5）。"""
+    """机械：`{仓库: {月份: [6 列]}}`（过程资料机械 6 列的手录旁路表，§5.2.5）。
+
+    ⚠️ 只取 `with_sources=False` 的原值：本表装配只要 warehouse / ym / mech_0..5，
+    默认出口另附的 `sources` ＋ `effective_signature`（每行整包来源副本与 sha256）
+    在这里**一律被丢弃**，却要按行现算——2026-11 实测 205 行时它占 `_amounts` 的大头。
+    """
     out: dict[str, dict[str, list]] = {}
-    for row in P6S.load_mech(s):
+    for row in P6S.load_mech(s, with_sources=False):
         wh = str(row.get("warehouse") or "")
         ym = str(row.get("ym") or "")
         if not wh or not ym:
@@ -163,9 +168,13 @@ def build_big_data(s: Session, state: dict | None = None) -> dict:
     order = selected["selected"]
     projects = [by_key[w] for w in order if w in by_key]
     amounts = _amounts(s, [p["warehouse"] for p in projects], month)
-    rows = B.assemble_rows(projects, amounts, R.load_manual(s), month=month)
+    # ⭐ 手填历史只读一次：行装配与页面出参（`/api/m07/big` 的 `manual`）共用这一份，
+    #    ⛔ 别再让调用方自己再 `load_manual(s)` 一遍全表。
+    manual = R.load_manual(s)
+    rows = B.assemble_rows(projects, amounts, manual, month=month)
     return {
         "state": st,
+        "manual": manual,
         "month": month,
         "candidates": cands,
         "selected": order,

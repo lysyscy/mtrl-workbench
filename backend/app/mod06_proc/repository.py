@@ -96,7 +96,11 @@ def load_mech(s: Session, *, with_sources: bool = True) -> list[dict]:
     也不读 `effective_signature`。默认 `True` 保持包间出口的完整契约。
     """
     out = []
-    for row in s.execute(select(ProcMechManual)).scalars():
+    columns = ((ProcMechManual,) if with_sources else
+               (ProcMechManual.ym, ProcMechManual.warehouse_name, ProcMechManual.project_id,
+                *(getattr(ProcMechManual, column) for column in MECH_KEYS)))
+    result = s.execute(select(*columns))
+    for row in result.scalars() if with_sources else result.all():
         base = {'ym': row.ym or '', 'warehouse': row.warehouse_name or '', 'project_id': row.project_id,
                 **{column: getattr(row, column) for column in MECH_KEYS}}
         if not with_sources:
