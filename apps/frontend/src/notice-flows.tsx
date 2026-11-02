@@ -12,7 +12,7 @@ import type { NoticeRow } from './notices-api';
 export function NoticeFlows({ notice, blocked, close }: { notice: NoticeRow; blocked: boolean; close: () => void }) {
   const closing = useDialogClose({ busy: false, dirty: false, close });
   const query = useQuery({ queryKey: ['notice-flows', notice.notice_id], enabled: !blocked, refetchOnWindowFocus: false,
-    queryFn: async ({ signal }) => (await loadFlows(signal)).filter(flow => flow.notice_id === notice.notice_id) });
+    queryFn: async ({ signal }) => loadFlows(signal, notice.notice_id) });
   return <BusinessModal open={!blocked} className="project-dialog notice-flows-dialog" titleId="notice-flows-title" requestClose={closing.requestClose}><DialogContents title={`${notice.bill_no}，付款流水`} titleId="notice-flows-title" closing={closing}>
     {query.isPending ? <p role="status">正在读取付款流水…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p> : !query.data.length ? <p role="status">暂无付款流水。</p> : <ReadGrid manualWidths table="notice-flows" className="notice-flows-table" label="付款流水明细" domLayout="autoHeight" rows={query.data} rowId={flow=>String(flow.id)} columns={[
       {field:'flow_no',headerName:'流水号'},

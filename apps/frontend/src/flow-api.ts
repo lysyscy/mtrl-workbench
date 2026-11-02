@@ -13,8 +13,9 @@ const flowSchema = v.intersect([v.object({
 }), nonArrayObject]);
 const flowsSchema = v.intersect([v.object({ rows: v.array(flowSchema) }), nonArrayObject]);
 export type Flow = v.InferOutput<typeof flowSchema>;
-export async function loadFlows(signal?: AbortSignal): Promise<Flow[]> {
-  const data = await requestJson('/api/m05/flows?year_month=', { signal: signal ?? null });
+export async function loadFlows(signal?: AbortSignal, noticeId?: number): Promise<Flow[]> {
+  const path = noticeId === undefined ? '/api/m05/flows?year_month=' : `/api/m05/flows?notice_id=${encodeURIComponent(String(noticeId))}`;
+  const data = await requestJson(path, { signal: signal ?? null });
   if (!v.is(flowsSchema, data)) throw new ApiError('付款流水读取不完整，请重试。');
   return data.rows.map(row => {
     cents(row.amount);

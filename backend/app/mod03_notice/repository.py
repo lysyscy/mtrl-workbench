@@ -120,6 +120,27 @@ def stat_trace_index(session: Session) -> dict[int, list[StatTrace]]:
     rows = session.execute(
         select(NoticeStatLog).order_by(NoticeStatLog.changed_at, NoticeStatLog.id)
     ).scalars().all()
+    return _trace_index(rows)
+
+
+def stat_trace_index_of(session: Session, notice_ids: list[int]) -> dict[int, list[StatTrace]]:
+    """**指定 id** 的统计手改留痕索引（`TAIL-471` 按对象核对用）。
+
+    与 `stat_trace_index` **同一个投影、同一个行序**，只是把范围收窄到这几张通知书
+    ⇒ 仍是**一次**查询（⛔ 不改成逐对象查 = N+1）。
+    `notice_ids=[]` ⇒ `{}`（空选 = 空，不查库）。
+    """
+    ids = [int(i) for i in notice_ids]
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(NoticeStatLog).where(NoticeStatLog.notice_id.in_(ids))
+        .order_by(NoticeStatLog.changed_at, NoticeStatLog.id)
+    ).scalars().all()
+    return _trace_index(rows)
+
+
+def _trace_index(rows) -> dict[int, list[StatTrace]]:
     out: dict[int, list[StatTrace]] = {}
     for r in rows:
         out.setdefault(int(r.notice_id), []).append(

@@ -185,14 +185,14 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
     from app.mod03_notice.repository import get_notices_by_ids, notice_rows
 
     if flows_of is None:
-        flows_of = _flows_by_notice(session)
+        flows_of = _flows_by_notice(session, notice_ids)
     suppliers = {}
     if links_of is None:
         from app.mod11_jc import service as contracts
         suppliers = contracts.linked_suppliers(session, notice_ids)
-        links_of = _links_by_notice(session)
+        links_of = _links_by_notice(session, notice_ids)
     if traces_of is None:
-        traces_of = _traces_by_notice(session)
+        traces_of = _traces_by_notice(session, notice_ids)
 
     from app.mod03_notice.classify import current_exclude_hint
     from app.mod03_notice.rules_repository import effective_rules
@@ -243,24 +243,37 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
     return rows
 
 
-def _traces_by_notice(session):
-    """`notice_id -> [StatTrace]`（**一次查完**，不得逐行查 = N+1）。"""
-    from app.mod03_notice.repository import stat_trace_index
+def _traces_by_notice(session, notice_ids: list[int] | None = None):
+    """`notice_id -> [StatTrace]`（**一次查完**，不得逐行查 = N+1）。
 
-    index = stat_trace_index(session)
+    `notice_ids` 非 None ⇒ 只取这几张通知书的留痕（同投影、同行序，仍是一次查询）；
+    `None` ⇒ 全量（列表页原口径）。`[]` ⇒ 全空且不查库。
+    """
+    from app.mod03_notice.repository import stat_trace_index, stat_trace_index_of
+
+    index = stat_trace_index(session) if notice_ids is None else stat_trace_index_of(session, notice_ids)
     return lambda notice_id: index.get(int(notice_id), [])
 
 
-def _flows_by_notice(session):
+def _flows_by_notice(session, notice_ids: list[int] | None = None):
     """`notice_id -> [{字段…}]`（该行**全部**流水，含已撤销）。
 
     ⚠️ 含已撤销的那几条：撤销入口要判"有几条**生效**流水"（R18），
        查看关联要**列出已撤销的**及其撤销原因（R18 下半）。
+
+    `notice_ids` 非 None ⇒ 只取这几张通知书的流水（`TAIL-471` 按对象核对：付款预览只核对
+    选中集合，不必把全库流水读进来装配）。**投影与行内顺序一字不动** ——
+    仍按「付款日期倒序、同日 id 倒序」分组（与全量 `list_flows` 同序）；
+    `[]` ⇒ 全空且不查库。
     """
     from app.mod05_flow import service as flow_service      # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2a）
 
+    if notice_ids is None:
+        flows = flow_service.list_flows(session)
+    else:
+        flows = flow_service.flows_of_notices(session, list(notice_ids), descending=True)
     grouped: dict[int, list[dict]] = {}
-    for f in flow_service.list_flows(session):
+    for f in flows:
         if f.notice_id is None:
             continue  # The flow remains visible in MOD-05 without a linked notice.
         grouped.setdefault(int(f.notice_id), []).append(
@@ -278,7 +291,7 @@ def _flows_by_notice(session):
     return lambda notice_id: grouped.get(int(notice_id), [])
 
 
-def _links_by_notice(session):
+def _links_by_notice(session, notice_ids: list[int] | None = None):
     """`notice_id -> 关联的集采合同 id 列表`（`MOD-11` 的**付款子表** = 关联关系的唯一载体）。
 
     ⭐ 2026-09-19（`M5-5`）落地 —— 原注释那句「**本函数是唯一的接入点**：M5 落地时只改这里，
@@ -289,9 +302,10 @@ def _links_by_notice(session):
     是这个设计的**自然结果**，⛔ 不需要"两边各写一遍再同步"。
 
     ⚠️ **一次查完**（⛔ 不逐行查 = N+1；列表页每行都要问一次）。
+    `notice_ids` 非 None ⇒ 只取这几张通知书的关联（`TAIL-471`）；`[]` ⇒ 全空且不查库。
     """
     from app.mod11_jc import service as contracts
-    grouped = contracts.links_by_notice(session)
+    grouped = contracts.links_by_notice(session, notice_ids)
     return lambda notice_id: grouped.get(int(notice_id), [])
 
 

@@ -18,3 +18,5 @@
 2026-11-02 · Created.
 
 2026-11-03 03:43 · 主控从累计`8673a52c`派DSH新会话`session-4c7fac69-cb46-452d-9f72-cd160013ef5c`（Flash/high/fresh，默认full）。本批只读源码并准备具名量测脚本，470持有live资源；明确行序/空选全量/可信核对/账号及合法候选后，再由主控分配下一DB窗口。结果归`site-performance/TAIL-471-preparation.md`。
+
+05:00 · [真实候选及检查回执](../../site-performance/TAIL-471-result.md)已交回。主控核下推后的完整字段/原倒序及供应商来源，保默认完整流与默认ASC；新增非法显式ID报错保护后四项范围回归通过。live窗口已退出，真实副本弹窗/付款前只读核对连通仍待核，不执行正式付款，暂不done。

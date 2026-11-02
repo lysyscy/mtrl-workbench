@@ -181,9 +181,25 @@ def api_flows(
     pay_method: str = Query(""),
     project_id: str = Query(""),
     keyword: str = Query(""),
+    notice_id: str = Query("", description="按单张通知书取流水（弹窗）；空=保持原全量语义"),
     load: PageData = Depends(get_flows_data),
 ) -> dict:
-    """付款流水列表（筛选即时生效；**不分页**）。"""
+    """付款流水列表（筛选即时生效；**不分页**）。
+
+    `notice_id` 只做**范围下推**：给了就只取这张通知书的流水，行**字段与行序**
+    与原全量列表筛出该对象完全一致（见 `svc.build_notice_flows`）；
+    不给则一字不动地走原来的全量口径（含 `year_month` 的「不传=当月 / 空=全部」区别）。
+    """
+    picked = notice_id.strip() if isinstance(notice_id, str) else ""
+    if picked:
+        try:
+            scoped_notice_id = int(picked)
+        except ValueError:
+            raise MustReportError("通知书编号必须为正整数。") from None
+        if scoped_notice_id <= 0:
+            raise MustReportError("通知书编号必须为正整数。")
+        with session_scope() as s:
+            return svc.build_notice_flows(s, scoped_notice_id)
     return load(
         year_month=_resolve_ym(year_month), status=status or None,
         pay_method=pay_method or None,

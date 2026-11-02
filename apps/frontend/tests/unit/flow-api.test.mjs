@@ -9,14 +9,15 @@ const base = {
   pay_date: '2026-10-28', amount: '12.34', pay_method: '现汇', remark: '', created_by: '',
   status: 'effective', status_label: '生效', revoke_reason: '',
 };
-async function load(payload) {
+async function load(payload, noticeId) {
   const previous = globalThis.fetch;
+  const expected = noticeId === undefined ? '/api/m05/flows?year_month=' : `/api/m05/flows?notice_id=${noticeId}`;
   globalThis.fetch = async (path, init) => {
-    assert.equal(path, '/api/m05/flows?year_month=');
+    assert.equal(path, expected);
     assert.ok(init.signal instanceof AbortSignal);
     return { status: 200, ok: true, json: async () => payload };
   };
-  try { return await loadFlows(); }
+  try { return await loadFlows(undefined, noticeId); }
   finally { globalThis.fetch = previous; }
 }
 
@@ -62,4 +63,14 @@ test('normal effective/revoked/orphan history keeps values, identity, extras and
   assert.equal(rows.filter(row => row.status === 'effective').reduce((total, row) => total + cents(row.amount), 0n), 1234n);
   assert.equal(rows[1].amount_approved, null); assert.equal(rows[1].pay_date, '');
   assert.deepEqual(await load({ rows: [] }), []);
+});
+
+test('single-notice scope only changes the request path, keeping rows, order and revoked/orphan facts', async () => {
+  const newer = { ...base, id: 9, notice_id: 7, pay_date: '2026-10-30' };
+  const older = { ...base, id: 4, notice_id: 7, amount_approved: null, status: 'revoked', status_label: '已撤销', revoke_reason: '合成原因' };
+  const rows = await load({ rows: [newer, older] }, 7);
+  assert.equal(rows[0], newer); assert.equal(rows[1], older);
+  assert.equal(rows[1].amount_approved, null); assert.equal(rows[1].status, 'revoked');
+  assert.deepEqual(await load({ rows: [] }, 7), []);
+  await assert.rejects(load({ rows: [{ ...base, notice_id: '7' }] }, 7), ApiError);
 });

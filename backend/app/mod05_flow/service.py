@@ -85,11 +85,15 @@ def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView
     return history.adjustments(repo.list_openings(s, project_id=project_id), notice_debt_views(s))
 
 
-def project_options(s: Session) -> list[dict]:
-    """项目选择器候选（**台账两侧共用同一个选择器**，§4.5.4）。"""
+def project_options(s: Session, projects: dict[int, Project] | None = None) -> list[dict]:
+    """项目选择器候选（**台账两侧共用同一个选择器**，§4.5.4）。
+
+    `projects` —— 调用方**已经算过**`project_index(s)` 时传进来复用（同一请求别读两遍全项目行）。
+    """
+    index = project_index(s) if projects is None else projects
     return [
         {"id": p.id, "label": project_label(p), "warehouse_name": p.warehouse_name or ""}
-        for p in sorted(project_index(s).values(), key=lambda x: (x.warehouse_name or "", x.id))
+        for p in sorted(index.values(), key=lambda x: (x.warehouse_name or "", x.id))
     ]
 
 
@@ -184,9 +188,23 @@ def build_flows(
             "amount": f"{sum((Decimal(r['amount']) for r in live), Decimal('0')):.2f}",
         },
         "pay_methods": list(PAY_METHODS),
-        "project_options": project_options(s),
+        "project_options": project_options(s, projects),
         "paginated": dom.FLOW_PAGINATED,
     }
+
+
+def build_notice_flows(s: Session, notice_id: int) -> dict:
+    """**单张通知书**的付款流水（弹窗用）—— 只读这张通知书的流水，不再全量装配。
+
+    ⚠️ 口径与 `build_flows(year_month="")` 筛出该对象的行**逐字段、逐行序全等**：
+       同一份 `_flow_dict` 投影、同一套排序（`pay_date DESC, id DESC`），
+       已撤销照常出行、失联（`notice_id` 为 NULL）本来就不属于任何通知书的弹窗。
+    ⚠️ 这是**只读展示**口径；付款前的核对仍走 `payment-context` 权威重读（⛔ 不得拿这里的旧缓存放行付款）。
+    """
+    notices = {int(n.id): n for n in repo.notice_ids_rows(s, [int(notice_id)])}
+    projects = project_index(s)
+    return {"rows": [_flow_dict(f, notices, projects)
+                     for f in repo.flows_of_notices(s, [int(notice_id)], descending=True)]}
 
 
 # ---------------------------------------------------------------- ② 欠款（三类 + 按项目）

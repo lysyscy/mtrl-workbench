@@ -38,13 +38,21 @@ def list_flows(s: Session) -> list[PaymentFlow]:
     return list(s.execute(stmt).scalars().all())
 
 
-def flows_of_notices(s: Session, notice_ids: list[int]) -> list[PaymentFlow]:
-    """一次取指定通知书的全部流水，供合同明细分笔展示。"""
+def flows_of_notices(s: Session, notice_ids: list[int], *, descending: bool = False) -> list[PaymentFlow]:
+    """一次取指定通知书的全部流水，供合同明细分笔展示。
+
+    `descending=True` ⇒ 与 `list_flows` **同序**（`pay_date DESC, id DESC`）。
+    默认仍是 `pay_date, id` 升序：合同明细分笔依赖这条默认口径，⛔ 不要为别的调用方改它。
+    单对象核对（`TAIL-471`）要的是「全量列表筛出该对象」后的原序 ⇒ 必须显式传 `descending=True`。
+    """
     if not notice_ids:
         return []
-    return list(s.execute(select(PaymentFlow).where(
-        PaymentFlow.notice_id.in_(notice_ids)
-    ).order_by(PaymentFlow.pay_date, PaymentFlow.id)).scalars().all())
+    stmt = select(PaymentFlow).where(PaymentFlow.notice_id.in_(notice_ids))
+    if descending:
+        stmt = stmt.order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())
+    else:
+        stmt = stmt.order_by(PaymentFlow.pay_date, PaymentFlow.id)
+    return list(s.execute(stmt).scalars().all())
 
 
 def get_flow(s: Session, flow_id: int, *, for_update: bool = False) -> PaymentFlow | None:
@@ -320,6 +328,15 @@ def notice_rows(s: Session) -> list[PaymentNotice]:
     """付款通知书行 —— `NoticeDebtView` 的来源（欠款 / 台账 / 统计**共用同一批行**）。"""
     from app.mod03_notice import service as notices
     return notices.all_notice_rows(s)
+
+
+def notice_ids_rows(s: Session, notice_ids: list[int]) -> list[PaymentNotice]:
+    """**指定 id** 的通知书行（单对象装配用，经 `mod03` 出口）。
+
+    ⚠️ 只读装配用：`notice_ids=[]` ⇒ `[]`（空选 = 空，不查库）。
+    """
+    from app.mod03_notice import service as notices
+    return notices.get_notices_by_ids(s, notice_ids)
 
 
 def debt_notice_rows(s: Session):
