@@ -62,6 +62,24 @@ def _big_row(r: dict) -> dict:
     }
 
 
+def _annual_out(annual: dict) -> dict:
+    """年度网格 → JSON（金额一律字符串；`None` **保持 `None`** ⇒ 「不可得 ≠ 0」）。
+    完整出口与屏幕读模型共用这一份，保证两边同源同值。"""
+    return {kind: {**grid,
+                   "rows": [{**row, "prior": _s(row['prior']), "balance": _s(row['balance']),
+                             "cells": [_s(value) for value in row['cells']],
+                             "total": _s(row['total'])}
+                            for row in grid['rows']],
+                   "sum_row": [_s(value) for value in grid['sum_row']]}
+            for kind, grid in annual.items()}
+
+
+def _balances_out(balances: dict) -> dict:
+    """「结余」录入值 → JSON（**未录入的键不出现** ≠ 0）。完整出口与屏幕读模型共用。"""
+    return {str(kind): {str(wh): _s(v) for wh, v in ((balances or {}).get(kind) or {}).items()}
+            for kind in X.KINDS}
+
+
 # ============================================================ 读
 
 
@@ -105,7 +123,8 @@ def api_extract(year: str = "", status: str = "全部") -> dict:
     with session_scope() as s:
         amounts = I.load_amounts(s)
         balances = load_balances(s)
-        annual = S.annual_grids(s, amounts, S.parse_extract_state({"ext_period":year, "status":status}))
+        annual = S.annual_grids(s, amounts, S.parse_extract_state({"ext_period":year, "status":status}),
+                                balances=balances)
     out: dict[str, dict[str, dict[str, object]]] = {}
     for kind in X.KINDS:
         by_wh = (amounts or {}).get(kind) or {}
@@ -115,17 +134,28 @@ def api_extract(year: str = "", status: str = "全部") -> dict:
         }
     return {
         "amounts": out,
-        "annual": {kind:{**grid, "rows":[{**row, "prior":_s(row['prior']), "balance":_s(row['balance']),
-                    "cells":[_s(value) for value in row['cells']], "total":_s(row['total'])}
-                    for row in grid['rows']], "sum_row":[_s(value) for value in grid['sum_row']]}
-                    for kind,grid in annual.items()},
+        "annual": _annual_out(annual),
         "annual_totals": S.extract_year_totals(amounts, balances),
         "kinds": list(X.KINDS),
-        "balances": {
-            str(kind): {str(wh): _s(v) for wh, v in ((balances or {}).get(kind) or {}).items()}
-            for kind in X.KINDS
-        },
+        "balances": _balances_out(balances),
     }
+
+
+@router.get("/api/m07/extract-screen")
+def api_extract_screen(year: str = "", status: str = "全部") -> dict:
+    """**提取页屏幕读模型** —— 与 `/api/m07/extract` 的 `annual` / `balances` **逐值同一份**，
+    只少发屏幕不消费的三项（`amounts` 全量明细字典、`annual_totals` 各年整表合计、`kinds` 常量）。
+
+    ⛔ 不是新的取数口径：`amounts` / `balances` / 年度网格仍走 `I.load_amounts` ·
+       `load_balances` · `S.annual_grids`（同一份规则与同一份历史结余）；完整出口原样保留。
+    ⚠️ 屏幕消费方 = `apps/frontend/src/settlement-api.ts` 的 `readExtract`：只校验 `annual` ＋ `balances`。
+    """
+    with session_scope() as s:
+        amounts = I.load_amounts(s)
+        balances = load_balances(s)
+        annual = S.annual_grids(s, amounts, S.parse_extract_state({"ext_period":year, "status":status}),
+                                balances=balances)
+    return {"annual": _annual_out(annual), "balances": _balances_out(balances)}
 
 
 @router.get("/api/m07/big/export")

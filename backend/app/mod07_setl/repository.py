@@ -53,6 +53,17 @@ def load_rows(s: Session) -> list[dict]:
     return [to_row(d) for d in s.execute(select(SetlDetail)).scalars()]
 
 
+def load_month_rows(s: Session, ym: str) -> list[dict]:
+    """**单月明细行** —— 与 `load_rows` 同一投影（`to_row`），月筛交给 `SetlDetail.ym` 的索引。
+
+    ⚠️ 只是**少装载别的月份**（屏幕只要这一月）；⛔ 不是新的取数口径：
+       页面表体仍 = `domain.warehouse_rows(...)`（`rows_of` 会再按 `ym` 过一遍），
+       取数 / 汇总 / 合计的**唯一出口**没动。
+    """
+    want = str(ym or "")
+    return [to_row(d) for d in s.execute(select(SetlDetail).where(SetlDetail.ym == want)).scalars()]
+
+
 # ============================================================ 抓取落库（幂等刷新，§9.5）
 
 
@@ -172,5 +183,5 @@ def _find_balance(s: Session, kind: str, warehouse: str) -> WeldGasBalance | Non
     return None
 
 
-__all__ = ["AMOUNT_FIELDS", "SOURCE_FIELDS", "to_row", "load_rows", "upsert_month",
-           "load_balances", "save_balance"]
+__all__ = ["AMOUNT_FIELDS", "SOURCE_FIELDS", "to_row", "load_rows", "load_month_rows",
+           "upsert_month", "load_balances", "save_balance"]

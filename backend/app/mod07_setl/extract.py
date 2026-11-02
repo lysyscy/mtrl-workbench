@@ -103,14 +103,22 @@ def match_kind(resource_name: str, kind: str, rules: dict) -> bool:
 
 
 def extract_amounts(details, rules: dict | None = None) -> dict[str, dict[str, dict[str, Decimal]]]:
-    """明细 → `{类别: {仓库: {月份: 金额}}}`（**取数唯一出口**；金额 = 收金额）。"""
+    """明细 → `{类别: {仓库: {月份: 金额}}}`（**取数唯一出口**；金额 = 收金额）。
+
+    ⚠️ `match_kind` 是**纯函数**（结果只取决于 资源名称 × 类别 × 规则），同一份明细里
+       同名物料反复出现 ⇒ 本调用内按名称记一次命中，**只省重复判定**：
+       规则仍来自本次入参、不跨调用缓存（改名单/改排除子串立刻生效），金额口径一字不动。
+    """
     rules = rules or default_rules()
     out: dict[str, dict[str, dict[str, Decimal]]] = {k: {} for k in KINDS}
+    hits: dict[str, tuple[str, ...]] = {}
     for d in details or ():
         name = str(d.get("resource_name") or "")
-        for kind in KINDS:
-            if not match_kind(name, kind, rules):
-                continue
+        kinds = hits.get(name)
+        if kinds is None:
+            kinds = tuple(k for k in KINDS if match_kind(name, k, rules))
+            hits[name] = kinds
+        for kind in kinds:
             wh = str(d.get(WAREHOUSE_KEY) or "")
             ym = str(d.get("ym") or "")
             bucket = out[kind].setdefault(wh, {})

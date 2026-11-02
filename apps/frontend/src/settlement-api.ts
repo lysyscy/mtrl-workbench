@@ -35,7 +35,8 @@ export function readExtract(value: unknown, year: string): ExtractData {
   return value as unknown as ExtractData;
 }
 export const getSettlement = async (ym: string, signal?: AbortSignal) => readSettlement(await requestJson(`/api/m07/settlement?${new URLSearchParams({ period: ym })}`, signal ? { signal } : {}), ym);
-export const getExtract = async (year: string, status: string, signal?: AbortSignal) => readExtract(await requestJson(`/api/m07/extract?${new URLSearchParams({ year, status })}`, signal ? { signal } : {}), year);
+// 屏幕只消费 annual + balances；完整出口 /api/m07/extract 保留给导出与既有脚本，读模型见后端 screen 端点。
+export const getExtract = async (year: string, status: string, signal?: AbortSignal) => readExtract(await requestJson(`/api/m07/extract-screen?${new URLSearchParams({ year, status })}`, signal ? { signal } : {}), year);
 export async function saveBalance(kind: ExtractKind, warehouse: string, raw: string, signal: AbortSignal) {
   const value = await requestJson('/api/m07/extract/balance', { method: 'POST', signal, ...body({ kind, warehouse, raw }) });
   // This existing endpoint returns Decimal values as JSON numbers, and null when cleared.

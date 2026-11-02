@@ -17,6 +17,7 @@ from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
 from app.mod07_setl import inventory_extract as I
 from app.mod07_setl.repository import load_balances, load_rows, save_balance
+from app.mod07_setl.repository import load_month_rows
 
 
 def parse_state(params: dict | None = None) -> dict:
@@ -40,7 +41,9 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     """页面所需的一切：按月取数**＋ 按仓汇总** → 表体 / 合计 / 空态文字 / 三项计数 / 产出物清单。"""
     st = dict(state or parse_state())
     ym = st["period"]
-    rows = D.warehouse_rows(load_rows(s), ym)
+    # 只装载这一月（别的月份屏幕根本不用）——表体仍经 `warehouse_rows`/`rows_of` 二次按月过滤，
+    # 取数 / 汇总 / 合计的唯一出口没变（Sqlite/桩忽略 WHERE 时结果同样正确）。
+    rows = D.warehouse_rows(load_month_rows(s, ym), ym)
     return {
         "state": st,
         "ym": ym,
@@ -117,7 +120,7 @@ def build_extract_data(s: Session, state: dict | None = None) -> dict:
             amounts, kind, warehouses=_visible(amounts, kind, st, statuses, order))
             for kind in X.KINDS],
         "rules": X.default_rules(),
-        "annual": annual_grids(s, amounts, st),
+        "annual": annual_grids(s, amounts, st, context=(statuses, order)),
     }
 
 
@@ -156,16 +159,26 @@ def build_extract_export(s: Session, state: dict | None = None) -> dict:
             warehouses=_visible(amounts, kind, st, statuses, order),
             year=report_ym[:4] if report_ym else "", balances=balances)
     return {"state": st, "report_ym": report_ym, "year": report_ym[:4] if report_ym else "",
-            "grids": grids, "annual_grids": annual_grids(s, amounts, st)}
+            "grids": grids,
+            "annual_grids": annual_grids(s, amounts, st, balances=balances,
+                                        context=(statuses, order))}
 
 
-def annual_grids(s: Session, amounts: dict, state: dict) -> dict:
-    """页面、合计和年度导出共用网格；筛选、档案顺序仍走现有出口。"""
+def annual_grids(s: Session, amounts: dict, state: dict, *,
+                 balances: dict | None = None,
+                 context: tuple[dict[str, str], list[str]] | None = None) -> dict:
+    """页面、合计和年度导出共用网格；筛选、档案顺序仍走现有出口。
+
+    `balances` / `context`（= `_project_context` 的返回值）可由**同一请求**里已经取过的调用方
+    直接传入，省掉同一次请求内的重复读；不传（默认）仍按原口径自取 ⇒ 单独调用时行为不变。
+    ⛔ 这里**不做跨请求缓存**：`balances` 是用户手录的历史结余，必须每次现读。
+    """
     year = str(state.get('period') or D.default_month())[:4]
     if len(year) != 4 or not year.isdigit():
         year = D.default_month()[:4]
-    statuses, order = _project_context(s)
-    balances = load_balances(s)
+    statuses, order = context if context is not None else _project_context(s)
+    if balances is None:
+        balances = load_balances(s)
     return {kind:I.annual_grid(amounts, kind, warehouses=_visible(amounts, kind, state, statuses, order), year=year, balances=balances)
             for kind in X.KINDS}
 

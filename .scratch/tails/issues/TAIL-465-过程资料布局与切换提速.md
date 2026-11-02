@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] 固定真实矩阵、字号、视口及缓存状态，用调用栈区分全量规划、签名、字体、控件测量与网格提交；自动化等待不冒充交互指标。
 - [ ] 对确认热点完成有界优化，验证初次显示、切项目及输入保存的实际用户路径；未证实热点时保留可复查的测量结论。
@@ -16,3 +16,7 @@
 共同范围、共享文件归属与验证调度见[全站性能规格](../../site-performance/plan.md)。本票不以读取票为硬前置。
 
 2026-11-02 · Created.
+
+2026-11-03 · 主控从本地累计`3c5712ed`派DSH新会话`session-5b7070b3-524e-4b80-8f2a-fea69fbd217a`，默认Flash/high，附用户全权限要求。先以固定真实matrix/screen输入核局部布局准备，尚无preview/DB时段；共享机制候选由主控串行整合，结果归`site-performance/TAIL-465-result.md`。
+
+03:37 · 旧会话工具停滞已取消；默认全权限真正配置并经新会话实测后，替换会话`session-f9dd0666-f9f0-4237-aca5-22291964df52`已交[离线候选](../../site-performance/TAIL-465-result.md)。单格键不混不同渲染，固定行保原键；类型检查通过，真实浏览器首显/切项目/保存与主控验收未完，保持in-progress。

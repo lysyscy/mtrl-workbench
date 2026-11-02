@@ -15,7 +15,7 @@ import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { cents, money } from './notices-api';
 import { categories, dataKeys, getProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
-import type { Confirmation, Difference, ProcessRow } from './process-api';
+import type { Confirmation, Difference, ProcessData, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const differenceRowId = (row: Difference) => String(row.id);
@@ -164,7 +164,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,cancel:key=>saves.update(current=>{const next={...current};delete next[key];return next;})}}>
-        <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale}/>
+        <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale} sources={query.data?.sources[warehouse]}/>
       </ProcessCells.Provider></>}
     </>}
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
@@ -187,13 +187,16 @@ function MatrixCell(p:ICellRendererParams<MatrixRow>){
   if(p.node.rowPinned)return show(row[field]);
   const column=matrixColumns.find(column=>column.field===field)!;return field.startsWith('mech_')?<MechanicalCell data={row} column={field}/>:<MaterialCell data={row} column={field} label={column.label}/>;
 }
-function MatrixGrid({matrix,rows,kind,warehouse,scale}:{matrix:Awaited<ReturnType<typeof getProcess>>['matrices'][string];rows:ProcessRow[];kind:'raw'|'adjusted';warehouse:string;scale:number}){
+function MatrixGrid({matrix,rows,kind,warehouse,scale,sources}:{matrix:Awaited<ReturnType<typeof getProcess>>['matrices'][string];rows:ProcessRow[];kind:'raw'|'adjusted';warehouse:string;scale:number;sources:ProcessData['sources'][string]|undefined}){
   const cells=useContext(ProcessCells)!;
   const errors=JSON.stringify(Object.entries(cells.drafts).filter(([,draft])=>draft.warehouse===warehouse&&draft.error).map(([key,draft])=>[key,draft.error]));
   const measurement=useMemo(()=>{
     const messages=new Map<string,string>(JSON.parse(errors));
-    return {signature:(row:MatrixRow,column:string,pinned:boolean)=>JSON.stringify([row,pinned?'':messages.get(keyOf(warehouse,row.ym,column))??''])};
-  },[errors,warehouse]);
+    // Only what the measuring render of one cell reads: its own amount, whether it is an
+    // input or plain text, the 明细确认 marker, and its own error message. Pinned totals rows
+    // keep the whole row so the 总求和 label layout stays keyed as before.
+    return {signature:(row:MatrixRow,column:string,pinned:boolean)=>pinned?JSON.stringify([row,'']):JSON.stringify([row[column]??null,row.materialEditable??null,messages.get(keyOf(warehouse,row.ym,column))??'',sources?.[row.ym]?.[column]?.mode==='detail'?'detail':''])};
+  },[errors,warehouse,sources]);
   const totals=useMemo<MatrixRow[]>(()=>[
     {...matrix.totals[kind],ym:'合计',rowkind:'total'} as MatrixRow,
     {...Object.fromEntries(dataKeys.map(field=>[field,null])),ym:'总求和（本表）',rowkind:'segments',...Object.fromEntries([0,5,10,14].map((start,index)=>[matrixColumns[start]!.field,['入库合计','出库合计','机械合计','不含税合计'][index]+' '+show(matrix.segments[kind][index]!.total)]))} as MatrixRow,

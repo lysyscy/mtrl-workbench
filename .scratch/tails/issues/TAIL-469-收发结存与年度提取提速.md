@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] 分别量真实月报与年度提取的事实读取、响应字段、构造及布局成本，只改证实有收益的消费链。
 - [ ] 对热点减少屏幕未消费的历史传输或重复事实读取，保持当前年完整网格、历史结余、归档和继承名单及空值与零的区别。
@@ -16,3 +16,7 @@
 共同范围及并行归属见[全站性能规格](../../site-performance/plan.md)。与大表票没有业务前置关系，共用入口由同路线串行协调。
 
 2026-11-02 · Created.
+
+2026-11-03 · 主控从本地累计`3c5712ed`派DSH新会话`session-4fcc471b-96a8-4b63-b369-d333ef65bbbf`，默认Flash/high，附用户全权限要求。持有第二轮唯一DB只读探针/backend_verify窗口，按月报/年度提取分别量测与实现；不改big主人、不用有写语义导出作只读探针，结果归`site-performance/TAIL-469-result.md`。
+
+03:37 · 旧会话停滞取消；默认full生效后替换会话`session-fb47a83b-e62a-4b20-8f0a-c55ec80fcde0`交回[月报/提取候选与真实指标](../../site-performance/TAIL-469-result.md)。主控核月筛仍经原投影与域汇总，提取保旧完整出口与既有金额规则；相关隔离回归48项及前端检查通过，连接/临时测试schema已退出，证据组active待结项。真实副本年度表/成品代表仍待验，保持in-progress。
