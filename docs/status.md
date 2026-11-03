@@ -50,7 +50,7 @@
 
 ## 后续工作
 
-2026-11-03，按[全站性能规格](../.scratch/site-performance/plan.md)采用Impeccable `optimize` 并派DSH完成464–471，四批累计`78c79c8a`已按本轮明确授权推送并核远端SHA。追加共享首显修复后，十五页有限路径覆盖、具名交互和双轴审查已收敛；build-08类型/构建、2项首显/滚动/列宽浏览器及34项unit通过。逐页收益/保持理由、默认月无数据及基线同红、未验范围见[收敛结果](../.scratch/site-performance/completion.md)；472正在资源结项。未现场人工验收或正式加载；油卡及原无关修改保持。
+2026-11-03，按[全站性能规格](../.scratch/site-performance/plan.md)采用Impeccable `optimize` 并派DSH完成464–472，最终产品`d5a97eaf`已按本轮明确授权推送并核远端SHA，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41570045739)通过。追加共享首显修复后，十五页有限路径覆盖、具名交互和双轴审查已收敛；build-08类型/构建、2项首显/滚动/列宽浏览器及34项unit通过。逐页收益/保持理由、默认月无数据及基线同红、未验范围见[收敛结果](../.scratch/site-performance/completion.md)；临时预览/schema/工作树/构建退出，必要证据保全并结项。未现场人工验收或正式加载；油卡及原无关修改保持。DSH未来新会话默认全权限已按用户要求配置并实测生效；早期凭据输出事故仍需后续处置，未视为已解决。
 
 夜间优化改善了首页JS传输量和库存输入反馈，但此前本机代理指标不足以证明库存全量准备、滚动或整体加载提速。后续沿现有Profiler/layoutTiming固定真实输入，保完整金额、手工列宽、草稿和用户滚动、零HTTP本地筛选；逐页据实核验。
 
