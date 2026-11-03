@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-464, TAIL-465, TAIL-466, TAIL-467, TAIL-468, TAIL-469, TAIL-470, TAIL-471
 
-**Status:** blocked
+**Status:** in-progress
 
 - [ ] 前八票均按各自协议完成，核累计整合基线及每票实际采用或保持结论；未完成、wontfix及缺失原票不能视为依赖满足。
 - [ ] 逐项核首页、项目档案、i8接入层、特殊费用、规则配置、用户管理及机械页的共享收益和剩余热点，必要修复保持本页完整用户路径。
@@ -14,6 +14,8 @@
 
 ## Comments
 
-共同范围、独立双轴审查及整合安排见[全站性能规格](../../site-performance/plan.md)。本票由前八票全部done解锁，当前未满足。
+共同范围、独立双轴审查及整合安排见[全站性能规格](../../site-performance/plan.md)。本票由前八票全部done解锁。
 
 2026-11-02 · Created.
+
+2026-11-03 · 前八票已据实done；十五页共享首显覆盖及每页采用/保持理由归[收敛结果](../../site-performance/completion.md)，累计双轴及共享修复P2已关闭。预览与本轮schema退出，临时构建/工作树和受管证据待最后结项。

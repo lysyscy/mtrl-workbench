@@ -44,6 +44,8 @@ html,body{height:100%}body{display:flex;flex-direction:column}#root{display:flex
 .sidebar .nav-group+ .nav-group{margin-top:1.2rem}.sidebar .nav-group h2{font-size:calc(12px * var(--fscale));font-weight:500;margin:0 0 .35rem;padding:.2rem .4rem;color:inherit}.sidebar .nav-group a{display:block;overflow-wrap:anywhere}
 .account-pill{display:flex;align-items:center;gap:.5em;border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf2);font-size:calc(12px * var(--fscale));padding:.35em .8em;min-height:0;text-align:left;overflow-wrap:anywhere}.account-dot{width:.55em;height:.55em;flex-shrink:0;border-radius:50%;background:var(--ok)}
 
+/* Retained pages share the active page's content box without taking up flow space. */
+.main>main{position:relative}
 .page-loading{position:absolute;z-index:1;padding:calc(20px * var(--fscale));display:flex;align-items:center;gap:1rem;color:var(--tx2)}
 
 /* Bound virtual row invalidation; offscreen sizing portals keep their natural overflow. */

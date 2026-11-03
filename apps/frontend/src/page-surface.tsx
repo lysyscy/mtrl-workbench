@@ -1,9 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Button from 'antd/es/button';
 import { loadElementFonts } from './appearance-ready';
 import { PageActivity } from './page-activity';
+
+// Keep inactive grids at the content area's size so their layout queues can settle.
+// The retained page stays outside both the interaction and accessibility trees.
+const retainedBox: CSSProperties = { display: 'block', position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none', zIndex: -1 };
 
 // Prepare only the first display. Retained pages, refreshes and editing never hide existing content.
 export function PageSurface({ active, title, children }: { active: boolean; title: string; children: ReactNode }) {
@@ -43,6 +47,6 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
   }, [active, client]);
   return <>
     {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>重试字体加载</Button>}</div>}
-    <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} style={{ visibility: ready ? undefined : 'hidden' }}><PageActivity.Provider value={active}>{children}</PageActivity.Provider></div>
+    <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} aria-hidden={active ? undefined : true} style={active ? { visibility: ready ? undefined : 'hidden' } : retainedBox}><PageActivity.Provider value={active}>{children}</PageActivity.Provider></div>
   </>;
 }

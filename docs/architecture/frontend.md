@@ -12,6 +12,8 @@ React 账号工作区由 `apps/frontend/src/main.tsx` 的 `pages` 注册表统�
 
 PageSurface的首次发布由页面显式`data-page-loading`和`data-page-chrome`所指字体决定，各表负责自身布局和局部重试。QueryCache只唤醒准备检查；身份核验、已有内容保活和保存锁继续由各自主人持有。PageActivity向新增业务网格传递当前页可见性，保活隐藏页暂停尺寸准备；路由使用BrowserRouter公开useTransitions=false，及时切换路由身份，首次数据/字体等待仍由现有PageSurface负责。
 
+保活页隐藏时保持主内容区的同一宽高，脱离文档流并以visibility、inert和aria-hidden隔离，避免零尺寸触发AG内部布局队列持续重试；定位包含块由主内容区持有。返回保留原滚动、筛选和草稿，PageActivity查询/尺寸准备门控保持。
+
 React业务数据表统一用AG Grid Community承载输入、合计、分组表头及虚拟窗口；标准屏幕视图展开报表合并标签，沿用原服务端快照值，不从重复标签重算金额。Excel/PDF继续由原模板生成，不依赖企业版。受管声明补丁只处理已采用网格版本与 TS7 严格可选属性的兼容；精确版本、补丁与升级核对回组件依赖及锁文件。
 
 库存、通知书、付款流水、欠款双侧主表、机械公司汇总、收发结存、焊材/气体年度提取及月度会大表经`grid-presentation.tsx`装配表格呈现生命周期：页面提供业务列、数据及范围，内部统一列定义保留、尺寸所有权、测量列派生、挂载、首显与局部重试；`grid-layout.ts`仍持有深尺寸准备：文本短内容走字体测宽，长文本与富控件在最终宽度下有界实测；富控件通过所属React树的portal复用真实渲染器和上下文，不直接复制控件样式。统一应用正文/固定合计行高及表头后发布首显，保留虚拟滚动。工作区实际AG数据行以paint containment限定重绘范围，避免滚动时行内容使大区域反复绘制；离屏grid-layout-measure保持自然溢出，浮层沿原portal挂载。
