@@ -1,0 +1,13 @@
+.grid-value-filter { width: min(calc(350px * var(--fscale, 1)), calc(100vw - 24px)); padding: 12px; color: var(--tx); background: var(--sf); font-family: var(--fs); }
+.grid-value-filter-sort, .grid-value-filter-actions { display: flex; align-items: center; gap: 8px; }
+.grid-value-filter-sort { margin-bottom: 8px; }
+.grid-value-filter-selected { color: var(--tx2); padding-block: 8px; min-height: 1.5em; }
+.grid-value-filter-tree { background: var(--sf); color: var(--tx); }
+.grid-value-filter-tree .ant-tree-node-content-wrapper { flex: 1; min-width: 0; }
+.grid-value-filter-tree .ant-tree-title { display: block; }
+.grid-value-filter-candidate { display: flex; align-items: center; gap: 8px; min-width: 0; line-height: 1.5; }
+.grid-value-filter-label { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.grid-value-filter-count { color: var(--tx2); font-variant-numeric: tabular-nums; }
+.grid-value-filter-only { visibility: hidden; flex: none; }
+.ant-tree-treenode:hover .grid-value-filter-only, .ant-tree-treenode:focus-within .grid-value-filter-only { visibility: visible; }
+.grid-value-filter-actions { border-top: .5px solid var(--bd); margin-top: 8px; padding-top: 8px; }

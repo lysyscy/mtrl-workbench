@@ -17,6 +17,7 @@ from app.report_export import (
     jc_print_export,
     mechanical_export,
     nt_export,
+    oilcard_export,
     pj_export,
     save,
     service,
@@ -31,6 +32,7 @@ BINDINGS = {
     "fl": fl_export,        # 付款流水导出（`mod05`）
     "jc_print": jc_print_export,
     "mechanical": mechanical_export,
+    "oilcard": oilcard_export,
     "jc": jc_export,        # 集采台账导出（`mod11`）
     "service": service,     # 中立编排：`export_big` / `export_ledger` / `export_proc` / …（`mod05/06/07/08`）
     "save": save,           # `save_workbook`（`mod05` 的「总欠款表」用它落盘）

@@ -118,7 +118,7 @@ class M09Session:
             return _Result([getattr(row, descriptions[0]['expr'].key) for row in rows])
         return _Result(rows)
 
-    def get(self, model, ident):  # noqa: ANN001
+    def get(self, model, ident, **kwargs):  # noqa: ANN001
         return next((r for r in self.by_model.get(model, []) if r.id == ident), None)
 
     def add(self, row) -> None:  # noqa: ANN001

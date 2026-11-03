@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, false, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -53,6 +53,19 @@ class FeeManualItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class FeeOilBinding(Base):
+    """显式核对后启用的用油身份；旧完整月值留在原表，不成为custom。"""
+    __tablename__ = 'fee_oil_binding'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey('project.id'), unique=True)
+    fee_item_id: Mapped[int | None] = mapped_column(ForeignKey('fee_item.id'), nullable=True, unique=True)
+    reviewed_json: Mapped[str] = mapped_column(Text)
+    source_note: Mapped[str] = mapped_column(Text)
+    enabled_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
 class LegacyFeeManualItem(Base):
     """迁移前原始费用记录，仅供保留和项目引用检查。"""
     __tablename__ = "fee_manual_item"
@@ -65,4 +78,4 @@ class LegacyFeeManualItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
-__all__ = ["FeeItem", "FeeManualItem", "LegacyFeeManualItem"]
+__all__ = ["FeeItem", "FeeManualItem", "FeeOilBinding", "LegacyFeeManualItem"]

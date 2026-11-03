@@ -2,14 +2,14 @@ import {
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule,
-  ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule,
+  ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule, CustomFilterModule,
 } from 'ag-grid-community';
 
 // Register adopted public modules; their dependencies supply the grid defaults.
 ModuleRegistry.registerModules([
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
-  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule,
+  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule, CustomFilterModule,
 ]);
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
 // Native drag selection/copy is shared by every grid; retain virtualisation.

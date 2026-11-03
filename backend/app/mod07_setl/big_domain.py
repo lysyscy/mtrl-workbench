@@ -76,7 +76,7 @@ _SPECS: tuple[tuple[str, str, str], ...] = (
     ("contract",    KIND_HAND,    FMT_MONEY),   # 合同（预估）价（手填）
     ("output_cum",  KIND_HAND,    FMT_MONEY),   # 产值累计（含税）（手填）
     ("mat_cum",     KIND_DERIVED, FMT_MONEY),   # 主材累计（含税）= 按项目取集采台账结算额（§5.7.1 末条）
-    ("oil",         KIND_HAND,    FMT_MONEY),   # 工程用油（手填 · 油卡台账）
+    ("oil",         KIND_HAND,    FMT_MONEY),   # 兼容读槽；已接续时由油卡累计结果覆盖，原总额只读
     ("note",        KIND_HAND,    FMT_TEXT),    # 备注（手填 · 自由文本）
 )
 
@@ -113,7 +113,7 @@ _MANUAL_SPECS: tuple[tuple[str, str, str], ...] = (
     ("note",       FMT_TEXT,  "note"),
 )
 
-#: **手填 6 列**（标签取自 `BIG_COLUMNS`，⛔ 不再写一遍）
+#: 兼容读协议含旧oil槽；oil完整总额不再开放写入，其余手填仍沿现有协议。
 BIG_MANUAL: tuple[dict, ...] = tuple(
     {"key": key, "fmt": fmt, "column": column, "label": _LABEL[key]}
     for key, fmt, column in _MANUAL_SPECS

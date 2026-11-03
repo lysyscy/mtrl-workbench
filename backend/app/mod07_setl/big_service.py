@@ -172,6 +172,8 @@ def build_big_data(s: Session, state: dict | None = None) -> dict:
     #    ⛔ 别再让调用方自己再 `load_manual(s)` 一遍全表。
     manual = R.load_manual(s)
     rows = B.assemble_rows(projects, amounts, manual, month=month)
+    from .oil_linkage import apply_rows
+    apply_rows(s, rows, ym=month)
     return {
         "state": st,
         "manual": manual,
@@ -197,6 +199,8 @@ def save_manual_cell(s: Session, *, month: str, warehouse: str, key: str, raw) -
     ⭐ **只写这一格**：同行其它格保持原样（清空的行仍按带入显示，001-06）。
     """
     require_month(month)
+    if key == 'oil':
+        return {'ok': False, 'message': '工程用油由油卡管理的用油联动维护，原完整总额不再直接修改。', 'value': None}
     if key not in B.MANUAL_COLUMN:
         return {"ok": False, "message": B.MSG_NO_COLUMN, "value": None}
     data = selection_data(s, month)
@@ -205,6 +209,9 @@ def save_manual_cell(s: Session, *, month: str, warehouse: str, key: str, raw) -
     parsed = B.parse_manual(raw, B.MANUAL_FMT[key])
     if not parsed["ok"]:
         return {"ok": False, "message": parsed["message"], "value": None}
+    project = P1S.warehouse_index(s).get(warehouse)
+    if project is not None:
+        P1S.get_project(s, project.id, for_update=True)
     materialize_selection(s, month, data)
     R.save_cell(s, ym=month, warehouse=warehouse, key=key, value=parsed["value"])
     return {"ok": True,

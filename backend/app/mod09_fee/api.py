@@ -72,6 +72,7 @@ def _payload(s, *, ym: str, pj: str) -> dict:
             for c in (data["projects"] or [])
         ],
         "auto": _row(data["auto"]),
+        "oil": _row(data['oil']) if data['oil'] else None,
         "manuals": [_row(r) for r in (data["manuals"] or [])],
         "total": _s(data["total"]),
         "count": int(data["count"] or 0),

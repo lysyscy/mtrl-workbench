@@ -17,6 +17,12 @@ from app.mod08_inv import service as inventory
 from app.mod09_fee.models import FeeItem, FeeManualItem
 
 
+def _require_manual(s, item_id):
+    from .oil_linkage import is_bound, READONLY_MESSAGE
+    if is_bound(s, item_id):
+        raise ValueError(READONLY_MESSAGE)
+
+
 def inv_rows(s: Session, *, ym: str) -> list[dict]:
     """自动项取数用的库存单据行 —— **只取该核算年月**（§9.2 一次一个月），别把整表搬进内存。"""
     return [
@@ -31,7 +37,7 @@ def year_facts(s: Session, *, year: str, project_id: int | None, warehouse: str)
     """截至所选年末的原始事实；不改明细，不借用提取历史余额。"""
     end = f"{year}-12"
     items = [] if project_id is None else [
-        {"id": r.id, "ym": r.ym, "name": name, "amount": r.amount}
+        {"id": r.id, "fee_item_id": r.fee_item_id, "key": f"fee:{r.fee_item_id}", "ym": r.ym, "name": name, "amount": r.amount}
         for r, name in s.execute(select(FeeManualItem, FeeItem.name).join(FeeItem, FeeItem.id == FeeManualItem.fee_item_id).where(
             FeeManualItem.project_id == project_id, FeeManualItem.ym <= end, FeeItem.deleted.is_(False)
         ).order_by(FeeManualItem.id))
@@ -58,7 +64,7 @@ def items_of(s: Session, *, ym: str, project_id: int) -> list[dict]:
         .order_by(FeeManualItem.id)
     )
     return [
-        {"id": r.id, "name": name, "amount": Decimal(str(r.amount or 0))}
+        {"id": r.id, "fee_item_id": r.fee_item_id, "name": name, "amount": Decimal(str(r.amount or 0))}
         for r, name in s.execute(stmt).all()
     ]
 
@@ -84,6 +90,7 @@ def add_item(s: Session, *, ym: str, project_id: int, name: str, amount: Decimal
         item = FeeItem(project_id=int(project_id), name=str(name))
         s.add(item)
         s.flush()
+    _require_manual(s, item.id)
     existing = s.execute(select(FeeManualItem).where(FeeManualItem.fee_item_id == item.id, FeeManualItem.ym == ym)).scalar_one_or_none()
     if existing is not None:
         raise ValueError("该费用项在此月份已有记录")
@@ -94,6 +101,7 @@ def add_item(s: Session, *, ym: str, project_id: int, name: str, amount: Decimal
 
 
 def set_item_name(s: Session, row: FeeManualItem, name: str) -> None:
+    _require_manual(s, row.fee_item_id)
     item = s.get(FeeItem, row.fee_item_id)
     if item is None:
         raise ValueError("费用项已不存在")
@@ -106,11 +114,13 @@ def set_item_name(s: Session, row: FeeManualItem, name: str) -> None:
 
 
 def set_item_amount(s: Session, row: FeeManualItem, amount: Decimal) -> None:
+    _require_manual(s, row.fee_item_id)
     row.amount = amount
     s.flush()
 
 
 def delete_item(s: Session, row: FeeManualItem) -> None:
+    _require_manual(s, row.fee_item_id)
     s.delete(row)
     s.flush()
 
@@ -128,6 +138,7 @@ def upsert_item(s: Session, *, ym: str, project_id: int, name: str, amount: Deci
         .execution_options(populate_existing=True)).scalar_one_or_none()
     if item is None:
         return add_item(s, ym=ym, project_id=project_id, name=name, amount=amount)
+    _require_manual(s, item.id)
     row = s.execute(select(FeeManualItem).where(FeeManualItem.fee_item_id == item.id,
         FeeManualItem.ym == ym).execution_options(populate_existing=True)).scalar_one_or_none()
     if row is None:
