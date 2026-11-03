@@ -44,6 +44,8 @@
 
 ## 执行与恢复
 
+2026-11-03 · P2请求内事实复用及所选付款预览范围下推已由TAIL-467/471实施并随全站性能effort正式加载`8e4512ce`，两子票done且effort已按用户要求关闭。P2同源响应/顺序等值、SQL32→14；选中预览保空选/全量、撤销和原行序，相关隔离与真实只读入口通过。详细结果从提交`642725be`的`.scratch/site-performance/completion.md`及TAIL原路径追溯，不再将这两项当作待实证候选；父票其余项及needs-triage保持。
+
 按采用子批独立本地提交；仅现有受保护测试库/可丢弃副本写测，原库只读。先确认输入/版本，复用backend_verify/唯一预览和真实失败反例，不降守卫/跳审批。业务意义、认证/权限、外部i8/打印、正式切换/迁移/合并/推送仍按当次授权，不由此票自动扩大。
 
 每个采用项交实现/旧职责退出/验证与回退；未采用项保具体理由。P1/P2可在本票内分批，无需拆成多个无消费者规格；若确需复杂阶段规格，只建一份最小共同来源并在此引用。原扫描证据保本机task-4/backend-architecture-review、task-5/architecture-b、task-6/architecture-c.md；事实摘要已在本票，外部任务产物缺失也不要求重新全仓盘点。官方能力参考：[SQLAlchemy Session](https://docs.sqlalchemy.org/en/21/orm/session_basics.html)、[Valibot v.is](https://valibot.dev/api/is/)、[pytest conftest作用域](https://docs.pytest.org/en/stable/reference/fixtures.html#conftest-py-sharing-fixtures-across-multiple-files)。

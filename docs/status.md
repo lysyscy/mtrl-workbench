@@ -1,12 +1,12 @@
 # 当前活动工作
 
-## 机械页性能优化已正式加载
+## 已关闭的性能优化
 
-2026-11-02，按[性能诊断及方案](../.scratch/mechanical-performance/diagnosis.md)实施轻量当前月page接口、共享公司汇总业务投影、移除页面Excel预览查询、表头批量测量及保存定向重读。保留完整来源/历史接口、原来源敏感签名、明细行级溯源、全月累计和缓存统一标脏。相同只读快照下响应11.23MB→1.19MB，金额/签名/行级来源一致，四表7,421格的值、公式和数字格式一致；真实副本HTTP约327/341ms，零租布局准备约169–243ms（原约946ms）。
+2026-11-03，用户确认关闭两个effort：机械页性能优化已于11月2日加载`fbb42d23`；全站性能优化TAIL-464–472均done，已于11月3日11:19加载`8e4512ce`。类型/构建、相应后端及真实副本代表、独立审查和正式资源/健康/监听核验已完成。正式当前资源`8e4512ce31b1`，回退`fbb42d23b0e3`；未合并master，未进行现场人工交互验收。
 
-前端29项unit、类型检查/构建、后端六文件隔离回归、六项真实副本保存/未知回执/下载/共享表头代表均通过，独立审查无实质发现。详细边界见[验证说明](../.scratch/mechanical-performance/verification.md)；界面/CPU证据归`.artifacts/archive/mechanical-performance/20261102-opt`，同源对照归受管组`mechanical-performance-opt-20261102`。临时实例、schema和构建已退出。
+两effort的临时预览、schema、工作树及构建已退出，受管证据已按原保留期结项，在用正式与回退包保持。部署原始回执分别归`.artifacts/archive/frontend-release/20261102-mechanical-performance`和`20261103-site-performance`。诊断、规格、各票结果、全部失败/未验边界及关闭前材料从Git提交`642725be3d8fcb157dbeb0b66ed205f2fb758869`的原路径`.scratch/mechanical-performance/`、`.scratch/site-performance/`及TAIL-464–472追溯，已退出活动目录。后续新问题按具体缺陷处理，不默认恢复性能effort或追加全站验收。
 
-2026-11-02 14:39，正式`/app`及后端已加载`fbb42d23`，提交已推送并核远端SHA，尚未合并master。[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41401141543)通过；标准发布实际索引、37份资源、健康200及监听进程归属通过。正式page接口421/337ms、1,192,714B，逐项金额及原来源敏感签名与完整接口一致；兰考/茂名/宜昌累计保持正确，后两项目i8仍未知。回退资源为`e822612e221b`，回执及正式接口读回归`.artifacts/archive/frontend-release/20261102-mechanical-performance/reports`。本轮未迁移或写正式业务数据，未调用i8。
+早期DSH凭据输出事故仍未解决，已单独立[TAIL-473](../.scratch/tails/issues/TAIL-473-DSH凭据输出事故处置.md)，状态needs-triage；本次仅建票，未执行轮换或原始材料清理，不因性能effort关闭视为已处置。
 
 ## 新项目机械费累计接续与空取数修复已正式加载
 
@@ -50,13 +50,7 @@
 
 ## 后续工作
 
-2026-11-03，按[全站性能规格](../.scratch/site-performance/plan.md)采用Impeccable `optimize` 并派DSH完成464–472，最终产品`d5a97eaf`已按本轮明确授权推送并核远端SHA，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41570045739)通过。追加共享首显修复后，十五页有限路径覆盖、具名交互和双轴审查已收敛；build-08类型/构建、2项首显/滚动/列宽浏览器及34项unit通过。逐页收益/保持理由、默认月无数据及基线同红、未验范围见[收敛结果](../.scratch/site-performance/completion.md)；临时预览/schema/工作树/构建退出，必要证据保全并结项。未现场人工验收或正式加载；油卡及原无关修改保持。DSH未来新会话默认全权限已按用户要求配置并实测生效；早期凭据输出事故仍需后续处置，未视为已解决。
-
-夜间优化改善了首页JS传输量和库存输入反馈，但此前本机代理指标不足以证明库存全量准备、滚动或整体加载提速。后续沿现有Profiler/layoutTiming固定真实输入，保完整金额、手工列宽、草稿和用户滚动、零HTTP本地筛选；逐页据实核验。
-
-2026-11-03 11:19，按用户明确要求，正式前后端已加载本轮`8e4512ce`，完整资源为`8e4512ce31b1`，回退`fbb42d23b0e3`。正式构建/类型检查、实际索引及37份资源、健康200和8000监听归属通过；新增过程/提取屏幕接口及欠款读取正式200。未迁移或写业务数据、未调用i8或打印；未做现场人工交互验收。具体命令、首次准备失败及成功回执见[正式加载记录](../.scratch/site-performance/deployment.md)，临时work已退出。
-
-原架构候选背景继续由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，父票仍needs-triage；本次仅以464–472中具名执行票承接P2及所选预览相关性能范围，其余候选保持原裁定，不自动启动。
+原架构候选背景继续由[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)持有，父票仍needs-triage；P2及所选付款预览性能范围已在本次关闭effort完成，其余候选保持原裁定，不自动启动。
 
 ## 集合筛选研究（暂存参考）
 
