@@ -16,7 +16,18 @@ from sqlalchemy.orm import Session
 
 from app.mod11_jc import domain as D
 from app.mod11_jc import repository as R
-from app.mod11_jc.models import INVOICE_KINDS, SRC_MANUAL, SRC_NOTICE, TAG_IN, JcPayment
+from app.mod11_jc.models import (
+    INVOICE_KINDS,
+    SRC_MANUAL,
+    SRC_NOTICE,
+    SUBOP_INVOICE_ADD,
+    SUBOP_INVOICE_DEL,
+    SUBOP_PAYMENT_ADD,
+    SUBOP_PAYMENT_DEL,
+    TAG_IN,
+    JcInvoice,
+    JcPayment,
+)
 from app.core.money import sum_money
 
 
@@ -305,51 +316,205 @@ def act_update_contract(s: Session, *, contract_id: int, **cols) -> dict:
     return {"ok": True, "kind": "ok", "id": int(contract_id), "message": "已保存"}
 
 
-def act_add_invoice(s: Session, *, contract_id: int, kind: str, date, amount) -> dict:
-    """发票子表增行（供应商 / 贸易公司**同款**）—— 校验走 `D.invoice_problem`（判据 `001-05`）。"""
+# ------------------------------------------------- 子表操作的可靠保存（局部 · 标识幂等）
+#
+# ⭐ 用户口径（2026-11-03）：子表增删**带标识**的重复请求 ⇒ 回放原回执，⛔ 不重复产生 / 删除事实；
+#    同标识换动作 / 换参数 / 换账号 ⇒ **明确拒绝**；⛔ 绝不"日期金额一样就当同一笔"。
+# ⚠️ 只有**带了**标识的调用才走这套（没带的照旧执行 —— 迁移前的前端仍在用）。
+# ⚠️ 回执与本函数的业务变更在**同一个 `session`** 里落 ⇒ `session_scope()` 一次性提交 / 回滚
+#    ⇒ 事务失败**不会**留下"成功回执"，也不会留下半截事实。
+
+def subtable_account() -> str:
+    """回执归属的账号 = **登录会话身份**（`current_name()`）；未登录 ⇒ 空串（回执对谁都不回）。
+
+    ⚠️ 刻意**不**回落到 `current_operator()`：那是"人"的展示名，可以多人共用一个占位；
+       回执是"谁提交的"这件事，必须按可校验的账号身份隔离（判据：别的账号读不到我的回执）。
+    """
+    from app.core.session import current_name
+    return str(current_name() or "").strip()
+
+
+def _request_key(raw) -> str:
+    """归一操作标识（空 / `None` ⇒ `""` = 老调用）；不合法返回 `""` 并由调用方回错误文案。"""
+    try:
+        return D.request_key(raw)
+    except ValueError:
+        return ""
+
+
+def _request_conflict(key: str) -> dict:
+    return D.subtable_result_conflict(key)
+
+
+def _replay(s: Session, *, key: str, action: str, **fields) -> dict | None:
+    """命中回执 ⇒ 回放原成功回执；同键换了内容 / 换了账号 ⇒ 拒绝；未命中 ⇒ `None`（照常执行）。
+
+    ⚠️ 比对的是「动作 ＋ 参数 ＋ 账号」的摘要（`D.request_hash`）⇒ 内容变了**必须**拒绝，
+       ⛔ 不能因为"看起来像同一笔"就重新执行（那正是重复付款 / 重复发票的入口）。
+    """
+    if not key:
+        return None
+    row = R.subtable_operation_by_request(s, key)
+    if row is None:
+        return None
+    if str(row.account or "") != subtable_account():
+        return _request_conflict(key)
+    if str(row.request_hash or "") != D.request_hash(action=action, **fields):
+        return _request_conflict(key)
+    return dict(row.result or {})
+
+
+def _remember(s: Session, *, key: str, action: str, result: dict, fields: dict,
+              row_id: int | None = None, contract_id: int | None = None) -> None:
+    """记下这次操作的**成功**回执（与业务变更同事务）—— ⚠️ 只有成功路径才调用。
+
+    ⚠️ 摘要只按 `fields`（= 请求里**本来就有**的东西）算 ⇒ 重放时客户端还能算出一模一样的摘要；
+       而增行得到的**新行 id** 是执行结果、不是请求参数 ⇒ 只进 `row_id` 列、⛔ 不进摘要
+       （进了摘要就永远匹配不上，重放会退化成"同键不同内容"被拒）。
+    ⚠️ `contract_id` / `row_id` 只从**一处**取（两份来源会变成"同名关键字传两次"的 `TypeError`）。
+    ⚠️ 删行请求本身不带 `contract_id` ⇒ 由调用方**在删之前**从那一行读出来传进来（只落列、不进摘要）：
+       回执要能说清"这次删的是哪份合同的子表行"，⛔ 但行没了之后不能再要求重新算摘要。
+    """
+    if not key:
+        return
+    contract = fields.get("contract_id")
+    R.insert_subtable_operation(
+        s, request_id=key, account=subtable_account(), action=action,
+        contract_id=int((contract if contract_id is None else contract_id) or 0),
+        row_id=int(fields.get("row_id") if row_id is None else row_id),
+        request_hash=D.request_hash(action=action, **fields), result=result)
+
+
+def subtable_operation(s: Session, *, request_id) -> dict:
+    """`GET /api/m11/subtable-operation` 的读出口 —— 只回**当前账号自己**的回执。
+
+    ⚠️ 未登录 / 没查到 / 是别人的 ⇒ 一律 `{"ok": True, "status": "not_found"}`：
+       ⛔ 不区分"没这条"和"不是你的"（那等于泄露别人的操作存在性）。
+    """
+    key = _request_key(request_id)
+    if not key:
+        return D.subtable_operation_missing()
+    row = R.subtable_operation_of_account(s, account=subtable_account(), request_id=key)
+    if row is None:
+        return D.subtable_operation_missing()
+    return D.subtable_operation_of(row)
+
+
+def act_add_invoice(s: Session, *, contract_id: int, kind: str, date, amount,
+                    request_id: str | None = None) -> dict:
+    """发票子表增行（供应商 / 贸易公司**同款**）—— 校验走 `D.invoice_problem`（判据 `001-05`）。
+
+    ⭐ 带 `request_id` 时幂等：重复请求回放原回执，⛔ 不重复增行（见上方"可靠保存"注释）。
+    """
     if str(kind) not in INVOICE_KINDS:
         return {"ok": False, "kind": "err", "message": f"不认识的子表类型：{kind}"}
     bad = D.invoice_problem(date, amount)
     if bad:
         return {"ok": False, "kind": "err", "message": bad}
+    key = _request_key(request_id)
+    if str(request_id or "").strip() and not key:
+        return {"ok": False, "kind": "err", "message": D.MSG_REQUEST_BAD}
+    money = D.parse_amount(amount)
+    fields = dict(contract_id=int(contract_id or 0), kind=str(kind),
+                  date=str(date or "").strip(), amount=str(money))
+    if key:
+        R.lock_subtable_operations(s)
+        hit = _replay(s, key=key, action=SUBOP_INVOICE_ADD, **fields)
+        if hit is not None:
+            return hit
     row = R.insert_invoice(s, contract_id=contract_id, kind=str(kind),
-                           invoice_date=date, amount=D.parse_amount(amount))
-    return {"ok": True, "kind": "ok", "id": int(row.id), "message": "已增发票行"}
+                           invoice_date=date, amount=money)
+    result = {"ok": True, "kind": "ok", "id": int(row.id), "message": "已增发票行"}
+    _remember(s, key=key, action=SUBOP_INVOICE_ADD, result=result, fields=fields,
+              row_id=int(row.id))
+    return result
 
 
-def act_del_invoice(s: Session, *, invoice_id: int) -> dict:
-    """发票子表删行。"""
+def act_del_invoice(s: Session, *, invoice_id: int, request_id: str | None = None) -> dict:
+    """发票子表删行。
+
+    ⭐ 带 `request_id` 时幂等：删成功后重放仍回"已删除"（回执只增不删 ⇒ 删行不会把回执带走）。
+    """
+    key = _request_key(request_id)
+    if str(request_id or "").strip() and not key:
+        return {"ok": False, "kind": "err", "message": D.MSG_REQUEST_BAD}
+    fields = dict(row_id=int(invoice_id or 0))
+    if key:
+        R.lock_subtable_operations(s)
+        hit = _replay(s, key=key, action=SUBOP_INVOICE_DEL, **fields)
+        if hit is not None:
+            return hit
+    # ⚠️ 合同 id **在删之前**读：删完这行就没了，回执里"这次删的是哪份合同"就再也补不出来。
+    #    它只落回执的 `contract_id` 列、⛔ 不进摘要（进摘要 ⇒ 重放时读不到该值 ⇒ 退化成"同键不同内容"）。
+    owner = s.get(JcInvoice, int(invoice_id or 0))
+    owner_id = int(owner.contract_id) if owner is not None else 0
     if not R.delete_invoice(s, invoice_id):
         return {"ok": False, "kind": "err", "message": f"找不到发票行 {invoice_id}"}
-    return {"ok": True, "kind": "ok", "message": "已删除"}
+    result = {"ok": True, "kind": "ok", "message": "已删除"}
+    _remember(s, key=key, action=SUBOP_INVOICE_DEL, result=result, fields=fields,
+              contract_id=owner_id)
+    return result
 
 
 def act_add_payment(s: Session, *, contract_id: int, date, amount,
-                    source: str = SRC_MANUAL, notice_id=None) -> dict:
+                    source: str = SRC_MANUAL, notice_id=None,
+                    request_id: str | None = None) -> dict:
     """付款子表增行 —— **同款**校验（`D.payment_problem`）；引用付款域时先过**全库去重**。
 
     ⚠️ 去重范围 = **全库、不分合同**（§6.6.2）⇒ 入参是 `R.notice_ids_used(s)` 的全集。
+    ⭐ 带 `request_id` 时幂等：重复请求回放原回执，⛔ 不重复付款。
     """
     bad = D.payment_problem(date, amount)
     if bad:
         return {"ok": False, "kind": "err", "message": bad}
+    key = _request_key(request_id)
+    if str(request_id or "").strip() and not key:
+        return {"ok": False, "kind": "err", "message": D.MSG_REQUEST_BAD}
+    money = D.parse_amount(amount)
+    fields = dict(contract_id=int(contract_id or 0), date=str(date or "").strip(),
+                  amount=str(money), source=str(source or SRC_MANUAL),
+                  notice_id=str(notice_id if notice_id not in (None, "") else ""))
+    if key:
+        R.lock_subtable_operations(s)
+        hit = _replay(s, key=key, action=SUBOP_PAYMENT_ADD, **fields)
+        if hit is not None:
+            return hit
     if str(source) == SRC_NOTICE and D.dedup_blocked(
             notice_id=notice_id, existing_notice_ids=R.notice_ids_used(s)):
         return {"ok": False, "kind": "err",
                 "message": "该付款通知书已被引用过（全库去重，不分合同）"}
     row = R.insert_payment(s, contract_id=contract_id, pay_date=date,
-                           amount=D.parse_amount(amount), source=source, notice_id=notice_id)
-    return {"ok": True, "kind": "ok", "id": int(row.id), "message": "已增付款行"}
+                           amount=money, source=source, notice_id=notice_id)
+    result = {"ok": True, "kind": "ok", "id": int(row.id), "message": "已增付款行"}
+    _remember(s, key=key, action=SUBOP_PAYMENT_ADD, result=result, fields=fields,
+              row_id=int(row.id))
+    return result
 
 
-def act_del_payment(s: Session, *, payment_id: int) -> dict:
-    """删除手工付款行；通知书关系由正式解绑入口处理。"""
+def act_del_payment(s: Session, *, payment_id: int, request_id: str | None = None) -> dict:
+    """删除手工付款行；通知书关系由正式解绑入口处理。
+
+    ⭐ 带 `request_id` 时幂等：删成功后重放仍回"已删除"。
+    """
+    key = _request_key(request_id)
+    if str(request_id or "").strip() and not key:
+        return {"ok": False, "kind": "err", "message": D.MSG_REQUEST_BAD}
+    fields = dict(row_id=int(payment_id or 0))
+    if key:
+        R.lock_subtable_operations(s)
+        hit = _replay(s, key=key, action=SUBOP_PAYMENT_DEL, **fields)
+        if hit is not None:
+            return hit
     row = s.get(JcPayment, int(payment_id))
     if row is not None and row.source == SRC_NOTICE:
         return {"ok": False, "kind": "err", "message": "请到付款通知书页改关联或解绑"}
+    owner_id = int(row.contract_id) if row is not None else 0   # 同上：删之前读，只落 `contract_id` 列
     if not R.delete_payment(s, payment_id):
         return {"ok": False, "kind": "err", "message": f"找不到付款行 {payment_id}"}
-    return {"ok": True, "kind": "ok", "message": "已删除"}
+    result = {"ok": True, "kind": "ok", "message": "已删除"}
+    _remember(s, key=key, action=SUBOP_PAYMENT_DEL, result=result, fields=fields,
+              contract_id=owner_id)
+    return result
 
 
 # ---------------------------------------------------------------- 付款域双向引用（`M5-5`）
@@ -582,6 +747,7 @@ __all__ = ["project_references",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",
+    "subtable_operation", "subtable_account",
     "act_link_notice", "act_unlink_notice", "auto_link_plan", "act_auto_link",
     "party_kinds", "act_set_party_kind",
     "list_contracts", "links_by_notice",

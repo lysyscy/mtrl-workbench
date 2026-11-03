@@ -155,7 +155,12 @@ class FieldsIn(BaseModel):
 
 
 class SubRowIn(BaseModel):
-    """子表增删入参（发票 / 付款**同款**）—— 增行用 `id` ＋ `date`/`amount`，删行用 `row_id`。"""
+    """子表增删入参（发票 / 付款**同款**）—— 增行用 `id` ＋ `date`/`amount`，删行用 `row_id`。
+
+    ⭐ `request_id`（可选）= 这一次操作的**稳定标识**：带了它，同一次操作重发不会重复增 / 删，
+    并可用 `GET /api/m11/subtable-operation` 查"那一次到底成了没有"（页面刷新后恢复用）。
+    ⚠️ 不传 = 老行为，一字不变（迁移前的前端仍在用）。
+    """
 
     id: int = 0                       # 合同 id（增行用）
     row_id: int | None = None         # 子表行 id（删行用）
@@ -164,6 +169,7 @@ class SubRowIn(BaseModel):
     amount: str = "0"
     source: str = "manual"            # `manual` | `notice`（仅付款用）
     notice_id: int | None = None
+    request_id: str | None = None     # 操作标识（UUID 或其它明确有界标识；可选）
 
 
 @router.post("/api/m11/fetch")
@@ -359,14 +365,16 @@ def api_inv_add(payload: SubRowIn) -> dict:
     """发票子表增行 —— **日期必填**（判据 `001-05`，校验在域层）。"""
     with session_scope() as s:
         return SV.act_add_invoice(s, contract_id=int(payload.id), kind=payload.kind,
-                                  date=payload.date, amount=payload.amount)
+                                  date=payload.date, amount=payload.amount,
+                                  request_id=payload.request_id)
 
 
 @router.post("/api/m11/invoice/del")
 def api_inv_del(payload: SubRowIn) -> dict:
     """发票子表删行。"""
     with session_scope() as s:
-        return SV.act_del_invoice(s, invoice_id=int(payload.row_id or 0))
+        return SV.act_del_invoice(s, invoice_id=int(payload.row_id or 0),
+                                  request_id=payload.request_id)
 
 
 @router.post("/api/m11/payment/add")
@@ -375,14 +383,31 @@ def api_pay_add(payload: SubRowIn) -> dict:
     with session_scope() as s:
         return SV.act_add_payment(s, contract_id=int(payload.id), date=payload.date,
                                   amount=payload.amount, source=payload.source,
-                                  notice_id=payload.notice_id)
+                                  notice_id=payload.notice_id,
+                                  request_id=payload.request_id)
 
 
 @router.post("/api/m11/payment/del")
 def api_pay_del(payload: SubRowIn) -> dict:
     """付款子表删行。"""
     with session_scope() as s:
-        return SV.act_del_payment(s, payment_id=int(payload.row_id or 0))
+        return SV.act_del_payment(s, payment_id=int(payload.row_id or 0),
+                                  request_id=payload.request_id)
+
+
+# ==================================================== 子表操作的可靠保存/恢复 · 回执读取
+
+@router.get("/api/m11/subtable-operation")
+def api_subtable_operation(request_id: str = "") -> dict:
+    """查**这一次子表操作**的结果 —— 页面刷新后用它替换"重读明细 → 自行比对 → 已核对"。
+
+    回执形状（判据：前端会**保留原标识**，⛔ 不因 `not_found` 换一个新标识重发）：
+    - 跑成功过：`{"ok": true, "status": "completed", "result": <原成功回执>}`
+    - 其它（没这条 / 不是本账号的 / 未登录）：`{"ok": true, "status": "not_found"}`
+    ⚠️ 只回**当前账号自己**的回执；⛔ 不区分"没这条"和"不是你的"（那会泄露别人的操作存在性）。
+    """
+    with session_scope() as s:
+        return SV.subtable_operation(s, request_id=request_id)
 
 
 __all__ = ["router"]

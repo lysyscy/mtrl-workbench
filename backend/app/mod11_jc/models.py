@@ -34,7 +34,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, false
+from sqlalchemy import (
+    JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, false,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -203,7 +205,9 @@ class JcPartyKind(Base):
 
 __all__ = [
     "JcContract", "JcInvoice", "JcPayment", "JcPartyKind",
-    "JcImportBatch", "JcImportUndo", "BATCH_ACTIVE", "BATCH_ROLLED_BACK",
+    "JcImportBatch", "JcImportUndo", "JcSubtableOperation",
+    "SUBOP_INVOICE_ADD", "SUBOP_INVOICE_DEL", "SUBOP_PAYMENT_ADD", "SUBOP_PAYMENT_DEL",
+    "BATCH_ACTIVE", "BATCH_ROLLED_BACK",
     "TAG_IN", "TAG_OUT", "TAGS",
     "KIND_SUPPLIER", "KIND_TRADE", "INVOICE_KINDS",
     "SRC_MANUAL", "SRC_NOTICE",
@@ -284,3 +288,47 @@ class JcImportUndo(Base):
     after_json: Mapped[str] = mapped_column(Text, default="")               # 6 列的改后值（JSON）
     invoice_ids: Mapped[str] = mapped_column(Text, default="")              # 本批**新加**的发票行 id（JSON 数组）
     at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# ---------------------------------------------------------------- 子表操作回执（局部可靠保存 / 恢复）
+#
+# ⭐ **为什么要这张表**：集采子表（发票 / 付款）的增删原先**没有稳定操作标识** ⇒ 页面刷新后
+#    浏览器只记得「这次改动可能没存成功」，服务端却说不出「那一次到底成了没有」。⇒ 前端只能让
+#    用户「重读明细 → 自行比对 → 已核对」才能恢复 —— 用户明确不要这个流程。
+# ⚠️ 因此只给 m11 子表加**轻量操作回执**（⛔ 不扩成全站框架、⛔ 不改发票 / 付款业务行的语义）：
+#    带 `request_id` 的同一操作重复提交 ⇒ **直接回放原成功回执**（⛔ 不重复产生 / 删除事实）；
+#    同一 `request_id` 换了动作或参数 ⇒ **明确拒绝**（⛔ 不退化成"按日期金额猜是不是同一笔"）。
+# ⚠️ 回执**只增不删**：删行之后重复请求仍要能拿到"已删除" ⇒ ⛔ 别把它挂成业务行的从属列
+#    （那样删行就等于把回执一起删了）。
+# ⚠️ 回执**不进** `history_bindings` 白名单：它不参与撤销（撤销只覆盖主表白名单列），
+#    ⇒ 历史撤销不会把回执改坏，回执也不会把撤销语义改坏。
+
+#: 子表动作用键（回执的 `action` 列）—— ⭐ 换了动作就是换了键，⛔ 不能拿同一个 `request_id` 复用。
+SUBOP_INVOICE_ADD = "invoice_add"
+SUBOP_INVOICE_DEL = "invoice_del"
+SUBOP_PAYMENT_ADD = "payment_add"
+SUBOP_PAYMENT_DEL = "payment_del"
+
+
+class JcSubtableOperation(Base):
+    """一次**子表操作**的回执（幂等键 = `request_id`）。
+
+    ⚠️ `account` = **登录账号身份**（`app.core.session.current_name()`）：回执只对写入它的账号可见，
+       别的账号读同一 `request_id` 一律"没找到"（⛔ 不回别人的内容、也⛔ 不告诉他"存在但没权限"）。
+    ⚠️ `request_hash` 绑住「动作 ＋ 参数 ＋ 账号」：同一 `request_id` 再来一次而内容不同 ⇒
+       **明确拒绝**（不许"看起来像同一笔"就当成重放）。
+    ⚠️ `result` = 那一次**原样**的成功回执对象（`{"ok": true, ...}`）⇒ 重放时直接还给它，
+       判据要求"结果形状与首次一致"。
+    """
+
+    __tablename__ = "jc_subtable_operation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    request_id: Mapped[str] = mapped_column(String(160), unique=True, index=True, default="")
+    account: Mapped[str] = mapped_column(String(128), default="")
+    action: Mapped[str] = mapped_column(String(16), index=True, default="")
+    contract_id: Mapped[int] = mapped_column(Integer, default=0)            # 便于排查：这次操作属于哪份合同
+    row_id: Mapped[int] = mapped_column(Integer, default=0)                # 删行操作的子表行 id（增行为 0）
+    request_hash: Mapped[str] = mapped_column(String(64), default="")
+    result: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

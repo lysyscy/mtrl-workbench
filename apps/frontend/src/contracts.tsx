@@ -22,7 +22,8 @@ import { useHistoryGuard } from './history';
 import { contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
 import type { ContractRow } from './contracts-api';
 import { cents, money, receipt, searchKey } from './notices-api';
-import { ContractEditor, nextContractArchiveNo } from './contract-dialog';
+import { ContractEditor, archiveNoHint, nextContractArchiveNo } from './contract-dialog';
+import { createInlineFieldQueue } from './inline-field-queue';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { ContractFetch, ContractSettings } from './contract-tools';
@@ -42,7 +43,9 @@ function ContractSelectionHeader(){
 }
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:''});
 type InlineKey='remark'|'arch_no'|'ret_date'|'payment_term'|'payment_method';
-type InlineControl={disabled:boolean;methods:string[];drafts:Record<string,string>;change:(id:number,key:InlineKey,value:string)=>void;save:(row:ContractRow,key:InlineKey|'arch',value:string)=>Promise<boolean>;remark:(row:ContractRow,value:string)=>void;next:(row:ContractRow)=>string};
+type InlineControl={disabled:boolean;methods:string[];drafts:Record<string,string>;change:(id:number,key:InlineKey,value:string)=>void;save:(row:ContractRow,key:InlineKey|'arch',value:string)=>Promise<boolean>;remark:(row:ContractRow,value:string)=>void;next:(row:ContractRow)=>string;advance:(row:ContractRow)=>Promise<void>};
+// 只对完整合法的日期立即保存，半截输入仍留在草稿里。
+const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
 function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKey;control:()=>InlineControl}){
   const row=p.data!,key=p.editKey,name=`${row.id}:${key}`,control=p.control();
   const value=control.drafts[name]??(key==='remark'?contractRemarkText(row.remark??''):row[key]);
@@ -50,7 +53,7 @@ function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKe
   useEffect(()=>setText(value),[value]);
   if(p.node.rowPinned)return null;
   if(key==='payment_method')return <Select className="contract-inline-select" aria-label={`${row.contract_no||row.material} 合同付款方式`} value={text} disabled={control.disabled} options={['',...control.methods].map(value=>({value,label:value?<EnumTag kind="payMethod" value={value}/>: '未约定'}))} onChange={value=>{setText(value);p.control().change(row.id,key,value);void p.control().save(row,key,value);}}/>;
-  return <TextPreview text={text}><Input className="record-value" onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?control.next(row):'可填'} onChange={e=>{setText(e.target.value);p.control().change(row.id,key,e.target.value);}} onBlur={()=>void p.control().save(row,key,text)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/></TextPreview>;
+  return <TextPreview text={text}><Input className={key==='arch_no'?'record-value record-hint':'record-value'} onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?archiveNoHint(control.next(row)):'可填'} onChange={e=>{const next=e.target.value;setText(next);p.control().change(row.id,key,next);if(key==='ret_date'&&VALID_DATE.test(next))void p.control().save(row,key,next);}} onBlur={()=>void p.control().save(row,key,text)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/></TextPreview>;
 }
 function ContractRemarkEditor({ row, initial, busy, disabled, paused, error, save, close }: { row:ContractRow;initial:string;busy:boolean;disabled:boolean;paused:boolean;error:string;save:(value:string)=>Promise<boolean>;close:()=>void }) {
   const [text,setText]=useState(initial);
@@ -114,45 +117,78 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     finally{lock.current=false;setBusy(false);}
   }
   function changeInline(id:number,key:InlineKey,value:string){const next={...inlineDraftRef.current,[`${id}:${key}`]:value};inlineDraftRef.current=next;setInlineDrafts(next);}
-  const fieldQueue=useRef(new Map<string,{row:ContractRow;key:InlineKey|'arch';value:string;notify:boolean}>()),fieldSaving=useRef(false);
+  const fieldQueue=useRef(createInlineFieldQueue());
   const fieldScope=useRef({blocked,active,owner:me?`${me.id}:${me.account}`:'',uncertain});fieldScope.current={blocked,active,owner:me?`${me.id}:${me.account}`:'',uncertain};
-  useEffect(()=>{fieldScope.current.blocked=blocked;return()=>{fieldScope.current.blocked=true;fieldQueue.current.clear();};},[]);
-  async function saveField(row:ContractRow,key:InlineKey|'arch',value:string,notify=key==='arch'){
-    if(blocked||!active||!me||uncertain||query.isError||!query.data)return false;
+  useEffect(()=>{fieldScope.current.blocked=blocked;return()=>{fieldScope.current.blocked=true;fieldQueue.current.reject();};},[]);
+  // 每一笔都排队等待真正写入并刷新后才结算：blur 与"推进存档"共用同一条串行队列，
+  // 因此保存进行中的点击不会被丢弃，也不会把被顶掉的输入当成已保存。
+  function saveField(row:ContractRow,key:InlineKey|'arch',value:string,notify=key==='arch'):Promise<boolean> {
+    if(blocked||!active||!me||uncertain||query.isError||!query.data)return Promise.resolve(false);
     const name=`${row.id}:${key}`,owner=fieldScope.current.owner;
-    fieldQueue.current.set(name,{row,key,value,notify});
-    if(fieldSaving.current||lock.current)return false;
-    let completed=true;
-    fieldSaving.current=true;lock.current=true;setBusy(true);setError('');
-    try{
-      while(fieldQueue.current.size){
-        const scope=fieldScope.current;if(scope.blocked||!scope.active||scope.uncertain||scope.owner!==owner){completed=false;fieldQueue.current.clear();break;}
-        const [draftKey,draft]=fieldQueue.current.entries().next().value!;fieldQueue.current.delete(draftKey);
-        const latest=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===draft.row.id)??draft.row;
-        const history=draft.key==='remark'?contractHistoryDate(latest.remark):'',next=history?historyContractRemark(history,draft.value):draft.value.trim();
-        let written=false;
-        try{
-          if(next!==latest[draft.key]){const result=await contractWrite('/api/m11/fields',{id:latest.id,fields:{[draft.key]:next}});written=true;await refresh();if(draft.notify)announce(receipt(result));}
-          if(inlineDraftRef.current[draftKey]===draft.value){
-            const copy={...inlineDraftRef.current};delete copy[draftKey];inlineDraftRef.current=copy;inlineControl.current.drafts=copy;setInlineDrafts(copy);
-            const node=grid.current?.getRowNode(String(latest.id));
-            if(node)grid.current?.refreshCells({force:true,rowNodes:[node],columns:[draft.key]});
-          }
-        }catch(failure){completed=false;fieldQueue.current.clear();setUncertain(true);setError(`${written?'登记已保存，列表重读失败。':'登记结果待核实。'}${failure instanceof Error?failure.message:'请重读核对。'}勿重复操作。`);break;}
+    return fieldQueue.current.push(name,async()=>{
+      const scope=fieldScope.current;if(scope.blocked||!scope.active||scope.uncertain||scope.owner!==owner)return false;
+      const latest=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===row.id)??row;
+      const history=key==='remark'?contractHistoryDate(latest.remark):'',next=history?historyContractRemark(history,value):value.trim();
+      let written=false;
+      try{
+        if(next!==latest[key]){
+          const result=await contractWrite('/api/m11/fields',{id:latest.id,fields:{[key]:next}});
+          written=true;await refresh();
+          if(notify)announce(receipt(result));
+        }
+        if(inlineDraftRef.current[name]===value){
+          const copy={...inlineDraftRef.current};delete copy[name];inlineDraftRef.current=copy;inlineControl.current.drafts=copy;setInlineDrafts(copy);
+          const node=grid.current?.getRowNode(String(latest.id));
+          if(node)grid.current?.refreshCells({force:true,rowNodes:[node],columns:[key]});
+        }
+        return true;
+      }catch(failure){
+        setUncertain(true);
+        setError(`${written?'登记已保存，列表重读失败。':'登记结果待核实。'}${failure instanceof Error?failure.message:'请重读核对。'}勿重复操作。`);
+        return false;
       }
-    }finally{fieldSaving.current=false;lock.current=false;setBusy(false);}
-    return completed;
+    },()=>{void drainFieldQueue();});
   }
-  const inlineDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError||busy&&!fieldSaving.current;
+  async function drainFieldQueue() {
+    setBusy(true);lock.current=true;setError('');
+    try{
+      while(true){
+        const task=fieldQueue.current.take();
+        if(!task)break;
+        const scope=fieldScope.current;
+        if(scope.blocked||!scope.active||scope.uncertain){fieldQueue.current.reject();task.settle(false);break;}
+        let ok=false;
+        try{ok=await task.run();}catch{ok=false;}
+        task.settle(ok);
+        if(!ok){fieldQueue.current.reject();break;}
+      }
+    }finally{fieldQueue.current.release();lock.current=false;setBusy(false);}
+  }
+  const inlineDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError||busy&&!fieldQueue.current.running;
+  // 行操作只在身份/权限/待核实期间禁用：存档号 blur 保存进行中不得让"推进存档"在点击中途变灰。
+  const actionDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError;
   const paymentMethodsKey=JSON.stringify(query.data?.payment_methods??[]);
-  const inlineControl=useRef<InlineControl>({disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row)});
-  inlineControl.current={disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row)};
+  const nextArch=(arch:string)=>arch==='未存档'?'资产处':arch==='资产处'?'已存档':'未存档';
+  const advancing=useRef(false);
+  // 一次点击完成：先存这一行的存档号草稿（排队等它真的写入并刷新），再推进存档；任一失败/未知都不推进。
+  async function advance(row:ContractRow) {
+    if(actionDisabled||advancing.current)return;
+    advancing.current=true;
+    try{
+      const draft=inlineDraftRef.current[`${row.id}:arch_no`];
+      if(draft!==undefined&&!await saveField(row,'arch_no',draft,false))return;
+      const latest=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===row.id)??row;
+      await saveField(latest,'arch',nextArch(latest.arch));
+    }finally{advancing.current=false;}
+  }
+  const inlineControl=useRef<InlineControl>({disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row),advance});
+  inlineControl.current={disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row),advance};
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['remark','arch_no','ret_date','payment_term','payment_method']});},[active,inlineDisabled,paymentMethodsKey]);
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['arch_no']});},[active,rows]);
-  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['actions']});},[active,unavailable]);
+  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['actions']});},[active,actionDisabled]);
   // The select column definition is stable now, so ticking a row refreshes only its checkbox cells.
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['select']});},[active,picked,shown]);
-  const state=useRef({unavailable,picked,shown,tag});state.current={unavailable,picked,shown,tag};
+  const state=useRef({unavailable,actionDisabled,picked,shown,tag,advance});state.current={unavailable,actionDisabled,picked,shown,tag,advance};
   // The select header reads the live selection through context, so ticking a row no longer rebuilds every column.
   const selection=useMemo<ContractSelection>(()=>({shown,picked,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked]);
   const scale=Number(me?.ui_scale_css??1);
@@ -196,7 +232,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
-    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.unavailable} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.unavailable} onClick={()=>void inlineControl.current.save(p.data!,'arch',p.data!.arch==='未存档'?'资产处':p.data!.arch==='资产处'?'已存档':'未存档')}>推进存档</Button></div>}
+    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,projectRows,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
   const columns=useMemo(()=>manualGridColumns(baseColumns),[baseColumns]);
   // Keep the reset action on the material header, clear of complete identifiers.
@@ -217,7 +253,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
     {query.isPending?<p role="status">正在读取集采合同…</p>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
     {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}
-    {subtable&&<ContractSubtableDialog scale={scale} row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} change={changeSubtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
+    {subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} accountId={me?.id} contracts={rows} workspace={subtables} change={changeSubtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
     {remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}
     {tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}
     {tool==='party'&&<ContractSettings kind={tool} me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}

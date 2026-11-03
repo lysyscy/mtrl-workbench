@@ -27,6 +27,7 @@ from app.mod11_jc.models import (
     JcInvoice,
     JcPartyKind,
     JcPayment,
+    JcSubtableOperation,
 )
 
 
@@ -80,7 +81,13 @@ def list_contracts(
     if str(project_key or "").strip():
         project = projects.get(str(project_key).strip())
         stmt = stmt.where(JcContract.project_id == project.id) if project else stmt.where(False)
-    stmt = stmt.order_by(JcContract.contract_date.desc(), JcContract.id.desc())
+    # ⭐ 默认行序 = **合同日期从早到晚、同一天按录入先后、无日期放最后**（用户 2026-11-03 口径）。
+    # ⚠️ `contract_date` 是 `String(10)` 且 **NOT NULL**（无日期 = 空串，⛔ 不是 SQL NULL）
+    #    ⇒ 后置只能靠"空串排最后"这个布尔序，⛔ 别写 `NULLS LAST`（这里根本没有 NULL）。
+    # ⚠️ 行序 **不影响** 项目内派生序号：`domain.project_sequences` 自己按同一口径重排编号，
+    #    且 `service.build_list` 用**全量**行算号（筛选不改号）⇒ 这里只是把展示顺序对齐它。
+    stmt = stmt.order_by(
+        JcContract.contract_date == "", JcContract.contract_date, JcContract.id)
 
     out: list[dict] = []
     for row in s.execute(stmt).scalars().all():
@@ -346,6 +353,62 @@ def count_contracts(s: Session) -> int:
     return int(s.execute(select(func.count()).select_from(JcContract)).scalar_one())
 
 
+# ---------------------------------------------------------- 子表操作回执（幂等键 = request_id）
+#
+# ⚠️ 本层只做**取 / 落**，判定（键冲突、账号归属、动作不认识）一律在 `service`。
+
+def lock_subtable_operations(s: Session) -> None:
+    """把同一事务里的子表操作串行化 —— 同一 `request_id` 的并发重复提交只能有一个真正落库。
+
+    ⚠️ 用事务级 advisory lock（本模块**占 411**；`384` = 历史账号锁、`406` = 过程资料、`419` = 配置）
+       —— 三处工具都只在 `postgresql` 下执行 ⇒ sqlite 内存库测试不炸（那些库也没这张表）。
+    ⚠️ 锁的是**整个子表操作域**（不是一个 `request_id`）：`request_id` 是新生成的，锁它没有意义
+       （两个并发请求本来就是**两个不同的** `request_id`，锁各自等于不锁）。
+    """
+    if s.get_bind().dialect.name == 'postgresql':
+        s.connection().exec_driver_sql('SELECT pg_advisory_xact_lock(%s, %s)', (411, 0))
+
+
+def subtable_operation_by_request(s: Session, request_id: str) -> JcSubtableOperation | None:
+    """按 `request_id` 取回执（**全库唯一**）—— ⛔ 不按账号过滤：账号判定在调用方。"""
+    key = str(request_id or "").strip()
+    if not key:
+        return None
+    return s.execute(
+        select(JcSubtableOperation).where(JcSubtableOperation.request_id == key)
+    ).scalars().first()
+
+
+def subtable_operation_of_account(s: Session, *, account: str, request_id: str) -> JcSubtableOperation | None:
+    """按 **账号 ＋ `request_id`** 取回执 —— 别的账号读同一个键一律"没有"。
+
+    ⚠️ 未登录（`account` 空串）一律取不到：回执只回给**当初写入它的那个账号**。
+    """
+    who = str(account or "").strip()
+    if not who:
+        return None
+    row = subtable_operation_by_request(s, request_id)
+    return row if row is not None and str(row.account or "") == who else None
+
+
+def insert_subtable_operation(s: Session, *, request_id: str, account: str, action: str,
+                              contract_id: int = 0, row_id: int = 0,
+                              request_hash: str, result: dict) -> JcSubtableOperation:
+    """落一条子表操作回执（**与业务变更同事务** —— 调用方必须在同一 `session` 里先落业务行）。
+
+    ⚠️ `request_id` 带全库唯一键 ⇒ 并发下真撞了数据库会直接拒；服务层先用 advisory lock 串行化，
+       让"先查后写"在并发下也成立。
+    """
+    row = JcSubtableOperation(
+        request_id=str(request_id or "").strip(), account=str(account or "").strip(),
+        action=str(action or ""), contract_id=int(contract_id or 0), row_id=int(row_id or 0),
+        request_hash=str(request_hash or ""), result=dict(result or {}),
+    )
+    s.add(row)
+    s.flush()
+    return row
+
+
 # ============================================================ 抓取落库（`M5-6`）
 
 #: 「**抓取会刷新**」的列 —— i8 的事实；已审核锁定的合同日期除外（TAIL-313）。
@@ -546,6 +609,8 @@ __all__ = [
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
 
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
+    "lock_subtable_operations", "subtable_operation_by_request", "subtable_operation_of_account",
+    "insert_subtable_operation",
     "FETCH_COLS", "FETCH_ONLY_WHEN_BLANK", "FETCH_BY_PARTY_COLS",
     "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
     "list_party_kinds", "party_kind_map", "ensure_party_kinds", "set_party_kind",

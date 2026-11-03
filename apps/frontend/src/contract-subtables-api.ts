@@ -40,9 +40,20 @@ export function draftProblem(draft: SubtableDraft): string {
   if (!/^\d+(?:\.\d{1,2})?$/.test(draft.amount.trim()) || cents(draft.amount.trim()) <= 0n) return '金额须大于0，最多两位小数。';
   return '';
 }
-export async function writeSubtable(contractId: number, kind: SubtableKind, draft: SubtableDraft | null, rowId?: number): Promise<number | null> {
+
+export async function writeSubtable(contractId: number, kind: SubtableKind, draft: SubtableDraft | null, rowId?: number, requestId?: string): Promise<number | null> {
   const adding = draft !== null;
-  const result = await requestJson(`/api/m11/${kind === 'payment' ? 'payment' : 'invoice'}/${adding ? 'add' : 'del'}`, { method:'POST', ...body(adding ? {id:contractId,date:draft.date,amount:draft.amount.trim(),...(kind === 'payment' ? {source:'manual'} : {kind})} : {row_id:rowId}) });
+  const result = await requestJson(`/api/m11/${kind === 'payment' ? 'payment' : 'invoice'}/${adding ? 'add' : 'del'}`, { method:'POST', ...body(adding ? {id:contractId,date:draft.date,amount:draft.amount.trim(),...(kind === 'payment' ? {source:'manual'} : {kind}),...(requestId ? {request_id:requestId} : {})} : {row_id:rowId,...(requestId ? {request_id:requestId} : {})}) });
   if (!record(result) || result.ok !== true || adding && !id(result.id)) throw new ApiError('保存回执不完整，请重读核对，勿重复操作。');
   return adding ? result.id as number : null;
+}
+
+/** 按稳定编号查询单次写操作的结果；不猜、不重投。 */
+export type SubtableOperationLookup = { status: 'completed'; result: Record<string, unknown> } | { status: 'not_found' };
+export async function readSubtableOperation(requestId: string, signal?: AbortSignal): Promise<SubtableOperationLookup> {
+  const value = await requestJson(`/api/m11/subtable-operation?request_id=${encodeURIComponent(requestId)}`, { signal: signal ?? null });
+  if (!record(value) || value.ok !== true) throw new ApiError('保存结果查询未确认，请稍后刷新页面核对。');
+  if (value.status === 'not_found') return { status: 'not_found' };
+  if (value.status === 'completed' && record(value.result)) return { status: 'completed', result: value.result };
+  throw new ApiError('保存结果查询回执不完整，请稍后刷新页面核对。');
 }

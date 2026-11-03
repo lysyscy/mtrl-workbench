@@ -1,4 +1,5 @@
 """Real contract subtable draft and normal add/delete wiring, isolated copy only."""
+import json
 from decimal import Decimal
 from playwright.sync_api import expect
 from test_preview import server,browser_page
@@ -23,16 +24,27 @@ def test_actual_subtable_draft_survives_navigation_and_close_confirm(server,brow
 
 
 def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disposable):
+    """请求未到达服务端：自动查询得"未找到"，重试沿用同一 request_id，最终只记一次。"""
     page,_=browser_page;row,label=contract_sample(api);before=get(api,'/api/m11/detail',id=row['id'])['data'];modal=open_payment(page,server,row,label)
-    amount=modal.get_by_label('手工付款金额（元）',exact=True);amount.fill('1.25');writes=[]
-    def damaged(route):
-        response=route.fetch();assert response.ok and response.json()['ok'];writes.append(route.request.post_data);route.fulfill(response=response,body='{')
-    page.route('**/api/m11/payment/add',damaged);modal.get_by_role('button',name='新增手工付款',exact=True).click()
-    expect(modal.get_by_role('alert')).to_contain_text('未取得保存确认');expect(modal.get_by_role('button',name='新增手工付款',exact=True)).to_be_disabled();assert len(writes)==1
-    page.unroute('**/api/m11/payment/add');modal.get_by_role('button',name='重读明细',exact=True).click();expect(modal.get_by_role('button',name='已核对结果，继续处理',exact=True)).to_be_enabled()
-    assert len(writes)==1;modal.get_by_role('button',name='已核对结果，继续处理',exact=True).click()
-    expect(modal.get_by_role('button',name='新增手工付款',exact=True)).to_be_enabled()
-    after=get(api,'/api/m11/detail',id=row['id'])['data'];assert Decimal(after['pay_sum'])==Decimal(before['pay_sum'])+Decimal('1.25')
+    amount=modal.get_by_label('手工付款金额（元）',exact=True);amount.fill('1.25');writes=[];lookups=[]
+    def lose(route):
+        writes.append(json.loads(route.request.post_data))
+        # 首次请求在浏览器侧断掉（服务端没收到）；重试放行到真实服务端。
+        if len(writes)==1: route.abort('failed')
+        else: route.continue_()
+    def not_found(route):
+        lookups.append(route.request.url);route.fulfill(status=200,content_type='application/json',body=json.dumps({'ok':True,'status':'not_found'}))
+    page.route('**/api/m11/payment/add',lose);page.route('**/api/m11/subtable-operation?*',not_found)
+    modal.get_by_role('button',name='新增手工付款',exact=True).click()
+    # 结果未知 → 自动查询这次提交（无需手工"重读明细/已核对"）；确实未落地就明确说未保存。
+    expect(modal.get_by_text('暂未查到上次手工付款操作的保存结果')).to_be_visible()
+    assert len(writes)==1 and len(lookups)==1 and 'request_id=' in lookups[0]
+    retry=modal.get_by_role('button',name='重试上次手工付款',exact=True);expect(retry).to_be_enabled()
+    page.unroute('**/api/m11/subtable-operation?*');retry.click()
+    expect(page.get_by_text('手工付款已新增。',exact=True)).to_be_visible()
+    assert len(writes)==2 and writes[0]['request_id']==writes[1]['request_id']
+    after=get(api,'/api/m11/detail',id=row['id'])['data']
+    assert Decimal(after['pay_sum'])==Decimal(before['pay_sum'])+Decimal('1.25') and len(after['payments'])==len(before['payments'])+1
     ids={p['id'] for p in before['payments']};added=next(p for p in after['payments'] if p['id'] not in ids)
     dom=modal.locator('.ag-row').filter(has=page.locator('[data-subtable="payment"][data-row="'+str(added['id'])+'"]'))
     dom.get_by_role('button',name='删除手工付款',exact=True).click()
@@ -41,3 +53,16 @@ def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disp
     dom.get_by_role('button',name='删除手工付款',exact=True).click();modal.get_by_role('group',name='确认删除子行').get_by_role('button',name='确认删除',exact=True).click()
     expect(page.get_by_text('已删除。',exact=True)).to_be_visible()
     assert get(api,'/api/m11/detail',id=row['id'])['data']['pay_sum']==before['pay_sum']
+
+
+def test_actual_lost_receipt_is_confirmed_without_second_write(server,browser_page,api,disposable):
+    """请求已到服务端但回执丢失：自动查询得已完成，只写一次、不重投、不误报未保存。"""
+    page,_=browser_page;row,label=contract_sample(api);before=get(api,'/api/m11/detail',id=row['id'])['data'];modal=open_payment(page,server,row,label)
+    amount=modal.get_by_label('手工付款金额（元）',exact=True);amount.fill('2.50');writes=[]
+    def lose_receipt(route):
+        writes.append(json.loads(route.request.post_data));response=route.fetch();assert response.ok and response.json()['ok'];route.abort('failed')
+    page.route('**/api/m11/payment/add',lose_receipt);modal.get_by_role('button',name='新增手工付款',exact=True).click()
+    expect(page.get_by_text('手工付款已保存。',exact=True)).to_be_visible()
+    assert len(writes)==1
+    after=get(api,'/api/m11/detail',id=row['id'])['data'];assert Decimal(after['pay_sum'])==Decimal(before['pay_sum'])+Decimal('2.50')
+    expect(modal.get_by_label('手工付款金额（元）',exact=True)).to_have_value('')

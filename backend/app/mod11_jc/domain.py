@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 from itertools import combinations
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -145,6 +147,66 @@ def payment_problem(date, amount) -> str | None:
     ⚠️ 付款日期由**壳侧默认取系统当日**（`001-07`）—— 那是录入便利，不是"可以不填"。
     """
     return invoice_problem(date, amount)
+
+
+# ------------------------------------------------------ 子表操作标识（局部可靠保存 / 恢复）
+#
+# ⭐ 为什么需要：子表增删原先没有稳定操作标识 ⇒ 页面刷新后浏览器只记得"这次可能没存成功"，
+#    服务端却说不出"那一次到底成了没有" ⇒ 只能逼用户「重读明细 → 自行比对 → 已核对」。
+# ⚠️ 口径（用户 2026-11-03 确认）：**只给 m11 子表**加回执，⛔ 不扩成全站框架；
+#    带标识的重复请求 ⇒ 回放原回执（⛔ 不重复产生 / 删除事实）；同标识换动作或换参数 ⇒ **明确拒绝**；
+#    ⛔ 绝不"因为日期和金额一样就当同一笔"—— 判重只认标识。
+
+MSG_REQUEST_BAD = "请求标识不合法：只允许 1~160 个字母、数字或 - _ . : 组成的标识（UUID 亦可），本次未修改数据"
+MSG_REQUEST_TAKEN = "该请求标识已用于另一次操作或另一个账号，未重复执行，本次未修改数据"
+
+#: 子表操作标识的字符域 —— 有界、可打印、⛔ 不含空白与斜杠（省得进日志 / 键名时出歧义）。
+_REQUEST_RE = re.compile(r"^[A-Za-z0-9._:-]{1,160}$")
+
+#: 回执里"这次操作是什么"的字段清单 —— ⭐ **同标识不同内容**只按它比对（⛔ 不按日期金额猜）。
+#: ⚠️ 账号**不在**这里：它由回执的 `account` 列单独比对（摘要只描述"操作内容"）。
+_REQUEST_FIELDS: tuple[str, ...] = (
+    "action", "contract_id", "row_id", "kind", "date", "amount", "source", "notice_id",
+)
+
+
+def request_key(raw) -> str:
+    """归一子表操作标识：空 / `None` ⇒ `""`（= 老调用，行为不变）；不合法 ⇒ `ValueError`。
+
+    ⚠️ 空串**不是错**：没带标识的老调用照旧执行（迁移前的前端仍在用）。带了的才受幂等保护。
+    """
+    text = str(raw if raw is not None else "").strip()
+    if not text:
+        return ""
+    if not _REQUEST_RE.match(text):
+        raise ValueError(MSG_REQUEST_BAD)
+    return text
+
+
+def request_hash(**fields) -> str:
+    """把「动作 ＋ 参数 ＋ 账号」压成一个摘要 —— ⭐ 同标识再次提交时**只按它**判断内容变没变。
+
+    ⚠️ 用 `sort_keys` ＋ `default=str`（金额 `Decimal`、id 数字都稳定）⇒ 同样的输入永远同样的摘要；
+       ⛔ 别把"看起来一样"当成等价（日期写法 / 金额写法不同就是不同内容，那是客户端该保持一致的事）。
+    """
+    payload = {name: str(fields.get(name, "")) for name in _REQUEST_FIELDS}
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def subtable_operation_of(row) -> dict:
+    """回执读出口 —— 查到了就回 `completed` ＋ **原样**的成功回执（判据：形状与首次一致）。"""
+    return {"ok": True, "status": "completed", "result": dict((row.result if row is not None else None) or {})}
+
+
+def subtable_operation_missing() -> dict:
+    """回执没查到 —— ⚠️ `not_found` **不是**"可以换一个新标识重发"的依据（客户端保留原标识即可）。"""
+    return {"ok": True, "status": "not_found"}
+
+
+def subtable_result_conflict(request_id: str) -> dict:
+    """同标识换了内容 / 换了账号 ⇒ **明确拒绝**（⛔ 不静默当成重放、⛔ 也不静默再执行一次）。"""
+    return {"ok": False, "kind": "err", "message": MSG_REQUEST_TAKEN, "request_id": request_id}
 
 
 # ---------------------------------------------------------------- 结算 / 欠款（唯一出口）
@@ -291,6 +353,9 @@ __all__ = [
     "settle_amount", "debt_amount", "contract_amounts",
     "normalize_tag", "tag_after_fetch",
     "link_hint", "dedup_blocked", "pick_candidates", "recommend_link",
+    "MSG_REQUEST_BAD", "MSG_REQUEST_TAKEN",
+    "request_key", "request_hash", "subtable_operation_of", "subtable_operation_missing",
+    "subtable_result_conflict",
 ]
 
 
