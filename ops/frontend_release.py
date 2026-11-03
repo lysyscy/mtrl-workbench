@@ -25,7 +25,7 @@ from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from tools.audit.workspace_paths import close_runs, output_dir
+from tools.audit.workspace_paths import close_runs, output_dir, owned_run
 from tools.dev.frontend_preview_runtime import product_sources, read_json, write_json
 
 POINTER = re.compile(rb'(?m)^(?:\xef\xbb\xbf)?FRONTEND_APP_DIR[ \t]*=[^\r\n]*')
@@ -449,7 +449,7 @@ def elevate(arguments):
 
 def outcome(code, run, **details):
     close_runs(success=code == 0)
-    if not run.exists():
+    if not run.exists() and run.is_relative_to(ROOT / '.artifacts/active'):
         run = ROOT / '.artifacts/archive' / run.relative_to(ROOT / '.artifacts/active')
     print(json.dumps({**details, 'run': str(run)}, ensure_ascii=False))
     return code
@@ -468,7 +468,7 @@ def main():
     if not 1 <= args.wait_sec <= 120:
         parser.error('等待秒数须在1至120之间')
     os.environ.setdefault('MTRL_EFFORT', 'frontend-release')
-    run = no_links(args.run, ROOT / '.artifacts/active') if args.run else output_dir('reports').parent
+    run = owned_run(args.run if args.run else output_dir('reports').parent, root=ROOT, writing=True)
     for kind in ('logs', 'reports', 'work'): (run / kind).mkdir(parents=True, exist_ok=True)
     try:
         host = WindowsService(ROOT, args.service_name, run, args.wait_sec)

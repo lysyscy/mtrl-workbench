@@ -34,6 +34,59 @@ def _no_links(path: Path, root: Path) -> None:
             break
 
 
+def _checked_path(path: Path, root: Path) -> Path:
+    path = Path(path)
+    if '..' in path.parts:
+        raise ValueError('运行路径不得包含父目录跳转')
+    # Inspect the original spelling before resolve() removes junction/symlink evidence.
+    absolute = Path(os.path.abspath(path))
+    _no_links(absolute, Path(root).absolute())
+    return absolute.resolve()
+
+
+def owned_run(path: Path, *, root: Path = ROOT, writing: bool = False) -> Path:
+    """Validate a legacy active run or a registered run in this project's output area.
+
+    Enrollment and records remain owned by the installed lifecycle implementation.
+    Held/closed evidence can be read, but cannot be reused for new output.
+    """
+    if path is None:
+        raise RuntimeError('须指定已有运行归属 --run')
+    run = _checked_path(path, root)
+    if run.is_relative_to(Path(root).resolve() / '.artifacts/active'):
+        return run
+    try:
+        module, managed_root = _lifecycle()
+        managed_root = module.enrolled(managed_root)
+        if run.name != 'files' or run.parent.parent.name != 'groups':
+            raise ValueError('不是已登记运行的files目录')
+        _, files, record = module.load(managed_root, run.parent.name)
+        # Windows packaged-app redirection and 8.3 aliases can spell the same
+        # directory differently. Compare its filesystem identity, never just a
+        # matching group name, and retain the lifecycle's declared spelling.
+        if not files.samefile(run) or record['state'] not in {'active', 'closed'}:
+            raise ValueError('运行归属或状态不符')
+        if writing and (record['state'] != 'active' or record['hold']):
+            raise ValueError('运行已结束或暂缓，不能继续写入')
+    except (OSError, ValueError) as error:
+        raise RuntimeError('运行未登记在本项目产物区，或归属/状态不可用') from error
+    return files
+
+
+def owned_work(path: Path, *, root: Path = ROOT, writing: bool = False) -> Path:
+    """Validate a work descendant through the same run identity as its producer."""
+    work = _checked_path(path, root)
+    for parent in work.parents:
+        if parent.name != 'work':
+            continue
+        try:
+            run = owned_run(parent.parent, root=root, writing=writing)
+        except RuntimeError:
+            continue
+        return run / 'work' / work.relative_to(parent)
+    raise RuntimeError('构建不属于本项目已登记运行的work目录')
+
+
 def output_dir(kind: str = 'reports', *, root: Path = ROOT) -> Path:
     global _owns_run
     if kind not in {'reports', 'logs', 'screenshots', 'traces', 'exports', 'work', 'recovery'}:

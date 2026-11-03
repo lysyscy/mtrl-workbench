@@ -136,13 +136,12 @@ def product_sources(*, frontend_only=False):
 
 
 def verify_build(version, *, check_sources=True):
-    build = Path(version["build_path"]).resolve()
-    if not build.is_relative_to(ROOT / ".artifacts/active"):
-        raise RuntimeError("构建不属于当前工作树活动运行")
+    from tools.audit.workspace_paths import owned_work
+    build = owned_work(Path(version["build_path"]), root=ROOT)
     if check_sources and version.get("frontend_sources") != product_sources(frontend_only=True):
         raise RuntimeError("构建的前端输入已变化，须离线重新构建")
     for name, digest in version["files"].items():
-        asset = (build / name).resolve()
+        asset = owned_work(build / name, root=ROOT)
         if not asset.is_relative_to(build) or hashlib.sha256(asset.read_bytes()).hexdigest() != digest:
             raise RuntimeError("构建资源散列不符")
     return build

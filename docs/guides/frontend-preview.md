@@ -20,7 +20,7 @@
 
 ## 离线构建
 
-依赖及最低版本读 `apps/frontend/package.json`（Node范围）与锁文件（pnpm精确版本）；复用已准备环境。仓根运行，`<run>`为本次 `.artifacts/active/<effort>/<run>`，构建目录必须是该run/work下不存在的新目录：
+依赖及最低版本读 `apps/frontend/package.json`（Node范围）与锁文件（pnpm精确版本）；复用已准备环境。仓根运行，`<run>`取本项目已登记受管运行的`files`目录，兼容已有`.artifacts/active/<effort>/<run>`；构建目录必须是该run/work下不存在的新目录。发布、构建和资源核验共用运行归属校验，不能用未登记仓外目录或链接代替，已结束或暂缓运行不得新增构建：
 
 ```text
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --run <run> --prepare-build <run>/work/<new-build>

@@ -17,6 +17,7 @@ import threading
 
 from tools.dev.frontend_preview_runtime import (ROOT, product_sources, process_identity,
     read_json, write_json, state_dir, verify_build, finish_preview)
+from tools.audit.workspace_paths import owned_run as validate_run, owned_work
 
 
 def arguments():
@@ -36,7 +37,7 @@ def arguments():
 
 def prepare_build(args):
     run = owned_run(args.run)
-    build = args.prepare_build.resolve()
+    build = owned_work(args.prepare_build, root=ROOT, writing=True)
     if not build.is_relative_to(run / 'work') or build.exists():
         raise RuntimeError('新构建必须位于本run/work且不能覆盖已有资源')
     before = product_sources(frontend_only=True)
@@ -76,12 +77,7 @@ def prepare_build(args):
 
 
 def owned_run(path):
-    if path is None:
-        raise RuntimeError('须指定已有运行归属 --run')
-    run = path.resolve()
-    if not run.is_relative_to(ROOT / '.artifacts/active'):
-        raise RuntimeError('运行必须属于当前工作树的.artifacts/active')
-    return run
+    return validate_run(path, root=ROOT, writing=True)
 
 
 def existing_environment(args, run, source, guard):
@@ -203,7 +199,11 @@ def run(args):
     from tests.db_guard import TestDatabaseGuard
     from tools.dev.frontend_preview import isolated_database
     run = owned_run(args.run)
-    os.environ.update(MTRL_EFFORT=run.parent.name, MTRL_RUN_ID=run.name)
+    if run.is_relative_to(ROOT / '.artifacts/active'):
+        os.environ.update(MTRL_EFFORT=run.parent.name, MTRL_RUN_ID=run.name)
+    else:
+        os.environ.update(MTRL_RUN_ID=run.parent.name, MTRL_LIFECYCLE_OUTPUT=str(run))
+        os.environ.setdefault('MTRL_EFFORT', 'frontend-preview')
     if args.source_env is None:
         raise RuntimeError('须明确只读来源配置 --source-env')
     version = read_json(run / 'reports/version.json')

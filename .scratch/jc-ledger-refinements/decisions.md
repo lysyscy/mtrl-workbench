@@ -63,3 +63,7 @@ DSH 会话 `session-6627f708-44fe-4e3a-8773-2513245f4eb2`，核查运行 `hrun-m
 - 最终真实副本浏览器 `test_invoices.py test_contracts.py` 为6 passed / exit 0（36.93s），覆盖未查到回执后原request_id重试、只产生一条事实、丢回执自动确认等。比例与正常无警示行修正后的类型检查、62项单测、构建通过；机械布局扫描无发现。未将旧版源码推断扩称为完整旧版GUI红绿复现。
 - 最新图像与几何报告归 `C:/Users/Administrator/AppData/Local/AgentArtifacts/projects/mtrl-workbench/groups/154902-194050-44976/files/`，报告 `reports/final-evidence.json`；主会话已实际查看 `screenshots/final-inv6-1920x1080-112-top.png`，六张发票与合计完整展示，正常不占警示行。中间图 `many-pay-1080p-112.png` / `scroll2-*.png` 不作最终证据。
 - 后端迁移仅已在隔离验证目标应用。上线须按另行授权执行新增操作回执表迁移并同步加载前后端。当前没有源码提交、推送或正式部署；无生产业务写。
+
+## 后续上线
+
+用户随后明确要求“上线”，并在自动审批要求后明确授权正常推送到原公开GitHub仓库。2026-11-03 16:07，产品`073aaedd`已推送、核远端SHA并正式加载，两库备份及增量迁移完成，原集采业务表摘要保持，正式资源、健康、进程及新接口/排序只读核验通过。完整状态与证据归[上线回执](deployment.md)，上节“未提交/未上线”仅指当时实施交付阶段。
