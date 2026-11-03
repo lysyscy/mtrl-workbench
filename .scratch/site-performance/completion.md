@@ -1,5 +1,7 @@
 # 全站性能收敛结果
 
+正式加载更新：2026-11-03 11:19按用户要求已加载`8e4512ce`，正式健康/资源/监听和新增接口只读核验通过，见[部署回执](deployment.md)。下文为技术验收结束时的边界，现场人工交互验收仍未进行。
+
 2026-11-03。范围为`daf8a7fc`起的本轮源码，分支`codex/site-performance-20261102`；前八票候选累计`78c79c8a`，PageSurface最终产品提交`d5a97eaf`已推送并核远端相等，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41570045739)成功。464–472按本轮协议done，技术验证完成，人工现场验收及正式加载未进行。本轮公开推送已获明确授权。
 
 ## 采用结果与保持理由
