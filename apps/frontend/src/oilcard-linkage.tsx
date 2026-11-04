@@ -13,6 +13,7 @@ import { TimePicker } from './time-picker';
 import { useCellSaveQueue } from './use-cell-save';
 import { enableOilBigLinkage, enableOilFeeLinkage, getOilLinkage, saveOilBigCustom, saveOilFeeCustom } from './oilcard-linkage-api';
 import type { OilFeeMonth, OilLinkage } from './oilcard-linkage-api';
+import { ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type Field = 'custom_amount' | 'remark' | 'big_amount' | 'big_remark';
 type Draft = { projectId: number; ym: string; field: Field; original: string; value: string; error: string };
@@ -96,14 +97,20 @@ export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLoc
       { colId: 'big_total', headerName: '大表工程用油', cellClass: 'money', valueGetter: p => p.data?.big.amount, valueFormatter: p => p.data?.big.enabled ? money(p.value) : '待接续核对', ...contentWidth(160, 260, scale, 1) },
     ] },
   ], [projects, rows, scale]);
+  // 切核算月即换查询身份：旧月的金额不留在屏上，占位替代原表而不冒充"无项目"。
+  const readState = readPhase(query);
+  const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label></div>
     {rows.some(row => !row.enabled) && <p className="muted">待接续项目仅显示当月充值供核对，原特殊费用和导出仍取旧记录；核对旧用油总额后启用联动。</p>}
-    {(error || query.isError) && <p role="alert" className="notice">{error || query.error?.message}<Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    {error && <p role="alert" className="notice">{error}<Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {uncertain && <p role="alert" className="notice">核对刚才的用油自定义额后再继续。<Button disabled={blocked || busy || !verified} onClick={() => saves.confirm()}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p key={key} className="oilcard-draft-error">{draft.ym} {labels[draft.field]}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>还原该字段</Button></p>)}
-    {query.isPending ? <p data-page-loading role="status">正在读取用油联动…</p> : query.data && <LinkageCells.Provider value={{ rows, projects, drafts, disabled, structuralDisabled: disabled || busy || dirty || query.isFetching, save: saves.save,
+    <ReadStatusLane phase={readState} announce="正在读取用油联动…">
+      {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    </ReadStatusLane>
+    {query.data ? <LinkageCells.Provider value={{ rows, projects, drafts, disabled, structuralDisabled: disabled || busy || dirty || query.isFetching, save: saves.save,
       enable: (row, big) => { void saves.run(signal => (big ? enableOilBigLinkage : enableOilFeeLinkage)(row.project_id, signal), () => '', big ? '启用大表联动：' : '启用用油联动：'); },
       change: (row, field, value) => { if (disabled) return; const key = keyOf(row, field); saves.update((previous, writing) => { const next = { ...previous }, original = previous[key]?.original ?? valueOf(row, field); if (value === original && !writing) delete next[key]; else next[key] = { projectId: row.project_id, ym: row.ym, field, original, value, error: '' }; return next; }); } }}>
       {!rows.length ? <p className="state">尚无正式项目，请先维护项目档案。</p> : <BusinessGrid table="oilcard-linkage" label="用油联动项目月表" rows={rows} columns={columns} rowId={row => String(row.project_id)} scale={scale} domLayout="autoHeight" />}
-    </LinkageCells.Provider>}</section>;
+    </LinkageCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}</section>;
 }

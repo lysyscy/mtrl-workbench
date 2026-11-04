@@ -17,6 +17,7 @@ import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
 import { OilInvoiceSheet } from './oilcard-invoices';
+import { ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
 import { getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
@@ -174,15 +175,21 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     { field: 'remark', headerName: '备注', ...contentWidth(160, 360, scale, 1), cellRenderer: EntryCell },
   ] satisfies ColDef<TableRow>[]).map(column => valueFilterColumn<TableRow>(column, filterOptions[column.field as Field])), [scale, amountWidth, filterOptions]);
   const totals = useMemo<TableRow[]>(() => query.data ? [{ id: -1, request_id: 'total', version: '', kind: 'adjustment', project_id: 0, account_id: 0, card_id: null, date_text: '合计', entry_date: null, amount: filteredAmount, remark: '', related_entry_id: null, transfer_id: null, total: true }] : [], [query.data, filteredAmount]);
+  // 台账首读与失败只在表区原位呈现：工具栏和草稿错误行保持可见，未读不被当成空台账。
+  const readState = readPhase(query);
+  const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section className="oilcard-ledger-sheet" aria-label="充值与发票">
-    {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '核对刚才的充值登记后再继续。' : '已读取当前记录，请核对保留的输入。'}<Button disabled={!verified || blocked || busy} onClick={confirm}>已核对，保留输入继续</Button></p>}
     <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button>
       {Object.values(drafts).some(draft => !draft.id) && <Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = Object.fromEntries(Object.entries(ds).filter(([, draft]) => draft.id)); draftRef.current = next; return next; })}>取消新增</Button>}</div></div>
       <div className="oilcard-selection-actions" aria-hidden="true" />
+      <ReadStatusLane phase={readState} announce="正在读取充值台账…">
+        {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+      </ReadStatusLane>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
-      {query.isPending ? <p role="status" data-page-loading>正在读取充值台账…</p> : query.data && <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider>}
+      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     {transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
       const from = archives.accounts.find(account => account.id === values.out_account_id)?.name ?? '转出账户';

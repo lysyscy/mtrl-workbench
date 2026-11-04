@@ -24,6 +24,7 @@ import { ReadGrid } from './business-grid';
 import { numberColumnWidth, pageGridGeometry, textWidth } from './grid';
 import { completeColumnWidth } from './grid-text';
 import { BusinessDate } from './time-picker';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 function completeMoneyWidth(values: string[], scale: number) {
   const amount = numberColumnWidth(values, scale), complete = completeColumnWidth(values, '金额（元）', scale);
@@ -193,6 +194,9 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
   }, [state?.focus, query.data, query.isFetching, paused]);
 
   const unavailable = !writable || paused || !state || state.busy || state.uncertain || query.isFetching || query.isError || !query.data;
+  // 明细读取状态与占位在区外恒高呈现：首读、失败和恢复都不塌掉摘要、警示与合计的位置。
+  const readState = readPhase(query);
+  const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
 
   async function save(kind: SubtableKind, deleting = false) {
     if (unavailable || lock.current || !state) return;
@@ -285,8 +289,10 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
       {onlyKind !== 'payment' && overageLine(onlyKind)}
     </div>}
     {storageWarning && <p className="subtable-storage-note" role="status">{storageWarning}</p>}
-    {query.isPending ? <p role="status">正在读取合同子表…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}</p> : null}
-    {data && <>{historyDate && <p className="subtable-history-note">历史未结金额，核对截至日 {historyDate}；已扣除此前付款，请勿重复录入。</p>}{!onlyKind && <div className="subtable-totals">{[['结算金额', data.settle], ['付款金额', data.pay_sum], ['欠款金额', data.debt]].map(([label, value]) => <span key={label}>{label}<strong>{money(value!)} 元</strong></span>)}</div>}
+    <ReadStatusLane phase={readState} announce="正在读取合同子表…" className="subtable-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="明细更新失败，保留上次结果。"/>}
+    </ReadStatusLane>
+    {data ? <>{historyDate && <p className="subtable-history-note">历史未结金额，核对截至日 {historyDate}；已扣除此前付款，请勿重复录入。</p>}{!onlyKind && <div className="subtable-totals">{[['结算金额', data.settle], ['付款金额', data.pay_sum], ['欠款金额', data.debt]].map(([label, value]) => <span key={label}>{label}<strong>{money(value!)} 元</strong></span>)}</div>}
       <div className="subtable-invoices">{(['supplier', 'trade'] as const).filter(kind => (!onlyKind || kind === onlyKind) && (kind === 'supplier' || data.trade_co || data.trade_invoices.length || state && draftDirty(state.drafts.trade))).map(kind => <section key={kind} aria-label={labels[kind]}>
         <div className="subtable-section-head">{(!onlyKind || onlyKind !== 'payment') && <h4>{labels[kind]}{kind === 'trade' && data.trade_co ? `，${data.trade_co}` : kind === 'supplier' && data.supplier ? `，${data.supplier}` : ''}</h4>}<span className="subtable-count">共 {invoiceRows(kind).length} 条</span></div>
         {onlyKind === undefined && overageLine(kind)}
@@ -306,7 +312,7 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
         { colId: 'actions', headerName: '操作', ...completeColumnWidth(['删除手工付款', '回通知书改关联'], '操作', scale, 24), cellRenderer: ({ data: row, node }: { data: PaymentDisplayRow; node: { rowPinned: unknown } }) => node.rowPinned ? null : row.source === 'manual' ? <Button htmlType="button" danger size="small" disabled={unavailable} onClick={() => remove('payment', row)}>删除手工付款</Button> : <span className="muted">回通知书改关联</span> },
       ]}/></div>{draftRow('payment')}</section>}
       {(!onlyKind || onlyKind === 'payment') && linkedNotices.length > 0 && <div className="subtable-linked-group"><div className="subtable-links"><span>已关联通知书</span>{linkedNotices.slice((currentLinkPage - 1) * linkPageSize, currentLinkPage * linkPageSize).map((id, index) => <NoticeButton key={id} id={id}>通知书 {(currentLinkPage - 1) * linkPageSize + index + 1}</NoticeButton>)}</div>{linkedNotices.length > linkPageSize && <Pagination aria-label="已关联通知书分页" size="small" current={currentLinkPage} pageSize={linkPageSize} total={linkedNotices.length} showSizeChanger={false} onChange={setLinkPage}/>}</div>}
-    </>}
+    </> : placeheld && <div className="subtable-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={readState === 'error'}/></div>}
     {referencing && <ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} state={state} update={update} refresh={refresh} close={() => setReferencing(false)}/>}
     {state?.deleting && (!onlyKind || state.deleting.kind === onlyKind) && <div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date || '日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={() => update(s => ({ ...s, deleting: null }))}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={() => void save(state.deleting!.kind, true)}>确认删除</Button></div>}
     {state?.feedback && <p role="status">{state.feedback}</p>}{state?.error && <p className="notice" role="alert">{state.error}</p>}
@@ -322,7 +328,7 @@ export function ContractSubtableDialog({ row, kind, accountId, contracts, worksp
     close();
   } });
   const title = kind === 'payment' ? '付款子表' : kind === 'trade' ? '贸易公司发票子表' : historyDate ? '历史未结金额' : '供应商发票子表';
-  return <BusinessModal open={!paused} className="project-dialog contract-subtable-dialog" titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
+  return <BusinessModal open={!paused} centered={false} className="project-dialog contract-subtable-dialog" titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
     <ContractSubtables contractId={row.id} accountId={accountId} historyDate={historyDate} contracts={contracts} workspace={workspace} change={change} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
     <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
   </DialogContents></BusinessModal>;

@@ -23,6 +23,10 @@
 .subtable-totals span{display:grid;gap:4px}
 .subtable-totals strong,.contract-subtables .money,.subtable-draft input{font-variant-numeric:tabular-nums}
 .subtable-invoices{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+/* 明细状态槽沿用 read-region.css 的恒高几何，本页只给槽内边距；占位框沿用明细外框，首读/失败不塌掉合计与警示的位置。 */
+.subtable-read-status{--read-status-pad:calc(14px*var(--fscale));margin:calc(8px*var(--fscale)) 0 0}
+.subtable-read-reserve{margin:calc(12px*var(--fscale)) 0 0;padding:calc(8px*var(--fscale)) calc(14px*var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-inner);background:var(--sf);min-height:calc(190px*var(--fscale))}
+
 .contract-subtables section{min-width:0;border:0;border-radius:0;overflow:visible}
 .subtable-section-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:calc(4px*var(--fscale))}
 .subtable-count{color:var(--tx2);font-size:calc(12px*var(--fscale));font-variant-numeric:tabular-nums}

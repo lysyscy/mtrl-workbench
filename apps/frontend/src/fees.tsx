@@ -15,6 +15,7 @@ import { feeWrite, getFeeYear } from './fees-api';
 import type { FeeYearData, FeeYearRow } from './fees-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { useCellSaveQueue } from './use-cell-save';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const rowId=(row:FeeYearRow)=>row.item_id ? `item-${row.item_id}` : `auto-${encodeURIComponent(row.business_key ?? row.item)}`;
 type Draft={itemId:number; item:string; ym:string; field:'name'|'amount'; value:string; original:string; error:string};
@@ -65,6 +66,15 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
   const {drafts,busy,uncertain,verified,error}=saves,dirty=Object.keys(drafts).length>0;
   const disabled=blocked||!active||!me||uncertain||!ready||!query.data?.can_edit||query.isError;
   const paused=blocked||busy||dirty||uncertain;
+  // One read region keyed by year and project: the lane under the toolbar reports it in every
+  // state. A response that belongs to another range is never rendered as this range's amounts, and
+  // until the matching result arrives the table box keeps its area instead of collapsing. Such a
+  // mismatched payload is not "a retained result" either, so a failed read of the new range reads
+  // as a plain failure rather than as an update of the old one.
+  const readState = readPhase(query) === 'stale' && !ready ? 'error' as const
+    : query.data !== undefined && !ready ? 'reading' as const
+    : readPhase(query, query.data !== undefined && query.data.rows.length === 0);
+  const placeheld = query.data === undefined || !ready;
   async function add() {
     if(disabled||busy||dirty||query.isFetching)return;
     const names=new Set(query.data?.rows.map(row=>row.item));let name='新项';for(let n=2;names.has(name);n++)name=`新项${n}`;
@@ -91,10 +101,14 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
     <div data-page-chrome className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data??[]).filter(p=>p.warehouse_name&&p.project_type!=='shell')} selected={(projects.data??[]).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused||projects.isPending} /></label></div>
     <div data-page-chrome className="fee-toolbar"><div><Button disabled={disabled||busy||dirty||query.isFetching} onClick={()=>void add()}>增加手填项</Button><Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button></div><span className="muted">随逐月欠款台账导出，特殊费用月报表</span></div>
-    {(error||projects.isError||query.isError)&&<p role="alert" className="notice">{error||projects.error?.message||query.error?.message}<Button disabled={busy||blocked} onClick={()=>void saves.reread()}>重读核对</Button></p>}
+    {(error||uncertain)&&<p role="alert" className="notice">{error||'核对刚才的操作结果后再继续。'}<Button disabled={busy||blocked} onClick={()=>void saves.reread()}>重读核对</Button></p>}
     {uncertain&&<p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified||busy} onClick={()=>saves.confirm()}>已核对，保留输入继续</Button></p>}
+    <ReadStatusLane phase={readState} announce="正在读取费用…" className="fees-read-status">
+      {(readState==='error'||readState==='stale')&&<ReadFailure read={query} retained="费用更新失败，保留上次结果。"/>}
+      {projects.isError&&<ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}
+    </ReadStatusLane>
     {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item}，{d.field==='name'?'项名':'金额'}：{d.error} <Button size="small" disabled={disabled||busy} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.save(key,true)}>保存</Button><Button size="small" disabled={busy||blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(ds=>{const next={...ds};delete next[key];return next;})}>取消这项修改</Button></p>)}
-    {query.isPending?<p role="status">正在读取费用…</p>:ready&&<FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled||busy||dirty||query.isFetching,remove,save:saves.save,
+    {placeheld?<div className="fees-grid fees-annual-grid fees-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState==='error'}/></div>:<FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled||busy||dirty||query.isFetching,remove,save:saves.save,
       change:d=>saves.update((ds,writing)=>{const key=keyOf(d.itemId,d.field,d.ym),old=ds[key],next={...ds,[key]:{...d,original:old?.original??d.original}};if(d.value===(old?.original??d.original)&&!writing)delete next[key];return next;})}}><PreparedGrid presentation={presentation} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" grid={{theme:gridTheme,domLayout:'autoHeight',getRowId:p=>rowId(p.data),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,animateRows:false}} /></FeeCells.Provider>}
   </section>;
 }

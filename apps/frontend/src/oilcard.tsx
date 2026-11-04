@@ -18,6 +18,7 @@ import { OilLedgerSheet } from './oilcard-ledger';
 import { OilReconciliationSheet } from './oilcard-reconciliation';
 import { OilLinkageSheet } from './oilcard-linkage';
 import { OilTotalExport } from './oilcard-export';
+import { ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type ArchiveKind = 'card' | 'account';
 type Field = 'card_no' | 'kind' | 'parent_card_id' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
@@ -168,6 +169,10 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     { colId: 'actions', headerName: '记录', pinned: 'right', ...contentWidth(90, 110, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row?.id ? <AccountActions row={row} /> : null },
   ], [scale]);
   const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, showHistory: row => setHistoryAccount(row.id) };
+  // 档案读失败时页签条与工具栏仍在，占位只替代内容区，避免未读被当成空档案。
+  const readState = readPhase(query);
+  const projectsWait = projects.isPending && !projects.data;
+  const placeheld = !data || projectsWait;
   const renderRemark = useCallback((kind: ArchiveKind, row: OilCard | OilAccount) => <ArchiveEditor kind={kind} row={row} field="remark" />, []);
   function chooseTab(value: typeof tab) { if (value === 'ledger') setLedgerVisited(true); if (value === 'linkage') setLinkageVisited(true); setTab(value); }
   return <section className="oilcard-page" aria-label="油卡管理">
@@ -175,10 +180,13 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     {!me && <p className="state">登录后可维护油卡档案。</p>}
     {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值或收票结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对保存结果</Button></p>}
     {linkageUncertain && tab !== 'linkage' && <p className="notice" role="alert">用油自定义额保存结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('linkage')}>核对保存结果</Button></p>}
-    {(error || query.isError || projects.isError) && <p className="notice" role="alert">{error || query.error?.message || projects.error?.message}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的档案变更后再继续。<Button disabled={!verified || blocked || busy} onClick={() => saves.confirm()}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>{fieldLabels[d.field]}：{d.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>还原该字段</Button></p>)}
-    {query.isPending || projects.isPending ? <p data-page-loading role="status">正在读取油卡档案…</p> : data && <ArchiveCells.Provider value={state}>
+    <ReadStatusLane phase={projectsWait ? 'reading' : readState} announce="正在读取油卡档案及项目…">
+      {(query.isError || projects.isError) && <p className="notice" role="alert"><span className="read-failure-text">{data && '更新未成功，保留上次结果。'}{query.error?.message || projects.error?.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    </ReadStatusLane>
+    {data && !projectsWait ? <ArchiveCells.Provider value={state}>
       <div role="tabpanel" id="oilcard-panel-overview" aria-labelledby="oilcard-tab-overview" hidden={tab !== 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} /></PageActivity.Provider></div>
       {ledgerVisited && <div role="tabpanel" id="oilcard-panel-ledger" aria-labelledby="oilcard-tab-ledger" hidden={tab !== 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></div>}
       {linkageVisited && <div role="tabpanel" id="oilcard-panel-linkage" aria-labelledby="oilcard-tab-linkage" hidden={tab !== 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></div>}
@@ -188,7 +196,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
         <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增油卡</Button></div></div>
         {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" />}</section></div>
       </PageActivity.Provider></div>
-    </ArchiveCells.Provider>}
+    </ArchiveCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}
     {historyAccount > 0 && tab === 'archives' && <section className="oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
       {assignments.isPending ? <p role="status">正在读取关联历史…</p> : assignments.isError ? <p role="alert" className="notice">{assignments.error.message}<Button disabled={blocked} onClick={() => void assignments.refetch()}>重读关联历史</Button></p> : <ReadGrid table="oilcard-assignments" label="账户关联历史" rows={assignments.data ?? []} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" columns={[
         { field: 'changed_at', headerName: '关联时间' },

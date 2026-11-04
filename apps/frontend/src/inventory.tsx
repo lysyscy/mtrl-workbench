@@ -20,6 +20,7 @@ import { InventoryFetch } from './inventory-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true};
 const inventoryRowId = (row: InventoryRow) => String(row.id);
@@ -89,7 +90,12 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const filterProblem = [filter.min,filter.max].some(raw => raw && !Number.isFinite(Number(raw.replace(/,/g,'')))) ? '列数值无效，请修改或清除此列。' : '';
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
   const editMissing = Boolean(editing && query.data && !query.data.rows.some(r => r.id === editing.id));
-  return <section className="inventory-page" aria-label="库存单据与调整单" data-page-loading={query.isPending || projects.isPending ? '' : undefined}>
+  // Inventory keeps one read state for its table: the first read holds the reserved box with a
+  // quiet skeleton, a failed reread keeps the rows it already published, and the status lane
+  // reports either case without adding a line above the table.
+  const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
+  const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
+  return <section className="inventory-page" aria-label="库存单据与调整单">
     <div className="inventory-toolbar" data-page-chrome><div><label>核算期间<TimePicker singleEntry label="库存核算期间" value={period} modes={['月','跨月','年','全部']} onChange={setPeriod} disabled={paused} /></label>
       <ProjectPicker label="库存项目" projects={(projects.data ?? []).filter(p => query.data?.projects.includes(p.warehouse_name ?? ''))} selected={ids} pick={setIds} multiple emptyLabel="全部项目" disabled={paused || projects.isPending || projects.isError} />
       <label>方向<Select aria-label="库存方向" value={direction} onChange={setDirection} options={['全部','入库','出库'].map(value => ({value,label:value}))} disabled={paused} /></label>
@@ -107,8 +113,8 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       <Select mode="multiple" aria-label="列值清单" placeholder="值清单（多选）" value={filter.values} onChange={value => changeFilter('values',value)} options={values.map(value => ({value,label:value}))} showSearch={{optionFilterProp:'label'}} disabled={paused} maxTagCount="responsive" />
       <Button disabled={paused} onClick={() => setFilters(old => {const next = {...old};delete next[column];return next;})}>清除此列</Button><Button disabled={paused} onClick={() => setFilters({})}>清除全部列</Button>{filterProblem && <span role="alert">{filterProblem}</span>}</div>}
     <div className="inventory-summary" data-page-chrome><span aria-live="polite" aria-atomic="true"><span className="inventory-count-feedback" key={`${rows.length}:${query.data?.rows.length ?? 0}`}>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span></span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}</div>
-    {query.isError && <p className="notice" role="alert">{query.error.message}{query.data ? ' 保留上次读取的内容。' : ' 尚未读取库存。'}<Button disabled={paused || query.isFetching} onClick={() => void query.refetch()}>重试读取库存</Button></p>}{projects.isError && <p className="notice" role="alert">{projects.error.message}<Button disabled={paused} onClick={() => void projects.refetch()}>重读项目</Button></p>}
-    {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <PreparedGrid presentation={presentation} className="inventory-grid" errorClassName="notice" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,
+    <ReadStatusLane phase={readState} announce="正在读取库存单据…" className="inventory-read-status">{(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained={query.data ? '读取更新失败，保留上次读取的内容。' : undefined} />}{projects.isError && <ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。" />}</ReadStatusLane>
+    {placeheld ? <div className="inventory-grid inventory-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : <PreparedGrid presentation={presentation} className="inventory-grid" errorClassName="notice" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,
       getRowId:p=>String(p.data.id),defaultColDef:defaultColumn,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
       overlayNoRowsTemplate:'当前筛选条件下没有库存单据',onGridReady:e=>{grid.current=e.api;}}} />}
     {editRow && <InventoryAdjust key={editRow.id} row={editRow} properties={query.data?.materialProperties??[]} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}

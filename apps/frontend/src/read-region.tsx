@@ -1,3 +1,4 @@
+import './read-region.css';
 import Button from 'antd/es/button';
 import type { ReactNode } from 'react';
 
@@ -26,18 +27,6 @@ export function readPhase(read: ReadLike, empty = false): ReadPhase {
   return empty ? 'empty' : 'ready';
 }
 
-/** One in-place line for a region that keeps its own structure visible. */
-export function ReadState({ query }: { query: ReadLike }) {
-  return query.isError ? (
-    <p className="notice" role="alert">
-      {query.error?.message}
-      <Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button>
-    </p>
-  ) : query.isPending ? (
-    <p role="status">正在读取…</p>
-  ) : null;
-}
-
 /**
  * Neutral rows that occupy a region whose content is not known yet. They reuse
  * the region's row geometry and carry no values, counts or percentages.
@@ -55,16 +44,36 @@ export function ReadPlaceholder({ rows = 4, quiet = false }: { rows?: number; qu
 }
 
 /**
+ * One fixed lane a region reports its read state in. It is present in every state, so a failure,
+ * a running read or a retained result never adds a line and never moves the region's table.
+ *
+ * A region with more than one read (its own result plus a secondary list it depends on) passes one
+ * `ReadFailure` per read: they sit side by side in this same lane, each with its own retry button.
+ * The consuming page keeps its own class so it can set the lane's spacing; this component only
+ * owns the shared geometry.
+ */
+export function ReadStatusLane({ phase, announce, className, children }: {
+  phase: ReadPhase; announce?: string; className?: string; children?: ReactNode;
+}) {
+  return (
+    <div className={className ? `read-status ${className}` : 'read-status'} data-read-phase={phase} aria-busy={phase === 'reading' || undefined}>
+      {children}
+      {phase === 'reading' && <p className="read-announce" role="status">{announce ?? '正在读取…'}</p>}
+    </div>
+  );
+}
+
+/**
  * In-place failure with retry; a result still on screen stays and says it is old.
  *
  * The message is wrapped so a consumer can keep the row one line tall (ellipsis) instead of
  * letting a long message wrap and change the region's height.
  */
-export function ReadFailure({ read, retained }: { read: ReadLike; retained?: ReactNode }) {
+export function ReadFailure({ read, retained, label }: { read: ReadLike; retained?: ReactNode; label?: string }) {
   const note = read.data === undefined ? null : (retained ?? '更新未成功，保留上次结果。');
   return (
     <p className="notice" role="alert">
-      <span className="read-failure-text">{note}{read.error?.message}</span>
+      <span className="read-failure-text">{label ? `${label}：` : null}{note}{read.error?.message}</span>
       <Button htmlType="submit" onClick={() => void read.refetch()}>重试读取</Button>
     </p>
   );

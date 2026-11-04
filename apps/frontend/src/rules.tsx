@@ -8,6 +8,7 @@ import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const NO_RECOMPUTE = '规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。';
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '').replace(/，§[\d.]+/g, '').replace(/\s*[—-]+\s*§[\d.]+(\s*\/\s*§[\d.]+)*/g, '');
@@ -51,10 +52,6 @@ export function readMechRules(value: unknown): MechRuleRow[] {
   });
 }
 
-function ReadFailed({ message, retry }: { message: string; retry: () => void }) {
-  return <div className="notice" role="alert"><span>{message}</span><Button htmlType="submit" onClick={retry}>重读</Button></div>;
-}
-
 function Feedback({ receipt, error }: { receipt: string; error: string }) {
   if (error) return <p className="notice" role="alert">{error}</p>;
   if (receipt) return <p className="rules-receipt" role="status">{receipt}</p>;
@@ -86,6 +83,8 @@ function ExclusionRules({ enabled, writable, blocked }: { enabled: boolean; writ
   const dirty = Boolean(form) && (original ? original.kind !== form!.kind || original.values !== form!.values || original.meaning !== form!.meaning : form!.kind !== empty || form!.values !== '' || form!.meaning !== '');
   const closing = useDialogClose({ busy, dirty, close: () => setForm(null) });
   const deleteClosing = useDialogClose({ busy: deleteBusy, dirty: false, close: () => setDeleting(null) });
+  const readState = readPhase(query, data !== undefined && data.rules.length === 0);
+  const placeheld = data === undefined;
   async function save() {
     if (!form || busy) return;
     if (!form.values.trim()) { setFormError('命中值不能为空，请填写后保存。'); return; }
@@ -112,14 +111,15 @@ function ExclusionRules({ enabled, writable, blocked }: { enabled: boolean; writ
       await query.refetch();
     }
   }
-  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
+  return <div className="rules-block">
     <div className="rules-head"><h2>剔除规则{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
       <div className="rules-head-tools">{data && <span className="muted">来源：{data.sourceLabel}</span>}
         <Button htmlType="submit" className="primary" disabled={!writable || !data || data.kinds.length === 0}
           onClick={() => { setForm({ id: null, kind: data!.kinds[0]!.kind, values: '', meaning: '' }); setFormError(''); }}>＋ 增加规则</Button></div></div>
-    {query.isError && !data && <ReadFailed message={query.error instanceof Error ? query.error.message : '剔除规则读取失败，请重试。'} retry={() => void query.refetch()} />}
-    {query.isError && data && <ReadFailed message={`规则更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
-    {query.isPending ? <p role="status">正在读取剔除规则…</p> : data && <>
+    <ReadStatusLane phase={readState} announce="正在读取剔除规则…" className="rules-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="规则更新失败，保留上次结果。" />}
+    </ReadStatusLane>
+    {placeheld ? <div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div> : data && <>
       <Feedback receipt={receipt} error={error} />
       <ReadGrid table="exclusion-rules" className="rules-table" label="剔除规则列表" domLayout="autoHeight" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
         {field:'kindLabel',headerName:'规则类别'},
@@ -156,6 +156,8 @@ function JcIgnore({ enabled, writable }: { enabled: boolean; writable: boolean }
   const [receipt, setReceipt] = useState('');
   const [error, setError] = useState('');
   const rows = query.data;
+  const readState = readPhase(query, rows !== undefined && rows.length === 0);
+  const placeheld = rows === undefined;
   async function add() {
     if (busy) return;
     if (!name.trim()) { setReceipt(''); setError('项目全名不能为空，请粘贴项目全名（与档案里那个名字一致）。'); return; }
@@ -181,11 +183,12 @@ function JcIgnore({ enabled, writable }: { enabled: boolean; writable: boolean }
       await query.refetch();
     }
   }
-  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
+  return <div className="rules-block">
     <div className="rules-head"><h2>集采项目剔除名单{rows && <span className="rules-count">（{rows.filter(row => row.active).length} 项在用）</span>}</h2></div>
-    {query.isError && !rows && <ReadFailed message={query.error instanceof Error ? query.error.message : '集采项目剔除名单读取失败，请重试。'} retry={() => void query.refetch()} />}
-    {query.isError && rows && <ReadFailed message={`名单更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
-    {query.isPending ? <p role="status">正在读取集采项目剔除名单…</p> : rows && <>
+    <ReadStatusLane phase={readState} announce="正在读取集采项目剔除名单…" className="rules-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="名单更新失败，保留上次结果。" />}
+    </ReadStatusLane>
+    {placeheld ? <div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div> : rows && <>
       <Feedback receipt={receipt} error={error} />
       {rows.length === 0 ? <p className="state">集采项目剔除名单为空；需要排除项目时，在下方加入项目全名。</p> : <ReadGrid table="jc-ignore-rules" className="rules-table" label="集采项目剔除名单" domLayout="autoHeight" rows={rows} rowId={row=>String(row.id)} grid={{getRowClass:p=>p.data?.active?'':'rules-inactive'}} columns={[
         {field:'nameFull',headerName:'项目全名'}, {field:'reason',headerName:'加入理由',valueFormatter:p=>p.value||'—'},
@@ -215,6 +218,8 @@ function MechMatch({ enabled, writable }: { enabled: boolean; writable: boolean 
   const [receipt, setReceipt] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const rows = query.data;
+  const readState = readPhase(query, rows !== undefined && rows.length === 0);
+  const placeheld = rows === undefined;
   const text = (row: MechRuleRow) => drafts[row.warehouse] ?? row.aliases.join(' ｜ ');
   async function save(row: MechRuleRow) {
     if (busyRow) return;
@@ -228,11 +233,12 @@ function MechMatch({ enabled, writable }: { enabled: boolean; writable: boolean 
       setReceipt(''); setErrors(old => ({ ...old, [row.warehouse]: failure instanceof Error ? failure.message : '没能保存，请核对后重试。' }));
     } finally { setBusyRow(''); }
   }
-  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
+  return <div className="rules-block">
     <div className="rules-head"><h2>机械报表项目匹配{rows && <span className="rules-count">（{rows.length} 项）</span>}</h2></div>
-    {query.isError && !rows && <ReadFailed message={query.error instanceof Error ? query.error.message : '机械报表项目匹配读取失败，请重试。'} retry={() => void query.refetch()} />}
-    {query.isError && rows && <ReadFailed message={`匹配规则更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
-    {query.isPending ? <p role="status">正在读取机械报表项目匹配…</p> : rows && <>
+    <ReadStatusLane phase={readState} announce="正在读取机械报表项目匹配…" className="rules-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="匹配规则更新失败，保留上次结果。" />}
+    </ReadStatusLane>
+    {placeheld ? <div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div> : rows && <>
       <Feedback receipt={receipt} error="" />
       {rows.length === 0 ? <p className="state">还没有机械报表项目匹配规则。</p> : <AliasContext.Provider value={{text,disabled:!writable||busyRow!=='',change:(warehouse,value)=>setDrafts(old=>({...old,[warehouse]:value})),save:row=>void save(row),errors}}><ReadGrid table="mechanical-match-rules" className="rules-table" label="机械报表项目匹配" domLayout="autoHeight" rows={rows} rowId={row=>row.warehouse} columns={aliasColumns}/></AliasContext.Provider>}
       <p className="rules-note muted">机械报表按这里的项目名对应到档案项目；两个项目用同一个名字会让报表混写，保存时后端会拒绝。</p>

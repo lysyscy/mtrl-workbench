@@ -1,0 +1,35 @@
+/* Presentation owned by read-region.tsx. Every consumer imports this file, so a region
+   reports its own read the same way wherever it is used. A page only supplies the padding
+   that belongs to its own region, through the two variables documented below. */
+
+/* Screen-reader only: a running read is announced without adding a visible line. */
+.read-announce{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* Neutral rows that hold a region's area while its content is not known yet. They reuse the row
+   height of the tables around them and carry no values, counts or percentages. */
+.read-placeholder{display:grid;gap:0;grid-auto-rows:calc(38px * var(--fscale));align-content:start;margin:0;padding:0}
+.read-placeholder>span{display:block;height:calc(7px * var(--fscale));align-self:center;border-radius:var(--radius-pill);background:var(--sf2)}
+.read-placeholder>span:nth-child(2n){width:72%}
+.read-placeholder>span:nth-child(3n){width:88%}
+/* A first read that failed keeps its area but stops looking like work in progress. */
+.read-placeholder-quiet>span{visibility:hidden}
+
+/* The reserved box a page shows before its table exists. The page sizes it; overflow stays hidden
+   so a placeholder never spills out of the space the table will take. */
+.read-reserve{overflow:hidden}
+
+/* One fixed status lane per region, present in every state. The lane is one control line tall, so
+   an idle, running, failed or retained-result notice all occupy exactly the same height and never
+   move the region's table or the content below it.
+
+   A region with two reads (its own and a secondary list) puts both notices side by side in this
+   same lane: the message says which read failed and each keeps its own retry button. Long text is
+   truncated; the retry button is never clipped.
+
+   Page-owned spacing, set from the page's own CSS:
+   --read-status-inset  outer inset of the lane inside the region (default 0)
+   --read-status-pad    inset of a notice's content inside its own box (default 10px) */
+.read-status{display:flex;align-items:stretch;gap:calc(6px * var(--fscale));height:calc(var(--control-h));margin:0;padding:0 var(--read-status-inset,0);overflow:hidden;flex:none;min-width:0}
+.read-status>.notice{flex:1 1 0;min-width:0;margin:0;display:flex;align-items:center;flex-wrap:nowrap;gap:calc(8px * var(--fscale));padding:0 var(--read-status-pad,calc(10px * var(--fscale)));font-size:calc(12px * var(--fscale));line-height:1.4;border-radius:var(--radius-card);overflow:hidden}
+.read-status>.notice>.read-failure-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.read-status>.notice>.ant-btn,.read-status>.ant-btn{flex:none;height:auto;min-height:0;margin:0;padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));line-height:1.4}

@@ -16,6 +16,7 @@ import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTota
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 const settlementRowId = (row: SettlementRow) => row.id;
 const annualRowId = (row: AnnualRow) => row.warehouse;
 const emptySettlement: SettlementRow[] = [];
@@ -42,6 +43,10 @@ function Monthly({ me, blocked, active }: Props) {
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
   const presentation = useGridPresentation({table: 'settlement-month', root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
+  // One read region: its state is reported in a fixed lane under the toolbar, and the table box
+  // keeps its area while the month's rows are unknown. A failure never replaces a result on screen.
+  const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
+  const placeheld = query.data === undefined;
   return <>
     <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
@@ -49,8 +54,10 @@ function Monthly({ me, blocked, active }: Props) {
         <ul className="settlement-export-list">{query.data?.rows.map(row => <li key={row.id}>{row.name}，{row.rows} 行</li>)}</ul>
       </SettlementExport>
     </div>
-    {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()} disabled={blocked}>重读</Button></p>}
-    {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
+    <ReadStatusLane phase={readState} announce="正在读取收发结存…" className="settlement-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="收发结存更新失败，保留上次结果。" />}
+    </ReadStatusLane>
+    {placeheld ? <div className="settlement-grid settlement-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : query.data && <>
       <p className="settlement-summary">{ym}，{query.data.counts.warehouses} 仓，{query.data.counts.rows} 行，{query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
       <PreparedGrid presentation={presentation} className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
         getRowId:p=>p.data.id,defaultColDef:{resizable: true,sortable:false,suppressMovable:true},
@@ -92,6 +99,10 @@ function Extract({ me, blocked, active }: Props) {
   const save=saves.save;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
+  // The annual summary is one read region: the lane below the toolbar reports it in every state and
+  // the two natural-height tables keep their area until the year's rows are known.
+  const readState = readPhase(query, query.data !== undefined && kinds.every(kind => query.data!.annual[kind].rows.length === 0));
+  const placeheld = query.data === undefined;
   return <>
     <div data-page-chrome className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
       <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label><Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button></div>
@@ -100,14 +111,17 @@ function Extract({ me, blocked, active }: Props) {
         <p>保留原模板，并附年度汇总；合计包含历史值与所选年 12 个月，2025 年 1–11 月留空。</p>
       </SettlementExport>
     </div>
-    {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}<Button disabled={busy || blocked} onClick={() => {
+    {(error || uncertain) && <p className="notice" role="alert">{error || '核对刚才的操作结果后再继续。'}<Button disabled={busy || blocked} onClick={() => {
       void saves.reread();
     }}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={() => {saves.confirm();}}>已核对，保留输入继续</Button></p>}
+    <ReadStatusLane phase={readState} announce="正在读取库存年度汇总…" className="settlement-read-status">
+      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="库存年度汇总更新失败，保留上次结果。" />}
+    </ReadStatusLane>
     {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}<span role="alert">，{d.error}</span></span>
       <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {save(key,true);}}>保存这项</Button>
       <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消修改</Button></div>)}
-    {query.isPending ? <p role="status">正在读取库存年度汇总…</p> : query.data && <Cells.Provider value={{drafts,disabled,save,
+    {placeheld ? <div className="settlement-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : query.data && <Cells.Provider value={{drafts,disabled,save,
       change:(kind,warehouse,original,value)=>{const key=keyOf(kind,warehouse);saves.update((drafts,writing)=>{const old=drafts[key],next={...drafts,[key]:{kind,warehouse,original:old?.original??original,value,error:''}};if(value===(old?.original??original)&&!writing)delete next[key];return next;});},
       cancel:key=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[key];return next;})}}>
       {kinds.map(kind => <AnnualTable key={kind} grid={query.data!.annual[kind]} active={active} scale={Number(me?.ui_scale_css ?? 1)} />)}

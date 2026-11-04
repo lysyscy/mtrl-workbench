@@ -71,3 +71,7 @@
 @media (max-width: 700px) { .oilcard-transfer-sides, .oilcard-transfer-common { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .oilcard-workspace-bar { flex-wrap: wrap; gap: 8px 16px; } .oilcard-tabs { gap: 16px; } .oilcard-total-export { margin-inline-start: auto; } }
 @media (max-width: 900px) { .oilcard-archive-panes { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+/* 读数未完成时用占位占住表区：不出现"尚无…"结论，也不让页签工具栏随表格落位跳动。
+   overflow 由 read-region.css 的 .read-reserve 统一负责，这里只补本页的内边距与外框。 */
+.oilcard-read-reserve { display: block; box-sizing: border-box; padding: calc(8px * var(--fscale)) calc(12px * var(--fscale)); border: 1px solid var(--bd); border-radius: var(--radius-inner); background: var(--sf); min-height: calc(160px * var(--fscale)); }
+

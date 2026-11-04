@@ -49,3 +49,10 @@
 .settlement-page .settlement-annual .money{white-space:nowrap}
 
 .settlement-month-page{width:min(100%,calc(1180px * var(--fscale)));margin-inline:auto}
+
+/* Both reports read independently of the tab frame: each publishes its state in one fixed lane
+   under its toolbar (read-region.css), and each reserved box keeps the space its content will
+   take. Only the horizontal inset and the box padding belong to this page. */
+.settlement-read-status{--read-status-pad:calc(16px * var(--fscale))}
+.settlement-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
+.settlement-grid.settlement-read-reserve{min-height:calc(260px * var(--fscale));height:auto}

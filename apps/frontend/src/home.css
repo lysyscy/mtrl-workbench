@@ -13,4 +13,13 @@
 .home-tile-link{margin-top:calc(8px * var(--fscale));align-self:flex-start;color:var(--pri);text-decoration:none;padding:calc(2px * var(--fscale)) 0}
 .home-tile-link:hover{text-decoration:underline}
 .home-tile-link:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-.home-updating{margin:calc(12px * var(--fscale)) 0 0;font-size:calc(12px * var(--fscale));color:var(--tx2)}
+
+/* The todo block keeps its tiles while a read is pending or has failed: the number
+   slot holds the same line height, and the status lane follows the tiles, so a late,
+   short or failed read never moves them. */
+.home-tile-count-reading{display:flex;align-items:center;height:calc(28px * var(--fscale) * 1.2)}
+.home-tile-count-reading span{display:block;height:calc(7px * var(--fscale));width:60%;border-radius:var(--radius-pill);background:var(--sf2)}
+/* The todo lane keeps one control line whatever it holds, so a failure never adds a row below the
+   tiles. Geometry is shared with the other regions; this page has no extra inset. */
+.home-read-lane{--read-status-pad:0}
+.home-updating{margin:0;font-size:calc(12px * var(--fscale));color:var(--tx2)}

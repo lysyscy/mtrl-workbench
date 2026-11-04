@@ -17,7 +17,7 @@ import { loadFlows, saveBlob } from './flow-api';
 import type { Flow } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
-import { ReadFailure, ReadPlaceholder, ReadState, readPhase } from './read-region';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { contentWidth, gridTheme } from './grid';
 import { TimePicker, timeMatches } from './time-picker';
 const flowRowId = (row: Flow) => row.id == null ? 'flow-total' : String(row.id);
@@ -50,10 +50,9 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
       aria-busy={phase==='reading'}>
       {/* One status slot above the cards, present in every state so a failure never adds a row and
           never sits on top of a heading or a value. It is the region's own line, not a page overlay. */}
-      <div className="debt-overviews-status">
+      <ReadStatusLane phase={phase} announce="正在读取欠款汇总…" className="debt-overviews-status">
         {(phase==='error'||phase==='stale')&&<ReadFailure read={debt}/>}
-        {phase==='reading'&&<p className="read-announce" role="status">正在读取欠款汇总…</p>}
-      </div>
+      </ReadStatusLane>
       <div className="debt-overviews-grid">
         {categories.map(([key,label])=>{
           const items=(debt.data??[]).filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);
@@ -125,17 +124,25 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     flowSection.current?.scrollIntoView({block:'nearest'});
   }
   const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]??'0.00'}));
-  return <div className="flow-workspace" data-page-chrome data-page-loading={flows.isPending||stats.isPending||projectQuery.isPending?true:undefined}>
+  // Statistics and flows read independently: each publishes its own state in a fixed lane so a
+  // pending or failed read never holds the other region or pushes the table box around.
+  const statsPhase=readPhase(stats,(stats.data?.buckets.length??0)===0);
+  const flowsPhase=readPhase(flows,rows.length===0);
+  const statsPlaceheld=!stats.data;
+  const flowsPlaceheld=flowsPhase==='idle'||flowsPhase==='reading'||flowsPhase==='error';
+  return <div className="flow-workspace" data-page-chrome>
     <section className="flow-card payment-stats" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
-      <ReadState query={stats}/>{stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元，{stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
+      <ReadStatusLane phase={statsPhase} announce="正在读取付款统计…" className="flow-read-status payment-stats-status">{(statsPhase==='error'||statsPhase==='stale')&&<ReadFailure read={stats} retained={statsPhase==='stale'?'统计更新失败，保留上次结果。':undefined}/>}</ReadStatusLane>
+      {statsPlaceheld ? <div className="payment-stat-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={statsPhase==='error'}/></div> : stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元，{stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
     </div></section>
     <section ref={flowSection} className="flow-card flow-list" aria-labelledby="flows-title"><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
       <div className="flow-toolbar"><div className="time-picker-field"><span>付款时间</span><TimePicker singleEntry label="付款时间" value={filter.period} modes={['月','跨月','年','全部']} onChange={period=>setFilter(f=>({...f,period}))} /></div>
       <div className="time-picker-field flow-project-field"><span>付款项目</span><ProjectPicker projects={projects} selected={filter.projects} multiple emptyLabel="全部项目" pick={ids=>setFilter(f=>({...f,projects:ids}))} label="付款项目"/></div>
       <label>实际付款方式<Select aria-label="实际付款方式" value={filter.method} onChange={value=>setFilter(f=>({...f,method:value}))} options={[{value:'',label:'全部'},...['现汇','承兑','供应链','其他'].map(value=>({value,label:value}))]}/></label><label>状态<Select aria-label="流水状态" value={filter.status} onChange={value=>setFilter(f=>({...f,status:value}))} options={[{value:'',label:'全部'},{value:'effective',label:'生效'},{value:'revoked',label:'已撤销'}]}/></label>
       <label className="flow-search-field">搜索<Input aria-label="流水关键词" allowClear placeholder="搜索各列内容" value={search} onChange={e=>{const value=e.target.value;setSearch(value);if(!searchComposing.current||!value)setFilter(f=>({...f,keyword:value}));}} onCompositionStart={()=>{searchComposing.current=true;}} onCompositionEnd={e=>{searchComposing.current=false;const value=e.currentTarget.value;setSearch(value);setFilter(f=>({...f,keyword:value}));}}/></label><Button htmlType="submit" onClick={()=>{setFilter(initial());setSearch('');}}>重置</Button><span>显示 {rows.length} 条</span>{filter.notice>0&&<Button htmlType="submit" onClick={()=>setFilter(f=>({...f,notice:0}))}>清除通知书定位</Button>}{filter.projects.includes(0)&&<span>待指定归属</span>}
-      </div><ReadState query={flows}/>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
-      {flows.data&&<PreparedGrid presentation={presentation} className="flow-grid" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,defaultColDef:{cellDataType:false,sortable:true,resizable: true,suppressMovable:true,wrapHeaderText:true},getRowId:p=>p.rowPinned?'flow-total':String(p.data.id),onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选没有付款流水。'}} />}
+      </div>
+      <ReadStatusLane phase={flowsPhase} announce="正在读取付款流水…" className="flow-read-status flow-list-status">{(flowsPhase==='error'||flowsPhase==='stale')&&<ReadFailure read={flows} retained={flowsPhase==='stale'?'流水更新失败，保留上次结果。':undefined}/>}{projectQuery.isError&&<ReadFailure read={projectQuery} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}</ReadStatusLane>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
+      {flowsPlaceheld ? <div className="flow-grid flow-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={flowsPhase==='error'}/></div> : <PreparedGrid presentation={presentation} className="flow-grid" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,defaultColDef:{cellDataType:false,sortable:true,resizable: true,suppressMovable:true,wrapHeaderText:true},getRowId:p=>p.rowPinned?'flow-total':String(p.data.id),onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选没有付款流水。'}} />}
     </section>
     {revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}
   </div>;

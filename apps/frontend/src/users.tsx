@@ -7,6 +7,7 @@ import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '');
 
@@ -61,7 +62,10 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
     }
   }
 
-  return <section className="users-page" aria-label="用户管理" data-page-chrome data-page-loading={query.isPending?true:undefined}>
+  const readState = readPhase(query);
+  const placeheld = data === undefined;
+
+  return <section className="users-page" aria-label="用户管理" data-page-chrome>
     <div className="users-block">
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">
@@ -69,8 +73,10 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
           <Button htmlType="submit" className="primary" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'add' }); setError(''); }}>＋ 新增账号</Button>
         </div></div>
       {current && <p className="muted users-note">当前登录 {current.name || current.account}（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : '，只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
-      {query.isError && !data && <div className="notice" role="alert"><span>{query.error instanceof Error ? query.error.message : '账号列表读取失败，请重试。'}</span><Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></div>}
-      {query.isPending ? <p role="status">正在读取账号列表…</p> : data && <>
+      <ReadStatusLane phase={readState} announce="正在读取账号列表…" className="users-read-status">
+        {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="账号列表更新失败，保留上次结果。" />}
+      </ReadStatusLane>
+      {placeheld ? <div className="users-table users-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : data && <>
         <Feedback receipt={receipt} error={error} />
         <ReadGrid table="users" className="users-table" label="账号列表" domLayout="autoHeight" rows={data.users} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
           {field:'account',headerName:'登录账号'},

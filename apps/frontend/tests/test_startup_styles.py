@@ -1,5 +1,6 @@
 """First painted UI uses ready fonts/theme; real-copy reads only."""
 import json
+import re
 import pytest
 from pathlib import Path
 from playwright.sync_api import expect
@@ -199,21 +200,53 @@ def test_inventory_does_not_wait_for_retained_i8_read(server,browser_page):
         page.unroute('**/api/m02/fetch/records*')
 
 
-@pytest.mark.parametrize('read',['**/api/m08/inventory','**/api/m01/projects'])
-def test_inventory_waits_for_its_own_first_reads(server,browser_page,read):
+def test_inventory_tools_publish_while_its_own_first_read_is_pending(server,browser_page):
     page,_=browser_page;login(page,server);held=[]
-    page.route(read,lambda route:held.append(route))
+    page.route('**/api/m08/inventory',lambda route:held.append(route))
     try:
-        with page.expect_request(read):
+        with page.expect_request('**/api/m08/inventory'):
             page.get_by_role('link',name='库存单据与调整单',exact=True).click()
-        expect(page.locator('.page-loading')).to_contain_text('库存')
-        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_hidden()
+        expect(page.locator('.inventory-read-status')).to_have_attribute('data-read-phase','reading')
         assert held
+        # The page frame and its tools publish on their own; only the data area reports the read.
+        expect(page.locator('.page-view:not([hidden])')).to_be_visible()
+        expect(page.locator('.page-loading')).to_have_count(0)
+        period=page.get_by_role('button',name='库存核算期间',exact=True)
+        expect(period).to_be_visible()
+        expect(period).to_be_enabled()
+        expect(page.get_by_role('button',name='列筛选',exact=True)).to_be_enabled()
+        # The unread data area keeps its reserved box and never claims an empty list or a zero count.
+        expect(page.locator('.inventory-grid.inventory-read-reserve')).to_be_visible()
+        expect(page.locator('.inventory-grid [role="grid"]')).to_have_count(0)
+        expect(page.locator('.inventory-count-feedback')).to_have_text('尚未读取')
+        expect(page.locator('.inventory-read-status')).to_have_attribute('data-read-phase','reading')
+        expect(page.locator('.inventory-read-status [role="status"]')).to_have_count(1)
     finally:
         for route in held:route.continue_()
-        page.unroute(read)
-    expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_visible()
-    expect(page.locator('.inventory-grid')).to_be_visible()
+        page.unroute('**/api/m08/inventory')
+    expect(page.locator('.inventory-read-status [role="status"]')).to_have_count(0)
+    expect(page.locator('.inventory-read-reserve')).to_have_count(0)
+    expect(page.locator('.inventory-grid')).to_have_attribute('aria-busy','false',timeout=30000)
+    expect(page.locator('.inventory-count-feedback')).to_have_text(re.compile(r'^\d+ / \d+ 行$'))
+
+
+def test_inventory_tools_publish_while_the_project_list_is_pending(server,browser_page):
+    page,_=browser_page;login(page,server);held=[]
+    page.route('**/api/m01/projects',lambda route:held.append(route))
+    try:
+        with page.expect_request('**/api/m01/projects'):
+            page.get_by_role('link',name='库存单据与调整单',exact=True).click()
+        expect(page.locator('.inventory-toolbar .business-project-picker')).to_be_visible()
+        assert held
+        expect(page.locator('.page-loading')).to_have_count(0)
+        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_enabled()
+        # The project list is a secondary dependency: the page says it is missing, gates only the
+        # picker that needs it, and keeps the table usable.
+        expect(page.locator('.inventory-toolbar .business-project-picker')).to_be_visible()
+        expect(page.locator('.inventory-grid')).to_be_visible(timeout=30000)
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m01/projects')
 
 
 def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_page):

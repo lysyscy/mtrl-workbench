@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { registerHooks } from 'node:module';
 
-import { ReadPlaceholder, readPhase } from '../../src/read-region.tsx';
+// read-region.tsx owns its presentation file and imports it, so every page that renders a region
+// loads the same styles. tsx does not transform CSS, so this test stubs the import to an empty
+// module; the assertions below stay about behaviour, never about stylesheet contents.
+// The same run has no bundler for the AntD entry point, so its button is stubbed to the text it
+// was given: the assertions below are about which words each region says, not about AntD.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.endsWith('.css')) return { url: 'data:text/javascript,export default {}', shortCircuit: true };
+    if (specifier === 'antd/es/button') {
+      return { url: 'data:text/javascript,export%20default%20function%20Button(p)%7Breturn%20p.children%7D', shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } = await import('../../src/read-region.tsx');
 
 const read = (value) => ({
   isPending: false,
@@ -58,4 +74,36 @@ test('a region that failed before showing anything keeps its space without looki
   assert.match(quiet, /read-placeholder-quiet/u);
   assert.doesNotMatch(waiting, /read-placeholder-quiet/u);
   assert.match(quiet, /aria-hidden="true"/u);
+});
+
+test('a lane is present in every state and only speaks while it is reading', () => {
+  const idle = renderToStaticMarkup(ReadStatusLane({ phase: 'idle' }));
+  const reading = renderToStaticMarkup(ReadStatusLane({ phase: 'reading', announce: '正在读取付款流水…' }));
+  const ready = renderToStaticMarkup(ReadStatusLane({ phase: 'ready' }));
+  // The lane keeps its box in every state, so a state change never adds a line.
+  for (const markup of [idle, reading, ready]) assert.match(markup, /class="read-status"/u);
+  assert.match(idle, /data-read-phase="idle"/u);
+  assert.match(reading, /data-read-phase="reading"/u);
+  // Only a running read announces; a settled or idle lane says nothing at all.
+  assert.match(reading, /role="status"/u);
+  assert.doesNotMatch(idle, /role="status"/u);
+  assert.doesNotMatch(ready, /role="status"/u);
+});
+
+test('two failed reads in one lane stay apart, each naming itself and retrying itself', () => {
+  const own = renderToStaticMarkup(ReadFailure({
+    read: read({ isError: true, error: new Error('库存读取不完整。'), data: [] }),
+    retained: '读取更新失败，保留上次读取的内容。',
+  }));
+  const secondary = renderToStaticMarkup(ReadFailure({
+    read: read({ isError: true, error: new Error('项目读取不完整。') }),
+    retained: '项目清单更新未成功，保留上次结果。',
+    label: '项目清单',
+  }));
+  // Each failure carries its own error text and its own retry, so a reader can tell them apart.
+  assert.match(own, /库存读取不完整。/u);
+  assert.match(secondary, /项目清单：/u);
+  assert.match(secondary, /项目读取不完整。/u);
+  assert.match(own, /重试读取/u);
+  assert.match(secondary, /重试读取/u);
 });

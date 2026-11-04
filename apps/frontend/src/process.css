@@ -8,7 +8,10 @@
 .process-grid .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
 .process-history{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-inline-start:auto}
 .process-history label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
-.process-history .ant-input{width:calc(150px * var(--fscale))}
+/* The month field is a native month input: left to its own intrinsic box it is a couple of pixels
+   taller than the filter row's other controls, so the row grew when the tools appeared and pushed
+   everything below it. Pin it to the shared control height instead. */
+.process-history .ant-input{width:calc(150px * var(--fscale));height:var(--control-h);min-height:var(--control-h)}
 .process-filters{padding:calc(16px * var(--fscale));gap:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .process-tabs{justify-content:space-between;padding:0 calc(16px * var(--fscale)) calc(12px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .process-diff-count{display:inline-block;margin-inline-start:calc(6px * var(--fscale));padding:0 calc(6px * var(--fscale));border-radius:var(--radius-pill);background:var(--sf2);font-variant-numeric:tabular-nums}
@@ -57,6 +60,11 @@
 .process-cell-error{display:flex;flex-direction:column;gap:calc(3px * var(--fscale));font-size:calc(12px * var(--fscale));line-height:1.4;white-space:normal;overflow-wrap:anywhere;color:var(--dg-d)}
 .process-cell-error>div{display:flex;gap:calc(4px * var(--fscale));flex-wrap:wrap}
 .process-matrix .process-cell-error .ant-btn{height:auto;min-height:calc(24px * var(--fscale));padding-inline:calc(4px * var(--fscale));font-size:inherit}
+/* Lane geometry is shared (read-region.css): one fixed control line, failures side by side with
+   their own retry, text truncating before a button. This page only sets its outer inset. */
+.process-read-status{--read-status-inset:calc(16px * var(--fscale))}
+.process-read-body{flex:1 1 auto;min-height:0;overflow:hidden;padding:calc(10px * var(--fscale)) calc(16px * var(--fscale))}
+.process-read-note{margin:0;color:var(--mut);font-size:calc(12px * var(--fscale))}
 .process-uncertain p{margin-block:calc(4px * var(--fscale));white-space:normal}
 .process-matrix .process-segment-total{display:flex;flex-wrap:wrap;justify-content:flex-end;column-gap:.35em;line-height:1.5}
 .process-matrix .process-segment-total>span{white-space:nowrap}

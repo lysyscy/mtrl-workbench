@@ -81,6 +81,11 @@
 .contract-remark-editor textarea.ant-input{height:min(calc(240px * var(--fscale)),40dvh);min-height:calc(120px * var(--fscale));font-size:inherit;line-height:1.6;resize:vertical}
 .contract-remark-editor .dialog-actions{margin-top:calc(24px * var(--fscale))}
 
-.contracts-page>.contract-selection{justify-content:flex-start;margin:0;padding:calc(8px * var(--fscale)) calc(16px * var(--fscale));gap:8px}
+.contracts-page>.contract-selection{justify-content:flex-start;margin:0;padding:calc(8px * var(--fscale)) calc(16px * var(--fscale));gap:8px;min-height:calc(var(--control-h) + 16px * var(--fscale));flex:none}
 .contracts-page>.contract-selection>div{display:flex;flex-direction:row;align-items:center;gap:8px}
 .contracts-page>.contract-selection>span{font-size:inherit}
+
+/* 读数状态槽沿用 read-region.css 的恒高几何，本页只给槽内边距；占位框与真表共用同一套外框。 */
+.contract-read-status{--read-status-pad:calc(16px * var(--fscale))}
+.contracts-grid.contract-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
+

@@ -18,6 +18,7 @@ import { categories, dataKeys, getProcess, mechKeys, mechLabels, saveProcess, ta
 import type { Confirmation, Difference, ProcessData, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 const differenceRowId = (row: Difference) => String(row.id);
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; expected:string|null; revision:number; error:string }
@@ -155,18 +156,27 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   ],[scale]);
   const dirty=Object.keys(drafts).length>0,reason=uncertain?'先重读核对保存结果':busy?'正在保存':dirty?'先处理未保存输入':query.isError||projects.isError?'先重读资料':query.isFetching?'正在重读':'';
   const currentDrafts=Object.entries(drafts).filter(([,d])=>d.warehouse===warehouse);
+  const readState=readPhase(query,(query.data?.projects.length??0)===0);
+  const settled=readState==='ready'||readState==='empty';
+  // A settled read without a matrix is a real result (no data, or no project picked yet), never a running read.
+  const regionNote=!matrix&&settled?(readState==='empty'||Boolean(warehouse)?'暂无有数据的项目。':'请选择项目查看资料。'):'';
+  const regionBody=regionNote?<p className="process-read-note">{regionNote}</p>:<ReadPlaceholder rows={6} quiet={readState==='error'} />;
   return <section className="process-page" aria-label="过程资料">
     <div data-page-chrome className="process-toolbar"><h2>过程资料</h2><ProcessExport projects={candidates} current={warehouse} tab={tab} paused={paused} reason={reason} /></div>
     <div data-page-chrome className="process-filters"><span>项目</span><ProjectPicker label="过程资料项目" projects={candidates} selected={candidates.filter(p=>p.warehouse_name===warehouse).map(p=>p.id)} pick={ids=>{const p=candidates.find(p=>p.id===ids[0]);if(p?.warehouse_name){setWarehouse(p.warehouse_name);saves.clearFeedback();}}} disabled={paused||projects.isPending||projects.isError||query.isPending} />{tab!==2&&matrix&&<div className="process-history"><label>增加历史月份 <Input type="month" aria-label="增加历史月份" max="2025-11" value={newMonth} onChange={e=>setNewMonth(e.target.value)} /></label><Button disabled={disabled||!/^\d{4}-(0[1-9]|1[0-2])$/.test(newMonth)||newMonth>'2025-11'||displayRows.some(row=>row.ym===newMonth)} onClick={()=>{setExtraMonths(current=>({...current,[warehouse]:[...(current[warehouse]??[]),newMonth]}));setNewMonth('');}}>增加月份</Button><span>填写金额后保存月份</span></div>}</div>
     <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{Object.values(drafts).some(draft=>draft.error)&&<span>有未保存的修改，请查看对应金额格。</span>}<Button disabled={paused||busy||uncertain||!currentDrafts.length} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button></div>
-    {(query.isError||projects.isError||uncertain)&&<div className="notice" role="alert">{error||query.error?.message||projects.error?.message}{(query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重新核对</Button>}{projects.isError&&<Button disabled={paused||projects.isFetching} onClick={()=>void projects.refetch()}>重读项目</Button>}</div>}
+    <ReadStatusLane phase={readState} announce="正在读取过程资料…" className="process-read-status">
+      {(readState==='error'||readState==='stale')&&<ReadFailure read={query}/>}
+      {projects.isError&&<ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}
+    </ReadStatusLane>
+    {(error||uncertain)&&<div className="notice" role="alert">{error||'保存结果待核实，请重新核对；输入已保留。'}{(query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重新核对</Button>}</div>}
     {uncertain&&<div className="notice process-uncertain" role="alert">{attempt.current&&<p>{name(attempt.current.warehouse)}，{attempt.current.ym} {matrixColumns.find(column=>column.field===attempt.current!.column)?.label}，本次输入：{attempt.current.value.trim()?displayAmount(attempt.current.value):'留空'}。</p>}<p>{query.isFetching?'正在重新核对…':verified?'已重读，请对照当前金额和本次输入核对结果。':'保存结果待核实，核对前暂停后续保存。'}</p><Button disabled={paused||!me||busy||!verified||query.isFetching||query.isError||projects.isError} onClick={confirmResult}>已核对，保留输入继续</Button></div>}
-    {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
+    {matrix?<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,cancel:key=>saves.update(current=>{const next={...current};delete next[key];return next;})}}>
         <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale} sources={query.data?.sources[warehouse]}/>
       </ProcessCells.Provider></>}
-    </>}
+    </>:<div className="process-read-body">{regionBody}</div>}
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
       <p>{name(source.draft.warehouse)}，{source.draft.ym} {mechLabels[mechKeys.indexOf(source.draft.column)]}</p><p>该项目本月已有机械明细。此格将采用手填金额，原明细保留。</p>
       <p>原金额 {source.draft.expected===null?'未录入':show(source.draft.expected)+' 元'} → 新金额 {source.draft.value.trim()?show(source.draft.value)+' 元':'留空'}</p>

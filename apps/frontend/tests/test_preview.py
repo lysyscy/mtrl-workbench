@@ -40,7 +40,9 @@ def browser_page(server, preview_browser, request):
                     capture_preview(page, server.owner, request.node.nodeid)
                 except Exception as exc:
                     request.node.add_report_section('teardown','screenshot',type(exc).__name__)
-            page.unroute_all(behavior='wait')
+            # A failed loading assertion can leave an intentionally held request.
+            # Closing that failed context must not wait forever for its handler.
+            page.unroute_all(behavior='ignoreErrors' if report is not None and report.failed else 'wait')
         context.close()
 
 
@@ -93,7 +95,7 @@ def test_real_read_failure_retry_and_session_expiry(server, browser_page, projec
     page.reload()
     expect(page.get_by_role('alert')).to_be_visible()
     page.unroute('**/api/m01/projects?status=all')
-    page.get_by_role('button', name='重读项目', exact=True).click()
+    page.get_by_role('button', name='重试读取', exact=True).click()
     row = next(p for p in projects if p['status'] == 'active')
     expect(page.get_by_label('展示名：' + row['disp'], exact=True)).to_have_value(row['disp'])
     pending = []

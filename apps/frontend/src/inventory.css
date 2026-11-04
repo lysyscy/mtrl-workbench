@@ -49,3 +49,9 @@
 .inventory-actions .inventory-problem{margin:0;margin-inline-end:auto;flex:1 1 10em;text-align:left}
 
 .inventory-actions>:is([role=status],[role=alert],.inventory-warning,.inventory-trail){flex-basis:100%;margin:0;text-align:left}
+
+/* The inventory read reports in its own fixed lane and its own reserved box, so a
+   pending or failed read never pushes the toolbar, the summary or the table. */
+/* Lane geometry is shared (read-region.css); this page only sets its own inset. */
+.inventory-read-status{--read-status-pad:calc(16px * var(--fscale))}
+.inventory-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}

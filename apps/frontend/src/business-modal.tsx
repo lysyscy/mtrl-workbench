@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
 // Only the close protocol belongs here; drafts and request state stay with the caller.
-export function BusinessModal({ open, requestClose, className, titleId, children }: {
-  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode;
+export function BusinessModal({ open, requestClose, className, titleId, children, centered = true }: {
+  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode; centered?: boolean;
 }) {
   const previous = useRef<HTMLElement | null>(null), wasOpen = useRef(false), mounted = useRef(false);
   const currentOpen = useRef(open), body = useRef<HTMLDivElement>(null); currentOpen.current = open;
@@ -20,7 +20,7 @@ export function BusinessModal({ open, requestClose, className, titleId, children
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; restore(); }; }, []);
   useEffect(() => { if (!open) restore(); }, [open]);
   // rc-dialog labels only its own header; our heading lives in the body.
-  return <Modal open={open} onCancel={requestClose} footer={null} closable={false} keyboard centered
+  return <Modal open={open} onCancel={requestClose} footer={null} closable={false} keyboard centered={centered}
     mask={{ closable: true }} width="max-content" focusable={{ focusTriggerAfterClose: false }}
     panelRef={panel => { panel?.setAttribute('aria-labelledby', titleId); }} className="business-modal" destroyOnHidden={false}>
     <div ref={body} className={className}>{children}</div>
