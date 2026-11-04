@@ -16,7 +16,20 @@
 .i8-error>summary:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .i8-error pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;color:var(--tx);background:var(--sf2);border-radius:var(--radius-input);padding:12px}
 .i8-page .notice .ant-btn{margin-left:8px}
+/* 读态条与首次读取占位：与下方 `.i8-latest`/`.i8-records` 的真实几何对齐（同一 1px 边框、
+   同一圆角），这样从"占位"换到"结果"时高度不会突然跳一下。
+   `.read-reserve` 只给 overflow，占位的高度由这里给 —— 不给就把 6 行占位撑成整页。 */
+.i8-read-status{height:var(--control-h);margin:0 0 calc(10px * var(--fscale))}
+.i8-read-status:empty{display:none}
+.i8-read-reserve{padding:calc(10px * var(--fscale)) calc(12px * var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf);min-height:calc(96px * var(--fscale))}
 .i8-page{width:min(100%,calc(1080px * var(--fscale)));margin-inline:auto;box-sizing:border-box}
 .i8-server{display:flex;align-items:flex-end;gap:12px;margin-bottom:20px;flex-wrap:wrap}
 .i8-server label{display:flex;flex-direction:column;gap:6px;max-width:100%}
 .i8-server .ant-select{width:calc(320px * var(--fscale));max-width:100%}
+.i8-relay{margin:calc(20px * var(--fscale)) 0 calc(28px * var(--fscale));padding:calc(16px * var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf2)}
+.i8-relay h2{margin-bottom:calc(8px * var(--fscale))}
+.i8-relay-row{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-top:calc(10px * var(--fscale))}
+.i8-relay-row label{display:flex;flex-direction:column;gap:6px;font-size:calc(12px * var(--fscale));color:var(--tx2);width:calc(320px * var(--fscale));max-width:100%}
+.i8-relay-origin{font-size:calc(12px * var(--fscale));color:var(--tx2);overflow-wrap:anywhere}
+.i8-relay-note{font-size:calc(12px * var(--fscale));color:var(--tx2);margin:calc(8px * var(--fscale)) 0 0}
+.notice-fetch-mode{display:flex;align-items:center;gap:12px;margin:calc(12px * var(--fscale)) 0 0;font-size:calc(12px * var(--fscale));color:var(--tx2)}

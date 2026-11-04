@@ -122,12 +122,19 @@ class CommonProjectSource:
 def load_warehouse_rows(client) -> list[dict] | None:
     """取一次**仓库名单**（`API-05`）—— **复用调用方已有的登录会话**（不额外登录、不重复强踢）。
 
-    ⚠️ **失败返回 `None`、不抛**：调用方（抓取编排）走到这一步时数据**已经入库**，
+    ⚠️ **普通失败返回 `None`、不抛**：调用方（抓取编排）走到这一步时数据**已经入库**，
        建档只是**补档案**，绝不能反过来把抓取拖挂。
        口径见《说明书》**§2.4.2 链路 B**（`ACC-PRJ-AUTO-001`）。
+    ⚠️（`TAIL-476`）**严格通道的停止要穿透**：浏览器模式下"会话不在/身份或站点不符/浏览器没回音"
+       不是"补档案失败"，而是**整条链该停**的理由 —— 吞掉它会让后续取数继续按失效身份跑，
+       甚至部分采用。⛔ 别把 `Strict*` 加进下面的 `except`。
     """
+    from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionUnavailable, StrictTargetMismatch
+
     try:
         return WarehouseSource(client).fetch()
+    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        raise
     except Exception:                                   # noqa: BLE001
         return None
 

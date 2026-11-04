@@ -22,12 +22,14 @@ from typing import Callable
 from app.core.config import PROJECT_ROOT, get_settings
 from app.core.db import session_scope
 from app.core.logging import get_logger
+from app.core.session import current_name
 from app.mod01_projects.domain import (
     OwnershipDecision,
     needs_archive,
     resolve_ownership,
 )
 from app.mod01_projects import service as P1S
+from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
@@ -152,7 +154,12 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int, list[dict]]]:
     def _exec(year_month: str, allow_kick: bool) -> tuple[int, int, list[dict]]:
         # ⚠️ 耗时的**起点**：必须在 `I8Client` 登录 i8 **之前**（见 `create_run_record` 那段）
         t0 = datetime.now()
-        client = I8Client(allow_kick=allow_kick)
+        # ⭐（`TAIL-476`）取数客户端走 `open_i8_client()` 工厂：**默认仍是产品原有 `I8Client`**
+        #    （Cookie 缓存 → 单次重登 → 强踢授权，一字未改）；只有调用方显式进入
+        #    `relay_scope(MODE_BROWSER, device_id)` 时才切到「复用浏览器已有会话」的那支。
+        #    `owner` 取**服务端认证身份**（`current_name()`，来自本请求会话），⛔ 不接受客户端声明。
+        #    ⚠️ 浏览器模式缺连接时这里**当场抛错**（落"失败"执行记录），⛔ 不会悄悄退回登录。
+        client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
         try:
             rows = NoticeFetcher(client).fetch_month(year_month)
         except Exception as exc:  # noqa: BLE001

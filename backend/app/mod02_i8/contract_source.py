@@ -162,7 +162,18 @@ class ContractFetcher:
            实测**几乎每条都有**）；`ItemGrid` = **明细行**（实测多数合同为空 —— 尤其增补合同）。
         ⚠️ **查不到 / 报错 ⇒ 回空串、⛔ 不抛**：材料名不是关键字段，不该因它让**整批抓取**失败。
            但调用方**必须计数并报出来**（禁静默 —— 否则"材料名怎么空了"没人知道）。
+
+        ⛔ **`Strict*` 例外**（`TAIL-476`）：上面那句「不抛」只针对**单条业务读取失败**。
+           浏览器会话方式下，'会话不在 / 身份或站点不符 / 浏览器一直没回音'是**整条链该停**的理由 ——
+           吞掉它会让后面每一条都继续按失效身份去问，最后落一批半残数据。
+           ⇒ 严格通道的停止**必须穿透**（下面第一个 `except`），别并进最后的 `except Exception`。
         """
+        from app.mod02_i8.browser_session import (
+            StrictSessionEnded,
+            StrictSessionUnavailable,
+            StrictTargetMismatch,
+        )
+
         pid = str(ph_id or "").strip()
         if not pid:
             return ""
@@ -170,6 +181,8 @@ class ContractFetcher:
             resp = self._client.post_json(configured_detail_url(),
                                           params={"id": pid, "type": DETAIL_TYPE},
                                           data={}, timeout=DETAIL_TIMEOUT)
+        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+            raise                      # ⛔ 严格通道的停止不在这里降级成"本条留空"
         except Exception as exc:                        # noqa: BLE001 —— 见上：单条失败不断整批
             logger.warning("合同 {} 的材料名取数失败（本条留空，不影响落库）：{}", pid, exc)
             return ""

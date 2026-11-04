@@ -3,9 +3,11 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from app.core.errors import MustReportError
+from app.core.session import current_name
 from app.mod01_projects.domain import resolve_ownership
 from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_NORMAL, TYPE_SHELL
 from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.browser_relay import open_i8_client
 
 # Observed on all three Fourth Engineering Company list pages on 2026-10-19.
 # These are query scopes, not credentials; never substitute an empty/all-organizations filter.
@@ -146,7 +148,8 @@ def preview_payload(lists, projects, previous=None):
 
 
 def read_preview(projects, previous=None, *, allow_kick=False):
-    client = I8Client(allow_kick=allow_kick)
+    # ⚠️ 统一工厂：默认仍是原 `I8Client`；显式选了浏览器方式但连接不在 ⇒ 当场停，⛔ 不退回登录。
+    client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
     try:
         return preview_payload(fetch_lists(client), projects, previous)
     finally:

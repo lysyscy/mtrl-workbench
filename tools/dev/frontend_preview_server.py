@@ -32,6 +32,8 @@ def arguments():
     parser.add_argument('--prepare-build', type=Path)
     parser.add_argument('--stop', action='store_true')
     parser.add_argument('--pg-bin', type=Path, help='既有匹配PostgreSQL工具目录，仅已有副本升级需要')
+    parser.add_argument('--browser-notice-check', type=Path,
+                        help='单独获批后使用：本run/work内的月份/站点/账号范围文件，仅新建disposable副本')
     return parser.parse_args()
 
 
@@ -141,7 +143,7 @@ def existing_environment(args, run, source, guard):
         engine.dispose()
 
 
-def application(args, run, env, owner, version, source, guard):
+def application(args, run, env, owner, version, source, guard, browser_notice_check=None):
     from app.core import config
     private = ROOT / 'var/state/react-writable-preview' / run.name
     private.mkdir(parents=True, exist_ok=True)
@@ -155,10 +157,13 @@ def application(args, run, env, owner, version, source, guard):
     @lru_cache
     def settings():
         values = PreviewSettings(_env_file=(args.source_env, config.ENV_FILE))
-        return values.model_copy(update=dict(database_url=guard.test_url, test_database_url=guard.test_url,
+        updates = dict(database_url=guard.test_url, test_database_url=guard.test_url,
             session_secret=secret, app_env='dev', allowed_ip_cidrs='127.0.0.1/32,::1/128', cors_allow_origins='',
             frontend_preview_dir=version['build_path'], frontend_app_dir='', artifacts_dir=str(ROOT / 'var/data/react-writable-preview' / run.name),
-            logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='', printer_name=''))
+            logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='', printer_name='')
+        if browser_notice_check is not None:
+            updates['i8_base_url'] = browser_notice_check.origin
+        return values.model_copy(update=updates)
     config.get_settings = settings
     os.environ.update(env)
     from app.core import db, session
@@ -172,6 +177,10 @@ def application(args, run, env, owner, version, source, guard):
                 raise RuntimeError('预览运行连接越出已登记目标')
         connection.rollback()
     session.COOKIE_NAME = owner['cookie_name']
+    if browser_notice_check is not None:
+        from tools.dev.frontend_preview_browser_check import bind_preview_account, enforce_browser_transport
+        bind_preview_account(engine, owner, browser_notice_check)
+        enforce_browser_transport()
     from app.mod02_i8 import cookie_store, source_cache, wh_cache
     cookie_store.CACHE_DIR = private / 'i8_cookie'
     source_cache.DIR = settings().artifacts_path / 'i8_source'
@@ -184,7 +193,8 @@ def application(args, run, env, owner, version, source, guard):
     app = create_app()
     if not owner.get('i8_enabled'):
         from tools.dev.frontend_preview_copy import restrict_copy_preview
-        restrict_copy_preview(app, full_app=True)
+        restrict_copy_preview(app, full_app=True, browser_notice_check=browser_notice_check,
+                              preview_account=owner['preview_account'])
     @app.get('/visual-version')
     def visual_version():
         with engine.connect() as connection:
@@ -199,6 +209,8 @@ def run(args):
     from tests.db_guard import TestDatabaseGuard
     from tools.dev.frontend_preview import isolated_database
     run = owned_run(args.run)
+    from tools.dev.frontend_preview_browser_check import load_check
+    browser_notice_check = load_check(args, run)
     if run.is_relative_to(ROOT / '.artifacts/active'):
         os.environ.update(MTRL_EFFORT=run.parent.name, MTRL_RUN_ID=run.name)
     else:
@@ -240,7 +252,9 @@ def run(args):
                 product_digest=hashlib.sha256(__import__('json').dumps(sources, sort_keys=True).encode()).hexdigest(),
                 index_sha256=version['index_sha256'], build_path=version['build_path'], started_at=datetime.now(timezone.utc).isoformat())
             owner.pop('stopped_at', None)
-            app = application(args, run, env, owner, version, source, guard)
+            if browser_notice_check is not None:
+                owner['browser_notice_check'] = browser_notice_check.receipt()
+            app = application(args, run, env, owner, version, source, guard, browser_notice_check)
             path = run / 'reports/real_owner.json'
             stop = run / 'reports/stop-request.json'
             if stop.exists():

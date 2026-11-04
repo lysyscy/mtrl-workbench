@@ -69,6 +69,10 @@ class FetchRequest(BaseModel):
 
     month: str = ""
     confirm: bool = False
+    #: 取数方式：空/`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
+    session_mode: str = ""
+    #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
+    device_id: str = ""
 
 
 def _money(x) -> float:
@@ -173,12 +177,14 @@ def api_fetch(req: FetchRequest) -> dict:
     `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
     ⚠️ 失败**显式报错待人处理**（原因 + 请稍后重试；⛔ 无手动兜底 —— 2026-09-22 用户裁定），**绝不自动重试登录**（D9）。
     """
+    from app.mod02_i8.browser_relay import scope_of
     from app.mod08_inv import fetch_service as FS
 
-    with session_scope() as s:
-        return FS.run_fetch(
-            s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
-        )
+    with scope_of(req):
+        with session_scope() as s:
+            return FS.run_fetch(
+                s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
+            )
 
 
 @router.get("/api/m08/inventory/export")

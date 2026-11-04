@@ -8,6 +8,8 @@ import { detailSum, historyInitialization, mechanicalMoney as money, readI8Previ
 import type { Workbench, Relation, SourceRow, Discovery, Matter, I8Preview, HistoryBase, HistoryBaseDraft } from './mechanical-api';
 import { useHistoryGuard } from './history';
 import { ReadGrid } from './business-grid';
+import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
+import { useI8Session } from './i8-session';
 import { numberColumnWidth, textWidth } from './grid';
 import { EllipsisText } from './grid-text';
 import type { ColDef,ColGroupDef } from 'ag-grid-community';
@@ -63,6 +65,9 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
   const [working,setWorking]=useState(false);
   const lock=useRef(false),mounted=useRef(true);
   const scopeKey=JSON.stringify(warehouses),currentScope=useRef(scopeKey);currentScope.current=scopeKey;
+  // 取数方式来自账号工作区的统一选择（「i8 接入」页）。
+  const session=useI8Session();
+  const browserBlocked=session.mode===SESSION_MODE_BROWSER&&!session.connected;
   const blocked=busy||working;
   useHistoryGuard('mechanical-history-base',()=>working?'累计起点正在保存，请稍候。':historyDirty?'请先处理累计起点未保存的修改。':'');
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
@@ -100,13 +105,16 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
     void commit(()=>post('ignore',{warehouse:row.warehouse,relation:row.relation,revision:row.revision,raw:row.raw,i8_revision:row.i8_revision,undo}),undo?'已恢复差额提醒。':'已留底忽略金额，以后只提示新增差额。');
   }
   async function fetchPreview(wh='') {
-    if(!writable||blocked||lock.current)return;
+    if(!writable||blocked||browserBlocked||lock.current)return;
     lock.current=true;setWorking(true);const scope=scopeKey;
     setWarehouse(wh);setDialog('fetch');setPreview(null);setSelected([]);setAllowReduction(false);setReason('');
     try {await operate(async()=>{
       setFeedback('');
       try {
-        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:randomUUID(),allow_kick:true})}));
+        // 会话来源字段统一由 `sessionPayload` 生成：`browser` 连接不在就当场失败（不退回登录），
+        // 直连保留原来的强踢授权。
+        const mode=sessionPayload(session,{allow_kick:true});
+        const result=readI8Preview(await requestJson('/api/m06/workbench/i8-fetch',{method:'POST',...body({request_id:randomUUID(),...mode})}));
         const refreshed=await refresh();
         if(!mounted.current||currentScope.current!==scope)return;
         if(!refreshed){failed('取数预览已取得，重新读取失败；请重新读取后再抓取。');return;}

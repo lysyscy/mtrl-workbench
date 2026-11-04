@@ -14,11 +14,13 @@
 
 当次两库已备份并迁移到`c7d4e2a9b1f3`，原集采合同/发票/付款表计数及内容摘要保持；正式新增结果查询及271条合同默认排序只读核验通过，未重录业务或调用i8。当次资源`073aaedd1b16`，回退`8e4512ce31b1`；具体备份、首次预检兼容问题、原始发布回执与未验边界见[上线回执](../.scratch/jc-ledger-refinements/deployment.md)。当时保留8065副本预览，未将技术验证当作正式库GUI业务验收。
 
-## i8 浏览器登录态复用测试与页面稳定加载（首轮修正中）
+## i8 日常会话复用与页面稳定加载（加载已验，连接修复中）
 
-2026-11-04 用户确认六张拆分及依赖后，已发布 TAIL-476–481，见[实施票索引](../.scratch/browser-session-loading-20261103/ticket-plan.md)。TAIL-476（i8 复用验证）与 TAIL-477（欠款加载样板）为 ready-for-agent；其余四票为 blocked，只依赖 TAIL-477。共同范围与验收沿[正式规格](../.scratch/browser-session-loading-20261103/spec.md)，[总票 TAIL-475](../.scratch/tails/issues/TAIL-475-i8会话复用与稳定加载.md)保持原状；各票持有实际进度。发布核对基线 master 22cc48f8，尚未开始应用实现、真实 i8 抓取或部署。
+共同范围与验收沿[正式规格](../.scratch/browser-session-loading-20261103/spec.md)，[总票475](../.scratch/tails/issues/TAIL-475-i8会话复用与稳定加载.md)为入口，[实施票索引](../.scratch/browser-session-loading-20261103/ticket-plan.md)仅导航，各原票持有状态。接手目录、运行编号和资源回[交接](../.scratch/browser-session-loading-20261103/handoff.md)。
 
-接手实施位于`codex/browser-session-loading-20261104`隔离工作树，476/477当前in-progress，首版代码与代理检查已返回；主控已复现基线加载位移并整理[首轮复核及修正](../.scratch/browser-session-loading-20261103/evidence/review-round1.md)，未验收完成。用户已确认DSH更新完成并恢复，首轮修正已沿两原会话派发，回执确认Flash/high；临时基线预览已退出。真实i8会话因现有标签为登录表单未验证；478–481仍blocked，未提交/推送或部署。接续与资源归[交接](../.scratch/browser-session-loading-20261103/handoff.md)。
+2026-11-05，加载线的[欠款样板](../.scratch/browser-session-loading-20261103/evidence/TAIL-477-acceptance.md)及[其余页面代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-478-481-acceptance.md)技术验证完成；提交`90720465`已按用户授权正常推送本任务分支并核远端SHA，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41876511391)成功。未部署，验证副本均已正常退出并清理自建schema。
+
+用户已明确“日常抓取能用才算能用”：现有按钮必须无需Agent中转直接复用Edge。[宿主单笔真实代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-476-live.md)及隔离Chromium样机只算中间证据；476正关闭[累计审查发现](../.scratch/browser-session-loading-20261103/evidence/review-closure.md)，真实Edge安装/权限与日常入口验收待具体包确认，尚未完成。正式工作台配置与主根他任务内容保持。
 
 ## 已关闭的性能优化
 

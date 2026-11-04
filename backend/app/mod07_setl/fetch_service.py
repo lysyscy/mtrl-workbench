@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.core.session import current_name
 # ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
 #    —— 不传 ⇒ 耗时恒 0，用户实测报过）
 from app.mod01_projects.pending import record_detail
@@ -32,6 +33,12 @@ from app.mod01_projects.recovery import (
 from app.mod01_projects import service as P1S
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.browser_relay import open_i8_client
+from app.mod02_i8.browser_session import (
+    StrictSessionEnded,
+    StrictSessionUnavailable,
+    StrictTargetMismatch,
+)
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import load_warehouse_rows
 from app.mod07_setl import importer
@@ -93,7 +100,12 @@ def run_fetch(
     ids = P1S.export_phids(s)
     report_export.require_ready(SPEC_KEY)               # 登记不全（如 reportName 未定稿）⇒ 显式拒
     operator = operator or current_operator()
-    client_factory = client_factory or (lambda: I8Client(allow_kick=True))
+    # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（缓存 + 单次重登 + 强踢，
+    #    与改动前逐字节一致）；只有本请求显式选了「浏览器已有会话」时才换成复用通道。
+    #    ⛔ 选了浏览器但连接不在 ⇒ 工厂当场抛停止，绝不在这里悄悄退回登录。
+    client_factory = client_factory or (
+        lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
+    )
     export = export or (lambda c, ym, ids_: report_export.export(
         c, spec_key=SPEC_KEY, year_month=ym, proj_ids=ids_))
 
@@ -110,6 +122,11 @@ def run_fetch(
                 if callable(close):
                     close()
         rows = importer.parse_rows(content, ym=plan["ym"])
+    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
+        #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
+        #    吞掉它去写一条"稍后重试"的失败记录，等于让人对着错的原因反复点。
+        raise
     except Exception as exc:                            # noqa: BLE001 —— 一律降级，不静默
         notice = fetch_task.degrade_no_manual(exc)   # ⭐ 本域无手动兜底（纠正悬空承诺，2026-09-22）
         run = save_run_record(s, **fetch_task.fetch_record_payload(

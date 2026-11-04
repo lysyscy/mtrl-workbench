@@ -84,7 +84,11 @@ def perform_action(name: str, payload: dict, request: Request):
                         for row in rows if row.get('projectId')})
                     previous[snapshot['warehouse']] = ids
                 projects = project_service.all_projects(session)
-            incoming = read_preview(projects, previous, allow_kick=allow_kick)
+            # ⚠️ 取数方式覆盖整次读取（缺连接即当场停，⛔ 不回落登录）。
+            from app.mod02_i8.browser_relay import scope_of
+
+            with scope_of(payload):
+                incoming = read_preview(projects, previous, allow_kick=allow_kick)
             incoming['request_id'] = payload.get('request_id', '')
             with session_scope() as session:
                 result = workbench.action(session, 'i8-preview', incoming, operator)

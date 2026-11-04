@@ -90,13 +90,21 @@ def fetch_notices(
 
     ⚠️ 登录含强踢（KillOnlineUser）：`allow_kick=False` 时若检测到在线冲突 ⇒ 直接失败、不踢人。
     ⚠️ 抓取失败**不自动重试登录**（D9）。
+    ⭐（`TAIL-476`）`session_mode="browser"` 时把本次请求绑定到浏览器连接：
+       在 `relay_scope` 内执行器会拿到「复用浏览器会话」的客户端（**不登录、不缓存、不强踢**）；
+       缺连接 ⇒ 当场失败（⛔ 不静默退回直连）。`http`（默认）路径与改动前**逐字节一致**。
     """
     from app.core.identity import require_expected_account
+    from app.mod02_i8.browser_relay import MODE_BROWSER, relay_scope
     from app.mod02_i8.fetch_task import build_fetch_params
 
     require_expected_account(req.expected_account)
     build_fetch_params(req.year_month)
-    fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
+    if req.session_mode == MODE_BROWSER:
+        with relay_scope(MODE_BROWSER, req.device_id):
+            fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
+    else:
+        fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
     return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted, ignored=ignored)
 
 
@@ -219,8 +227,25 @@ def warehouse_check(
 
     cached_at = ""
     head = ""
+    # ⚠️（`TAIL-476`）取数方式必须在**进入取数**之前进入作用域：这个入口过去连作用域都没有，
+    #    于是用户选了「浏览器已有会话」也照样按直连去登录 —— 那正是本票要堵的缝。
+    #    `http`（缺省）路径与改动前**逐字节一致**；`browser` 缺连接 ⇒ `wh_loader` 当场抛
+    #    `BrowserRelayUnavailable`，⛔ 不会悄悄变成登录。
+    from app.mod02_i8.browser_relay import scope_of
+    from app.mod02_i8.browser_session import (
+        StrictSessionEnded,
+        StrictSessionUnavailable,
+        StrictTargetMismatch,
+    )
+
     try:
-        rows = wh_loader(req.allow_kick)
+        with scope_of(req):
+            rows = wh_loader(req.allow_kick)
+    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        # ⛔ 严格通道的停止（会话不在/身份或站点不符/浏览器没回音）**不许**被这里的
+        #    "回落上一次缓存"吞掉：那会让用户以为名单是刚查的、而实际上是没查成。
+        #    普通取数失败（网络抖动、i8 报错）仍走下面的缓存兜底 —— 那是既有行为。
+        raise
     except Exception as exc:                              # noqa: BLE001
         # ⭐ `TAIL-39`：抓不到 ⇒ **回退到上一次的名单**接着判（缓存是优化、不是功能），
         #    但**必须说清"这是几点抓的"** —— ⛔ 不许把旧名单说成刚抓的（`wh_cache` 纪律 2）。

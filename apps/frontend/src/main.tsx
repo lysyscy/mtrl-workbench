@@ -15,6 +15,8 @@ import { readIdentity, setRequestIdentity, requestJson, beginIdentityVerificatio
 import type { Identity } from './api';
 import type { ComponentType } from 'react';
 import { GridWidthOwner } from './grid-width-owner';
+import { resetBrowserRelay } from './i8-browser-relay';
+import { I8SessionProvider } from './i8-session';
 
 type WorkspacePageProps = {
   me: Identity | null; blocked: boolean; active: boolean;
@@ -92,7 +94,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
       window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
+  return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
@@ -107,7 +109,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
-  </div></HistoryScope></GridWidthOwner></QueryClientProvider>;
+  </div></I8SessionProvider></HistoryScope></GridWidthOwner></QueryClientProvider>;
 }
 
 function preserveIdentity(current: Identity | null, incoming: Identity | null) {
@@ -157,7 +159,7 @@ function App() {
     void check();
     // Keep local navigation/input responsive; API intents wait at the identity gate.
     const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(false, true); };
-    const lost = () => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
+    const lost = () => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
   }, []);
@@ -166,7 +168,7 @@ function App() {
     {!fontsReady && !error && <p className="page-loading" role="status">正在准备界面…</p>}
     {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl()}>重新登录</a></div>}
     {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : null}
-    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} onPreferencesSaved={() => check(false)} onLogout={() => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
+    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} onPreferencesSaved={() => check(false)} onLogout={() => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
   </UiProvider>;
 }
 

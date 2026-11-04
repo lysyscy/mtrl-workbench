@@ -53,6 +53,15 @@ class FetchRequest(BaseModel):
         False,
         description="界面主动抓取传 true；省略时不强踢在线会话",
     )
+    # ---------------------------------------------------------------- 会话来源（`TAIL-476`）
+    # ⚠️ 缺省 / `http` ⇒ **产品原有直连**（Cookie 缓存 → 单次重登 → 强踢授权）完全不变；
+    #    只有用户在「i8 接入」页显式连上浏览器并在这儿传 `browser` 才改走浏览器通道。
+    # ⛔ 已选 `browser` 但连接不在时**失败**，不会悄悄退回登录。
+    session_mode: Literal["http", "browser"] = Field(
+        "http",
+        description="http = 工作台直连（默认，行为不变）；browser = 复用已连接的浏览器 i8 会话",
+    )
+    device_id: str = Field("", description="浏览器模式必传：本页面的连接标识（不是账号，不是凭据）")
 
 
 # --------------------------------------------------------------- 链路 C 弹窗（`TAIL-29`-② ④）
@@ -119,10 +128,15 @@ class WarehouseCheckRequest(BaseModel):
     """**兜底前先跑一次 i8 仓库名单**（`TAIL-39`）。
 
     `allow_kick` 默认 `False`；界面主动查询传 `True`，允许登录时退出该账号其他在线会话。
+    ⚠️ `session_mode` / `device_id` 与其它日常抓取入口同口径（`TAIL-476`）：
+       不传＝产品原直连行为；传 `browser` ⇒ 必须走用户浏览器里已登录的 i8 会话，
+       ⛔ 连接不在就当场停，不许回落到登录。
     """
 
     warehouse_name: str = ""
     allow_kick: bool = False
+    session_mode: str = Field("", description="http（缺省）＝直连；browser＝浏览器已有会话")
+    device_id: str = Field("", description="浏览模式必传：本页面的连接标识")
 
 
 class WarehouseCheckOut(BaseModel):

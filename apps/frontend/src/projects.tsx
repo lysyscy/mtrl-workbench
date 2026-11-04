@@ -15,6 +15,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, readProjects, record, requestJson, uncertainWrite } from './api';
 import type { Identity, Project } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { SESSION_MODE_BROWSER, sessionParams } from './i8-browser-relay';
+import { useI8Session } from './i8-session';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type ArchiveProject = Project & { parent_shell_id: number | null; match_keywords: string[]; is_placeholder: boolean };
@@ -236,6 +238,9 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
 }
 function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state: DialogState; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
   const p = 'project' in state ? state.project : null, item = 'item' in state ? state.item : null;
+  // 取数方式来自账号工作区的统一选择（「i8 接入」页）；这里只消费，不另设一套。
+  const session = useI8Session();
+  const browserBlocked = session.mode === SESSION_MODE_BROWSER && !session.connected;
   const [full, setFull] = useState(p?.name_full ?? ''), [disp, setDisp] = useState(p?.disp ?? '');
   const [choice, setChoice] = useState('');
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [done, setDone] = useState(false), [receipt, setReceipt] = useState(''), [samples, setSamples] = useState<Record<string, unknown>[]>([]);
@@ -246,7 +251,7 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   const title = state.kind === 'sync' ? `同步${state.source === 'warehouses' ? '仓库名单' : '常用项目列表'}` : ({ create: '手工建档，无仓库项目', delete: '删除项目档案', promote: '人工指认，扶正', archive: '选择仓库建档' } as const)[state.kind];
   const initial = useRef(JSON.stringify([full,disp,choice]));
   const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,choice]) !== initial.current, close });
-  const cannot = blocked || !me || busy || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
+  const cannot = blocked || !me || busy || browserBlocked || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
   async function save() {
     if (cannot || lock.current) return;
     if (state.kind === 'create' && !full.trim()) { setError('请填写项目全名。'); return; }
@@ -260,7 +265,10 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
       else if (state.kind === 'promote') result = await requestJson('/api/m01/promote', { method: 'POST', ...body({ project_id: Number(choice), warehouse_name: item!.warehouse_name, full_name: item!.full_name }) });
       else if (state.kind === 'archive') result = await requestJson('/api/m01/archive-row', { method: 'POST', ...body({ warehouse_name: choice, full_name: item!.full_name }) });
       else if (state.kind === 'sync') {
-        result = await requestJson(`/api/m02/sync/${state.source}?${new URLSearchParams({ allow_kick: 'true', expected_account: me!.account })}`, { method: 'POST' });
+        // ⚠️ 浏览器方式：**不传 allow_kick**（那条通道结构上不会登录/强踢），只带本页连接标识。
+        //    会话来源字段统一由 `sessionParams` 生成；`browser` 连接不在就当场失败（不退回登录）。
+        const query = sessionParams(session, { allow_kick: 'true' }, { expected_account: me!.account });
+        result = await requestJson(`/api/m02/sync/${state.source}?${query}`, { method: 'POST' });
         const sync = object<{ degraded: boolean; message: string; count: number; sample: Record<string, unknown>[] }>(result, x => typeof x.degraded === 'boolean' && typeof x.message === 'string' && typeof x.count === 'number' && Array.isArray(x.sample));
         if (sync.degraded) { await refresh(); throw new ApiError(sync.message || '同步未完成，请核对执行记录后重试。'); }
         if (mounted.current) { setReceipt(sync.message || `已同步 ${sync.count} 条。`); setSamples(sync.sample); setDone(true); }

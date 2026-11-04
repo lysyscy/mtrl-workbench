@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "工作台 i8 会话桥",
+  "version": "0.1.0",
+  "description": "把工作台的 i8 取数请求交给本机浏览器里已登录的 i8 标签执行；不读 Cookie、不登录、不顶号。",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": { "service_worker": "service_worker.js" },
+  "action": { "default_title": "点这里选中当前 i8 标签（工作台会话桥）" },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApJ09feY0DDXUfs0Novrf7ZhVTre/sgK/NoWmCJ2Vq+twCnyp6VF/jihetnTjDXE3fV+Ew5YGzE7ITPCeCnliIonJTDpIIk3BQ/OVXiwHLNVVJPizwxP3dbPsjI37WaNz7Utj3FjJow0slM5Snl48G+5L+B+6Cz+279BBhsn67qlGaA/e5mG1kzjw0y2SQiheAjVALs4YGFKhLJ3O0tXg8W9bEhw9hLYHyiWmIWf7Wrq+7i4aIOQSmmDhHTeSXVuP3EbW3NSd1wxBlqgzrlIXiv9/DAfqLVfgYqKIwoQxnrf1meEFlkdEyRURnJmyG5e3SwyEeX6b4P/3ZuiaeB1y4QIDAQAB",
+  "externally_connectable": {
+    "matches": [
+      "http://127.0.0.1:8000/*",
+      "http://localhost:8000/*",
+      "http://127.0.0.1:8065/*",
+      "http://localhost:8065/*"
+    ]
+  }
+}

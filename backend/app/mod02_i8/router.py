@@ -13,7 +13,19 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from app.core.db import session_scope
-from app.mod02_i8 import wh_cache
+from app.mod02_i8 import browser_broker, wh_cache
+from app.mod02_i8.browser_relay import (
+    MODE_BROWSER,
+    MODE_HTTP,
+    expected_org_id,
+    open_i8_client,
+    scope_of,
+)
+from app.mod02_i8.browser_session import (
+    StrictSessionEnded,
+    StrictSessionUnavailable,
+    StrictTargetMismatch,
+)
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.fetch_task import (
     CONFIRM_CLOSES_DIALOG,
@@ -28,6 +40,11 @@ from app.mod02_i8.models import RunRecord
 from app.mod02_i8.notice_source import NoticeFetcher
 from app.mod02_i8.repository import create_run_record, finish_run_record, run_record_out
 from app.mod02_i8.schemas import (
+    BrowserCompleteOut,
+    BrowserCompleteRequest,
+    BrowserConnectRequest,
+    BrowserPendingOut,
+    BrowserStateOut,
     FetchPlanOut,
     FetchPreviewOut,
     FetchPreviewRequest,
@@ -44,11 +61,31 @@ router = APIRouter(prefix="/api/m02", tags=["mod02"])
 # --------------------------------------------------------------- 依赖（可注入）
 
 
+def _own_client(allow_kick: bool) -> I8Client:
+    """自建客户端（没有调用方传入可复用的 `client` 时）。
+
+    ⭐ 一律走 `open_i8_client()` 工厂：`http`（默认）⇒ 产品原有 `I8Client`，行为不变；
+       `browser` ⇒ 严格复用客户端，连接不在就**当场停**——⛔ 绝不在这里悄悄回落去登录，
+       否则「用浏览器已有会话」在仓库/常用项目这两个口子上会变成"看起来生效、实际在顶号"。
+    ⚠️ `owner` 取服务端认证身份 `current_name()`，⛔ 不接受客户端声明。
+    """
+    from app.core.session import current_name
+
+    return open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+
+
 def get_notice_rows() -> Callable[[str, bool], list[dict]]:
-    """付款通知书取数（`API-01`）。测试可覆盖。"""
+    """付款通知书取数（`API-01`）。测试可覆盖。
+
+    ⭐ 客户端走 `open_i8_client()` 工厂：默认仍是**产品原有** `I8Client`（缓存 / 单次重登策略不变）；
+       只有当前请求显式选了「用浏览器已有会话」时才换成严格复用客户端。
+       ⚠️ `owner` 取**服务端认证身份** `current_name()`，⛔ 不接受客户端声明。
+    """
 
     def _fetch(year_month: str, allow_kick: bool) -> list[dict]:
-        client = I8Client(allow_kick=allow_kick)
+        from app.core.session import current_name
+
+        client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
         try:
             return NoticeFetcher(client).fetch_month(year_month)
         finally:
@@ -66,7 +103,7 @@ def get_warehouse_rows() -> Callable[..., list[dict]]:
 
     def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
         own = client is None
-        c = client if client is not None else I8Client(allow_kick=allow_kick)
+        c = client if client is not None else _own_client(allow_kick)
         try:
             rows = WarehouseSource(c).fetch()
         finally:
@@ -90,7 +127,7 @@ def get_common_project_rows() -> Callable[..., list[dict]]:
 
     def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
         own = client is None
-        c = client if client is not None else I8Client(allow_kick=allow_kick)
+        c = client if client is not None else _own_client(allow_kick)
         try:
             return CommonProjectSource(c).fetch()
         finally:
@@ -104,7 +141,7 @@ def get_common_project_rows() -> Callable[..., list[dict]]:
 
 
 @router.get("/config")
-def connection_config() -> dict:
+def connection_config(device_id: str = Query("", description="本页面标识；给了才回报本页连接状态")) -> dict:
     """Read effective address and own binding without logging into i8."""
     from app.core.app_settings import SETTING_I8_BASE_URL, is_overridden, validate
     from app.core.config import get_settings, i8_base_of
@@ -124,9 +161,180 @@ def connection_config() -> dict:
             user, password = current_i8_credentials()
         except MustReportError as exc:
             reasons.append(str(exc))
+    # 浏览器通道：本页是否已连、连的是哪个站点（**去敏**：只报原点，不报会话材料）。
+    connection = browser_broker.broker().connection_of(str(current_name()), device_id or "") \
+        if current_name() and device_id else None
     return {"account": str(current_name()), "base_url": address, "source": "page" if is_overridden(SETTING_I8_BASE_URL) else "environment",
             "i8_user": user, "ready": bool(address and user and not reasons),
-            "message": " ".join(reasons)}
+            "message": " ".join(reasons),
+            "session_modes": [MODE_HTTP, MODE_BROWSER],
+            "browser_connected": connection is not None,
+            "browser_origin": connection.origin if connection is not None else "",
+            "expected_org": expected_org_id()}
+
+
+# --------------------------------------------------------------- 浏览器会话通道（`TAIL-476`）
+# 设计约束（见 `.scratch/browser-session-loading-20261103/daily-integration.md`）：
+# - owner 一律取**服务端认证身份** `current_name()`；⛔ 客户端声明的账号不参与授权。
+# - 通道只搬运"后端已经构造好的那一条请求"；⛔ 不接受扩展自行决定 URL/方法/头。
+# - 连接/回帖都走既有中间件（未登录写动作 401、IP 白名单、请求号），**不绕过任何身份门**。
+
+
+def _browser_state(device_id: str) -> BrowserStateOut:
+    from app.core.session import current_name
+    from app.mod02_i8.browser_relay import expected_org_id
+    from app.mod02_i8.i8_identity import org_of
+
+    owner = str(current_name())
+    connection = browser_broker.broker().connection_of(owner, device_id) if owner and device_id else None
+    want_org = expected_org_id()
+    try:
+        want_code, want_name = org_of(want_org)
+    except Exception:
+        # 组织还没登记映射 ⇒ 状态里就留空，让用户看到"还没核过"，而不是显示一个编号冒充组织。
+        want_code, want_name = ("", "")
+    return BrowserStateOut(
+        connected=connection is not None,
+        mode=MODE_BROWSER if connection is not None else MODE_HTTP,
+        origin=connection.origin if connection is not None else "",
+        i8_user="",
+        expected_org=want_org,
+        expected_org_code=want_code,
+        expected_org_name=want_name,
+        generation=connection.generation if connection is not None else 0,
+    )
+
+
+@router.get("/browser/state", response_model=BrowserStateOut)
+def browser_state(device_id: str = Query("", description="本页面标识")) -> BrowserStateOut:
+    """本页当前的浏览器通道状态（**只读**，不发起任何 i8 请求）。"""
+    return _browser_state(device_id)
+
+
+@router.post("/browser/connect", response_model=BrowserStateOut)
+def browser_connect(req: BrowserConnectRequest) -> BrowserStateOut:
+    """登记一条「工作台页面 ↔ 后端」的浏览器连接。
+
+    ⚠️ 这是**声明连接**，不是登录：不碰 i8、不写会话缓存、不代表已完成真实验收。
+    身份核对（缺一即停，**不用声明冒充机器核对结果**）：
+      1. 站点原点必须等于**工作台当前配置**的 i8 站点；
+      2. `i8_account`（扩展从 i8 页面读到的账号）必须等于**工作台本人绑定的 i8 账号**
+         （绑定的 i8 账号，不是工作台登录名 —— 两者本来就不是一回事）；
+      3. `i8_org_code` / `i8_org_name`（同来源的组织短码与名称）必须等于
+         **本部署已登记**的映射（内部机构号 ≠ 可见短码，⛔ 不拿两种 id 直接比）。
+    """
+    from app.core.config import get_settings, i8_base_of
+    from app.core.errors import MustReportError
+    from app.core.identity import current_i8_credentials
+    from app.core.session import current_name
+    from app.mod02_i8.browser_broker import BrowserRelayUnavailable
+    from app.mod02_i8.browser_relay import expected_org_id
+    from app.mod02_i8.browser_session import StrictTargetMismatch, _origin_of
+    from app.mod02_i8.i8_identity import VisibleIdentity, check_identity
+
+    owner = str(current_name())
+    if not owner:
+        raise BrowserRelayUnavailable("登录后才能连接浏览器会话。")
+
+    configured = _origin_of(i8_base_of(get_settings()))
+    if not configured:
+        raise BrowserRelayUnavailable(
+            "工作台还没配置 i8 服务地址，无法核对浏览器里的站点；本次未建立连接（未登录、未发请求）。"
+        )
+    if _origin_of(req.i8_origin) != configured:
+        raise StrictTargetMismatch(
+            "浏览器里的 i8 站点与工作台当前配置不一致，本次未建立连接（未发请求、未改配置）。"
+            "请在工作台「设置」里把 i8 服务器改成同一个地址，或改用工作台直连模式。"
+        )
+
+    try:
+        bound_user, _password = current_i8_credentials()
+    except MustReportError as exc:
+        raise BrowserRelayUnavailable(str(exc)) from exc
+
+    want_org = expected_org_id()
+    visible = VisibleIdentity(
+        account=(req.i8_account or "").strip(),
+        org_code=(req.i8_org_code or "").strip(),
+        org_name=(req.i8_org_name or "").strip(),
+        origin=_origin_of(req.i8_origin),
+    )
+    check_identity(visible, bound_user=str(bound_user or ""), org_id=want_org)
+
+    info = browser_broker.broker().connect(owner, req.device_id, _origin_of(req.i8_origin))
+    from app.mod02_i8.i8_identity import org_of
+
+    code, name = org_of(want_org)
+    return BrowserStateOut(
+        connected=True, mode=MODE_BROWSER, origin=info.origin,
+        i8_user=bound_user, expected_org=want_org,
+        expected_org_code=code, expected_org_name=name,
+        generation=info.generation,
+        message="已连接：本次取数将复用这个浏览器里的 i8 会话（不会登录、不会顶掉任何在线会话）。",
+    )
+
+
+@router.post("/browser/disconnect", response_model=BrowserStateOut)
+def browser_disconnect(device_id: str = Query("", description="本页面标识")) -> BrowserStateOut:
+    """主动断开：连接与挂起队列一起清（挂起请求当场判停，⛔ 不回落登录）。"""
+    from app.core.session import current_name
+
+    browser_broker.broker().disconnect(str(current_name()), device_id)
+    return _browser_state(device_id)
+
+
+@router.get("/browser/pending", response_model=BrowserPendingOut)
+def browser_pending(
+    device_id: str = Query("", description="本页面标识"),
+    timeout: float = Query(browser_broker.PENDING_WAIT_SECONDS, ge=0.0,
+                           le=browser_broker.PENDING_WAIT_SECONDS,
+                           description="长轮询上限；不超过服务端自己的上限"),
+) -> BrowserPendingOut:
+    """长轮询取活。**没有活是正常状态**（`request` 为空），不是错误。
+
+    ⚠️ 走与其它接口**完全相同**的中间件：未登录/身份失效照既有语义处理
+       （本端点自身不额外吞掉 401），⛔ 不给浏览器通道开身份后门。
+    """
+    from app.core.session import current_name
+
+    owner = str(current_name())
+    if not owner:
+        # 与其余接口同语义：未登录就不是"没有活"，而是**没有资格**。
+        from app.core.errors import MustReportError
+
+        raise MustReportError("登录后才能使用浏览器会话通道。")
+    pending = browser_broker.broker().take_pending(owner, device_id, timeout=timeout)
+    return BrowserPendingOut(request=pending.outbound_payload() if pending is not None else None)
+
+
+@router.post("/browser/complete", response_model=BrowserCompleteOut)
+def browser_complete(req: BrowserCompleteRequest) -> BrowserCompleteOut:
+    """回帖（**一次性**）：把浏览器实际收到的响应当场交给发起请求的那个线程。
+
+    ⚠️ 只接受**本连接自己的**票：票不属于 `(当前身份, 本页面)` ⇒ 一律不接受（返回 False）。
+       ⛔ 不回显票内容、不回显响应原文（诊断只走受控类别）。
+    """
+    import base64 as _b64
+
+    from app.core.session import current_name
+
+    owner = str(current_name())
+    if not owner:
+        from app.core.errors import MustReportError
+
+        raise MustReportError("登录后才能使用浏览器会话通道。")
+    try:
+        body = _b64.b64decode((req.body_b64 or "").encode("ascii"), validate=True) if req.body_b64 else b""
+    except (ValueError, UnicodeEncodeError):
+        return BrowserCompleteOut(accepted=False, message="回帖的响应体无法读取，已忽略。")
+    accepted = browser_broker.broker().complete(
+        owner, req.device_id, req.ticket,
+        status=int(req.status), headers=dict(req.headers or {}), body=body,
+        declared_length=req.declared_length, generation=int(req.generation or 0),
+    )
+    if not accepted:
+        return BrowserCompleteOut(accepted=False, message="这张回帖已作废或不属于当前连接，已忽略。")
+    return BrowserCompleteOut(accepted=True)
 
 
 @router.get("/fetch/plan", response_model=FetchPlanOut)
@@ -157,13 +365,21 @@ def fetch_preview(
     """
     params = build_fetch_params(req.year_month)
     echo = echo_params(params)
-    try:
-        rows = rows_loader(req.year_month, req.allow_kick)
-    except Exception as exc:  # noqa: BLE001
-        info = degrade_to_excel(exc)
-        return FetchPreviewOut(
-            year_month=req.year_month, echo=echo, degraded=True, message=info["message"]
-        )
+    # ⚠️ 取数方式在**整个取数过程**内有效：同一请求里的登录/重登判断与后续 i8 调用走同一通道。
+    with scope_of(req):
+        try:
+            rows = rows_loader(req.year_month, req.allow_kick)
+        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+            # ⛔（`TAIL-476`）浏览器方式下的停止**不降级成"可以去手动导 Excel"**：
+            #    用户点的是"用浏览器里那个会话"，真实原因是连接不在/站点不符/会话失效，
+            #    而"i8 抓不到数 ⇒ 请手动导 Excel"既不真、也让人以为该去导表。
+            #    ⇒ 原样抛出，由 `AppError` 处理器给出 400/409/502 与固定文案。
+            raise
+        except Exception as exc:  # noqa: BLE001
+            info = degrade_to_excel(exc)
+            return FetchPreviewOut(
+                year_month=req.year_month, echo=echo, degraded=True, message=info["message"]
+            )
     dialog = build_dialog(req.year_month, rows)
     return FetchPreviewOut(
         year_month=req.year_month,
@@ -187,7 +403,16 @@ def fetch_run(
     target = f"付款通知书 {req.year_month}"
     t0 = datetime.now()          # ⚠️ 见 `create_run_record`：动作**开始前**取时刻，否则耗时恒 0
     try:
-        rows = rows_loader(req.year_month, req.allow_kick)
+        with scope_of(req):
+            rows = rows_loader(req.year_month, req.allow_kick)
+    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded) as exc:
+        # ⛔（`TAIL-476`）严格通道的停止：**仍要留失败执行记录**（001-07），
+        #    但给用户的说明必须是真实原因，⛔ 不能改口成"已降级为手动 Excel 导入"。
+        _persist_fetch(
+            payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc)),
+            started=t0,
+        )
+        raise
     except Exception as exc:  # noqa: BLE001
         info = degrade_to_excel(exc)
         _persist_fetch(
@@ -207,6 +432,8 @@ def sync_warehouses(
     allow_kick: bool = Query(False, description="界面主动同步传 true；省略时不强踢在线会话"),
     rows_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
     expected_account: str | None = Query(None),
+    session_mode: str = Query("", description="http（缺省）＝直连；browser＝浏览器已有会话"),
+    device_id: str = Query("", description="浏览器方式必传：本页面的连接标识"),
 ) -> SyncOut:
     """**同步仓库名单**（`API-05`，手动点击）—— 建档推导判据 / 占位行扶正的数据源。
 
@@ -217,8 +444,12 @@ def sync_warehouses(
 
     require_expected_account(expected_account)
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时要有起点
+    from app.mod02_i8.browser_relay import scope_of
+
     try:
-        rows = rows_loader(allow_kick)
+        # ⚠️ 取数方式覆盖整个取数调用；缺连接即当场停（⛔ 不回落登录）。
+        with scope_of({"session_mode": session_mode, "device_id": device_id}):
+            rows = rows_loader(allow_kick)
     except Exception as exc:  # noqa: BLE001
         _persist_fetch(run_type="sync", payload=fetch_record_payload(
             object_desc="仓库列表", success=0, fail=0, error_message=str(exc)
@@ -251,6 +482,8 @@ def sync_common_projects(
     rows_loader: Callable[..., list[dict]] = Depends(get_common_project_rows),
     wh_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
     expected_account: str | None = Query(None),
+    session_mode: str = Query("", description="http（缺省）＝直连；browser＝浏览器已有会话"),
+    device_id: str = Query("", description="浏览器方式必传：本页面的连接标识"),
 ) -> SyncOut:
     """**同步常用项目列表**（`API-06`，手动点击）—— **`phid` 权威来源**；抓完**按 `phid` 幂等建档**。
 
@@ -267,12 +500,16 @@ def sync_common_projects(
     require_expected_account(expected_account)
 
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时的起点（本次同步要拉两个名单，通常是最慢的一条）
-    with session_scope() as s:
-        out = sync_and_archive(
-            s,
-            load_common=lambda: rows_loader(allow_kick),
-            load_warehouses=lambda: wh_loader(allow_kick),
-        )
+    from app.mod02_i8.browser_relay import scope_of
+
+    # ⚠️ 两个名单在**同一次取数方式**下取（缺连接即当场停，⛔ 不回落登录）。
+    with scope_of({"session_mode": session_mode, "device_id": device_id}):
+        with session_scope() as s:
+            out = sync_and_archive(
+                s,
+                load_common=lambda: rows_loader(allow_kick),
+                load_warehouses=lambda: wh_loader(allow_kick),
+            )
     if out["degraded"]:
         _persist_fetch(run_type="sync", payload=fetch_record_payload(
             object_desc="常用项目列表", success=0, fail=0, error_message=out["message"]

@@ -34,6 +34,65 @@
 
 上述策略也适用于保留作回退的旧壳入口；i8接入层的配置/执行记录和本地Excel导出只读本地结果，不因此登录i8。先复用本人账号隔离的Cookie缓存；真正需要登录时才可能强踢。登录失败直接报错，不循环登录或自动重跑抓取；已建立会话失效时仍保留既有至多一次重新登录并重发该请求的恢复。有效空响应的单次复核沿各接口已有契约，不扩为登录失败重试。
 
+## 浏览器已有会话通道（`TAIL-476`，**候选 · 真实未验**）
+
+用途：日常抓取直接用用户在 Edge 里已经登录的 i8 会话取只读数据 —— 不登录、不顶号、不导出 Cookie。
+⚠️ 本节登记的是**协议与边界**，不是"已完成验证的接口"：真实 Edge 安装、真实 i8 站点、真实业务结果**均未验**（见文末"验证状态"）。
+
+### 通路
+
+`I8Client`（既有解析链不变）→ 后端进程内 broker 排队 → 已登录的工作台页面长轮询取走 → 专用 MV3 扩展在**用户选中的 i8 标签**里用 `fetch(credentials:'same-origin')` 发出**后端构造好的那一条**请求 → 回帖 → 唤醒 → 既有 `_extract_records` / `_map_record` / 各 source 解析。
+
+- 会话留在浏览器里：扩展不读 Cookie、不用 `debugger`、不开远程调试端口；HttpOnly Cookie 由浏览器自动携带（已在隔离 Chromium 里固化为样机判据）。
+- 扩展是**无状态搬运工**：不接受任意 URL / 方法 / 头，只执行 broker 分配的票。
+- 通道只在**用户显式选择**「浏览器已有会话」时生效；缺省与其它的旧请求仍是产品原有 HTTP 直连。
+
+### 与既有 HTTP 模式的关系
+
+- **两套策略并存、互不回退**：HTTP 模式（含既有的至多一次重新登录、`allow_kick` 强踢授权、"先复用本人账号隔离的 Cookie 缓存"）一字未改；浏览器模式下一旦身份/站点/会话不对就**当场停止**。
+- 浏览器模式下 `I8Client` 的重登与强踢路径**结构上不可达**：子类 `_login()` 直接抛 `StrictSessionEnded` 并计数，`_ensure_cookie()` 不碰产品会话缓存 ⇒ 不会登录、不会顶掉在线会话、不写 `cookie_store`。
+- 浏览器模式连不上就失败（`i8_browser_relay_unavailable`），⛔ 绝不静默改走登录。
+
+### 只读端点范围（两侧必须逐条一致）
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/api/WorkFlow3/WorkFlowApi/getFlowHisForPrint` | 审批流程节点 |
+| GET | `/SUP/RichHelp/GetCommonUseList` | 常用项目 |
+| GET | `/reportcenter/printManage/getPrintDesign` | 取版式 |
+| POST | `/FC/FM/PaymentBill/getList` | 付款通知书列表（`API-01`） |
+| POST | `/FC/FM/PaymentBill/getInfo` | 通知单单头 |
+| POST | `/FC/FM/PaymentBill/getDetInfo` | 通知单明细 |
+| POST | `/PMS/PMM/KcBaseSetting/GetWareHouseList` | 仓库列表（`API-05`） |
+| POST | `/reportcenter/reportExport/export` | 库存/结存**二进制报表读取**（xlsx 字节；**不是**实际打印动作） |
+| POST | `/PMS/PCM/Contract/ProjBal/GetCntProjBalList` | 采购合同应付 |
+| POST | `/PMS/PCM/Contract/GetCntMInfoFirst` | 合同详情（补材料名） |
+| POST | `/PMS/PCM/Contract/GetCntMList` | **采购合同列表**（部署配置项 `I8_CONTRACT_LIST_URL` 的实测值，POST、无查询参数） |
+| POST | `/sup/customServer/getList` | 机械费工作台小列表（小写 `sup`，原样） |
+
+- 白名单**双重校验**（后端 `browser_relay.assert_readonly()` + 扩展 `checkEndpoint()`），每次请求都核，不只看初始化站点。
+- 拒绝：非以上路径、方法不匹配、`..`、`//`、结尾斜杠、带 userinfo 的地址、非 http(s)。
+- `reportExport/export` 保留是因为库存/结存的取数链本来就是二进制响应（后端核 xlsx 长度与文件头）；**打印链路（IPP 直投、打印执行器）完全不在本通道内，原策略不变**。
+
+### 身份与目标约束
+
+- 工作台侧比对的是**本人绑定的 i8 账号**（不是工作台账号），组织同时核**名称与短码**，站点核 `协议://主机[:端口]`。
+- 组织两种标识**不混算**：产品取数用的是内部组织号（`3700000000000014` 一类），i8 页面显示的是短码（如 `109`）⇒ 经 `mod02_i8/i8_identity.py` 的显式映射比对；映射是 **mod02 的外部适配**，工作台身份仍归 `core`。
+- 扩展侧每条请求**再核一次当前 DOM**（账号 / 组织 / 站点），不符即 `identity-changed` 停；绑定按 `device_id` 分连接存，一个页面不能覆盖另一个页面的绑定。
+- 请求代号（`generation`）由 broker 进程内发号器给，**每次连接都新建**（断开重连也不复用）；回帖必须带这张票自己的正整数代号，缺省/0/不匹配一律丢弃。
+
+### 超时与停止语义
+
+- 每条请求用它**自己的** read 预算（`httpx.Request.extensions['timeout']['read']`：合同列表 200s、详情 60s、其余默认 30s），broker 不用统一常量截断；扩展按 `timeout_ms` 用 `AbortController` 落实预算。
+- 空闲连接清理（120s）只清**真闲着**的：有挂起请求在途时不算空闲，不会把一条慢请求误杀成"连接已断开"。
+- 停止都有固定中文文案，超时归超时（`i8_strict_session_ended` 的"没回音"分支），⛔ 不谎称"会话失效"（那会把用户推向重登、反而顶号）。
+- 严格停止**穿透业务容错**：补档案、补材料名、抓取降级这些 `except Exception` 落点都先抬出 `Strict*`，不让"身份/目标已失效"被吞成"本条留空""降级为手动 Excel"继续跑。
+
+### 验证状态
+
+- **已离线验证**：协议形状、白名单双向校验、按连接隔离、代号、超时预算、HttpOnly Cookie 行为（隔离 Chromium 样机，`apps/browser-extension/tests/browser_smoke.py`）。
+- **未验证**：真实 Edge 安装与 `activeTab` 授权、真实 i8 站点与账号面板、真实日常业务结果、生产部署。⇒ 本通道仍为**候选**，不据离线通过宣称可用。
+
 ## 一、`API-01` 付款通知书列表
 
 **URL**：`{I8_BASE_URL}/FC/FM/PaymentBill/getList`（**POST**，`application/x-www-form-urlencoded`）

@@ -137,6 +137,10 @@ class FetchIn(BaseModel):
 
     confirm: bool = False
     since: str | None = None          # `None` = 没传（用默认）；`""` = 显式要默认；有值 = 用它
+    #: 取数方式：空/`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
+    session_mode: str = ""
+    #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
+    device_id: str = ""
 
 
 class TagIn(BaseModel):
@@ -185,9 +189,12 @@ def api_fetch(payload: FetchIn) -> dict:
     if not payload.confirm:
         return {"ok": False, "kind": "err",
                 "message": "请先确认采购合同抓取范围，再执行抓取"}
-    with session_scope() as s:
-        since = payload.since if payload.since is not None else FS.default_since(s)
-        return FS.run_fetch(s, confirmed=True, since=str(since or ""))
+    from app.mod02_i8.browser_relay import scope_of
+
+    with scope_of(payload):
+        with session_scope() as s:
+            since = payload.since if payload.since is not None else FS.default_since(s)
+            return FS.run_fetch(s, confirmed=True, since=str(since or ""))
 
 
 class ExportIn(BaseModel):
@@ -310,12 +317,17 @@ class AutoLinkIn(BaseModel):
     notice_ids: list[int] = Field(min_length=1, max_length=5000)
     selections: list[AutoLinkSelection] = Field(default_factory=list, max_length=5000)
     allow_kick: bool = Field(False, description='界面主动读取传 true；省略时不强踢在线会话')
+    #: 取数方式：空／`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
+    session_mode: str = ''
+    #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
+    device_id: str = ''
 
 
 def _read_payables(*, allow_kick=False):
-    from app.mod02_i8.client import I8Client
+    from app.core.session import current_name
+    from app.mod02_i8.browser_relay import open_i8_client
     from app.mod02_i8.payable_source import fetch_payables
-    client = I8Client(allow_kick=allow_kick)
+    client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
     try:
         return fetch_payables(client)
     finally:
@@ -324,7 +336,10 @@ def _read_payables(*, allow_kick=False):
 
 @router.post('/api/m11/auto-link-preview')
 def api_auto_link_preview(payload: AutoLinkIn) -> dict:
-    payables = _read_payables(allow_kick=payload.allow_kick)
+    from app.mod02_i8.browser_relay import scope_of
+
+    with scope_of(payload):
+        payables = _read_payables(allow_kick=payload.allow_kick)
     with session_scope() as s:
         return SV.auto_link_plan(s, payload.notice_ids, payables)
 
@@ -333,7 +348,10 @@ def api_auto_link_preview(payload: AutoLinkIn) -> dict:
 def api_auto_link(payload: AutoLinkIn) -> dict:
     if not payload.selections or {r.notice_id for r in payload.selections} - set(payload.notice_ids):
         return {'ok': False, 'message': '请先预览本次可关联通知书'}
-    payables = _read_payables(allow_kick=payload.allow_kick)
+    from app.mod02_i8.browser_relay import scope_of
+
+    with scope_of(payload):
+        payables = _read_payables(allow_kick=payload.allow_kick)
     with session_scope() as s:
         return SV.act_auto_link(s, [r.model_dump() for r in payload.selections], payables)
 

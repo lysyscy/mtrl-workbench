@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError, human_reason
 from app.core.identity import current_operator
+from app.core.session import current_name
 # ⚠️⚠️ 2026-09-20 补：`default_since` 里调了 `logger.warning(...)` 但**本文件从没有 logger**
 #    ⇒ 一旦"库里最大合同日期"不是个合法日期（手改过 / 脏数据），那一步会抛
 #    `NameError: name 'logger' is not defined` —— 而那句话的**本意**是"保守回落全量、并留个印子"。
@@ -40,6 +41,12 @@ from app.mod01_projects import service as P1S
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
 from app.mod02_i8.client import I8Client
+from app.mod02_i8.browser_relay import open_i8_client
+from app.mod02_i8.browser_session import (
+    StrictSessionEnded,
+    StrictSessionUnavailable,
+    StrictTargetMismatch,
+)
 from app.mod02_i8.contract_source import ContractFetcher
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import CommonProjectSource, load_warehouse_rows
@@ -169,7 +176,11 @@ def run_fetch(
     t0 = datetime.now()
 
     operator = operator or current_operator()
-    client_factory = client_factory or (lambda: I8Client(allow_kick=True))
+    # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（与改动前一致）；
+    #    只有本请求显式选了「浏览器已有会话」才换通道，⛔ 缺连接即当场停、不悄悄退回登录。
+    client_factory = client_factory or (
+        lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
+    )
     loaders_given = loaders is not None
 
     rows: list[dict] = []
@@ -222,6 +233,10 @@ def run_fetch(
             do_sync = sync or sync_and_archive       # ⚠️ 可注入（测试不连 i8）
             try:
                 sync_result = do_sync(s, load_common=load_common, load_warehouses=load_wh)
+            except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+                # ⛔（`TAIL-476`）「常用项目同步失败」的降级只该兜业务性失败；
+                #    浏览器通道停止意味着整条链的身份/目标已经不可信，继续抓下去只会落半批数据。
+                raise
             except Exception as exc:                        # noqa: BLE001 —— 降级，不抛
                 sync_result = {"degraded": True,
                                "message": human_reason(
@@ -232,6 +247,10 @@ def run_fetch(
             close = getattr(client, "close", None)
             if callable(close):
                 close()
+    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        # ⛔（`TAIL-476`）严格通道的停止必须如实冒出去（含 `BrowserRelayUnavailable`），
+        #    ⛔ 不能改写成「i8 抓不到数 ⇒ 已降级为手动 Excel 导入」——那只解释网络/接口故障。
+        raise
     except Exception as exc:                                    # noqa: BLE001 —— 一律降级，不抛
         notice = fetch_task.degrade_to_excel(exc)
         run = save_run_record(s, **fetch_task.fetch_record_payload(

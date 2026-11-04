@@ -151,7 +151,8 @@ def clone_from_source(source_url, target_url, target_schema):
         source_engine.dispose(); target_engine.dispose()
 
 
-def restrict_copy_preview(app, *, full_app=False):
+def restrict_copy_preview(app, *, full_app=False, browser_notice_check=None, preview_account=''):
+    from contextlib import nullcontext
     from fastapi.responses import JSONResponse
     reads = {'/healthz', '/app', '/login', '/api/m15/users', '/api/m01/projects', '/api/history/status',
              '/api/m05/ledger', '/api/m05/ledger/export', '/api/m05/debt', '/api/m05/debt/export', '/api/m05/stats', '/api/m05/flows'}
@@ -160,19 +161,28 @@ def restrict_copy_preview(app, *, full_app=False):
     async def local_only(request, call_next):
         path = request.url.path
         if full_app:
-            # Full local business routes, with every existing external action kept off.
+            # Full local business routes; live browser checks require a separately approved scope.
             external = path in {'/api/m11/fetch', '/api/m11/auto-link-preview', '/api/m11/auto-link',
                 '/api/m07/fetch', '/api/m08/fetch', '/api/m06/workbench/i8-fetch',
                 '/api/m03/notices/fetch', '/api/m03/notices/warehouse-check', '/api/m03/batch'}
             external = external or path.startswith('/api/m02/') and not (
-                request.method in {'GET','HEAD'} and path in {'/api/m02/config','/api/m02/fetch/records'})
+                request.method in {'GET','HEAD'} and path in {'/api/m02/config','/api/m02/fetch/records','/api/m02/browser/state'})
             allowed = not external
+            if browser_notice_check is not None:
+                if external:
+                    allowed = await browser_notice_check.allows(request, preview_account=preview_account)
+                elif request.method not in {'GET', 'HEAD'}:
+                    allowed = request.method == 'POST' and path in {'/m15/login', '/api/m15/logout'}
         else:
             allowed = request.method in {'GET', 'HEAD'} and (path in reads or path.startswith(('/preview/', '/static/')))
             allowed = allowed or request.method == 'POST' and path in writes
         if not allowed:
             return JSONResponse(status_code=403, content={'ok': False, 'message': '此副本未授权外部动作。' if full_app else '隔离预览仅开放台账本地操作。'})
-        return await call_next(request)
+        scoped_notice = (full_app and browser_notice_check is not None and
+                         request.method == 'POST' and path == '/api/m03/notices/fetch')
+        from tools.dev.frontend_preview_browser_check import approved_notice_context
+        with approved_notice_context() if scoped_notice else nullcontext():
+            return await call_next(request)
     return app
 
 

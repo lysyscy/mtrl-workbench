@@ -279,10 +279,16 @@ class MoveRequest(BaseModel):
 
 
 class FetchRequest(BaseModel):
-    """按月抓取；`confirm` 缺省为假，保留核算月与写入范围确认。"""
+    """按月抓取；`confirm` 缺省为假，保留核算月与写入范围确认。
+
+    ⭐ `session_mode` / `device_id`：取数方式由「i8 接入」页统一选择，`http`（缺省）＝产品原直连，
+       `browser`＝复用浏览器里已登录的 i8 会话（不登录、不顶号）。缺省值保证旧调用行为不变。
+    """
 
     month: str = ""
     confirm: bool = False
+    session_mode: str = ""
+    device_id: str = ""
 
 
 @router.post("/api/m07/big/cell")
@@ -347,12 +353,15 @@ def api_fetch(req: FetchRequest) -> dict:
     `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
     ⚠️ 失败**降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
     """
+    from app.mod02_i8.browser_relay import scope_of
     from app.mod07_setl import fetch_service as FS
 
-    with session_scope() as s:
-        return FS.run_fetch(
-            s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
-        )
+    # ⚠️ 取数方式在**整个抓取过程**内有效（同一请求内后续所有 i8 调用都走同一通道）。
+    with scope_of(req):
+        with session_scope() as s:
+            return FS.run_fetch(
+                s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
+            )
 
 
 @router.get("/api/m07/settlement/export")
