@@ -17,6 +17,7 @@ import { loadFlows, saveBlob } from './flow-api';
 import type { Flow } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { ReadFailure, ReadPlaceholder, ReadState, readPhase } from './read-region';
 import { contentWidth, gridTheme } from './grid';
 import { TimePicker, timeMatches } from './time-picker';
 const flowRowId = (row: Flow) => row.id == null ? 'flow-total' : String(row.id);
@@ -32,9 +33,6 @@ function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) =
     return choose ? <Button htmlType="submit" key={row.key} className="flow-bar" aria-pressed={selected?.includes(row.key)??false} onClick={()=>choose(row.key)} title="筛选下方付款流水，再点一次取消">{content}</Button> : <div key={row.key} className="flow-bar">{content}</div>;
   })}</div>;
 }
-function ReadState({ query }: { query: {isPending:boolean;isError:boolean;error:Error|null;refetch:()=>unknown} }) {
-  return query.isError ? <p className="notice" role="alert">{query.error?.message}<Button htmlType="submit" onClick={()=>void query.refetch()}>重试读取</Button></p> : query.isPending ? <p role="status">正在读取…</p> : null;
-}
 export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   const enabled=props.active&&!props.blocked;
   const debt=useQuery({queryKey:['debt'],enabled,queryFn:async({signal}):Promise<Debt[]>=>{
@@ -43,7 +41,30 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
     return data.by_project_category.map(row=>{if(!record(row)||typeof row.project!=='string')throw new ApiError('欠款读取不完整，请重试。');return {project:row.project,jc:String(row.jc),material:String(row.material),mech:String(row.mech)};});
   }});
   const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
-  return <div className="debt-workspace"><div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div><LedgerPage {...props}/></div>;
+  const phase=readPhase(debt,(debt.data?.length??0)===0);
+  // A first read that failed has nothing trustworthy to show, so the placeholder keeps the same
+  // rows as empty space instead of swapping one box for another.
+  const placeholder=phase==='idle'||phase==='reading'||phase==='error';
+  return <div className="debt-workspace">
+    <section className="debt-overviews" data-read-phase={phase} aria-label="按项目看的欠款汇总"
+      aria-busy={phase==='reading'}>
+      {/* One status slot above the cards, present in every state so a failure never adds a row and
+          never sits on top of a heading or a value. It is the region's own line, not a page overlay. */}
+      <div className="debt-overviews-status">
+        {(phase==='error'||phase==='stale')&&<ReadFailure read={debt}/>}
+        {phase==='reading'&&<p className="read-announce" role="status">正在读取欠款汇总…</p>}
+      </div>
+      <div className="debt-overviews-grid">
+        {categories.map(([key,label])=>{
+          const items=(debt.data??[]).filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);
+          return <section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body">
+            {placeholder ? <ReadPlaceholder rows={8} quiet={phase==='error'}/> : items.length ? <Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/> : <p className="muted">暂无{label}未结清欠款</p>}
+          </div></section>;
+        })}
+      </div>
+    </section>
+    <LedgerPage {...props}/>
+  </div>;
 }
 export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuard: string }) {
   const [params] = useSearchParams();
