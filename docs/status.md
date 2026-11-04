@@ -20,7 +20,7 @@
 
 2026-11-05，加载线的[欠款样板](../.scratch/browser-session-loading-20261103/evidence/TAIL-477-acceptance.md)及[其余页面代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-478-481-acceptance.md)技术验证完成；提交`90720465`已按用户授权正常推送本任务分支并核远端SHA，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41876511391)成功。未部署，验证副本均已正常退出并清理自建schema。
 
-用户已明确“日常抓取能用才算能用”：现有按钮必须无需Agent中转直接复用Edge。[宿主单笔真实代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-476-live.md)及隔离Chromium样机只算中间证据；476正关闭[累计审查发现](../.scratch/browser-session-loading-20261103/evidence/review-closure.md)，真实Edge安装/权限与日常入口验收待具体包确认，尚未完成。正式工作台配置与主根他任务内容保持。
+用户已明确“日常抓取能用才算能用”：现有按钮必须无需Agent中转直接复用Edge。[宿主单笔真实代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-476-live.md)及隔离Chromium样机只算中间证据。[累计审查发现](../.scratch/browser-session-loading-20261103/evidence/review-closure.md)已修，候选`fcc1512a`已推送、远端SHA一致，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41891441704)成功。用户已批准安装固定扩展包及2026-11通知书日常验收，但工具安全策略阻止扩展管理页且禁止绕过，原生窗口控制亦未建立。扩展未安装，真实日常链未验，476与总票保持未完成；准确接续状态归交接。正式工作台配置与主根他任务内容保持。
 
 ## 已关闭的性能优化
 

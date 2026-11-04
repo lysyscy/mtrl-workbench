@@ -13,6 +13,9 @@
 - 用户已确认动作：新建 Astra 统筹对话并开工，DSH 继续 DeepSeek V4.1 Flash；先推进 TAIL-476、477，477 完成后推进其余四票。
 - 主对话请求配置：gpt-6-astra / high。执行子任务默认 DSH DeepSeek V4.1 Flash / high，实际模型与配置按当次工具返回核对，不擅自替换用户模型。
 - 更新时间：2026-11-05。
+- 最新有效状态（2026-11-05，优先于下方历史检查点）：候选已提交并推送`fcc1512a546608c31de0f3ad902880ed65d7d031`，远端SHA一致，CI41891441704成功。用户已明确批准安装固定包、开发人员模式、activeTab以及当前Edge站点2026-11通知书抓取，仅写可丢弃副本；随后明确希望Agent用Computer Use自行安装，因为人不在电脑前。授权有效，不能再写“待用户批准”。
+- 安装仍未执行：当前Edge连接实例由3变4，原i8标签366065258仍为已登录业务页，已核可见账号/组织。原生窗口198336的getApp申请超时；随后浏览器工具对打开edge://extensions明确返回安全策略拒绝，并禁止用其他接口/界面绕过。因此不能转用原生Computer Use达到同一被阻止动作。已告知用户当前是工具限制，不是缺授权。没有安装扩展、没有真实抓取、没有新预览或数据库副本。
+- 固定包c44568c2997b03de三文件散列重新核对一致。用户批准后的私有scope已创建在i8-daily-runtime-20261105/files/work/approved-notice-scope.json；只含月/站点/已核i8用户名，不进Git。首次创建遗漏父运行环境，嵌套登记遇锁失败未写范围文件；补齐MTRL_RUN_ID和MTRL_LIFECYCLE_OUTPUT后在原租约成功。后续若工具限制解除，沿已批准范围继续，不重复询问安装许可；实际安装入口仍须遵守当时工具策略。
 - 最新接续点（2026-11-05 02:52）：第七轮扩展具名缺口已关闭，31协议测试和38隔离Chromium判据通过；主控补严格number代号后31项再过，完整集成回执/review-closure已更新。安装包已固定到主检出var/browser-extension/releases/c44568c2997b03de，三份文件SHA核一致，完整digest c44568c2997b03de594123eb1a243a90af80c227e3b3ccee0dc67acae4e233c6；属于待安装组件，不随测试日志清理。安装+当前Edge站点2026-11通知书日常入口验收已向用户异步询问，尚未收到回答时不得执行。范围见install-check-plan.md。当前无预览/活动DSH，准备提交推送候选；真实scope文件尚未创建。
 - 最新接续点（2026-11-05 02:41）：两组closure修复已返回，主控四文件backend_verify退出0（组023713-386228-17256），统一构建通过，5项新前端GUI控制验证通过52.82s；预览exec90881已stop退出0，自建schema frontend_rewrite_397_25564e3c1ac84469913f1ceea6459575已清理。证据见TAIL-476-integration-final.md。无活动预览。真实安装/日常抓取尚未执行。
 - 扩展回执存在具体缺口：execute实际未比较bound generation，bind允许缺identity，pending仅device未核sender。已交原476 Flash/high仅修apps/browser-extension及其证据，run hrun-mw2go9za-25ba26，等待cell g16:236；函数store extension-generation-closure。前后端/预览工具保持稳定。收结果后定向核闭环、准备稳定安装包再请求真实安装/范围批准；不再重复累计审查或24项UI回归。
