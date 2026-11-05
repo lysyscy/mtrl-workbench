@@ -54,3 +54,13 @@ Spec：应用时必须重核剔除范围的一项P2发现已关闭，启用/停�
 证据根为`C:/Users/Administrator/AppData/Local/AgentArtifacts/projects/mtrl-workbench/groups/`。本轮主组`audit-close-loop-20261105/files`保留width-before/content-key、gui/gui-retry、离线装配报告、探针源码、构建记录及32份证据SHA256清单。最终预览退出0、schema清理成功、登记指针移除；核实际路径且无链接后只释放本组work。各backend_verify报告均记schema和临时目录清理完成。上述已解决失败组解除保护，主组及失败证据2026-11-06 00:47（北京时间）起封存30天；未依赖调度器保证到期删除。
 
 本次仅本地保存并整合到master，不推送；最新用户指令取代前轮待公开上传确认。任务无关的油卡交接、frontend-design、status既有空行及未跟踪文件原样保留，不能宣称整个用户工作区无dirty。先保存本实现与证据，再用原票关闭入口同步450终态和status导航；源码整合不代表正式服务已加载。
+
+## 后续公开推送与正式发布（2026-11-06）
+
+用户随后要求“提交推送并部署”，并在自动审查拦截推送后明确确认将本次代码及审计/性能回执公开到`lysyscy/mtrl-workbench`。此前“不推送、未部署”是上一阶段边界，本节记录新授权后的实际结果。
+
+产品提交`67111c60b4f8c2614fb5ba7517b5f25f4da21bc4`已正常推送master，`git ls-remote`核远端SHA一致；[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/42119119708)成功。没有强推或提交用户其他dirty文件。
+
+标准`server_ctl.ps1 -Action publish -CheckOnly`预检通过（组`060844-231888-29568`），随后`publish`于北京时间06:10完成正式发布/重启：`var/frontend/releases/67111c60b4f8`，健康200、实际索引散列、44份公开资源及8000连接对应进程归属通过，服务Running/LocalSystem。正式上一版本`7540882ce5ff`保留回退；发布器按登记规则退出更早`09137eb00b69`，未清理未知资源。回执`060919-128605-4392/files/reports/deployment.json`，预检/发布均正常结项并退出临时work。
+
+本次无数据库迁移或依赖更新，未调用真实i8、打印或执行正式业务写入。发布仅改变正式前端资源指向并重启服务加载本次后端；未重复已通过的隔离业务验收。此次CI结果在发布后核得，不伪称先通过CI再切换；发布依据为已完成的本地验证及独审。

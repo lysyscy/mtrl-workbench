@@ -2,7 +2,7 @@
 
 ## 当前运行与活动整改
 
-2026-11-05 18:32按用户批准发布并重启：正式前端指向`var/frontend/releases/7540882ce5ff`，产品提交`7540882ce5ff400b566327e7e0b747c9c7e8b60a`。通知书、库存、收发结存、采购合同和机械费已共用前端抓取动作；正式收发结存月报的“抓取 i8…”入口可见。健康200、实际索引、44份资源和8000监听归属通过，回退保留`09137eb00b69`。发布回执归本机受管组`183114-343748-47096/files/reports/deployment.json`，本轮未执行真实i8抓取。前轮取消账号菜单限制的扩展0.1.1仍在`var/browser-extension/releases/fce4aa1d82143b81`，由用户自行安装；本轮无需更新扩展。源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
+2026-11-06 06:10按用户批准发布并重启：正式前端指向`var/frontend/releases/67111c60b4f8`，产品提交`67111c60b4f8c2614fb5ba7517b5f25f4da21bc4`。审计及TAIL-450整改已加载：三域抓取短事务与严格停止、统计/欠款读契约、默认金额完整显示；原统一抓取入口保持。健康200、实际索引、44份资源和8000监听归属通过，回退保留`7540882ce5ff`。代码已正常推送且远端SHA一致，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42119119708)通过；发布回执归本机受管组`060919-128605-4392/files/reports/deployment.json`，详见[实施与发布记录](../.scratch/audit-remediation-20261105/implementation.md)。本轮无迁移、真实i8抓取或正式业务写入。前轮取消账号菜单限制的扩展0.1.1仍在`var/browser-extension/releases/fce4aa1d82143b81`，由用户自行安装；本轮无需更新扩展。源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
 
 当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。2026-11-05 13:34已按用户授权部署并重启，正式加载b8ee0b24，HTTP200、42份资源及监听归属核验通过；原i8配置保持。另发现的大表合同价/空产值重读错误已开TAIL-482并[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
 
@@ -85,7 +85,7 @@
 
 ## 后续工作
 
-[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)于2026-11-06完成有界整改并done；P1事务/严格停止、P3读契约、P4纯工具隔离及默认金额截断已修复，P2沿用已完成子票，其余候选有明确保留/暂缓结论。[实施与验证](../.scratch/audit-remediation-20261105/implementation.md)已本地保存；按用户要求不推送，未部署，不改变顶部现行服务指向。
+[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)于2026-11-06完成有界整改并done；P1事务/严格停止、P3读契约、P4纯工具隔离及默认金额截断已修复，P2沿用已完成子票，其余候选有明确保留/暂缓结论。[实施与验证](../.scratch/audit-remediation-20261105/implementation.md)已保存；用户随后明确批准公开推送与部署，已完成，当前运行身份见顶部唯一指向。
 
 ## 集合筛选研究（暂存参考）
 
