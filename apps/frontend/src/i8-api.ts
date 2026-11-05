@@ -16,7 +16,7 @@ export function recordSource(row: RunRecord): keyof typeof sourceNames | null {
   if (/^\d{4}-\d{2}$/.test(target) || target.startsWith('付款通知书 ')) return 'notices';
   if (/^(setl |收发结存表)/.test(target)) return 'settlement';
   if (/^(inv |库存单据明细表)/.test(target)) return 'inventory';
-  return target.includes('采购合同') ? 'contracts' : null;
+  return target.startsWith('jc_contract ') || target.includes('采购合同') ? 'contracts' : null;
 }
 export function recordScope(row: RunRecord): string {
   if (row.run_type === 'sync') return '—';

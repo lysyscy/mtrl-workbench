@@ -15,6 +15,8 @@ import { useCellSaveQueue } from './use-cell-save';
 import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal } from './settlement-api';
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
+import { I8ReportFetch, useReportFetchPending } from './i8-report-fetch';
+import { useHistoryGuard } from './history';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 const settlementRowId = (row: SettlementRow) => row.id;
@@ -32,6 +34,15 @@ export function SettlementPage(props: Props) {
 }
 function Monthly({ me, blocked, active }: Props) {
   const [ym,setYm] = useState(reportMonth), root = useRef<HTMLDivElement>(null);
+  const [fetchMonth, setFetchMonth] = useState<string | null>(null);
+  const client = useQueryClient(), paused = blocked || !active;
+  const pending = useReportFetchPending('settlement', me?.account ?? '');
+  useHistoryGuard('settlement-fetch-pending', () => pending.month ? '收发结存抓取正在处理或结果待核实，请先核对执行记录。' : '');
+  async function refresh() {
+    await client.invalidateQueries({refetchType: 'none'});
+    await client.cancelQueries({queryKey: ['settlement', ym], exact: true});
+    await client.fetchQuery({queryKey: ['settlement', ym], staleTime: 0, queryFn: ({signal}) => getSettlement(ym, signal)});
+  }
   const query = useQuery({ queryKey:['settlement',ym], enabled: active && !blocked, queryFn:({signal}) => getSettlement(ym,signal) });
   const scale = Number(me?.ui_scale_css ?? 1);
   const columns = useMemo<ColDef<SettlementRow>[]>(() => [
@@ -48,12 +59,15 @@ function Monthly({ me, blocked, active }: Props) {
   const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
   const placeheld = query.data === undefined;
   return <>
-    <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
+    <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={paused} /></label>
+      <div><Button type="primary" disabled={paused || !me} onClick={() => setFetchMonth(pending.month ?? ym)}>{pending.month ? '核对抓取…' : '抓取 i8…'}</Button>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
         <p>{query.data?.counts.warehouses} 个分仓库工作簿 ＋ 1 个总表，打包 ZIP。</p>
         <ul className="settlement-export-list">{query.data?.rows.map(row => <li key={row.id}>{row.name}，{row.rows} 行</li>)}</ul>
       </SettlementExport>
+      </div>
     </div>
+    {pending.error && <p className="notice" role="alert">{pending.error}</p>}
     <ReadStatusLane phase={readState} announce="正在读取收发结存…" className="settlement-read-status">
       {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="收发结存更新失败，保留上次结果。" />}
     </ReadStatusLane>
@@ -63,6 +77,7 @@ function Monthly({ me, blocked, active }: Props) {
         getRowId:p=>p.data.id,defaultColDef:{resizable: true,sortable:false,suppressMovable:true},
         overlayNoRowsTemplate:'该核算月没有收发结存数据',suppressColumnVirtualisation:true,suppressScrollOnNewData:true}} />
     </>}
+    {fetchMonth !== null && <I8ReportFetch source="settlement" month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={refresh} pending={Boolean(pending.month)} onPending={pending.update}/>}
   </>;
 }
 

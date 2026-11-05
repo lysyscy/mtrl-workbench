@@ -16,45 +16,70 @@ import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { receipt } from './notices-api';
-import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
-import { useI8Session } from './i8-session';
+import { I8FetchActions, I8FetchRecovery, I8FetchStatus, useI8FetchAction } from './i8-fetch';
 
 interface ToolProps { me:Identity|null;blocked:boolean;close:()=>void;refresh:()=>Promise<void> }
-export function ContractFetch({me,blocked,close,refresh}:ToolProps) {
-  const [since,setSince]=useState(''),[all,setAll]=useState(false),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[result,setResult]=useState(''),[error,setError]=useState('');
-  const [summary,setSummary]=useState<{label:string;count:number}[]>([]),[details,setDetails]=useState<{name:string;count:number}[]>([]);
-  const [ownershipOpen,setOwnershipOpen]=useState(false);
-  const lock=useRef(false),closing=useDialogClose({busy,dirty:!done&&Boolean(since||all),close,active:!blocked});
-  const config=useQuery({queryKey:['contract-fetch-config'],enabled:!blocked,staleTime:0,refetchOnMount:'always',queryFn:async({signal})=>{
-    const value=await requestJson('/api/m02/config',{signal});
-    if(!record(value)||typeof value.ready!=='boolean'||typeof value.account!=='string'||typeof value.i8_user!=='string'||typeof value.message!=='string')throw new ApiError('i8绑定读取不完整，请重读。');
-    return {ready:value.ready,account:value.account,i8_user:value.i8_user,message:value.message};
-  }});
-  // 取数方式来自账号工作区的统一选择（「i8 接入」页）。
-  const session=useI8Session();
-  const browserBlocked=session.mode===SESSION_MODE_BROWSER&&!session.connected;
-  async function run(){
-    if(blocked||!me||busy||done||lock.current||browserBlocked||!config.data?.ready||config.data.account!==me.account)return;
-    lock.current=true;setBusy(true);setDone(true);setError('');
-    try{
-      // 会话来源那几个字段统一由 `sessionPayload` 生成：`browser` 连接不在就当场失败（不退回登录），
-      // 直连分支保持原来的字段（本合同抓取本来就没有强踢授权参数）。
-      const mode=sessionPayload(session);
-      const value=await contractWrite('/api/m11/fetch',{confirm:true,...mode,...(all?{since:''}:since?{since}:{})});
-      if(!record(value)||value.ok!==true||typeof value.message!=='string'||!['fetched','matched','unmatched','ignored','material_blank'].every(k=>typeof value[k]==='number')||!Array.isArray(value.unmatched_projects)||!value.unmatched_projects.every(x=>record(x)&&typeof x.name==='string'&&typeof x.count==='number'))throw new ApiError('抓取回执不完整，请到执行记录核对，勿重复抓取。');
-      setResult(value.message);setSummary([['抓取',value.fetched],['已匹配',value.matched],['未写入',value.unmatched],['忽略',value.ignored],['材料名未补齐',value.material_blank]].map(([label,count])=>({label:String(label),count:Number(count)})));setDetails(value.unmatched_projects as {name:string;count:number}[]);
-    }catch(failure){setError(`抓取结果请在执行记录核对，勿重复抓取。${failure instanceof Error?failure.message:''}`);}
-    finally{try{await refresh();}catch{setError(old=>`${old} 列表或执行记录更新失败，请关闭后重读核对。`);}lock.current=false;setBusy(false);}
+const contractFetchCounts = [
+  { field: 'fetched', label: '抓取' },
+  { field: 'matched', label: '已匹配' },
+  { field: 'unmatched', label: '未写入' },
+  { field: 'ignored', label: '忽略' },
+  { field: 'material_blank', label: '材料名未补齐' },
+];
+
+function readContractFetch(value: unknown) {
+  if (!record(value) || value.ok !== true || typeof value.message !== 'string' ||
+    !contractFetchCounts.every(({ field }) => typeof value[field] === 'number') ||
+    !Array.isArray(value.unmatched_projects) || !value.unmatched_projects.every(item => record(item) && typeof item.name === 'string' && typeof item.count === 'number')) {
+    throw new ApiError('采购合同抓取回执不完整。', 0, 'invalid_response');
   }
-  return <BusinessModal open={!blocked} className={`project-dialog contract-fetch${closing.confirming?' contract-tool-discard':''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}><DialogContents title="抓取采购合同" titleId="contract-fetch-title" closing={closing}>
-    {config.isPending?<p role="status">正在核对 i8 绑定…</p>:config.isError?<p className="notice" role="alert">{config.error.message}<Button onClick={()=>void config.refetch()}>重读绑定</Button></p>:<p>当前账号：{me?.name||me?.account}，i8：{config.data.i8_user||'未绑定'}</p>}
-    {!done&&<><label className="contract-field">抓取范围<Select aria-label="合同抓取范围" value={all?'all':'incremental'} disabled={busy} options={[{value:'incremental',label:'增量 / 指定起点'},{value:'all',label:'全部合同'}]} onChange={value=>setAll(value==='all')}/></label>{!all&&<label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={busy} onChange={setSince}/></label>}<p>{session.mode===SESSION_MODE_BROWSER?'本次抓取由你浏览器里已登录的 i8 标签发出：不登录、不顶号；连接失效时会明确停止。':'抓取会退出此 i8 账号的其他在线会话。'}保留人工标记、材料名、账期、付款方式和备注；未完成归属的合同不写入。</p></>}
-    {config.data&&(!config.data.ready||config.data.account!==me?.account)&&<p role="alert">{config.data.message||'账号已变化，请关闭后重新打开。'}</p>}
-    {result&&<p role="status">{result}</p>}{summary.length>0&&<div className="contract-fetch-summary">{summary.map(x=><span key={x.label}>{x.label} {x.count} 条</span>)}</div>}{details.length>0&&<div className="contract-unmatched"><h3>未写入项目</h3><ul>{details.map((x,i)=><li key={i}>{x.name}，{x.count} 条</li>)}</ul></div>}
-    {done&&details.length>0&&<Button disabled={busy||blocked} onClick={()=>setOwnershipOpen(true)}>去指定归属</Button>}
-    {ownershipOpen&&<ContractOwnershipPending blocked={blocked||busy} close={()=>setOwnershipOpen(false)} refresh={refresh}/>}
-    {error&&<p className="notice" role="alert">{error}</p>}{busy&&<p role="status">正在抓取，请稍候…</p>}<div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>{done?'关闭':'取消'}</Button>{!done&&<Button className="primary" disabled={busy||blocked||browserBlocked||!me||config.isFetching||!config.data?.ready||config.data.account!==me.account} onClick={()=>void run()}>确认抓取</Button>}</div>
-  </DialogContents></BusinessModal>;
+  return {
+    message: value.message,
+    summary: contractFetchCounts.map(({ field, label }) => ({ label, count: Number(value[field]) })),
+    details: value.unmatched_projects as { name: string; count: number }[],
+  };
+}
+
+export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
+  const [since, setSince] = useState('');
+  const [all, setAll] = useState(false);
+  const [result, setResult] = useState<ReturnType<typeof readContractFetch>>();
+  const [ownershipOpen, setOwnershipOpen] = useState(false);
+  const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
+  const closing = useDialogClose({ busy: action.busy, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
+
+  async function run() {
+    const receipt = await action.run({
+      path: '/api/m11/fetch',
+      payload: { confirm: true, ...(all ? { since: '' } : since ? { since } : {}) },
+      parse: readContractFetch,
+    });
+    if (receipt) setResult(receipt);
+  }
+
+  return <BusinessModal open={!blocked} className={`project-dialog contract-fetch${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
+    <DialogContents title="抓取采购合同" titleId="contract-fetch-title" closing={closing}>
+      <I8FetchStatus action={action} me={me} />
+      {!action.sent && <>
+        <label className="contract-field">抓取范围
+          <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
+        </label>
+        {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
+        <p>保留人工标记、材料名、账期、付款方式和备注。未完成归属的合同不写入。</p>
+      </>}
+      {result && <>
+        <p role="status">{result.message}</p>
+        <div className="contract-fetch-summary">{result.summary.map(item => <span key={item.label}>{item.label} {item.count} 条</span>)}</div>
+        {result.details.length > 0 && <>
+          <div className="contract-unmatched"><h3>未写入项目</h3><ul>{result.details.map((item, index) => <li key={index}>{item.name}，{item.count} 条</li>)}</ul></div>
+          <Button disabled={action.busy || blocked} onClick={() => setOwnershipOpen(true)}>去指定归属</Button>
+        </>}
+      </>}
+      {ownershipOpen && <ContractOwnershipPending blocked={blocked || action.busy} close={() => setOwnershipOpen(false)} refresh={refresh} />}
+      <I8FetchRecovery action={action} source="contracts" />
+      <I8FetchActions action={action} close={closing.requestClose} onRun={() => void run()} />
+    </DialogContents>
+  </BusinessModal>;
 }
 interface Party {name:string;kind:string;kind_name:string;count:number}
 interface Ignored {id:number;name_full:string;reason:string;operator:string;active:boolean}

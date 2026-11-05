@@ -4,8 +4,8 @@
  * 为什么要有这个文件：单纯的源码正则检查（"这行写的是 `/^\d{4}-/`"）抓不到真正的故障 ——
  * 曾经的就是这样：正则被写成 `/^\\d{4}-/`，**按钮看着可点、点了什么也不发**，
  * 而"源码里有个像模像样的正则"这条检查照样通过。这里改成**真的跑一遍提交**：
- *   渲染 `NoticeFetch` → 取到 `<form>` 上的 `onSubmit`（就是「确认抓取」按钮触发的那个）
- *   → 调用它 → 断言 `fetch` 里真的出现了 `POST /api/m03/notices/fetch` 且月份正确。
+ *   渲染 `NoticeFetch` 及其共用确认按钮，点击按钮并检查
+ *   `fetch` 中的 `POST /api/m03/notices/fetch` 参数。
  *
  * 运行环境没有 DOM，所以这里用 `registerHooks` 把 `react`/`jsx-runtime` 之外的东西
  * 换成最小的替身：组件照常按 JSX 调用、hook 照常按顺序取格子，**业务代码一行不改**。
@@ -37,7 +37,7 @@ registerHooks({
           if (!slot.set) { slot.set = true; slot.value = typeof initial === 'function' ? initial() : initial; }
           const index = globalThis.__relayCells.index - 1;
           if (index === 0 && globalThis.__relayCells.month !== null) slot.value = globalThis.__relayCells.month;
-          return [slot.value, next => { slot.value = next; }];
+          return [slot.value, next => { slot.value = typeof next === 'function' ? next(slot.value) : next; }];
         }
         export function useRef(initial) { const slot = cell(); if (!slot.set) { slot.set = true; slot.value = { current: initial }; } return slot.value; }
         export function useEffect() {}
@@ -60,6 +60,9 @@ registerHooks({
         export function useDialogClose() { return { requestClose() {} }; }
       `);
     }
+    if (specifier === './history') {
+      return stub('export function useHistoryGuard() {}');
+    }
     if (specifier === './time-picker') {
       return stub("export function TimePicker(p) { return { type: 'time-picker', props: p }; }");
     }
@@ -74,6 +77,8 @@ registerHooks({
 });
 
 const { NoticeFetch } = await import('../../src/notice-fetch.tsx');
+const { I8FetchActions, useI8FetchAction } = await import('../../src/i8-fetch.tsx');
+const { readReportFetchResult } = await import('../../src/i8-report-fetch-api.ts');
 
 class MemoryStorage {
   #m = new Map();
@@ -87,6 +92,15 @@ class MemoryStorage {
 
 const me = { id: 1, account: 'tester001', name: '测试员' };
 const config = { ready: true, account: 'tester001', i8_user: 'tester001', message: '' };
+
+function action(refresh = async () => {}) {
+  cells.index = 0;
+  cells.month = null;
+  return useI8FetchAction({source: 'settlement', me, paused: false, refresh});
+}
+const fetchRequest = {path: '/api/m07/fetch', payload: {month: '2026-10', confirm: true}, parse: value => readReportFetchResult('settlement', '2026-10', value)};
+const reportResponse = {ok: true, ym: '2026-10', rows: 4, stats: {inserted: 2, updated: 2, deleted: 1, kept_manual: 3}};
+const response = value => ({ok: true, status: 200, json: async () => value});
 
 let restored;
 beforeEach(() => {
@@ -105,6 +119,58 @@ afterEach(() => {
   delete globalThis.__relayCells;
   delete globalThis.__relayQuery;
   delete globalThis.__relaySession;
+});
+
+test('共用抓取动作防双击，收发结存走专属端点并可靠重读', async () => {
+  let finish, calls = 0, reads = 0;
+  globalThis.fetch = async () => {calls += 1; return new Promise(resolve => {finish = () => resolve(response(reportResponse));});};
+  const controller = action(async () => {reads += 1;});
+  const first = controller.run(fetchRequest);
+  const second = controller.run(fetchRequest);
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  finish();
+  assert.equal(await second, undefined);
+  assert.match((await first).message, /保留手工行 3/);
+  assert.equal(reads, 1);
+  assert.equal(action().pending, false);
+});
+
+test('回执月份不符保留未知标记，关闭再开不能重复发起', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {calls += 1; return response({...reportResponse, ym: '2026-09'});};
+  await action().run(fetchRequest);
+  assert.equal(action().pending, true);
+  cells.list = [];
+  const reopened = action();
+  assert.equal(reopened.pending, true);
+  await reopened.run(fetchRequest);
+  assert.equal(calls, 1);
+  reopened.acknowledge();
+  assert.equal(action().pending, false);
+});
+
+test('抓取已确认但重读失败保留回执和待核对状态，不自动重投', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {calls += 1; return response(reportResponse);};
+  const value = await action(async () => {throw new Error('read failed');}).run(fetchRequest);
+  assert.match(value.message, /抓取 4 行/);
+  assert.equal(action().pending, true);
+  assert.match(action().error, /重读失败/);
+  assert.equal(calls, 1);
+});
+
+test('后端明确空结果沿requestJson显示原原因，不误报成功或未知', async () => {
+  globalThis.fetch = async () => response({ok: false, empty: true, ym: '2026-10', message: '没有明细，未改动本地数据'});
+  assert.equal(await action().run(fetchRequest), undefined);
+  assert.equal(action().pending, false);
+  assert.match(action().error, /未改动本地数据/);
+});
+
+test('按月回执区分库存调整保留和收发结存手工保留', () => {
+  assert.match(readReportFetchResult('settlement', '2026-10', reportResponse).message, /保留手工行 3/);
+  assert.throws(() => readReportFetchResult('inventory', '2026-10', reportResponse));
+  assert.match(readReportFetchResult('inventory', '2026-10', {...reportResponse, stats: {...reportResponse.stats, kept_with_adjustment: 2}}).message, /保留有调整的源行 2/);
 });
 
 /** 走一遍元素树，把所有命中条件的节点收起来。 */
@@ -127,11 +193,17 @@ function render({ mode = 'http', connected = false } = {}) {
   return NoticeFetch({ me, blocked: false, close() {}, refresh: async () => {} });
 }
 
-/** 触发「确认抓取」：调用表单的 `onSubmit`，然后等异步链跑完。 */
+function confirmButton(tree) {
+  const [actions] = walk(tree, node => node.type === I8FetchActions);
+  assert.ok(actions, '必须渲染出共用抓取操作');
+  const [button] = walk(I8FetchActions(actions.props), node => node.props?.children === '确认抓取');
+  assert.ok(button, '必须存在确认抓取按钮');
+  return button;
+}
+
+/** 点击共用确认按钮，再等请求和回执处理完成。 */
 async function submit(tree) {
-  const [form] = walk(tree, node => node.type === 'form');
-  assert.ok(form, '必须渲染出表单（否则按钮根本不存在）');
-  form.props.onSubmit({ preventDefault() {} });
+  confirmButton(tree).props.onClick();
   for (let i = 0; i < 40; i += 1) await new Promise(resolve => setTimeout(resolve, 5));
 }
 
@@ -152,8 +224,7 @@ function recorder() {
 test('月份是正常值、直连方式：点「确认抓取」会真的发出 POST /api/m03/notices/fetch', async () => {
   const calls = recorder();
   const tree = render({ mode: 'http' });
-  const [submitButton] = walk(tree, node => node.props?.htmlType === 'submit');
-  assert.ok(submitButton, '必须存在提交按钮');
+  const submitButton = confirmButton(tree);
   assert.equal(submitButton.props.disabled, false, '月份合法时按钮不能是禁用状态');
   await submit(tree);
   assert.equal(calls.length, 1, '点一次必须只发一次请求');
@@ -179,8 +250,7 @@ test('选浏览器方式且已连接：同一按钮改走浏览器通道，且�
 test('选了浏览器方式但连接不在：一个字都不发（不许悄悄改用登录）', async () => {
   const calls = recorder();
   const tree = render({ mode: 'browser', connected: false });
-  const [submitButton] = walk(tree, node => node.props?.htmlType === 'submit');
-  assert.ok(submitButton, '必须存在提交按钮');
+  const submitButton = confirmButton(tree);
   assert.equal(submitButton.props.disabled, true, '没连接时按钮必须是禁用状态');
   await submit(tree);
   assert.equal(calls.length, 0, '⛔ 连接不在时绝不能退回登录再抓');
@@ -190,6 +260,7 @@ test('月份不合法时不发请求（原来的正则回归守卫）', async ()
   const calls = recorder();
   cells.month = '2026-11-05';
   const tree = render({ mode: 'http' });
+  assert.equal(confirmButton(tree).props.disabled, true);
   await submit(tree);
   assert.equal(calls.length, 0, '不是 YYYY-MM 的月份必须当场停，不能发出去猜');
 });

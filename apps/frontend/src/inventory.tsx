@@ -17,6 +17,7 @@ import { coarseRows, effectiveValues, emptyFilter, fields, filterOn, filterRows,
 import type { Field, Filters, InventoryRow } from './inventory-api';
 import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
+import { useReportFetchPending } from './i8-report-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
@@ -38,15 +39,8 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const deferredFilters = useDeferredValue(filters), filtering = target === null && filters !== deferredFilters;
   const [editing,setEditing] = useState<InventoryRow|null>(null), [fetchMonth,setFetchMonth] = useState<string|null>(null);
   const [pending,setPending] = useState<InventoryRow|null>(null);
-  const pendingKey = `inventory-fetch-pending:${me?.account ?? ''}`;
-  const [fetchPending,setFetchPending] = useState<string|null>(() => {try {return sessionStorage.getItem(pendingKey);} catch {return null;}});
-  const [storageError,setStorageError] = useState('');
+  const {month:fetchPending, update:updateFetchPending, error:storageError} = useReportFetchPending('inventory', me?.account ?? '');
   useHistoryGuard('inventory-pending',() => pending ? '库存调整正在处理或结果待核实，请先重读核对。' : fetchPending ? '库存抓取正在处理或结果待核实，请先核对执行记录。' : '');
-  function updateFetchPending(month:string|null) {
-    setFetchPending(month);
-    try {if (month) sessionStorage.setItem(pendingKey,month);else sessionStorage.removeItem(pendingKey);setStorageError('');}
-    catch {setStorageError('本机未能记住抓取状态；刷新或重开浏览器后请先到 i8 执行记录核对，勿重复抓取。');}
-  }
   const query = useQuery({queryKey:['inventory'],enabled:active && !blocked,queryFn:({signal}) => getInventory(signal)});
   const projects = useQuery({queryKey:['projects','active'],enabled:active && !blocked,queryFn:async({signal}) => readProjects(await requestJson('/api/m01/projects',{signal}))});
   const warehouses = ids.map(id => projects.data?.find(p => p.id === id)?.warehouse_name ?? '__unavailable__');
