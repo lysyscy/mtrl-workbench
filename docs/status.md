@@ -20,7 +20,9 @@
 
 2026-11-05，加载线的[欠款样板](../.scratch/browser-session-loading-20261103/evidence/TAIL-477-acceptance.md)及[其余页面代表](../.scratch/browser-session-loading-20261103/evidence/TAIL-478-481-acceptance.md)技术验证完成；提交`90720465`已按用户授权正常推送本任务分支并核远端SHA，[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41876511391)成功。未部署，验证副本均已正常退出并清理自建schema。
 
-用户已明确“日常抓取能用才算能用”：现有按钮必须无需Agent中转直接复用Edge。2026-11-05用户完成固定扩展安装后，[真实日常验收](../.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)通过：原工作台按钮抓取2026-11通知书17条、写入测试副本17条，逐条读回一致；观察无登录、强踢或跳转，已断开并清理副本。证据`5c573d21`已推送、远端SHA一致；[累计审查发现](../.scratch/browser-session-loading-20261103/evidence/review-closure.md)已修，产品候选`fcc1512a`的[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41891441704)成功。六张实施票及总票技术完成；其它业务端点未扩大现场覆盖，正式服务未合并部署。正式工作台配置与主根他任务内容保持，后续加载候选仍须部署授权。
+用户已明确“日常抓取能用才算能用”：现有按钮必须无需Agent中转直接复用Edge。2026-11-05用户完成固定扩展安装后，[真实日常验收](../.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)通过：原工作台按钮抓取2026-11通知书17条、写入测试副本17条，逐条读回一致；观察无登录、强踢或跳转，已断开并清理副本。证据`5c573d21`已推送、远端SHA一致；[累计审查发现](../.scratch/browser-session-loading-20261103/evidence/review-closure.md)已修，产品候选`fcc1512a`的[Frontend checks](https://github.com/lysyscy/mtrl-workbench/actions/runs/41891441704)成功。六张实施票及总票技术完成；其它业务端点未扩大现场覆盖。当时尚未部署，随后正式加载结果见下段。
+
+2026-11-05 08:59用户随后批准提交推送并重启，[正式加载](../.scratch/browser-session-loading-20261103/deployment-20261105.md)已完成：master产品`797dfe36`已推送，标准publish/restart为loaded，42份资源、实际索引、健康200及8000监听归属通过；正式i8页面新入口可见。部署过程中修复发布器旧产物目录限定，复用既有归属校验并通过28项发布/恢复检查。上一资源保留可回退，未迁移、未改正式i8站点、未执行正式业务抓取；无关未提交内容保持。
 
 ## 已关闭的性能优化
 
