@@ -36,8 +36,6 @@
 
 两effort的临时预览、schema、工作树及构建已退出，受管证据已按原保留期结项，在用正式与回退包保持。部署原始回执分别归`.artifacts/archive/frontend-release/20261102-mechanical-performance`和`20261103-site-performance`。诊断、规格、各票结果、全部失败/未验边界及关闭前材料从Git提交`642725be3d8fcb157dbeb0b66ed205f2fb758869`的原路径`.scratch/mechanical-performance/`、`.scratch/site-performance/`及TAIL-464–472追溯，已退出活动目录。后续新问题按具体缺陷处理，不默认恢复性能effort或追加全站验收。
 
-早期DSH凭据输出事故仍未解决，已单独立[TAIL-473](../.scratch/tails/issues/TAIL-473-DSH凭据输出事故处置.md)，状态needs-triage；本次仅建票，未执行轮换或原始材料清理，不因性能effort关闭视为已处置。
-
 ## 新项目机械费累计接续与空取数修复已正式加载
 
 2026-11-02，核实旧历史入口退役后仍依赖累计参考，且首次全空i8来源未列候选。修复分支`codex/mechanical-derivation-fix-20261102`已补逐项目累计起点初始化、月值/逐列采用版本签名及来源检查状态；未知累计显示已录入金额，缺i6不遮已采用i8，首次无记录不写零快照。定向后端回归、前端接口单测、类型检查/构建和真实可丢弃副本正常保存/刷新回读通过；独立审查的旧月补类别、初始化前采用及并发新月漏计均已关闭。原明细、月额和已采用i8保持。
