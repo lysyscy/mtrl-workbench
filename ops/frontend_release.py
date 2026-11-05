@@ -25,7 +25,7 @@ from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from tools.audit.workspace_paths import close_runs, output_dir, owned_run
+from tools.audit.workspace_paths import close_runs, output_dir, owned_run, owned_work
 from tools.dev.frontend_preview_runtime import product_sources, read_json, write_json
 
 POINTER = re.compile(rb'(?m)^(?:\xef\xbb\xbf)?FRONTEND_APP_DIR[ \t]*=[^\r\n]*')
@@ -346,7 +346,7 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
     try:
         manifest = old_manifest
         if candidate:
-            candidate = no_links(Path(candidate).absolute(), root / '.artifacts/active')
+            candidate = owned_work(Path(candidate), root=root, writing=True)
             manifest = validate_release(candidate)
             new_release = no_links(root / 'var/frontend/releases' / manifest['product_commit'][:12], root)
             if new_release.exists():

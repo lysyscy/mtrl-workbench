@@ -135,6 +135,31 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.apply(candidate=False)['status'], 'loaded')
         self.assertEqual((self.root / '.env').read_bytes(), self.original)
 
+    def test_registered_build_publishes_through_the_same_ownership_check(self):
+        from types import SimpleNamespace
+        managed = self.root / 'registered-output'
+        files = managed / 'groups/release-check/files'
+        self.candidate = make_release(files / 'work/build', 'c' * 40, 'registered build')
+        lifecycle = SimpleNamespace(enrolled=lambda path: managed,
+            load=lambda path, group: (None, files, {'state': 'active', 'hold': False}))
+        with patch('tools.audit.workspace_paths._lifecycle', return_value=(lifecycle, managed)):
+            result = self.apply()
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+
+    def test_held_registered_build_is_rejected_before_stopping_service(self):
+        from types import SimpleNamespace
+        managed = self.root / 'registered-output'
+        files = managed / 'groups/release-check/files'
+        self.candidate = make_release(files / 'work/build', 'c' * 40, 'held build')
+        lifecycle = SimpleNamespace(enrolled=lambda path: managed,
+            load=lambda path, group: (None, files, {'state': 'active', 'hold': True}))
+        with patch('tools.audit.workspace_paths._lifecycle', return_value=(lifecycle, managed)):
+            with self.assertRaisesRegex(RuntimeError, '已登记运行'):
+                self.apply()
+        self.assertEqual(self.service.calls, [])
+        self.assertEqual((self.root / '.env').read_bytes(), self.original)
+
     def test_successful_publications_retire_only_owned_versions_beyond_rollback(self):
         unknown = make_release(self.root / 'var/frontend/releases' / ('e' * 12), 'e' * 40, 'prepared by another task')
         self.apply()
