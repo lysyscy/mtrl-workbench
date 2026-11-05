@@ -86,14 +86,15 @@ function I8BrowserRelay() {
     <div className="i8-relay-row">
       <Tag className={`status-tag status-${connected ? 'positive' : 'neutral'}`}>{connected ? '已连接' : '未连接'}</Tag>
       {connected && state?.origin ? <span className="i8-relay-origin">站点 {state.origin}</span> : ''}
-      {connected && state?.i8_user ? <span className="i8-relay-origin">账号 {state.i8_user}</span> : ''}
+      {connected && state?.i8_user ? <span className="i8-relay-origin">绑定账号 {state.i8_user}</span> : ''}
       {connected && (state?.expected_org_name || state?.expected_org_code)
-        ? <span className="i8-relay-origin">组织 {state.expected_org_name}{state.expected_org_code ? `（${state.expected_org_code}）` : ''}</span>
+        ? <span className="i8-relay-origin">取数组织 {state.expected_org_name}{state.expected_org_code ? `（${state.expected_org_code}）` : ''}</span>
         : ''}
       {connected
         ? <Button onClick={() => void session.disconnect()} loading={session.busy}>断开</Button>
         : <Button htmlType="button" onClick={() => void session.connect()} loading={session.busy} disabled={!extensionReady}>连接浏览器会话</Button>}
     </div>
+    {session.mode === 'browser' && <p className="i8-relay-note">在已登录的 i8 标签页点一下扩展图标，再连接即可。无需展开账号菜单，取数使用该标签的当前会话。</p>}
     {!extensionReady && !connected && <p className="i8-relay-note">没检测到浏览器扩展：请按安装说明装好「工作台 i8 会话桥」（装一次即可，扩展 ID 是固定的），刷新本页后再点连接。</p>}
     {session.mode === 'browser' && !connected && <p className="i8-relay-note">当前选的是「浏览器已有会话」，但连接不在 —— 这时抓取会直接停下并说明原因，不会改用登录方式。重新连接，或把取数方式切回「工作台直连」。</p>}
     {session.mode === 'browser' && !connected && state?.connected && <p className="i8-relay-note">工作台那边还留着这条连接记录，但本页已经不再接收取数请求了 —— 以本页为准：请点上方「连接浏览器会话」重新连。不会自动恢复，也不会改用登录方式。</p>}

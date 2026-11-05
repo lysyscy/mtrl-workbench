@@ -7,7 +7,7 @@
        `jfkgliolimmpceandogfimjkadplidem`；
     2. `externally_connectable` 真的生效：列进去的 origin 能 `chrome.runtime.sendMessage`
        进扩展，没列进去的 origin 进不来；
-    3. `chrome.scripting.executeScript` 能把 `readIdentityInPage` 注入 i8 标签并读回账号/组织；
+    3. i8 标签没有账号菜单时，扩展仍能读取站点来源、建立连接并取数；
     4. 注入脚本里的 `fetch` 沿页面 origin 发出、`credentials:'same-origin'` 生效；
        跳转在真机上是**不透明响应**（`redirect:'manual'` 给 `opaqueredirect`、status 0、
        读不到 Location）⇒ 一律停下，读不出"跳到哪了"（这一点原来是替身伪造的，
@@ -89,27 +89,9 @@ WORKBENCH_HTML = """<!doctype html>
 </body></html>
 """ % (EXT_ID,)
 
-# 现场核对过的窄 DOM 结构：面板 > 内容 > body > [头像行(button + div[显示名, 账号])] + 组织行(名称 | 短码)。
-# ⚠️ 这里的层级必须与 README 里写的、以及 protocol.test.mjs 里的 DOM 替身完全一致：
-#    `body.children[0]` 是"头像行"，它里面那个 DIV 的 children[0] 才是显示名、children[1] 才是账号。
 I8_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>i8 业务页（样机）</title></head>
-<body>
-<div role="tooltip" class="ant-popover-inner">
-  <div class="ant-popover-inner-content">
-    <div>
-      <div class="head">
-        <button class="avatar">头像</button>
-        <div class="who"><div>测试员</div><div>tester001</div></div>
-      </div>
-      <div class="org">
-        <span aria-label="cluster">&#127970;</span>
-        <span class="nowrap">第四工程公司 | 109</span>
-      </div>
-    </div>
-  </div>
-</div>
-</body></html>
+<body><p>i8 业务页</p></body></html>
 """
 
 
@@ -161,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
             "headers": dict(self.headers),
             "body": body.decode("utf-8", "replace"),
         })
-        if self.path.startswith("/FC/FM/PaymentBill/getList"):
+        if self.path.startswith(("/FC/FM/PaymentBill/getList", "/PMS/PCM/Contract/GetCntMList")):
             self._send(200, FAKE_BODY)
             return
         self._send(404, b"{}")
@@ -380,33 +362,25 @@ def main() -> int:
                 i8.goto(f"{ORIGIN}/i8/business", wait_until="load")
                 select_tab(ctx_c, i8)
 
-                # ---------- 身份与代号的协议（与前端/后端共用的消息形状，⛔ 字段别改名） ----------
+                # ---------- 站点与代号的协议 ----------
                 device = DEVICE
                 generation = GENERATION
 
-                # 没有 device_id 时不该动手：待核身份与绑定都按连接隔离。
+                # 待绑定站点按连接隔离。
                 no_device = page_message(page_c, {"type": "i8-relay:identity"})
                 check(
-                    "没有连接标识时读身份也被拒（按连接隔离，不共用全局缓存）",
+                    "没有连接标识时读站点被拒",
                     no_device.get("ok") is False,
                     no_device,
                 )
 
                 identity = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
                 check(
-                    "注入脚本按已核 DOM 读到账号与组织",
-                    identity.get("ok") is True
-                    and identity.get("account") == "tester001"
-                    and identity.get("orgCode") == "109"
-                    and identity.get("orgName") == "第四工程公司",
+                    "i8 业务页没有账号菜单时仍能读到站点来源",
+                    identity == {"ok": True, "origin": ORIGIN},
                     identity,
                 )
-                pending = {
-                    "origin": identity.get("origin"),
-                    "account": identity.get("account"),
-                    "orgCode": identity.get("orgCode"),
-                    "orgName": identity.get("orgName"),
-                }
+                pending = {"origin": identity.get("origin")}
                 check(
                     "bind 必须带正整数代号（缺代号即拒，且不留下基准）",
                     page_message(page_c, {
@@ -421,7 +395,7 @@ def main() -> int:
                     "identity": pending,
                 })
                 check(
-                    "bind 用服务端代号 + 扩展自己读到的身份登记基准",
+                    "bind 用服务端代号和扩展自己读到的站点来源建立连接",
                     bound.get("ok") is True and bound.get("generation") == generation,
                     bound,
                 )
@@ -505,7 +479,7 @@ def main() -> int:
                 })
                 sent = [item for item in RECEIVED if item["path"].startswith("/FC/FM/PaymentBill/getList")]
                 check(
-                    "真实 fetch 沿页面 origin 发出，响应字节完整带回",
+                    "i8 业务页没有账号菜单时，同源取数仍完整返回响应字节",
                     reply.get("ok") is True
                     and len(sent) == 1
                     and reply.get("status") == 200
@@ -605,10 +579,10 @@ def main() -> int:
                         "body_b64": "",
                     },
                 })
-                check("断开后同一请求被拒绝（不会拿旧身份继续取数）", after.get("ok") is False, after)
+                check("断开后同一请求被拒绝", after.get("ok") is False, after)
 
-                # ---------- 代号闸、完整身份、发送页面归属（本轮定向补齐的三条） ----------
-                # 上一步 unbind 已经把待核身份也撤了，所以要**先读身份、再 bind**。
+                # ---------- 代号、站点与发送页面归属 ----------
+                # 断开时清除了待绑定站点，重新连接前先读取站点。
                 page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
                 re_bound = page_message(page_c, {
                     "type": "i8-relay:bind",
@@ -648,20 +622,19 @@ def main() -> int:
                         {"reply": answer, "received": RECEIVED},
                     )
 
-                # (2) bind 不带 identity / 字段残缺 ⇒ 拒（不许当成"没意见"放行）。
-                incomplete = [
+                # (2) 绑定需要使用扩展刚为当前连接读到的站点。
+                invalid_bind_origins = [
                     ("完全没带", None),
-                    ("账号为空", {**pending, "account": ""}),
-                    ("组织短码为空", {**pending, "orgCode": ""}),
-                    ("缺站点", {k: v for k, v in pending.items() if k != "origin"}),
+                    ("缺站点", {}),
+                    ("站点不符", {"origin": OTHER_ORIGIN}),
                 ]
-                for label, identity_value in incomplete:
+                for label, identity_value in invalid_bind_origins:
                     message = {
                         "type": "i8-relay:bind",
                         "device_id": "dev-incomplete",
                         "generation": generation,
                     }
-                    # 先让这个 device 有一份待核身份，才能证明"缺 identity"本身被拒。
+                    # 先让这个连接有待绑定站点，再验证请求里的站点字段。
                     page_message(page_c, {"type": "i8-relay:identity", "device_id": "dev-incomplete"})
                     if identity_value is not None:
                         message["identity"] = identity_value
@@ -705,12 +678,7 @@ def main() -> int:
                     "type": "i8-relay:bind",
                     "device_id": device,
                     "generation": generation,
-                    "identity": {
-                        "origin": stolen_read.get("origin"),
-                        "account": stolen_read.get("account"),
-                        "orgCode": stolen_read.get("orgCode"),
-                        "orgName": stolen_read.get("orgName"),
-                    },
+                    "identity": {"origin": stolen_read.get("origin")},
                 })
                 check(
                     "另一个工作台页面不能顶掉已有连接",

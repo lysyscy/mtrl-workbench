@@ -3,10 +3,10 @@
  *
  * 目的：在**不装到用户 Edge、不连真实 i8** 的前提下，把 `service_worker.js` 的协议边界钉死：
  *   - 只接受工作台 origin 的调用（`sender` 校验，不靠 manifest 单点）；
- *   - 身份按**已现场核对的窄 DOM 结构**读（面板未展开 / 面板不唯一 / 结构不符一律明确停止，不猜）；
+ *   - 连接只读站点，菜单隐藏或不存在都不阻塞；
  *   - 连接按 `device_id` 隔离：待核身份与绑定基准分开存，另一个页面不能替换；
- *   - `bind` 必须带服务端给的正整数 `generation`，且与扩展刚读到的身份/当前 DOM 一致才绑定；
- *   - 建立连接后**每条请求都重核**账号、组织与站点（i8 同源换号/换组织不得无声沿用）；
+ *   - `bind` 带服务端给的正整数 `generation`，与刚读到的站点一致；
+ *   - 请求使用选中标签的会话，不再读取或核验菜单中的账号、组织；
  *   - 只执行**只读端点白名单**里的 GET/POST，登录/踢人/保存与各种伪装路径一律不碰标签；
  *   - 只转发白名单请求头（Cookie / Authorization 永不外流）；
  *   - 不跟随跳转（真机上是不透明响应 ⇒ 直接停；不假装能判出跳转目标）；
@@ -35,104 +35,6 @@ const I8 = 'https://i8.example.test';
 const DEVICE = 'dev-test-1';
 /** 服务端在 connect 时给的代号（正整数），绑定时带回来。 */
 const GENERATION = 3;
-
-/* ------------------------------------------------------------------ *
- * 最小 DOM 替身：只复刻 `readIdentityInPage` 真正用到的那几个口。
- * ⛔ 不要为了"让测试过"加宽选择器 —— 结构一旦和现场核对结果分叉，这份测试就失去意义。
- * ------------------------------------------------------------------ */
-
-function node(rawTag, { text = '', classes = [], attributes = {}, hidden = false } = {}) {
-  // 真 DOM 的 `tagName` 是大写（`service_worker.js` 里按 `=== 'DIV'` 判），替身必须同形。
-  const tagName = rawTag.toUpperCase();
-  const self = {
-    tagName,
-    textContent: text,
-    children: [],
-    classes,
-    attributes,
-    getClientRects: () => (hidden ? [] : [{ width: 10, height: 10 }]),
-    get firstElementChild() {
-      return self.children[0] || null;
-    },
-    append(...kids) {
-      self.children.push(...kids);
-      return self;
-    },
-    querySelector(selector) {
-      return descendants(self).find(item => matches(item, selector)) || null;
-    },
-    querySelectorAll(selector) {
-      return descendants(self).filter(item => matches(item, selector));
-    },
-  };
-  return self;
-}
-
-function descendants(root, seen = []) {
-  for (const child of root.children) {
-    if (!child) continue;
-    seen.push(child);
-    descendants(child, seen);
-  }
-  return seen;
-}
-
-/** 只支持本测试用到的三种写法：`tag.cls`、`[attr="值"]`、`[role="tooltip"].ant-popover-inner`。 */
-function matches(item, selector) {
-  const parsed = /^(?:([a-zA-Z]+))?((?:\.[\w-]+|\[[\w-]+="[^"]*"\])*)$/.exec(selector);
-  if (!parsed) throw new Error(`测试里的选择器没实现：${selector}`);
-  const [, tag, rest] = parsed;
-  if (tag && item.tagName.toLowerCase() !== tag.toLowerCase()) return false;
-  for (const part of rest.match(/\[[\w-]+="[^"]*"\]|\.[\w-]+/g) || []) {
-    if (part.startsWith('.')) {
-      if (!item.classes.includes(part.slice(1))) return false;
-    } else {
-      const equal = /^\[([\w-]+)="([^"]*)"\]$/.exec(part);
-      if (!equal || item.attributes[equal[1]] !== equal[2]) return false;
-    }
-  }
-  return true;
-}
-
-/**
- * 按**现场核对过**的结构造一份账号面板：
- * `[role=tooltip].ant-popover-inner` > `.ant-popover-inner-content` > body；
- * body.children[0] 内 DIV 的 children[0]=显示名、children[1]=i8 账号；
- * 组织行 = 含 `[aria-label=cluster]` 的 body 直接 DIV 子，`span.nowrap` 文本为「组织名称 | 短码」。
- */
-function identityPage(state, extra = {}) {
-  const { displayName, account, orgName, orgCode } = state;
-  const panels = [];
-  for (let index = 0; index < (extra.panels ?? 1); index += 1) {
-    const body = node('div');
-    const head = node('div');
-    const headDiv = node('div');
-    headDiv.append(node('div', { text: displayName }), node('div', { text: account }));
-    head.append(node('button'), headDiv);
-    body.append(head);
-    if (extra.orgRow !== false) {
-      const orgRow = node('div');
-      orgRow.append(
-        node('span', { attributes: { 'aria-label': 'cluster' } }),
-        node('span', { classes: ['nowrap'], text: `${orgName} | ${orgCode}` }),
-      );
-      body.append(orgRow);
-    }
-    const content = node('div', { classes: ['ant-popover-inner-content'] });
-    content.append(body);
-    const panel = node('div', {
-      classes: ['ant-popover-inner'],
-      attributes: { role: 'tooltip' },
-      hidden: Boolean(extra.hidden),
-    });
-    panel.append(content);
-    panels.push(panel);
-  }
-  const document = node('#document');
-  document.title = 'i8 业务页';
-  for (const panel of panels) document.append(panel);
-  return document;
-}
 
 /* ------------------------------------------------------------------ *
  * 最小 chrome 替身：只实现扩展真正用到的那几个口，别的一个不给。
@@ -211,8 +113,8 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
         // 复刻「页面里那段函数」的真实执行环境：只有 location/document/fetch，没有 chrome。
         // `AbortController`/`setTimeout` 也是页面里本来就有的（超时预算靠它们）。
         const sandbox = {
-          location: { protocol: new URL(I8).protocol, host: new URL(I8).host, href: I8 },
-          document: identityPage(page, { panels: page.panels, hidden: page.hidden, orgRow: page.orgRow }),
+          location: new URL(page.origin || I8),
+          document: { querySelectorAll: () => { throw new Error('连接和取数不得读取账号菜单'); } },
           fetch: fetchImpl,
           URL,
           Uint8Array,
@@ -366,34 +268,24 @@ test('点扩展图标会记下当前标签，并把所有连接的身份基准�
  * 2. 身份读取：按已核 DOM，不猜
  * ------------------------------------------------------------------ */
 
-test('身份读取命中现场核对过的结构：账号与「组织名称 ｜ 短码」都读得到', async () => {
+test('连接仅报告实际站点，不报告未核验的账号与组织', async () => {
   const page = boot();
   const identity = await page.call({ type: 'i8-relay:identity', device_id: DEVICE });
   assert.equal(identity.ok, true);
   assert.equal(identity.origin, I8);
-  assert.equal(identity.account, 'tester001');
-  assert.equal(identity.orgName, '第四工程公司');
-  assert.equal(identity.orgCode, '109');
+  assert.equal(identity.account, undefined);
+  assert.equal(identity.orgName, undefined);
+  assert.equal(identity.orgCode, undefined);
 });
 
-test('面板没展开时提示用户展开，不当成"读到了"', async () => {
-  const page = boot({ page: { hidden: true } });
-  const identity = await page.call({ type: 'i8-relay:identity', device_id: DEVICE });
-  assert.equal(identity.ok, false);
-  assert.equal(identity.code, 'need-panel');
-  assert.match(identity.message, /账号面板/);
-});
-
-test('面板不唯一或结构不符都明确停止（不猜哪个是当前账号）', async () => {
-  const many = boot({ page: { panels: 2 } });
-  const ambiguous = await many.call({ type: 'i8-relay:identity', device_id: DEVICE });
-  assert.equal(ambiguous.ok, false);
-  assert.equal(ambiguous.code, 'need-unique');
-
-  const odd = boot({ page: { orgRow: false } });
-  const broken = await odd.call({ type: 'i8-relay:identity', device_id: DEVICE });
-  assert.equal(broken.ok, false);
-  assert.equal(broken.code, 'need-structure');
+test('菜单隐藏或不存在也能连接并取数', async () => {
+  for (const state of [{ hidden: true }, { panels: 0 }]) {
+    const page = boot({ page: state, fetchImpl: async () => reply() });
+    await page.bind();
+    const answer = await page.call(exec());
+    assert.equal(answer.ok, true, JSON.stringify(answer));
+    assert.equal(page.executed().length, 1);
+  }
 });
 
 test('没读到身份就不许 bind，也不许执行（连接必须有可信基准）', async () => {
@@ -452,32 +344,29 @@ test('请求目标与选中的标签不同源即拒', async () => {
 });
 
 /* ------------------------------------------------------------------ *
- * 4. 每条请求都重核身份（同源换号/换组织）
+ * 4. 会话使用选中标签，实际跳站仍停止
  * ------------------------------------------------------------------ */
 
-test('i8 同源换了账号后，下一条请求必须停（不许无声用新身份继续取数）', async () => {
+test('取数不再以菜单账号组织作为拦截条件', async () => {
   const page = boot({ fetchImpl: async () => reply() });
   await page.bind();
   page.page.account = 'someone-else';
+  page.page.orgCode = '208';
 
   const answer = await page.call(exec());
-  assert.equal(answer.ok, false);
-  assert.match(answer.message, /登录账号或组织已经变了/);
-  assert.deepEqual(page.executed(), []);
+  assert.equal(answer.ok, true);
+  assert.equal(page.executed().length, 1);
 });
 
-test('i8 换组织后同样停，且不是只在连接时核对一次', async () => {
-  const page = boot({ fetchImpl: async () => reply() });
+test('连接后标签跳到别的站点，请求仍不发出', async () => {
+  let requests = 0;
+  const page = boot({ fetchImpl: async () => { requests += 1; return reply(); } });
   await page.bind();
-
-  page.page.orgCode = '208';
+  page.page.origin = 'https://other.example.test';
   const otherOrg = await page.call(exec());
   assert.equal(otherOrg.ok, false);
-  assert.match(otherOrg.message, /登录账号或组织已经变了/);
-
-  page.page.orgCode = '109';
-  const restored = await page.call(exec());
-  assert.equal(restored.ok, true, '恢复原身份后应当可以继续（判据是"与基准一致"，不是"一次失败就永久停"）');
+  assert.match(otherOrg.message, /不是当前标签的站点/);
+  assert.equal(requests, 0);
 });
 
 /* ------------------------------------------------------------------ *
@@ -647,7 +536,7 @@ test('bind 必须带服务端给的正整数代号', async () => {
   }
 });
 
-test('bind 时报来的身份与刚读到的不一致 ⇒ 停（不采信页面内容）', async () => {
+test('bind 时报来的站点与刚读到的不一致时停止', async () => {
   const page = boot();
   const identity = await page.call({ type: 'i8-relay:identity', device_id: DEVICE });
   assert.equal(identity.ok, true);
@@ -655,18 +544,17 @@ test('bind 时报来的身份与刚读到的不一致 ⇒ 停（不采信页面�
     type: 'i8-relay:bind',
     device_id: DEVICE,
     generation: GENERATION,
-    identity: { ...identity, account: 'someone-else', orgCode: '208' },
+    identity: { origin: 'https://other.example.test' },
   });
   assert.equal(bound.ok, false);
-  assert.equal(bound.code, 'identity-changed');
+  assert.equal(bound.code, 'site-changed');
   assert.deepEqual(page.boundKeys(), []);
 });
 
-test('读身份之后、bind 之前 DOM 换了账号 ⇒ 停（不是只在连接时核一次）', async () => {
+test('读站点后菜单消失，仍可完成绑定', async () => {
   const page = boot();
   const identity = await page.call({ type: 'i8-relay:identity', device_id: DEVICE });
-  // 页面报来的是**读到那一刻**的那一份，完整且与 pending 一致 —— 这样才会走到"再核当前 DOM"。
-  page.page.account = 'someone-else';
+  page.page.panels = 0;
   const bound = await page.call({
     type: 'i8-relay:bind',
     device_id: DEVICE,
@@ -678,9 +566,8 @@ test('读身份之后、bind 之前 DOM 换了账号 ⇒ 停（不是只在连�
       orgName: identity.orgName,
     },
   });
-  assert.equal(bound.ok, false);
-  assert.equal(bound.code, 'identity-changed');
-  assert.deepEqual(page.boundKeys(), []);
+  assert.equal(bound.ok, true);
+  assert.deepEqual(page.boundKeys(), [`i8RelayBound:${DEVICE}`]);
 });
 
 test('请求自带的 timeout_ms 真的当预算用，超时按超时停（不说成会话失效）', async () => {
@@ -751,19 +638,18 @@ test('代号变了（断线重连后的旧请求）⇒ 停，不把旧结果打�
   assert.equal(page.executed().length, 1);
 });
 
-test('bind 不带 identity（或字段不全）⇒ 停，不许当成"没意见"放行', async () => {
+test('bind 不带站点时停止', async () => {
   const page = boot();
   const identity = await page.call({ type: 'i8-relay:identity', device_id: DEVICE });
   assert.equal(identity.ok, true);
 
   const missing = await page.call({ type: 'i8-relay:bind', device_id: DEVICE, generation: GENERATION });
   assert.equal(missing.ok, false, '缺 identity 必须被拒');
-  assert.match(missing.message, /完整的身份/);
+  assert.match(missing.message, /站点/);
 
   for (const broken of [
-    { account: '', orgCode: '109', orgName: '第四工程公司', origin: identity.origin },
-    { account: 'tester001', orgCode: '', orgName: '第四工程公司', origin: identity.origin },
-    { account: 'tester001', orgCode: '109', orgName: '  ', origin: identity.origin },
+    { origin: '' },
+    { origin: '  ' },
     { account: 'tester001', orgCode: '109', orgName: '第四工程公司' },
   ]) {
     const answer = await page.call({

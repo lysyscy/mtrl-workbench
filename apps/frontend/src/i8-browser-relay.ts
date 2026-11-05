@@ -84,12 +84,9 @@ export interface RelayReply {
   declared_length: number;
 }
 
-/** 从 i8 页面读到的**可见身份**（不是凭据；账号/组织名/短码都不是令牌）。 */
+/** 扩展从选中标签读取的站点；不再读取账号菜单。 */
 export interface VisibleIdentity {
   origin: string;
-  account: string;
-  orgCode: string;
-  orgName: string;
 }
 
 /** 扩展侧最小 API 面（只用 `runtime.sendMessage`；⛔ 不需要 cookies/tabs/debugger）。 */
@@ -213,14 +210,11 @@ export async function readBrowserState(signal?: AbortSignal): Promise<BrowserRel
   return readBrowserRelayState(await requestJson(path, signal ? { signal } : {}));
 }
 
-/** 连上浏览器：`identity` 里的账号/组织是**扩展从 i8 页面读到的可见值**，不是用户手填。 */
+/** 连上用户选中的浏览器标签，服务端核对站点。 */
 export async function connectBrowser(identity: VisibleIdentity, signal?: AbortSignal): Promise<BrowserRelayState> {
   const body = {
     device_id: deviceId(),
     i8_origin: identity.origin,
-    i8_account: identity.account,
-    i8_org_code: identity.orgCode,
-    i8_org_name: identity.orgName,
   };
   const init: RequestInit = { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } };
   return readBrowserRelayState(await requestJson('/api/m02/browser/connect', signal ? { ...init, signal } : init));
@@ -313,10 +307,10 @@ function sendToExtension(message: unknown): Promise<unknown> {
   });
 }
 
-const IDENTITY_HINT = '没能从浏览器读取 i8 的登录身份：请先在 i8 页面展开右上角的账号面板（显示账号与组织），再回来点连接。';
+const IDENTITY_HINT = '没能读取选中的 i8 标签：请在已登录的 i8 页面点一下扩展图标，再回来连接。';
 
 /**
- * 让扩展报告「用户选中的那个 i8 标签」的站点与账号/组织（可见身份，不是凭据）。
+ * 让扩展报告用户选中的 i8 标签站点，不读取账号或组织菜单。
  *
  * 带 `device_id`：扩展按连接缓存这份待核身份，另一个工作台页面的预检不会把它换掉。
  */
@@ -327,19 +321,14 @@ export async function readBrowserIdentity(send: Send = sendToExtension): Promise
     throw new ApiError(message || IDENTITY_HINT);
   }
   const origin = readString(value, 'origin');
-  const account = readString(value, 'account');
-  const orgCode = readString(value, 'orgCode');
-  const orgName = readString(value, 'orgName');
-  if (!origin || !account || !orgCode || !orgName) throw new ApiError(IDENTITY_HINT);
-  return { origin, account, orgCode, orgName };
+  if (!origin) throw new ApiError(IDENTITY_HINT);
+  return { origin };
 }
 
 /**
- * 告诉扩展「这条连接已经建立，可以拿这份身份作基准」。
+ * 告诉扩展这条连接已经建立，保存站点与代号。
  *
- * `identity` 必须是**服务端刚刚校验过的那一份**（就是 `connect` 前读到的可见身份），
- * `generation` 是服务端这次连接给的代号 —— ⛔ 页面不自己猜账号/组织，也不复用旧代号。
- * 扩展对不上刚才缓存的待核值或当前页面实读值时必须拒绝。
+ * 站点来自连接前的标签实读值，代号来自服务端本次连接。
  */
 export async function bindBrowserIdentity(identity: VisibleIdentity, generation: number, send: Send = sendToExtension): Promise<void> {
   if (!Number.isInteger(generation) || generation <= 0) {
@@ -349,7 +338,7 @@ export async function bindBrowserIdentity(identity: VisibleIdentity, generation:
     type: 'i8-relay:bind',
     device_id: deviceId(),
     generation,
-    identity: { origin: identity.origin, account: identity.account, orgCode: identity.orgCode, orgName: identity.orgName },
+    identity: { origin: identity.origin },
   });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';

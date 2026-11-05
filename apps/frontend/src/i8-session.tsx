@@ -6,7 +6,7 @@
  * - 页面切来切去不该把连接弄断（否则抓取中途点开别的页就全废了）；
  * - 但**账号暂停/身份待核/退出登录**必须立刻停 —— 那是两回事，这里分开处理。
  *
- * ⛔ 这里不放任何会话材料：只有站点原点、可见账号、组织名称/短码、连接代号。
+ * 这里不放任何会话材料：只保存站点、工作台配置与连接代号。
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -62,7 +62,7 @@ export interface I8SessionValue {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   refresh: () => Promise<void>;
-  /** 读一次 i8 页面可见身份（用于「连接」按钮前的预检与提示）。 */
+  /** 读取选中的 i8 标签站点。 */
   readIdentity: () => Promise<void>;
 }
 
@@ -152,7 +152,7 @@ export function I8SessionProvider({ blocked, owner, children }: { blocked: boole
     try {
       await readBrowserIdentity();
     } catch (failure) {
-      if (alive.current) setNotice(messageOf(failure, '没能从浏览器读到 i8 身份，请展开账号面板后再试。'));
+      if (alive.current) setNotice(messageOf(failure, '没能读取 i8 标签，请在 i8 页面点击扩展图标后再试。'));
     } finally {
       if (alive.current) setBusy(false);
     }

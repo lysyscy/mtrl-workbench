@@ -182,25 +182,14 @@ def connection_config(device_id: str = Query("", description="本页面标识；
 
 def _browser_state(device_id: str) -> BrowserStateOut:
     from app.core.session import current_name
-    from app.mod02_i8.browser_relay import expected_org_id
-    from app.mod02_i8.i8_identity import org_of
 
     owner = str(current_name())
     connection = browser_broker.broker().connection_of(owner, device_id) if owner and device_id else None
-    want_org = expected_org_id()
-    try:
-        want_code, want_name = org_of(want_org)
-    except Exception:
-        # 组织还没登记映射 ⇒ 状态里就留空，让用户看到"还没核过"，而不是显示一个编号冒充组织。
-        want_code, want_name = ("", "")
     return BrowserStateOut(
         connected=connection is not None,
         mode=MODE_BROWSER if connection is not None else MODE_HTTP,
         origin=connection.origin if connection is not None else "",
-        i8_user="",
-        expected_org=want_org,
-        expected_org_code=want_code,
-        expected_org_name=want_name,
+        expected_org=expected_org_id(),
         generation=connection.generation if connection is not None else 0,
     )
 
@@ -215,22 +204,15 @@ def browser_state(device_id: str = Query("", description="本页面标识")) -> 
 def browser_connect(req: BrowserConnectRequest) -> BrowserStateOut:
     """登记一条「工作台页面 ↔ 后端」的浏览器连接。
 
-    ⚠️ 这是**声明连接**，不是登录：不碰 i8、不写会话缓存、不代表已完成真实验收。
-    身份核对（缺一即停，**不用声明冒充机器核对结果**）：
-      1. 站点原点必须等于**工作台当前配置**的 i8 站点；
-      2. `i8_account`（扩展从 i8 页面读到的账号）必须等于**工作台本人绑定的 i8 账号**
-         （绑定的 i8 账号，不是工作台登录名 —— 两者本来就不是一回事）；
-      3. `i8_org_code` / `i8_org_name`（同来源的组织短码与名称）必须等于
-         **本部署已登记**的映射（内部机构号 ≠ 可见短码，⛔ 不拿两种 id 直接比）。
+    工作台当前账号须已绑定 i8，浏览器标签站点须与工作台配置一致。
+    登记阶段不登录 i8、不读取标签页的账号或组织。会话是否有效由取数响应判断。
     """
     from app.core.config import get_settings, i8_base_of
     from app.core.errors import MustReportError
     from app.core.identity import current_i8_credentials
     from app.core.session import current_name
     from app.mod02_i8.browser_broker import BrowserRelayUnavailable
-    from app.mod02_i8.browser_relay import expected_org_id
-    from app.mod02_i8.browser_session import StrictTargetMismatch, _origin_of
-    from app.mod02_i8.i8_identity import VisibleIdentity, check_identity
+    from app.mod02_i8.browser_session import _origin_of
 
     owner = str(current_name())
     if not owner:
@@ -241,7 +223,8 @@ def browser_connect(req: BrowserConnectRequest) -> BrowserStateOut:
         raise BrowserRelayUnavailable(
             "工作台还没配置 i8 服务地址，无法核对浏览器里的站点；本次未建立连接（未登录、未发请求）。"
         )
-    if _origin_of(req.i8_origin) != configured:
+    origin = _origin_of(req.i8_origin)
+    if origin != configured:
         raise StrictTargetMismatch(
             "浏览器里的 i8 站点与工作台当前配置不一致，本次未建立连接（未发请求、未改配置）。"
             "请在工作台「设置」里把 i8 服务器改成同一个地址，或改用工作台直连模式。"
@@ -251,24 +234,13 @@ def browser_connect(req: BrowserConnectRequest) -> BrowserStateOut:
         bound_user, _password = current_i8_credentials()
     except MustReportError as exc:
         raise BrowserRelayUnavailable(str(exc)) from exc
+    if not bound_user.strip():
+        raise BrowserRelayUnavailable("请先在工作台为当前账号绑定 i8 账号。")
 
-    want_org = expected_org_id()
-    visible = VisibleIdentity(
-        account=(req.i8_account or "").strip(),
-        org_code=(req.i8_org_code or "").strip(),
-        org_name=(req.i8_org_name or "").strip(),
-        origin=_origin_of(req.i8_origin),
-    )
-    check_identity(visible, bound_user=str(bound_user or ""), org_id=want_org)
-
-    info = browser_broker.broker().connect(owner, req.device_id, _origin_of(req.i8_origin))
-    from app.mod02_i8.i8_identity import org_of
-
-    code, name = org_of(want_org)
+    info = browser_broker.broker().connect(owner, req.device_id, origin)
     return BrowserStateOut(
         connected=True, mode=MODE_BROWSER, origin=info.origin,
-        i8_user=bound_user, expected_org=want_org,
-        expected_org_code=code, expected_org_name=name,
+        i8_user=bound_user, expected_org=expected_org_id(),
         generation=info.generation,
         message="已连接：本次取数将复用这个浏览器里的 i8 会话（不会登录、不会顶掉任何在线会话）。",
     )

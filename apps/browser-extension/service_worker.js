@@ -2,9 +2,9 @@
  * 工作台 i8 会话桥 —— MV3 service worker。
  *
  * 定位：**无状态搬运工**。它只做三件事：
- *   1. 报告「用户选中的那个已登录 i8 标签」的**可见身份**（站点 / 账号 / 组织名称与短码）；
+ *   1. 报告用户选中的 i8 标签站点，不读取账号菜单；
  *   2. 在**那个标签**里执行后端**已经构造好**的那一条请求，把响应原样带回去；
- *   3. 每条请求执行前**重新**核一次可见身份，与建立连接时核过的那一份比对。
+ *   3. 核对连接代号、发送页面与目标站点。
  *
  * ⛔ 不做的事（都是硬约束，改动前先读 `apps/browser-extension/README.md`）：
  *   - 不读、不存、不导出 Cookie / localStorage / 任何令牌（不申请 `cookies` 权限）；
@@ -17,11 +17,7 @@
  * 权限：`activeTab`（用户点扩展图标才临时授予当前标签）+ `scripting` + `storage`。
  *   ⇒ 页面地址与标签都由**用户点击**决定，不靠通配 host 权限。
  *
- * ⚠️ 身份读取**只有这一份实现**（`readIdentityInPage`）：它按现场核对过的窄 DOM 结构取值，
- *    结构不符就停，⛔ 不猜选择器、不读隐藏的历史值。
- *    它必须写成**自包含函数**，因为 `chrome.scripting.executeScript` 只注入函数源码、
- *    不带模块作用域（引用外部常量一执行就 `ReferenceError`）；受控代码因此经 `args` 传入。
- *    改结构必须同步改 `tests/protocol.test.mjs` 里的 DOM 替身。
+ * 注入函数必须自包含：executeScript 不携带模块作用域。
  */
 
 'use strict';
@@ -121,13 +117,10 @@ function nonEmptyString(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-/** `bind` 报来的身份必须**完整**：缺字段不能被当成"没意见"放过去。 */
+/** 连接只核站点；账号、组织不再从菜单读取。 */
 function identityComplete(value) {
   return Boolean(value)
-    && nonEmptyString(value.origin)
-    && nonEmptyString(value.account)
-    && nonEmptyString(value.orgCode)
-    && nonEmptyString(value.orgName);
+    && nonEmptyString(value.origin);
 }
 
 /** 取服务端给的正整数代号；缺失/0/负数/小数/字符串一律返回 0（= 无效）。 */
@@ -138,9 +131,6 @@ function positiveGeneration(value) {
 
 function sameIdentity(left, right) {
   return Boolean(left) && Boolean(right)
-    && left.account === right.account
-    && left.orgCode === right.orgCode
-    && left.orgName === right.orgName
     && originOf(left.origin) === originOf(right.origin);
 }
 
@@ -156,17 +146,6 @@ async function clearAllBindings() {
   const keys = Object.keys(stored || {}).filter(key => key === BOUND_PREFIX || key.startsWith(`${BOUND_PREFIX}:`));
   if (keys.length) await chrome.storage.session.remove(keys);
 }
-
-/** 面板没展开/结构不符/面板不唯一 —— 受控代码，不含页面内容。 */
-const NEED_PANEL = 'need-panel';
-const NEED_STRUCTURE = 'need-structure';
-const NEED_UNIQUE = 'need-unique';
-
-const IDENTITY_MESSAGES = {
-  [NEED_PANEL]: '没看到 i8 的账号面板：请先在 i8 页面展开右上角的账号面板（让它显示账号与组织），再回来点连接。',
-  [NEED_STRUCTURE]: '账号面板里没有找到「账号 / 组织名称 ｜ 短码」这些信息，可能 i8 换版了。本次已停止，请联系维护人核对。',
-  [NEED_UNIQUE]: '页面上同时出现了多个账号面板，无法确认哪个是当前账号。请关掉多余的面板后再试。',
-};
 
 function originOf(value) {
   try {
@@ -230,60 +209,9 @@ chrome.action.onClicked.addListener(async tab => {
   await clearAllBindings();
 });
 
-/**
- * 在选中标签里读「可见身份」——**已现场核对的窄 DOM 结构**（面板未展开就提示用户展开）。
- *
- * 结构与 `tests/protocol.test.mjs` 里的 DOM 替身必须一致；参数里传受控代码，
- * ⛔ 不要引用本模块的常量（注入后不存在）。
- */
-function readIdentityInPage(codes) {
-  const origin = `${location.protocol}//${location.host}`;
-  const text = node => (node && node.textContent ? node.textContent.trim().slice(0, 200) : '');
-  const visible = element => Boolean(element)
-    && typeof element.getClientRects === 'function'
-    && element.getClientRects().length > 0;
-
-  const panels = Array.from(document.querySelectorAll('[role="tooltip"].ant-popover-inner'));
-  const shown = panels.filter(visible);
-  if (shown.length === 0) return { ok: false, code: codes.needPanel, origin };
-  if (shown.length > 1) return { ok: false, code: codes.needUnique, origin };
-  const panel = shown[0];
-  const content = panel.querySelector('.ant-popover-inner-content');
-  const body = content ? content.firstElementChild : null;
-  if (!body) return { ok: false, code: codes.needStructure, origin };
-
-  const head = body.children[0];
-  const headDiv = head ? Array.from(head.children).find(child => child.tagName === 'DIV') : null;
-  if (!headDiv) return { ok: false, code: codes.needStructure, origin };
-  const displayName = text(headDiv.children[0]);
-  const account = text(headDiv.children[1]);
-  if (!account) return { ok: false, code: codes.needStructure, origin };
-
-  let orgName = '';
-  let orgCode = '';
-  for (const child of Array.from(body.children)) {
-    if (child.tagName !== 'DIV') continue;
-    if (!child.querySelector('[aria-label="cluster"]')) continue;
-    const label = Array.from(child.querySelectorAll('span.nowrap'))
-      .map(node => text(node))
-      .find(value => value.includes('|') || value.includes('｜'));
-    if (!label) continue;
-    const parts = label.split(/[|｜]/);
-    orgName = (parts[0] || '').trim();
-    orgCode = (parts[1] || '').trim();
-    break;
-  }
-  if (!orgName || !orgCode) return { ok: false, code: codes.needStructure, origin };
-
-  return {
-    ok: true,
-    origin,
-    account,
-    orgName,
-    orgCode,
-    displayName: displayName.slice(0, 60),
-    title: (document.title || '').slice(0, 120),
-  };
+/** 在选中标签里读取实际站点；不访问 DOM、Cookie 或存储。 */
+function readIdentityInPage() {
+  return { ok: true, origin: `${location.protocol}//${location.host}` };
 }
 
 async function readIdentity() {
@@ -301,7 +229,6 @@ async function readIdentity() {
       target: { tabId: entry.tabId },
       world: 'ISOLATED',
       func: readIdentityInPage,
-      args: [{ needPanel: NEED_PANEL, needStructure: NEED_STRUCTURE, needUnique: NEED_UNIQUE }],
     });
   } catch {
     return {
@@ -312,12 +239,8 @@ async function readIdentity() {
   }
   const first = Array.isArray(results) ? results[0] : null;
   const value = first && first.result ? first.result : null;
-  if (!value || typeof value.ok !== 'boolean') {
-    return { ok: false, code: NEED_STRUCTURE, message: '读不到那个 i8 标签的身份信息，请重新选中标签后再试。' };
-  }
-  if (!value.ok) {
-    const message = IDENTITY_MESSAGES[value.code] || IDENTITY_MESSAGES[NEED_STRUCTURE];
-    return { ok: false, code: value.code || NEED_STRUCTURE, message };
+  if (!value || value.ok !== true || !nonEmptyString(value.origin)) {
+    return { ok: false, code: 'need-tab', message: '读不到那个 i8 标签的站点，请重新选中标签后再试。' };
   }
   if (originOf(value.origin) !== entry.origin) {
     return { ok: false, code: 'need-tab', message: '那个标签已经跳到别的站点，请重新选中当前 i8 业务页。' };
@@ -325,10 +248,6 @@ async function readIdentity() {
   return {
     ok: true,
     origin: value.origin,
-    account: value.account,
-    orgName: value.orgName,
-    orgCode: value.orgCode,
-    displayName: value.displayName,
   };
 }
 
@@ -428,14 +347,11 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
 }
 
 /**
- * 每次执行前**重新**确认：当前标签的可见身份必须与建立连接时核过的那一份一致，
- * 且这条请求带的代号必须正是这个连接当前的代号。
- * ⛔ 只在 connect 时读一次是不够的 —— i8 同源换号/换组织会无声沿用旧连接；
- * 只不比对代号更不够 —— 断线重连之后旧代号的那条请求仍会打到新连接上。
+ * 每次执行前确认发送页面与连接代号。实际目标站点由 executeInPage 检查。
  *
  * 基准是**按连接（`device_id`）分开存**的：另一个页面的连接不能替换这一份。
  *
- * 顺序是有意的：先核代号（本地读，不碰标签），再读 DOM。
+ * 先核代号（本地读，不碰标签），再执行请求。
  * 代号不对时**一个字节都不该发出去**，也不该去读用户的 i8 页面。
  */
 async function identityStillBound(deviceId, generation, senderKey) {
@@ -465,15 +381,6 @@ async function identityStillBound(deviceId, generation, senderKey) {
       ok: false,
       code: 'stale-generation',
       message: '这条请求属于上一次连接（代号已过期），本次已停止，没有发出任何请求。请回「i8 接入」页重新连接后再抓取。',
-    };
-  }
-  const now = await readIdentity();
-  if (!now.ok) return now;
-  if (!sameIdentity(now, bound)) {
-    return {
-      ok: false,
-      code: 'identity-changed',
-      message: '浏览器里 i8 的登录账号或组织已经变了，本次已停止（不会用新身份继续取数）。请回「i8 接入」页确认后重新连接。',
     };
   }
   return { ok: true };
@@ -508,7 +415,7 @@ async function execute(message, senderKey) {
   const endpointProblem = checkEndpoint(request.method, request.url);
   if (endpointProblem) return { ok: false, message: endpointProblem };
 
-  // 代号与身份都在注入之前核：代号先（纯本地），再读 DOM。
+  // 先核连接归属与代号；页面中的执行函数再核实际站点。
   const identity = await identityStillBound(deviceId, generation, senderKey);
   if (!identity.ok) return { ok: false, message: identity.message, code: identity.code };
 
@@ -601,45 +508,28 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       sendResponse({ ok: false, message: '还没有读到 i8 的身份，请先点「连接浏览器会话」。' });
       return false;
     }
-    // 页面报来的那一份是"服务端说它核对过的"，必须**完整**且与**扩展自己**刚读到的待核值一致。
-    // ⛔ 缺字段不等于"没意见"：没有身份就没有可比对的东西，一律拒。
+    // 绑定站点必须与扩展刚才实读的站点一致。
     if (!identityComplete(message.identity)) {
-      sendResponse({ ok: false, message: '绑定时没有带上完整的身份（站点/账号/组织名称/短码），本次已停止。请回「i8 接入」页重新连接。' });
+      sendResponse({ ok: false, message: '绑定时没有带上站点，本次已停止。请回「i8 接入」页重新连接。' });
       return false;
     }
     if (!sameIdentity(message.identity, pending)) {
-      sendResponse({ ok: false, code: 'identity-changed', message: '服务端核对的身份与本扩展刚读到的不一致，本次已停止。请回「i8 接入」页重新连接。' });
+      sendResponse({ ok: false, code: 'site-changed', message: '服务端核对的站点与本扩展刚读到的不一致，请重新连接。' });
       return false;
     }
-    // 再核一次**当前 DOM**：从读到 → 页面发起 bind 之间也可能换过号。
-    readIdentity().then(
-      now => {
-        if (!now.ok) {
-          sendResponse(now);
-          return;
-        }
-        if (!sameIdentity(now, pending)) {
-          pendingIdentities.delete(key);
-          sendResponse({ ok: false, code: 'identity-changed', message: '浏览器里 i8 的登录账号或组织刚刚变了，本次已停止。请回「i8 接入」页重新连接。' });
-          return;
-        }
-        // ⛔ 绑定基准是按 `device_id` 存的，写之前必须确认它没被**另一个页面**占着：
-        // 否则另一个本地工作台页面只要知道 `device_id`，就能把别人的连接顶掉。
-        chrome.storage.session.get(boundKeyOf(deviceId)).then(stored => {
-          const existing = stored && stored[boundKeyOf(deviceId)];
-          if (existing && existing.sender && existing.sender !== senderKey) {
-            sendResponse({ ok: false, code: 'sender-mismatch', message: '这条连接已被另一个工作台页面占用，本页面不能顶掉它。请刷新本页面后重新连接，或先在那边断开。' });
-            return;
-          }
-          const record = { ...now, generation, sender: senderKey };
-          chrome.storage.session.set({ [boundKeyOf(deviceId)]: record }).then(
-            () => sendResponse({ ok: true, generation }),
-            () => sendResponse({ ok: false, message: '保存连接身份时出错，本次已停止。' }),
-          );
-        }, () => sendResponse({ ok: false, message: '绑定时读取已有连接出错，本次已停止。' }));
-      },
-      () => sendResponse({ ok: false, message: '绑定时读取身份出错，本次已停止。' }),
-    );
+    // 绑定按 device_id 保存，另一个页面不能替换已有连接。
+    chrome.storage.session.get(boundKeyOf(deviceId)).then(stored => {
+      const existing = stored && stored[boundKeyOf(deviceId)];
+      if (existing && existing.sender && existing.sender !== senderKey) {
+        sendResponse({ ok: false, code: 'sender-mismatch', message: '这条连接已被另一个工作台页面占用，本页面不能顶掉它。请刷新本页面后重新连接，或先在那边断开。' });
+        return;
+      }
+      const record = { ...pending, generation, sender: senderKey };
+      chrome.storage.session.set({ [boundKeyOf(deviceId)]: record }).then(
+        () => sendResponse({ ok: true, generation }),
+        () => sendResponse({ ok: false, message: '保存连接时出错，本次已停止。' }),
+      );
+    }, () => sendResponse({ ok: false, message: '绑定时读取已有连接出错，本次已停止。' }));
     return true;
   }
   if (type === 'i8-relay:unbind') {

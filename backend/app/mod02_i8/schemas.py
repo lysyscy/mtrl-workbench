@@ -63,18 +63,10 @@ class SyncOut(BaseModel):
 
 
 class BrowserConnectRequest(BaseModel):
-    """「连接浏览器会话」入参。
-
-    ⚠️ `i8_account` / `i8_org` 是**扩展从已登录 i8 页面可见身份读到的值**（不是用户手填：
-       手填值一律不被接受为机器核对结果）。后端会拿它们与「工作台本人绑定的 i8 账号」
-       和「取数组织范围」逐个比对，缺失或不符 ⇒ 停止。
-    """
+    """「连接浏览器会话」入参，由扩展读取标签页的站点原点。"""
 
     device_id: str = Field(..., description="本页面的随机标识（sessionStorage，仅本页有效）")
     i8_origin: str = Field(..., description="浏览器里那个 i8 标签的站点原点（协议://主机[:端口]）")
-    i8_account: str = Field("", description="i8 页面可见的登录账号")
-    i8_org_code: str = Field("", description="i8 页面可见的组织**短码**（账号面板「名称 ｜ 短码」右侧）")
-    i8_org_name: str = Field("", description="i8 页面可见的组织**名称**（同一行左侧）")
 
 
 class BrowserStateOut(BaseModel):
@@ -83,7 +75,7 @@ class BrowserStateOut(BaseModel):
     connected: bool = False
     mode: str = "http"
     origin: str = ""
-    i8_user: str = ""
+    i8_user: str = Field("", description="工作台当前账号绑定的 i8 用户名")
     expected_org: str = ""
     expected_org_code: str = ""
     expected_org_name: str = ""

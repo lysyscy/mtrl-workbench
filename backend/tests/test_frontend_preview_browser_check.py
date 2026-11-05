@@ -62,11 +62,11 @@ def test_scoped_notice_keeps_the_original_body_for_the_business_route():
         assert client.post('/m15/login', json={}).status_code == 200
 
 
-def test_connect_is_pinned_to_the_approved_site_and_i8_identity():
-    connect = {'device_id': 'fixture-device', 'i8_origin': SCOPE.origin, 'i8_account': SCOPE.i8_user}
+def test_connect_is_pinned_to_the_approved_site():
+    connect = {'device_id': 'fixture-device', 'i8_origin': SCOPE.origin}
     with client_for(SCOPE) as client:
         assert client.post('/api/m02/browser/connect', json=connect).status_code == 200
-        for change in ({'i8_origin': 'http://other.example.test'}, {'i8_account': 'other-user'}, {'device_id': ''}):
+        for change in ({'i8_origin': 'http://other.example.test'}, {'device_id': ''}):
             assert client.post('/api/m02/browser/connect', json={**connect, **change}).status_code == 403
         assert client.get('/api/m02/browser/pending?device_id=fixture-device').status_code == 200
         assert client.get('/api/m02/browser/pending').status_code == 403

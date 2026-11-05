@@ -62,7 +62,7 @@ const base = {
   message: '已连接',
 };
 
-const identity = { origin: 'https://i8.example.test', account: 'tester001', orgCode: '109', orgName: '第四工程公司' };
+const identity = { origin: 'https://i8.example.test' };
 
 let restored;
 
@@ -146,7 +146,7 @@ test('连接状态字段必须齐；缺项/未知模式一律抛错不猜', () =
   }
 });
 
-test('连接请求把扩展读到的账号与组织（名称+短码）交给后端核对，未在页面上自行判断', async () => {
+test('连接只提交扩展读取的站点，不依赖菜单账号与组织', async () => {
   const sent = [];
   globalThis.fetch = async (path, init) => {
     sent.push({ path, method: init.method, body: init.body ? JSON.parse(init.body) : null });
@@ -161,21 +161,18 @@ test('连接请求把扩展读到的账号与组织（名称+短码）交给后�
   assert.deepEqual(sent[0].body, {
     device_id: deviceId(),
     i8_origin: 'https://i8.example.test',
-    i8_account: 'tester001',
-    i8_org_code: '109',
-    i8_org_name: '第四工程公司',
   });
 });
 
-test('身份来自扩展的只读结果；缺字段或扩展报错时如实抛出，不自己拼一个', async () => {
+test('只需扩展的站点结果即可连接；读取失败如实抛出', async () => {
   const seen = [];
   const good = await readBrowserIdentity(async message => { seen.push(message); return { ok: true, ...identity }; });
   assert.deepEqual(good, identity);
   assert.equal(seen[0].type, 'i8-relay:identity');
   assert.equal(seen[0].device_id, deviceId(), '待核身份必须按本条连接缓存，别的页面不能替换它');
-  await assert.rejects(readBrowserIdentity(async () => ({ ok: true, origin: identity.origin, account: 'tester001', orgCode: '', orgName: '' })), error => error instanceof ApiError);
-  await assert.rejects(readBrowserIdentity(async () => ({ ok: false, message: '请先展开账号面板' })), error => /展开账号面板/.test(error.message));
-  await assert.rejects(readBrowserIdentity(async () => ({ ok: true, origin: 1 })), error => /账号面板/.test(error.message));
+  assert.deepEqual(await readBrowserIdentity(async () => ({ ok: true, origin: identity.origin })), identity);
+  await assert.rejects(readBrowserIdentity(async () => ({ ok: false, message: '请先选中 i8 标签' })), error => /选中 i8 标签/.test(error.message));
+  await assert.rejects(readBrowserIdentity(async () => ({ ok: true, origin: 1 })), error => /i8 标签/.test(error.message));
 });
 
 test('连接建立后把服务端刚校验过的身份与代号交给扩展；断开时让它忘掉（扩展没应答不阻塞断开）', async () => {

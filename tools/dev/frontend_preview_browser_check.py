@@ -82,8 +82,8 @@ class BrowserNoticeCheck:
         if not isinstance(body, dict):
             return False
         if path == '/api/m02/browser/connect':
-            return (body.get('i8_origin') == self.origin and body.get('i8_account') == self.i8_user
-                    and bool(body.get('device_id')))
+            # The approved i8 username is bound on the server by bind_preview_account.
+            return body.get('i8_origin') == self.origin and bool(body.get('device_id'))
         return (body.get('session_mode') == 'browser' and body.get('year_month') == self.year_month
                 and body.get('expected_account') == preview_account and bool(body.get('device_id'))
                 and body.get('allow_kick', False) is False)

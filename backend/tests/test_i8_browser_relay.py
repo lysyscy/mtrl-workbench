@@ -458,7 +458,7 @@ def test_组织范围取自既有取数表单(guards):
     assert expected_org_id() in str(WH_PARAMS["orgQuery"])
 
 
-# --------------------------------------------------------------- 连接路由：身份核对
+# --------------------------------------------------------------- 连接路由：工作台身份与站点
 
 
 class _Session:
@@ -482,16 +482,11 @@ def route(monkeypatch, store):
     return store
 
 
-def _connect(origin: str = BASE, account: str = "i8-tester",
-             org_code: str = "109", org_name: str = "第四工程公司", device: str = DEVICE):
-    """`org_code` / `org_name` 是 i8 页面**可见**的短码与名称（不是内部机构号）。"""
+def _connect(origin: str = BASE, device: str = DEVICE):
     from app.mod02_i8.router import browser_connect
     from app.mod02_i8.schemas import BrowserConnectRequest
 
-    return browser_connect(BrowserConnectRequest(
-        device_id=device, i8_origin=origin, i8_account=account,
-        i8_org_code=org_code, i8_org_name=org_name,
-    ))
+    return browser_connect(BrowserConnectRequest(device_id=device, i8_origin=origin))
 
 
 def test_连接时站点不符即拒绝(route):
@@ -500,57 +495,23 @@ def test_连接时站点不符即拒绝(route):
     assert route.connection_of(OWNER, DEVICE) is None
 
 
-def test_连接时账号必须是本人绑定的i8账号(route):
-    with pytest.raises(StrictTargetMismatch):
-        _connect(account="someone-else")
-    assert route.connection_of(OWNER, DEVICE) is None
+def test_工作台账号未绑定i8时拒绝连接(route, monkeypatch):
+    from app.core import identity as identity_module
 
-
-def test_连接时读不到账号就停止而不是放行(route):
-    # 「读不到」= 无法核实 ⇒ 按"会话材料不足"停（不是 409 目标不符）。
-    with pytest.raises(StrictSessionUnavailable):
-        _connect(account="   ")
-    assert route.connection_of(OWNER, DEVICE) is None
-
-
-def test_连接时组织短码不符即拒绝(route):
-    """内部机构号 ≠ 可见短码：拿内部号去比可见短码必须失败，而不是"看起来相等"。"""
-    with pytest.raises(StrictTargetMismatch):
-        _connect(org_code="3700000000000014", org_name="第四工程公司")
-    assert route.connection_of(OWNER, DEVICE) is None
-
-
-def test_连接时组织名称不符即拒绝(route):
-    with pytest.raises(StrictTargetMismatch):
-        _connect(org_name="别的公司")
-    assert route.connection_of(OWNER, DEVICE) is None
-
-
-def test_连接时读不到组织就停止而不是放行(route):
-    with pytest.raises(StrictSessionUnavailable):
-        _connect(org_code="", org_name="")
-    assert route.connection_of(OWNER, DEVICE) is None
-
-
-def test_连接时组织不在已登记映射里就停止(route, monkeypatch):
-    """本部署没登记过的内部机构号 ⇒ 停，不猜。"""
-    from app.mod02_i8 import i8_identity
-
-    monkeypatch.setattr(i8_identity, "ORG_MAP", {})
-    with pytest.raises(i8_identity.UnknownOrgMapping):
+    monkeypatch.setattr(identity_module, "current_i8_credentials", lambda: ("", ""))
+    with pytest.raises(BrowserRelayUnavailable, match="绑定 i8 账号"):
         _connect()
     assert route.connection_of(OWNER, DEVICE) is None
 
 
-def test_核对通过后登记连接并可断开(route):
+def test_只提供站点即可登记连接并断开(route):
     from app.mod02_i8.router import browser_disconnect, browser_state
 
     state = _connect()
     assert state.connected is True
     assert state.mode == MODE_BROWSER
+    assert state.i8_user == "i8-tester"                 # 工作台绑定账号
     assert state.expected_org == "3700000000000014"      # 内部机构号（取数表单里的那个）
-    assert state.expected_org_code == "109"              # i8 页面可见短码
-    assert state.expected_org_name == "第四工程公司"
     assert state.generation == 1
     assert route.connection_of(OWNER, DEVICE) is not None
 
