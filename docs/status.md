@@ -2,7 +2,7 @@
 
 ## 当前运行与活动整改
 
-2026-11-05本轮只读核对：正式前端指向`var/frontend/releases/b8ee0b2450e7`，manifest产品提交为`b8ee0b2450e7d4e93d4137d1ce1c1dc564935c4f`，HTTP `/app`实际索引散列与该清单一致。最近完整发布/进程验证见[11月5日上线回执](../.scratch/browser-session-loading-20261103/deployment-20261105.md)；源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
+2026-11-05 17:48按用户批准发布并重启：正式前端指向`var/frontend/releases/09137eb00b69`，产品提交`09137eb00b69558ff5df2afe4371662e59d295e6`。i8浏览器会话连接及取数取消账号菜单限制；健康200、实际索引、42份资源和8000监听归属通过，回退保留`b8ee0b2450e7`。发布回执归本机受管组`174746-946815-47032/files/reports/deployment.json`。扩展0.1.1已校验打包到`var/browser-extension/releases/fce4aa1d82143b81`，按用户要求留待本人安装；原安装包保留，未执行真实i8抓取。源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
 
 当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。2026-11-05 13:34已按用户授权部署并重启，正式加载b8ee0b24，HTTP200、42份资源及监听归属核验通过；原i8配置保持。另发现的大表合同价/空产值重读错误已开TAIL-482并[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
 
