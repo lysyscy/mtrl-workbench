@@ -1,4 +1,4 @@
-"""归档行尾保护文件也必须受编码哨兵检查，未知二进制输入仍拒绝。"""
+"""离线工具：归档行尾保护文件受编码检查，未知二进制输入仍拒绝。"""
 import importlib.util
 from pathlib import Path
 

@@ -68,15 +68,10 @@ def test_抓取链路_分类要在匹配之前打上():
 
     ⚠️ **能证伪**：把 `party_kind` 的赋值挪到 `match_projects` **之后** ⇒ 本条必红。
     """
-    import inspect
-
-    from app.mod01_projects import service as P1S
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from unittest.mock import patch
     from app.mod11_jc import fetch_service as FS
-
-    src = inspect.getsource(FS.run_fetch)
-    assert src.index('"party_kind"') < src.index("match_projects("), (
-        "`party_kind` 必须在 `match_projects` **之前**打上 —— 那个函数返回的是 `{**row, project_id}` "
-        "**新造的 dict**，之后打的分类只落在原 `rows` 上、**副本里没有** ⇒ 落库一律当 `unknown`")
 
     with session_scope() as s:                        # 行为面：照**真实序列**（匹配 → 打分类 → 落库）走一遍
         p = _proj(s)
@@ -86,12 +81,11 @@ def test_抓取链路_分类要在匹配之前打上():
                  "supplier_name": "自检供应商", "material_name": "电缆桥架",
                  "contract_amt": Decimal("40124.09"), "party_name": "自检链路贸易",
                  "bill_name": "自检单据", "remark": "", "fields": {"BillName": "自检单据"}}]
-        m = FS.match_projects(rows, P1S.all_projects(s))
-        assert len(m["matched"]) == 1, f"自检行没匹配上项目：{m}"
-        kmap = R.party_kind_map(s)
-        for _r in m["matched"]:                       # ⚠️ 对**副本**打分类（`run_fetch` 现在做的就是这件事）
-            _r["party_kind"] = kmap.get(str(_r.get("party_name") or "").strip(), "unknown")
-        R.upsert_fetched_contracts(s, project_id=int(p.id), rows=m["matched"])
+        with patch.object(FS, 'session_scope', lambda: nullcontext(s)):
+            result = FS.run_fetch(confirmed=True, fetch=lambda _client: rows,
+                client_factory=lambda: SimpleNamespace(close=lambda: None),
+                loaders=(lambda: [], lambda: []))
+        assert result['matched'] == 1
         cur = R.one_by_no(s, no)
         assert Decimal(str(cur.trade_contract_amt)) == Decimal("40124.09"), (
             "贸易公司合同：i8 的价要落「贸易公司合同金额」—— 落进「合同金额」就是本次报障的症状")

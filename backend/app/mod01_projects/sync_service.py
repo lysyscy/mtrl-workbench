@@ -17,6 +17,7 @@ from app.core.errors import human_reason
 from app.mod01_projects import archive as A
 from app.mod01_projects.models import TYPE_SHELL
 from app.mod01_projects.repository import all_projects, create_project
+from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionUnavailable, StrictTargetMismatch
 
 Loader = Callable[[], list[dict]]
 
@@ -41,6 +42,8 @@ def build_plan(
     try:
         common = load_common()
         warehouses = load_warehouses()
+    except (StrictSessionEnded, StrictSessionUnavailable, StrictTargetMismatch):
+        raise
     except Exception as exc:                              # noqa: BLE001
         return {
             "plan": None,

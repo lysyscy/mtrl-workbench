@@ -124,20 +124,24 @@ class ContractFetcher:
            i8 里**增补合同会沿用原单据日期** ⇒ 起点卡太紧会**漏掉它们**；
            好在落库按 `BillNo` **幂等**，起点推早了只是多拿几条、**不会重复插**。
         """
+        with serialize_fetch(TABLE):
+            return self.fetch_in_locked_batch(since=since)
+
+    def fetch_in_locked_batch(self, *, since: str = "") -> list[dict]:
+        """Read the list while the orchestrator owns TABLE through its DB commit."""
         url = configured_url()
         params = build_params()
         body = build_body(since=since)
-        with serialize_fetch(TABLE):
-            records: list[dict] = []
-            for attempt in range(EMPTY_RETRY + 1):
-                # ⚠️ `timeout` 必须显式放大（见 `LIST_TIMEOUT`：默认 30s 必超时）
-                resp = self._client.post_json(
-                    url, params=params, data=body, timeout=LIST_TIMEOUT)
-                records = _extract_records(resp)
-                if records or attempt >= EMPTY_RETRY:
-                    break
-                logger.warning("i8 采购合同返回 0 条 —— 再确认一次（防偶发回有效空 ⇒ 整批漏抓）")
-                time.sleep(EMPTY_RETRY_SLEEP)
+        records: list[dict] = []
+        for attempt in range(EMPTY_RETRY + 1):
+            # ⚠️ `timeout` 必须显式放大（见 `LIST_TIMEOUT`：默认 30s 必超时）
+            resp = self._client.post_json(
+                url, params=params, data=body, timeout=LIST_TIMEOUT)
+            records = _extract_records(resp)
+            if records or attempt >= EMPTY_RETRY:
+                break
+            logger.warning("i8 采购合同返回 0 条 —— 再确认一次（防偶发回有效空 ⇒ 整批漏抓）")
+            time.sleep(EMPTY_RETRY_SLEEP)
         mapped: list[dict] = []
         unapproved = 0
         for rec in records:

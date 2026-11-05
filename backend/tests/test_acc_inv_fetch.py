@@ -15,6 +15,9 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from unittest.mock import patch
+
 from decimal import Decimal
 from io import BytesIO
 
@@ -96,8 +99,9 @@ def _run(s, *, content=None, boom=None, month="2026-08", confirmed=True, calls=N
             raise boom
         return content
 
-    return FS.run_fetch(s, year_month=month, confirmed=confirmed, operator="科室用户",
-                        client_factory=_Client, export=fake_export)
+    with patch.object(FS, 'session_scope', lambda: nullcontext(s)):
+        return FS.run_fetch(year_month=month, confirmed=confirmed, operator="科室用户",
+                            client_factory=_Client, export=fake_export)
 
 
 # ------------------------------------------------------------ 001-01 / 001-02 入参与标识

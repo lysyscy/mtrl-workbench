@@ -6,10 +6,41 @@ a real empty result or a real zero count.
 """
 
 import re
+import pytest
 
 from playwright.sync_api import expect
 
 from test_preview import browser_page, login, server  # noqa: F401 (fixtures)
+
+
+@pytest.mark.parametrize('route,endpoint,lane,success', [
+    ('ledger','**/api/m05/stats?*','.payment-stats-status','.payment-stat-columns'),
+    ('debt','**/api/m05/debt','.debt-overviews-status','.debt-overviews-grid'),
+])
+def test_malformed_success_uses_read_retry_instead_of_page_failure(server, browser_page, route, endpoint, lane, success):
+    page, _ = browser_page
+    login(page, server)
+
+    def broken(request):
+        response = request.fetch()
+        assert response.ok
+        data = response.json()
+        if route == 'ledger':
+            del data['selected']['projects']
+        else:
+            assert data['by_project_category'], '真实副本缺欠款汇总代表'
+            del data['by_project_category'][0]['mech']
+        request.fulfill(response=response, json=data)
+
+    page.route(endpoint, broken)
+    page.goto(server+'/preview/'+route, wait_until='domcontentloaded')
+    failure = page.locator(lane+' [role=alert]')
+    expect(failure).to_contain_text('读取不完整')
+    expect(page.locator('[data-route-error]:visible')).to_have_count(0)
+    page.unroute(endpoint)
+    failure.get_by_role('button',name='重试读取').click()
+    expect(failure).to_have_count(0)
+    expect(page.locator(success)).to_be_visible()
 
 
 def test_notice_list_keeps_its_reserved_box_while_the_first_read_lands(server, browser_page):

@@ -351,17 +351,14 @@ def api_fetch(req: FetchRequest) -> dict:
     """**按月抓取**收发结存（`API-02`）—— 人工触发。
 
     `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
-    ⚠️ 失败**降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
+    失败显式报错待人处理；本域无手动导入通道，绝不自动重试登录。
     """
     from app.mod02_i8.browser_relay import scope_of
     from app.mod07_setl import fetch_service as FS
 
     # ⚠️ 取数方式在**整个抓取过程**内有效（同一请求内后续所有 i8 调用都走同一通道）。
     with scope_of(req):
-        with session_scope() as s:
-            return FS.run_fetch(
-                s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
-            )
+        return FS.run_fetch(year_month=req.month, confirmed=req.confirm, operator=current_operator())
 
 
 @router.get("/api/m07/settlement/export")

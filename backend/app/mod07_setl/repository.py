@@ -96,7 +96,7 @@ def upsert_month(s: Session, *, ym: str, rows: list[dict]) -> dict:
     existing = {_key_of(d): d for d in s.execute(select(SetlDetail)).scalars()
                 if str(d.ym or "") == str(ym or "")}
     seen: set[tuple[str, str, str]] = set()
-    inserted = updated = 0
+    inserted = updated = kept_manual = 0
     now = datetime.now()
 
     for row in rows:
@@ -106,6 +106,9 @@ def upsert_month(s: Session, *, ym: str, rows: list[dict]) -> dict:
         seen.add(key)
         if key in existing:
             found = existing[key]
+            if str(found.source or SOURCE_AUTO) != SOURCE_AUTO:
+                kept_manual += 1
+                continue
             updated += 1
         else:
             found = SetlDetail(ym=ym, warehouse_name=str(row.get("warehouse_name") or ""),
@@ -120,7 +123,7 @@ def upsert_month(s: Session, *, ym: str, rows: list[dict]) -> dict:
         found.source = SOURCE_AUTO
         found.updated_at = now
 
-    deleted = kept_manual = 0
+    deleted = 0
     for key, found in existing.items():
         if key in seen:
             continue

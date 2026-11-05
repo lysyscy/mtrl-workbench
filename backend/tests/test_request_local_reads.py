@@ -1,6 +1,7 @@
 """请求内复用读取及抓取异常关闭的隔离回归。"""
 
 from decimal import Decimal
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from app.mod05_flow import service as M5
@@ -51,6 +52,7 @@ def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch)
 def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
     closed = []
     client = SimpleNamespace(close=lambda: closed.append(True))
+    monkeypatch.setattr(M11, 'session_scope', lambda: nullcontext(None))
     monkeypatch.setattr(M11, "ContractFetcher", lambda _client: SimpleNamespace(last_unapproved=0))
     monkeypatch.setattr(M11.fetch_task, "degrade_to_excel", lambda _exc: {"message": "降级"})
     monkeypatch.setattr(M11.fetch_task, "fetch_record_payload", lambda **kwargs: kwargs)
@@ -61,7 +63,7 @@ def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
     def fail(_client):
         raise RuntimeError("boom")
 
-    result = M11.run_fetch(None, confirmed=True, operator="test",
+    result = M11.run_fetch(confirmed=True, operator="test",
                            client_factory=lambda: client, fetch=fail)
 
     assert result["ok"] is False

@@ -13,7 +13,7 @@ import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PY_ROOTS = [ROOT / 'backend/app', ROOT / 'backend/tests', ROOT / 'tools']
+PY_ROOTS = [ROOT / 'backend/app', ROOT / 'backend/tests', ROOT / 'backend/tool_tests', ROOT / 'tools']
 SKIP_DIRS = {'.venv', '__pycache__', 'node_modules', 'var', 'data', 'exports', 'dist', 'artifacts', '.git', '.pytest_cache'}
 sys.path.insert(0, str(ROOT))
 from tools.audit.git_index import staged_changes, index_bytes

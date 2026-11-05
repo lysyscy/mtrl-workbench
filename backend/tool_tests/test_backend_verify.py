@@ -20,7 +20,7 @@ def prepared(tmp_path,monkeypatch):
     def output(kind):
         path=tmp_path/kind;path.mkdir(exist_ok=True);return path
     monkeypatch.setattr(runner,'output_dir',output)
-    monkeypatch.setattr(runner,'close_runs',lambda:None)
+    monkeypatch.setattr(runner,'close_runs',lambda *,success:None)
     monkeypatch.setattr(runner,'source_state',lambda:{'commit':'fixture','dirty':False})
     return source
 

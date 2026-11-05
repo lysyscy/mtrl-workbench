@@ -181,10 +181,7 @@ def api_fetch(req: FetchRequest) -> dict:
     from app.mod08_inv import fetch_service as FS
 
     with scope_of(req):
-        with session_scope() as s:
-            return FS.run_fetch(
-                s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
-            )
+        return FS.run_fetch(year_month=req.month, confirmed=req.confirm, operator=current_operator())
 
 
 @router.get("/api/m08/inventory/export")

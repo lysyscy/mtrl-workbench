@@ -31,6 +31,38 @@ def storage_key(me, table):
     return 'mtrl:grid-widths:v1:' + json.dumps([f'{me["id"]}:{me["account"]}', table], separators=(',', ':'))
 
 
+@pytest.mark.parametrize('route,grid,endpoint', [
+    ('notices','.notice-grid','**/api/m03/notice-list?*'),
+    ('big','.big-month:not([hidden]) .big-grid[data-layout-state]','**/api/m07/big?*'),
+])
+def test_first_real_amounts_replace_placeholder_widths(server, browser_page, api, disposable, route, grid, endpoint):
+    page, _ = browser_page
+    original=api.get('/api/m15/theme?surface=react').json()
+    scale=next(item for item in original['scales'] if item['css']=='1.12')
+    assert api.post('/api/m15/ui-scale',json={'ui_scale':scale['key']}).is_success
+    held=[]
+    try:
+        login(page, server)
+        page.route(endpoint,lambda request:held.append(request))
+        page.goto(server+'/preview/'+route,wait_until='domcontentloaded')
+        page.wait_for_function("document.querySelector('.page-view:not([hidden]) [data-read-phase=reading]')!==null")
+        assert held
+        for request in held:request.continue_()
+        page.unroute(endpoint)
+        expect(page.locator(grid)).to_have_attribute('data-layout-state','ready',timeout=30000)
+        page.evaluate('document.fonts.ready')
+        result=page.locator(grid).evaluate('''root=>{let checked=0,bad=[];for(const cell of root.querySelectorAll('[role=gridcell]')){
+          const value=cell.querySelector('.ag-cell-value')||cell,text=value.textContent.trim();
+          if(!/^-?[\\d,]+\\.\\d{2}$/.test(text)||!value.clientWidth)continue;
+          checked++;if(value.scrollWidth>value.clientWidth+1)bad.push({column:cell.getAttribute('col-id'),available:value.clientWidth,needed:value.scrollWidth});
+        }return {checked,bad};}''')
+        assert result['checked']>0,'真实副本没有金额代表'
+        assert not result['bad'],result
+    finally:
+        page.unroute_all(behavior='ignoreErrors')
+        assert api.post('/api/m15/ui-scale',json={'ui_scale':original['ui_scale']}).is_success
+
+
 @pytest.mark.parametrize('route,title,grid,column,endpoint,widths',[
     ('contracts','集采台账','.contracts-grid','remark','**/api/m11/fields',{'arch':50,'arch_no':50,'material':160}),
     ('notices','付款通知书','.notice-grid','stat_settle','**/api/m03/actions/stat',{'project_display':60,'amount_approved':65,'stat_settle':70}),

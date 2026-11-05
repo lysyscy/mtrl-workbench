@@ -77,9 +77,8 @@ def main() -> int:
     try:
         for tag, runner in (("inv", FS8.run_fetch), ("setl", FS7.run_fetch)):
             print(f"\n=== 跑 {tag}（真机 · 复用同一会话）===")
-            with session_scope() as s:
-                out = runner(s, year_month=YM, confirmed=True, operator="科室用户",
-                             client_factory=factory)
+            out = runner(year_month=YM, confirmed=True, operator="科室用户",
+                         client_factory=factory)
             results[tag] = out
             print(f"  ok={out.get('ok')} degraded={out.get('degraded')} rows={out.get('rows')}")
             if out.get("message"):

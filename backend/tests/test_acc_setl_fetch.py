@@ -17,6 +17,14 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from unittest.mock import patch
+
+
+def _run_fetch(session, **kwargs):
+    with patch.object(FS, 'session_scope', lambda: nullcontext(session)):
+        return FS.run_fetch(**kwargs)
+
 from decimal import Decimal
 from io import BytesIO
 
@@ -291,13 +299,15 @@ def test_落库幂等且人工行不被覆盖():
         {"warehouse_name": "甲仓", "resource_code": "R99", "begin_amt": Decimal("3.00")},
     ])
     assert again["inserted"] == 0 and len(s.by_model[SetlDetail]) == 3
+    assert again['kept_manual'] == 1
+    assert live['R99'].source == 'manual' and live['R99'].begin_amt == Decimal('7.77')
 
 
 def test_抓取后页面即读到该月数据():
     from app.mod01_projects.models import Project
 
     s = FakeSession({Project: [_project(1, "甲仓", "P1")]})
-    out = FS.run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
+    out = _run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
                        client_factory=_fake_client,
                        export=lambda _c, _ym, _ids: build_xlsx([
                            _line(_values(code="R01")), _line(_values(code="R02")),
@@ -313,7 +323,7 @@ def test_抓取后页面即读到该月数据():
 def test_二次确认且失败降级不重试():
     s = FakeSession({})
     with pytest.raises(MustReportError) as exc:
-        FS.run_fetch(s, year_month="2026-08", confirmed=False, operator="测试")
+        _run_fetch(s, year_month="2026-08", confirmed=False, operator="测试")
     assert "强踢" in str(exc.value)                            # 明写会强踢（D9）
     assert not s.by_model.get(RunRecord), "用法错误**不该**写执行记录"
 
@@ -326,7 +336,7 @@ def test_二次确认且失败降级不重试():
         calls.append(ym)
         raise RuntimeError("i8 未登录")
 
-    out = FS.run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
+    out = _run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
                        client_factory=_fake_client, export=_boom)
     assert out["ok"] is False and out["degraded"] is True
     # ⚠️ 2026-09-22（`TAIL-69`）：本域**从未建成**手动导入通道 —— 判词从「降级为手动导入」
@@ -352,7 +362,7 @@ def test_陌生仓库自动建档扶正并逐条列出(monkeypatch):
 
     s = FakeSession({Project: [_project(1, "甲仓", "P1"),
                                _project(2, "未建仓-1", "P2")]})      # 2 号 = 占位行，等扶正
-    out = FS.run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
+    out = _run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
                        client_factory=lambda: _fake_client(
                            [("乙仓", "未建仓-1项目"), ("丙仓", "丁项目")]),
                        export=lambda _c, _ym, _ids: build_xlsx([
@@ -377,7 +387,7 @@ def test_陌生仓库自动建档扶正并逐条列出(monkeypatch):
 
     # ⚠️ 取不到仓库名单 ⇒ **降级不阻断**：抓取照样成功、数据照常落库，只在回执里说明
     s2 = FakeSession({Project: [_project(1, "甲仓", "P1")]})
-    out2 = FS.run_fetch(s2, year_month="2026-08", confirmed=True, operator="测试",
+    out2 = _run_fetch(s2, year_month="2026-08", confirmed=True, operator="测试",
                         client_factory=_broken_client,
                         export=lambda _c, _ym, _ids: build_xlsx(
                             [_line(_values(warehouse="乙仓", code="R01"))]))

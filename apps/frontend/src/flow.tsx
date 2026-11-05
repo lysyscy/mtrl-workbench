@@ -13,19 +13,16 @@ import { ApiError, record, requestJson, readProjects } from './api';
 import { LedgerPage } from './ledger';
 import { ProjectPicker } from './ledger-controls';
 import { body, cents, currentMonth, decimal, money, searchKey } from './notices-api';
-import { loadFlows, saveBlob } from './flow-api';
-import type { Flow } from './flow-api';
+import { loadFlows, readDebt, readPaymentStats, saveBlob } from './flow-api';
+import type { Flow, PaymentBar } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { contentWidth, gridTheme } from './grid';
 import { TimePicker, timeMatches } from './time-picker';
 const flowRowId = (row: Flow) => row.id == null ? 'flow-total' : String(row.id);
-interface Bar { key: string; label: string; amount: string }
-interface Debt { project: string; jc: string; material: string; mech: string }
-interface Stats { granularity: string; buckets: string[]; right: string[]; counts: number[]; selected: { bucket: string; projects: Bar[]; total: string; count: number } }
 const initial = () => ({ period:currentMonth(), projects: [] as number[], method:'', status:'effective', keyword:'', notice:0 });
-function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) => void; selected?: string[] | undefined }) {
+function Bars({ rows, choose, selected }: { rows: PaymentBar[]; choose?: (key:string) => void; selected?: string[] | undefined }) {
   const max=rows.reduce((value,row)=> { const n=cents(row.amount);return n<0n ? -n>value?-n:value : n>value?n:value; },1n);
   return <div className="flow-bars">{rows.map(row => {
     const value=cents(row.amount), width=Number((value<0n?-value:value)*10000n/max)/100;
@@ -35,11 +32,7 @@ function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) =
 }
 export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   const enabled=props.active&&!props.blocked;
-  const debt=useQuery({queryKey:['debt'],enabled,queryFn:async({signal}):Promise<Debt[]>=>{
-    const data=await requestJson('/api/m05/debt',{signal});
-    if(!record(data)||!Array.isArray(data.by_project_category))throw new ApiError('欠款读取不完整，请重试。');
-    return data.by_project_category.map(row=>{if(!record(row)||typeof row.project!=='string')throw new ApiError('欠款读取不完整，请重试。');return {project:row.project,jc:String(row.jc),material:String(row.material),mech:String(row.mech)};});
-  }});
+  const debt=useQuery({queryKey:['debt'],enabled,queryFn:async({signal})=>readDebt(await requestJson('/api/m05/debt',{signal}))});
   const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
   const phase=readPhase(debt,(debt.data?.length??0)===0);
   const [summarySettled, setSummarySettled] = useState(false);
@@ -80,10 +73,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   const guard=props.exportGuard;
   const enabled=props.active && !props.blocked;
   const flows=useQuery({queryKey:['flows'],enabled,queryFn:({signal})=>loadFlows(signal)});
-  const stats=useQuery({queryKey:['payment-stats',gran,year,quarter,bucket],enabled,queryFn:async({signal}):Promise<Stats>=>{
-    const data=await requestJson(`/api/m05/stats?${new URLSearchParams({granularity:gran,year:String(year),quarter:String(quarter),bucket})}`,{signal});
-    if(!record(data)||!Array.isArray(data.buckets)||!Array.isArray(data.right)||!record(data.selected))throw new ApiError('付款统计读取不完整，请重试。');return data as unknown as Stats;
-  }});
+  const stats=useQuery({queryKey:['payment-stats',gran,year,quarter,bucket],enabled,queryFn:async({signal})=>readPaymentStats(await requestJson(`/api/m05/stats?${new URLSearchParams({granularity:gran,year:String(year),quarter:String(quarter),bucket})}`,{signal}))});
   useEffect(()=>{ if (!props.active) return; const id=Number(params.get('notice'));if(id>0){locatePending.current=true;setFilter({...initial(),period:'全部',status:'',notice:id});setSearch('');} },[params.get('notice'),props.active]);
   useEffect(()=>{if(enabled&&!flows.isPending&&locatePending.current){locatePending.current=false;requestAnimationFrame(()=>flowSection.current?.scrollIntoView({block:'start'}));}},[params,enabled,flows.isPending]);
   const projectQuery=useQuery({queryKey:['projects', 'all'],enabled,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
@@ -129,7 +119,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     setFilter(f=>({...f,projects:f.projects.includes(id)?f.projects.filter(value=>value!==id):[...f.projects,id]}));
     flowSection.current?.scrollIntoView({block:'nearest'});
   }
-  const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]??'0.00'}));
+  const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]!}));
   // Statistics and flows read independently: each publishes its own state in a fixed lane so a
   // pending or failed read never holds the other region or pushes the table box around.
   const statsPhase=readPhase(stats,(stats.data?.buckets.length??0)===0);

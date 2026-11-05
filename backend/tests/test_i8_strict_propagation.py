@@ -264,15 +264,17 @@ def _session():  # noqa: ANN202
 
 
 @pytest.mark.parametrize("exc", STRICT_CASES, ids=lambda exc: type(exc).__name__)
-def test_收发结存抓取的严格停止不降级(exc):
+def test_收发结存抓取的严格停止不降级(exc, monkeypatch):
     """本域"失败 ⇒ 显式报错待人处理、不重试"的前提是**原因说对了**；要说错原因，就失去可诊断性。"""
     from app.mod07_setl import fetch_service as FS7
+    from contextlib import nullcontext
+    monkeypatch.setattr(FS7, 'session_scope', lambda: nullcontext(_session()))
 
     def factory():
         raise exc
 
     with pytest.raises(type(exc)):
-        FS7.run_fetch(_session(), year_month="2026-08", confirmed=True, operator="测试",
+        FS7.run_fetch(year_month="2026-08", confirmed=True, operator="测试",
                       client_factory=factory, export=lambda *a, **k: b"")
 
 
@@ -280,6 +282,8 @@ def test_收发结存抓取的严格停止不降级(exc):
 def test_库存抓取的严格停止不降级(exc, monkeypatch, tmp_path):
     from app.mod02_i8 import source_cache
     from app.mod08_inv import fetch_service as FS8
+    from contextlib import nullcontext
+    monkeypatch.setattr(FS8, 'session_scope', lambda: nullcontext(_session()))
 
     monkeypatch.setattr(source_cache, "DIR", tmp_path / "i8_source")
 
@@ -287,7 +291,7 @@ def test_库存抓取的严格停止不降级(exc, monkeypatch, tmp_path):
         raise exc
 
     with pytest.raises(type(exc)):
-        FS8.run_fetch(_session(), year_month="2026-08", confirmed=True, operator="测试",
+        FS8.run_fetch(year_month="2026-08", confirmed=True, operator="测试",
                       client_factory=factory, export=lambda *a, **k: b"")
 
 
@@ -300,7 +304,7 @@ def test_集采抓取的严格停止不降级(exc, monkeypatch):
 
     monkeypatch.setattr(FS11, "save_run_record", lambda *a, **k: None)
     with pytest.raises(type(exc)):
-        FS11.run_fetch(_session(), confirmed=True, operator="测试",
+        FS11.run_fetch(confirmed=True, operator="测试",
                        client_factory=factory, fetch=lambda client: [])
 
 
@@ -309,6 +313,8 @@ def test_集采抓取普通失败仍按原样降级(monkeypatch):
     from types import SimpleNamespace
 
     from app.mod11_jc import fetch_service as FS11
+    from contextlib import nullcontext
+    monkeypatch.setattr(FS11, 'session_scope', lambda: nullcontext(None))
 
     monkeypatch.setattr(FS11.fetch_task, "degrade_to_excel", lambda _exc: {"message": "降级"})
     monkeypatch.setattr(FS11.fetch_task, "fetch_record_payload", lambda **kwargs: kwargs)
@@ -319,6 +325,19 @@ def test_集采抓取普通失败仍按原样降级(monkeypatch):
     def boom(client):  # noqa: ANN001, ARG001
         raise RuntimeError("boom")
 
-    out = FS11.run_fetch(None, confirmed=True, operator="测试",
+    out = FS11.run_fetch(confirmed=True, operator="测试",
                          client_factory=lambda: _Boom(RuntimeError("unused")), fetch=boom)
     assert out["ok"] is False and out["degraded"] is True and out["message"] == "降级"
+
+
+@pytest.mark.parametrize('exc', STRICT_CASES, ids=lambda exc: type(exc).__name__)
+@pytest.mark.parametrize('stage', ['common', 'warehouses'])
+def test_project_sync_propagates_strict_loader_stop(exc, stage):
+    from app.mod01_projects.sync_service import build_plan
+
+    def stopped():
+        raise exc
+
+    with pytest.raises(type(exc)):
+        build_plan(load_common=stopped if stage == 'common' else lambda: [],
+                   load_warehouses=stopped if stage == 'warehouses' else lambda: [])

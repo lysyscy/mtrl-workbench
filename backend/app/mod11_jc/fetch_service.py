@@ -22,11 +22,13 @@ from __future__ import annotations
 
 # ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
 #    —— 不传 ⇒ 耗时恒 0，用户实测报过）
+from contextlib import ExitStack
 from datetime import datetime
 from typing import Callable
 
 from sqlalchemy.orm import Session
 
+from app.core.db import session_scope
 from app.core.errors import MustReportError, human_reason
 from app.core.identity import current_operator
 from app.core.session import current_name
@@ -40,7 +42,7 @@ from app.mod01_projects.pending import record_detail
 from app.mod01_projects import service as P1S
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
-from app.mod02_i8.client import I8Client
+from app.mod02_i8.client import serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import (
     StrictSessionEnded,
@@ -150,193 +152,180 @@ def default_since(s: Session) -> str:
 
 
 def run_fetch(
-    s: Session,
     *,
     confirmed: bool,
     operator: str = "",
-    since: str = "",
-    client_factory: Callable = None,        # type: ignore[assignment]
-    fetch: Callable | None = None,          # type: ignore[type-arg]
-    sync: Callable | None = None,           # type: ignore[type-arg]
+    since: str | None = "",
+    client_factory: Callable | None = None,
+    fetch: Callable | None = None,
+    sync: Callable | None = None,
     loaders: tuple[Callable, Callable] | None = None,
 ) -> dict:
-    """跑一次抓取（**人工触发**）⇒ 回执字典。
+    """Own the fetch transaction phases; external callbacks never borrow a Session.
 
-    ⭐ `since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空 = **全量**（首次），有值 = **增量**（日常）。
-    ⚠️ 起点由**调用方**算（默认 = 库里最大合同日期 **− 3 天**，见 `default_since`）——
-       i8 里**增补合同会沿用原单据日期** ⇒ 卡太紧会**漏**；落库按 `BillNo` 幂等 ⇒ 推早了无害。
-
-    ⚠️ 走到网络**之前**就失败的（未二次确认）⇒ **不写执行记录**（那是用法错误，不是业务失败）；
-    之后任何一步失败 ⇒ **降级进回执**（禁静默），**绝不自动重试登录**（`D9`）。
+    None selects the current incremental start; an empty string remains full fetch.
+    Project sync, contract application and the receipt commit together. Ordinary
+    sync failure rolls back only its savepoint; strict transport stops propagate.
     """
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
-    # ⚠️ **耗时的起点**：二次确认之后、任何导出 / 网络动作**之前**
-    #    （见 `save_run_record` 的 `started_at` 那段 —— 不传 ⇒ 耗时恒 0）
     t0 = datetime.now()
-
+    if since is None:
+        with session_scope() as s:
+            since = default_since(s)
+    since = str(since or "")
     operator = operator or current_operator()
-    # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（与改动前一致）；
-    #    只有本请求显式选了「浏览器已有会话」才换通道，⛔ 缺连接即当场停、不悄悄退回登录。
     client_factory = client_factory or (
         lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
     )
-    loaders_given = loaders is not None
-
-    rows: list[dict] = []
-    dropped = 0
-    material_filled = 0
-    material_blank = 0
-    sync_result: dict = {}
-    degraded = ""
-    try:
-        # ⛔⛔ **本层刻意**不再加 `serialize_fetch(TABLE)` —— `ContractFetcher.fetch_all()` 内部**已经锁了** `jc_contract`，
-        #    而那把锁**不可重入** ⇒ 套两层就是**自己等自己**。
-        #    ⚠️ 实测（2026-09-19）：症状是**等满 600 秒**后降级成「i8 接口不可用…已降级为手动 Excel 导入」——
-        #    那句话**极具误导性**（看着像 i8 挂了 / 账号有问题，其实是我们自己锁死的）。
-        #    ⇒ 同表串行的**唯一**落点 = `ContractFetcher.fetch_all`（`TABLE` 常量两边**是同一个值**，靠它对齐）。
-        client = client_factory()
+    dropped = material_filled = material_blank = 0
+    common_rows, warehouse_rows, sync_failure = [], [], None
+    with ExitStack() as batch:
         try:
-            fetcher = ContractFetcher(client)
-            if fetch is None:
-                rows = fetcher.fetch_all(since=since)
-            else:
-                rows = fetch(client)
-            dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
-            # ⭐⭐ `TAIL-96` **集采剔除名单**：不要的**项目** ⇒ 抓取时先剔除
-            #    （用户 2026-09-25 裁定；付款与集采**各一份名单**，⛔ 不共用）
-            #    ⛔ 禁静默：剔除多少条、都是谁 ⇒ 回执 `ignored` ＋ 执行记录 `jc_ignored`。
-            rows, ignored_rows = split_ignored(s, rows)
-            # ⭐⭐ **补材料名**（`M5-6`）：i8 **列表接口没有材料字段**（88 个字段全查过）
-            #    ⇒ 只能**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
-            #    ⚠️⚠️ **只补「库里还没有的」** —— 这是这件事能用的前提：
-            #       全量首次约 347 次请求（几分钟，**就这一次**）；之后增量新增只有几条 ⇒ **秒级**。
-            #       若每次都对全量补，日常抓取就永远是几分钟（而"刷新已有行的材料名"毫无意义）。
-            #    ⚠️ 必须**在 `client` 关闭之前**做（下面 `finally` 会 close）。
-            #    ⚠️ 单条失败 ⇒ 该条留空并**计数报出**（禁静默，见回执 `material_blank`）。
-            if fetch is None and rows:
-                known = R.existing_contract_nos(
-                    s, [str(r.get("contract_no") or "") for r in rows])
-                for r in rows:
-                    no = str(r.get("contract_no") or "").strip()
-                    if not no or no in known:
-                        continue
-                    name = fetcher.fetch_item_name(
-                        str((r.get("fields") or {}).get("PhId") or ""))
-                    if name:
-                        r["material_name"] = name
-                        material_filled += 1
-                    else:
-                        material_blank += 1
-            # ⭐ **先同步常用项目列表**（复用同一会话）—— 失败**不拖垮**抓取，只降级
-            load_common, load_wh = loaders if loaders_given else default_loaders(client)
-            do_sync = sync or sync_and_archive       # ⚠️ 可注入（测试不连 i8）
+            # One table lock spans acquisition through commit, without a DB
+            # connection while waiting for it or for any external response.
+            batch.enter_context(serialize_fetch(TABLE))
+            client = client_factory()
             try:
-                sync_result = do_sync(s, load_common=load_common, load_warehouses=load_wh)
+                fetcher = ContractFetcher(client)
+                fetched_rows = fetcher.fetch_in_locked_batch(since=since) if fetch is None else fetch(client)
+                dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
+                with session_scope() as s:
+                    rows, ignored_rows = split_ignored(s, fetched_rows)
+                    known = R.existing_contract_nos(s, [str(r.get("contract_no") or "") for r in rows]) if fetch is None and rows else set()
+                if fetch is None:
+                    for row in rows:
+                        no = str(row.get("contract_no") or "").strip()
+                        if not no or no in known:
+                            continue
+                        name = fetcher.fetch_item_name(str((row.get("fields") or {}).get("PhId") or ""))
+                        if name:
+                            row["material_name"] = name
+                            material_filled += 1
+                        else:
+                            material_blank += 1
+                load_common, load_wh = loaders if loaders is not None else default_loaders(client)
+                try:
+                    common_rows, warehouse_rows = load_common(), load_wh()
+                except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+                    raise
+                except Exception as exc:
+                    sync_failure = exc
+            finally:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+            raise
+        except Exception as exc:
+            notice = fetch_task.degrade_to_excel(exc)
+            with session_scope() as s:
+                run = save_run_record(s, **fetch_task.fetch_record_payload(
+                    object_desc=f"{TABLE} 全量", success=0, fail=1,
+                    error_message=f"{type(exc).__name__}: {exc}"),
+                    detail={**record_detail(), **R.fetch_detail()},
+                    operator=operator, started_at=t0)
+            return {"ok": False, "degraded": True, "message": notice["message"],
+                    "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
+
+        def common_snapshot():
+            if sync_failure is not None:
+                raise sync_failure
+            return common_rows
+
+        # Re-read local project/party/contract facts in the apply transaction;
+        # replayed loaders contain ordinary values, never network operations.
+        with session_scope() as s:
+            current_rows, current_ignored = split_ignored(s, fetched_rows)
+            if len(current_rows) != len(rows) or any(current is not previous for current, previous in zip(current_rows, rows)):
+                raise MustReportError('集采剔除名单已变化，本次未写入合同；请重新抓取。')
+            rows, ignored_rows = current_rows, current_ignored
+            try:
+                with s.begin_nested():
+                    sync_result = (sync or sync_and_archive)(
+                        s, load_common=common_snapshot, load_warehouses=lambda: warehouse_rows)
             except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
-                # ⛔（`TAIL-476`）「常用项目同步失败」的降级只该兜业务性失败；
-                #    浏览器通道停止意味着整条链的身份/目标已经不可信，继续抓下去只会落半批数据。
                 raise
-            except Exception as exc:                        # noqa: BLE001 —— 降级，不抛
-                sync_result = {"degraded": True,
-                               "message": human_reason(
-                                   "常用项目同步失败", exc,
-                                   next_step="本次仍按**现有档案**匹配；可稍后重抓一次")}
-                s.rollback()
-        finally:
-            close = getattr(client, "close", None)
-            if callable(close):
-                close()
-    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
-        # ⛔（`TAIL-476`）严格通道的停止必须如实冒出去（含 `BrowserRelayUnavailable`），
-        #    ⛔ 不能改写成「i8 抓不到数 ⇒ 已降级为手动 Excel 导入」——那只解释网络/接口故障。
-        raise
-    except Exception as exc:                                    # noqa: BLE001 —— 一律降级，不抛
-        notice = fetch_task.degrade_to_excel(exc)
-        run = save_run_record(s, **fetch_task.fetch_record_payload(
-            object_desc=f"{TABLE} 全量", success=0, fail=1,
-            error_message=f"{type(exc).__name__}: {exc}"),
-            detail={**record_detail(), **R.fetch_detail()},   # ⚠️ 失败**也要**写标记（否则"最近一次"指不住）
-            operator=operator, started_at=t0)
-        return {"ok": False, "degraded": True, "message": notice["message"],
-                "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
+            except Exception as exc:
+                sync_result = {"degraded": True, "message": human_reason(
+                    "常用项目同步失败", exc, next_step="本次仍按**现有档案**匹配；可稍后重抓一次")}
 
-    # ⭐⭐ **甲方单位归类**（`M5-6b` · 用户 2026-09-20 口径）—— 落库前必须先有它：
-    #    `upsert_fetched_contracts` 靠 `row["party_kind"]` 决定**金额落哪一列**。
-    #    ⚠️ **没见过的甲方先落 `unknown` 等人指定**（⛔ 不静默当成"正常"），并**在回执里报出来**。
-    # ⚠️⚠️ **必须排在 `match_projects` 之前**（2026-09-26 用户报障「抓取后那批合同还是没变」的**真因**）：
-    #    `match_projects` 返回的是 **`{**row, project_id}` 造出来的新 dict** ⇒ 在它**之后**才打的
-    #    `party_kind` 只落在**原 `rows`** 上，**副本里没有** ⇒ 落库看到的是 `unknown`
-    #    ⇒ **永远走"正常甲方"分支** ⇒ 贸易公司合同的 i8 价被写进「合同金额」、贸易两列永远空
-    #    （分类表里明明标着 `trade` —— 用户看到的就是这个）。
-    new_parties = R.ensure_party_kinds(s, [str(r.get("party_name") or "") for r in rows])
-    _kmap = R.party_kind_map(s)
-    for _r in rows:
-        _r["party_kind"] = _kmap.get(str(_r.get("party_name") or "").strip(), KIND_PARTY_UNKNOWN)
+            # ⭐⭐ **甲方单位归类**（`M5-6b` · 用户 2026-09-20 口径）—— 落库前必须先有它：
+            #    `upsert_fetched_contracts` 靠 `row["party_kind"]` 决定**金额落哪一列**。
+            #    ⚠️ **没见过的甲方先落 `unknown` 等人指定**（⛔ 不静默当成"正常"），并**在回执里报出来**。
+            # ⚠️⚠️ **必须排在 `match_projects` 之前**（2026-09-26 用户报障「抓取后那批合同还是没变」的**真因**）：
+            #    `match_projects` 返回的是 **`{**row, project_id}` 造出来的新 dict** ⇒ 在它**之后**才打的
+            #    `party_kind` 只落在**原 `rows`** 上，**副本里没有** ⇒ 落库看到的是 `unknown`
+            #    ⇒ **永远走"正常甲方"分支** ⇒ 贸易公司合同的 i8 价被写进「合同金额」、贸易两列永远空
+            #    （分类表里明明标着 `trade` —— 用户看到的就是这个）。
+            new_parties = R.ensure_party_kinds(s, [str(r.get("party_name") or "") for r in rows])
+            _kmap = R.party_kind_map(s)
+            for _r in rows:
+                _r["party_kind"] = _kmap.get(str(_r.get("party_name") or "").strip(), KIND_PARTY_UNKNOWN)
 
-    # ⭐ **再匹配**（档案已被上一步补过）——⚠️ 这一步会**复制**行 dict ⇒ 所以它必须在**上面那段之后**
-    m = match_projects(rows, P1S.all_projects(s))
+            # ⭐ **再匹配**（档案已被上一步补过）——⚠️ 这一步会**复制**行 dict ⇒ 所以它必须在**上面那段之后**
+            m = match_projects(rows, P1S.all_projects(s))
 
-    # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
-    stats = {"inserted": 0, "refreshed": 0, "skipped": 0}
-    by_pid: dict[int, list[dict]] = {}
-    for row in m["matched"]:
-        by_pid.setdefault(int(row["project_id"]), []).append(row)
-    for pid, group in by_pid.items():
-        part = R.upsert_fetched_contracts(s, project_id=pid, rows=group)
-        for k in stats:
-            stats[k] += int(part.get(k) or 0)
+            # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
+            stats = {"inserted": 0, "refreshed": 0, "skipped": 0}
+            by_pid: dict[int, list[dict]] = {}
+            for row in m["matched"]:
+                by_pid.setdefault(int(row["project_id"]), []).append(row)
+            for pid, group in by_pid.items():
+                part = R.upsert_fetched_contracts(s, project_id=pid, rows=group)
+                for k in stats:
+                    stats[k] += int(part.get(k) or 0)
 
-    run = save_run_record(s, **fetch_task.fetch_record_payload(
-        object_desc=f"{TABLE} 全量（{len(rows)} 条）",
-        success=len(m["matched"]), fail=0),
-        # ⚠️ `record_detail()` 是**材料侧**的键（`promote_pending`，集采天然用不上）⇒ 在其后**追加集采自己的**
-        #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
-        detail={**record_detail(),
-                **R.fetch_detail(
-                    jc_unsettled=[
-                        {"contract_no": str(r.get("contract_no") or ""),
-                         "project_name": str(r.get("project_name") or ""),
-                         "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
-                         "kind": r.get("unsettled_kind")}
-                        for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
-                    ],
-                    # ⭐ `TAIL-96`：被名单剔除的（同样截断保护）
-                    jc_ignored=[
-                        {"contract_no": str(r.get("contract_no") or ""),
-                         "project_name": str(r.get("project_name") or "")}
-                        for r in ignored_rows[:200]
-                    ])},
-        operator=operator, started_at=t0)
-    return {
-        "ok": True, "degraded": False,
-        "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）
-        "fetched": len(rows), "dropped_unapproved": dropped,
-        # ⭐ 材料名的补数情况（⛔ 禁静默：补不上多少条必须让人看见）
-        "material_filled": material_filled, "material_blank": material_blank,
-        # ⭐ `M5-6b`：这一次**新遇到的甲方单位**（已落成"未指定"）—— ⛔ 必须报出来让人去指定，
-        #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
-        "new_parties": new_parties,
-        # ⭐ `TAIL-96`：被剔除名单挡下的（⛔ 不静默 —— 得让人看见"哪些项目被当成不要的了"）
-        "ignored": len(ignored_rows), "ignored_projects": _tally(ignored_rows, "project_name"),
-        "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
-        # ⭐ `TAIL-92`：没落库的按**归属类别**分开报（⛔ 禁静默 —— 得让人看出"卡在哪一步"）：
-        #    `needs_keyword` = 壳认出来了、但单据名里没有该壳下任何小微的关键词（**最常见**，要人去指认/补词）
-        #    `needs_choice`  = 命中了多个小微（要人挑一个）· `not_archived` = 项目还没建档
-        "unsettled": _tally(m["unmatched"], "unsettled_kind"),
-        "stats": stats,
-        # ⭐ **匹配预览**（落库前就该让人看见的那两块；这里随回执一起回，壳直接用）
-        "matched_projects": _tally(m["matched"], "project_name"),
-        "unmatched_projects": _tally(m["unmatched"], "project_name"),
-        "sync": {k: v for k, v in (sync_result or {}).items() if k != "created"},
-        "run_record_id": getattr(run, "id", None),
-        "message": (
-            f"抓取 {len(rows)} 条（未审批丢弃 {dropped}）· 匹配上 {len(m['matched'])} 条"
-            f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
-            f"归属未走完、未写入 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
-            + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")
-        ),
-    }
+            run = save_run_record(s, **fetch_task.fetch_record_payload(
+                object_desc=f"{TABLE} 全量（{len(rows)} 条）",
+                success=len(m["matched"]), fail=0),
+                # ⚠️ `record_detail()` 是**材料侧**的键（`promote_pending`，集采天然用不上）⇒ 在其后**追加集采自己的**
+                #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
+                detail={**record_detail(),
+                        **R.fetch_detail(
+                            jc_unsettled=[
+                                {"contract_no": str(r.get("contract_no") or ""),
+                                 "project_name": str(r.get("project_name") or ""),
+                                 "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                                 "kind": r.get("unsettled_kind")}
+                                for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
+                            ],
+                            # ⭐ `TAIL-96`：被名单剔除的（同样截断保护）
+                            jc_ignored=[
+                                {"contract_no": str(r.get("contract_no") or ""),
+                                 "project_name": str(r.get("project_name") or "")}
+                                for r in ignored_rows[:200]
+                            ])},
+                operator=operator, started_at=t0)
+            return {
+                "ok": True, "degraded": False,
+                "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）
+                "fetched": len(rows), "dropped_unapproved": dropped,
+                # ⭐ 材料名的补数情况（⛔ 禁静默：补不上多少条必须让人看见）
+                "material_filled": material_filled, "material_blank": material_blank,
+                # ⭐ `M5-6b`：这一次**新遇到的甲方单位**（已落成"未指定"）—— ⛔ 必须报出来让人去指定，
+                #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
+                "new_parties": new_parties,
+                # ⭐ `TAIL-96`：被剔除名单挡下的（⛔ 不静默 —— 得让人看见"哪些项目被当成不要的了"）
+                "ignored": len(ignored_rows), "ignored_projects": _tally(ignored_rows, "project_name"),
+                "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
+                # ⭐ `TAIL-92`：没落库的按**归属类别**分开报（⛔ 禁静默 —— 得让人看出"卡在哪一步"）：
+                #    `needs_keyword` = 壳认出来了、但单据名里没有该壳下任何小微的关键词（**最常见**，要人去指认/补词）
+                #    `needs_choice`  = 命中了多个小微（要人挑一个）· `not_archived` = 项目还没建档
+                "unsettled": _tally(m["unmatched"], "unsettled_kind"),
+                "stats": stats,
+                # ⭐ **匹配预览**（落库前就该让人看见的那两块；这里随回执一起回，壳直接用）
+                "matched_projects": _tally(m["matched"], "project_name"),
+                "unmatched_projects": _tally(m["unmatched"], "project_name"),
+                "sync": {k: v for k, v in (sync_result or {}).items() if k != "created"},
+                "run_record_id": getattr(run, "id", None),
+                "message": (
+                    f"抓取 {len(rows)} 条（未审批丢弃 {dropped}）· 匹配上 {len(m['matched'])} 条"
+                    f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
+                    f"归属未走完、未写入 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
+                    + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")
+                ),
+            }
 
 
 __all__ = ["TABLE", "CONFIRM_TOKEN", "KICK_WARNING",

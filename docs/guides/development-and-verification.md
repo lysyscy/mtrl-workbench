@@ -26,6 +26,8 @@ React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/
 
 ## 工具与产物
 
+纯工具pytest放在`backend/tool_tests`，仓根运行`backend/.venv/Scripts/python.exe -B -X utf8 -m pytest -c backend/pytest.ini backend/tool_tests`，不经过业务conftest或数据库验证器。数据库配置/引擎保护与业务回滚夹具仍归`backend/tests`。旧syntax_audit的Node检查已退役，其专属用例退出；当前Python/暂存内容与失败码继续由`test_staged_audits.py`的既有unittest验证。
+
 工具用途及边界读 tools/README.md。syntax_audit、bytes_guard 和凭据文件名保护在真实 pre-commit 执行，不能跳钩子。前端源码、配置、单测或依赖变化由.github/workflows/frontend-checks.yml在push/PR运行锁定依赖安装、typecheck和test:unit；纯Markdown变化不触发，检查无需数据库或浏览器。票工具用临时 tracker/票目录验证高水位、依赖和失败回滚，干跑不得写入。audit_work 只提示运行产物生命周期；wiring_audit 的 W2 只是候选线索，不能当成业务缺陷或删除授权。
 
 默认新运行由workspace_paths登记到本机受管运行区的files/<kind>，路径以工具回执为准；父进程持有租约，明确成功后封存证据，失败或未明确结项时暂缓删除。固定旧运行继续原.artifacts/active路径；临时脚本放work/系统临时目录，证据必要才有限保留。手工指定MTRL_RUN_ID的运行由指定操作者负责退出。异常日志保留原始返回码后按需读取；删除/移动须核绝对路径、链接边界、实际用途及恢复依据，并在同一执行环境内完成。

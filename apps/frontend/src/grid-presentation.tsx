@@ -27,7 +27,9 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
   rowMinimum?: number;
 }) {
   const widths = useGridWidths(table, layout.root, scale, layout.active);
-  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}`);
+  // The first real result must replace placeholder sizing. Keep the key stable
+  // through ordinary non-empty saves so existing editing widths stay untouched.
+  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`);
   const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
   const widthColumns=useGridWidthColumns(materialized);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);

@@ -5,7 +5,7 @@ export const reportFetch = {
   inventory: {title: '库存单据', path: '/api/m08/fetch', preserved: 'kept_with_adjustment', preservedLabel: '保留有调整的源行',
     scope: '全项目按核算月抓取，不受页面筛选限制；重抓保留调整单。'},
   settlement: {title: '收发结存', path: '/api/m07/fetch', preserved: 'kept_manual', preservedLabel: '保留手工行',
-    scope: '按核算月抓取全部已配置 i8 编号的项目；同键明细更新为本次来源，未匹配的手工行保留。'},
+    scope: '按核算月抓取全部已配置 i8 编号的项目；同键自动明细更新为本次来源，手工行保留。'},
 } as const;
 
 export interface ReportFetchResult { ok: boolean; message: string }

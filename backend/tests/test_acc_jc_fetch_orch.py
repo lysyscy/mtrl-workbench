@@ -13,12 +13,48 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from app.core.db import session_scope
 from app.mod01_projects import repository as pj_repo
 from app.mod01_projects.models import TYPE_NORMAL
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod11_jc import fetch_service as FS
 from app.mod11_jc import repository as R
+
+
+def _run_fetch(session, **kwargs):
+    kwargs.setdefault('client_factory', lambda: SimpleNamespace(close=lambda: None))
+    kwargs.setdefault('loaders', (lambda: [], lambda: []))
+    with patch.object(FS, 'session_scope', lambda: nullcontext(session)):
+        return FS.run_fetch(**kwargs)
+
+
+def test_sync_database_failure_keeps_prior_facts_and_discards_partial_sync(rollback_db):
+    from types import SimpleNamespace
+    from sqlalchemy import text, select
+    from app.mod01_projects.models import Project
+
+    with session_scope() as s:
+        pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full=FULL_NEW,
+                               warehouse_name=WH_NEW, phid='9')
+        s.flush()
+
+        def partial_then_failed(session, **kwargs):
+            pj_repo.create_project(session, project_type=TYPE_NORMAL, name_full='局部同步临时项目',
+                                   warehouse_name='__450_partial__', phid='10')
+            session.flush()
+            session.execute(text('SELECT 1/0'))
+
+        out = _run_fetch(s, confirmed=True, fetch=lambda _c: _fetch_rows(), sync=partial_then_failed,
+                           client_factory=lambda: SimpleNamespace(close=lambda: None), loaders=(lambda: [], lambda: []))
+        assert out['sync']['degraded'] is True
+        assert out['matched'] == 1, '局部同步失败不能回滚此前已存在的项目事实'
+        assert s.scalar(select(Project).where(Project.warehouse_name == WH_NEW)) is not None
+        assert s.scalar(select(Project).where(Project.warehouse_name == '__450_partial__')) is None
+        assert R.one_by_no(s, '__自检_F_1__') is not None
 
 WH_NEW = "__自检仓_抓取新项目__"
 FULL_NEW = f"{WH_NEW}项目(TBLX9999000001)"
@@ -60,7 +96,7 @@ def test_先同步常用项目再匹配_否则会把该纳管的判成不需要(
         s.flush()
         assert R.one_by_no(s, "__自检_F_1__") is None, "前置：库里本没有这张合同"
 
-        out = FS.run_fetch(s, confirmed=True, fetch=lambda c: _fetch_rows(), sync=_sync_new_project)
+        out = _run_fetch(s, confirmed=True, fetch=lambda c: _fetch_rows(), sync=_sync_new_project)
 
         assert out["ok"] is True and out["degraded"] is False
         assert out["fetched"] == 2
@@ -82,7 +118,7 @@ def test_同步失败不拖垮抓取_降级进回执且仍按现有档案匹配(
     ⚠️ 这条要能红：把 `run_fetch` 里那个 `try/except` 去掉 ⇒ 整个抓取会抛出去。
     """
     with session_scope() as s:
-        out = FS.run_fetch(s, confirmed=True, fetch=lambda c: _fetch_rows(), sync=_sync_fail)
+        out = _run_fetch(s, confirmed=True, fetch=lambda c: _fetch_rows(), sync=_sync_fail)
         assert out["ok"] is True, "同步失败 ⛔ 不许把抓取一起打掉"
         assert isinstance(out.get("sync"), dict) and out["sync"].get("degraded") is True, \
             "降级必须**显式**进回执（禁静默）"
@@ -99,7 +135,7 @@ def test_未二次确认不写执行记录也不动数据():
     with session_scope() as s:
         before = R.count_contracts(s)
         try:
-            FS.run_fetch(s, confirmed=False, fetch=lambda c: _fetch_rows())
+            _run_fetch(s, confirmed=False, fetch=lambda c: _fetch_rows())
         except MustReportError as exc:
             assert FS.KICK_WARNING in str(exc), "报错里要带上「会顶号」的提醒"
         else:

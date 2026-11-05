@@ -192,9 +192,7 @@ def api_fetch(payload: FetchIn) -> dict:
     from app.mod02_i8.browser_relay import scope_of
 
     with scope_of(payload):
-        with session_scope() as s:
-            since = payload.since if payload.since is not None else FS.default_since(s)
-            return FS.run_fetch(s, confirmed=True, since=str(since or ""))
+        return FS.run_fetch(confirmed=True, since=payload.since)
 
 
 class ExportIn(BaseModel):

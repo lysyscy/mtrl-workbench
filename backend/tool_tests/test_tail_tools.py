@@ -1,4 +1,4 @@
-"""Ticket behavior against isolated temporary files; no application or DB writes."""
+"""Ticket behavior against isolated files, outside application fixture scope."""
 from pathlib import Path
 import sys
 

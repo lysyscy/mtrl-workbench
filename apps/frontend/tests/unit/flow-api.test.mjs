@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadFlows } from '../../src/flow-api.ts';
+import { loadFlows, readDebt, readPaymentStats } from '../../src/flow-api.ts';
 import { ApiError, cents, money } from '../../src/api.ts';
 
 const base = {
@@ -9,6 +9,36 @@ const base = {
   pay_date: '2026-10-28', amount: '12.34', pay_method: '现汇', remark: '', created_by: '',
   status: 'effective', status_label: '生效', revoke_reason: '',
 };
+const stats = () => ({granularity:'month',buckets:['2026-10'],right:['-0.01'],counts:[1],
+  selected:{bucket:'2026-10',projects:[{key:'',label:'未判定',amount:'-0.01'}],total:'-0.01',count:1}});
+
+test('statistics reject incomplete 200 facts instead of rendering missing money as zero', () => {
+  for (const patch of [{right:[]},{right:[null]},{right:['bad']},{counts:[]},{selected:{}},
+    {selected:{...stats().selected,projects:null}},{selected:{...stats().selected,total:null}},
+    {buckets:['2026-13']},{selected:{...stats().selected,bucket:'bad'}}]) {
+    assert.throws(()=>readPaymentStats({...stats(),...patch}),ApiError);
+  }
+  const weekly={...stats(),granularity:'week',buckets:['2026-12-28'],selected:{...stats().selected,bucket:'2026-12-28'}};
+  assert.equal(readPaymentStats(weekly),weekly);
+  assert.throws(()=>readPaymentStats({...weekly,buckets:['2026-12-29']}),ApiError);
+});
+
+test('statistics retain zero, negative, unassigned, extra fields and empty chart facts', () => {
+  const value={...stats(),quarter:null,extra:{keep:true}};
+  assert.equal(readPaymentStats(value),value);
+  assert.equal(readPaymentStats(value).selected.projects[0].key,'');
+  const empty={...stats(),buckets:[],right:[],counts:[],selected:{bucket:'2026-10',projects:[],total:'0.00',count:0}};
+  assert.equal(readPaymentStats(empty),empty);
+});
+
+test('debt requires real amount strings before rendering and preserves actual values', () => {
+  const row={project:'待指定归属',jc:'0.00',material:'-0.01',mech:'1234.00',extra:'keep'};
+  assert.equal(readDebt({by_project_category:[row]})[0],row);
+  assert.deepEqual(readDebt({by_project_category:[]}),[]);
+  for(const amount of [undefined,null,0,['0.00'],'bad']) {
+    assert.throws(()=>readDebt({by_project_category:[{...row,mech:amount}]}),ApiError);
+  }
+});
 async function load(payload, noticeId) {
   const previous = globalThis.fetch;
   const expected = noticeId === undefined ? '/api/m05/flows?year_month=' : `/api/m05/flows?notice_id=${noticeId}`;

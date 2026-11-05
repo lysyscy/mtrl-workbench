@@ -17,10 +17,12 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
 from app.core.session import current_name
@@ -85,7 +87,6 @@ def _wh_loader(wh_rows):
 
 
 def run_fetch(
-    s: Session,
     *,
     year_month: str,
     confirmed: bool,
@@ -104,7 +105,8 @@ def run_fetch(
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
 
-    ids = P1S.export_phids(s)
+    with session_scope() as s:
+        ids = P1S.export_phids(s)
     operator = operator or current_operator()
     # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（与改动前一致）；
     #    只有本请求显式选了「浏览器已有会话」才换通道，⛔ 缺连接即当场停、不悄悄退回登录。
@@ -116,8 +118,9 @@ def run_fetch(
 
     target = f"{SPEC_KEY} {plan['ym']}（{len(ids.split(','))} 个项目）"
     wh_rows: list[dict] | None = None
-    try:
-        with serialize_fetch(TABLE):             # 同表串行（D9）
+    with ExitStack() as batch:
+        try:
+            batch.enter_context(serialize_fetch(TABLE))
             client = client_factory()
             try:
                 content = export(client, plan["ym"], ids)
@@ -126,45 +129,47 @@ def run_fetch(
                 close = getattr(client, "close", None)
                 if callable(close):
                     close()
-        try:                                   # ⭐ 2026-09-21 用户裁定「抓取导出分开」：
-            source_cache.save(SPEC_KEY, plan["ym"], content)   # 源文件按月存档 ⇒
-        except OSError as cache_exc:           # 「含透视导出」只读这份缓存（⛔ 不再现场登 i8）。
-            logger.warning("i8 源文件存档失败（不影响抓取）：%s", cache_exc)
-        rows = importer.parse_rows(content)
-    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
-        # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
-        #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
-        raise
-    except Exception as exc:                      # noqa: BLE001 —— 一律降级，不静默
-        notice = fetch_task.degrade_no_manual(exc)   # ⭐ m08 无手动兜底（2026-09-22 用户裁定）
-        run = save_run_record(s, **fetch_task.fetch_record_payload(
-            object_desc=target, success=0, fail=1,          # fail=1 ⇒ status=failed（这一批失败）
-            error_message=f"{type(exc).__name__}: {exc}"),
-            detail=record_detail(), operator=operator,      # ⭐ 「待人工」清单：本次没有 ⇒ 写空（pending 口径 1）
-            started_at=t0)
-        return {"ok": False, "degraded": True, "message": notice["message"],
-                "run_record_id": getattr(run, "id", None)}
+            try:                                   # ⭐ 2026-09-21 用户裁定「抓取导出分开」：
+                source_cache.save(SPEC_KEY, plan["ym"], content)   # 源文件按月存档 ⇒
+            except OSError as cache_exc:           # 「含透视导出」只读这份缓存（⛔ 不再现场登 i8）。
+                logger.warning("i8 源文件存档失败（不影响抓取）：%s", cache_exc)
+            rows = importer.parse_rows(content)
+        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+            # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
+            #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
+            raise
+        except Exception as exc:                      # noqa: BLE001 —— 一律降级，不静默
+            notice = fetch_task.degrade_no_manual(exc)   # ⭐ m08 无手动兜底（2026-09-22 用户裁定）
+            with session_scope() as s:
+                run = save_run_record(s, **fetch_task.fetch_record_payload(
+                    object_desc=target, success=0, fail=1,          # fail=1 ⇒ status=failed（这一批失败）
+                    error_message=f"{type(exc).__name__}: {exc}"),
+                    detail=record_detail(), operator=operator,      # ⭐ 「待人工」清单：本次没有 ⇒ 写空（pending 口径 1）
+                    started_at=t0)
+            return {"ok": False, "degraded": True, "message": notice["message"],
+                    "run_record_id": getattr(run, "id", None)}
 
-    stats = {"inserted": 0, "updated": 0, "deleted": 0, "kept_with_adjustment": 0}
-    for (ym, warehouse), group in group_by_scope(rows).items():
-        part = upsert_details(s, ym=ym, warehouse=warehouse, rows=group)
-        for k in stats:
-            stats[k] += part[k]
+        with session_scope() as s:
+            stats = {"inserted": 0, "updated": 0, "deleted": 0, "kept_with_adjustment": 0}
+            for (ym, warehouse), group in group_by_scope(rows).items():
+                part = upsert_details(s, ym=ym, warehouse=warehouse, rows=group)
+                for k in stats:
+                    stats[k] += part[k]
 
-    # ⭐ 链路 B：遇陌生仓库 ⇒ **自动**建档 / 扶正（无感；失败降级，不拖垮抓取）
-    unknown = unknown_warehouses(s, rows)
-    recovery_result = recover_unknown_warehouses(
-        s, unknown_wh=unknown, load_warehouse_rows=_wh_loader(wh_rows), operator=operator)
+            # ⭐ 链路 B：遇陌生仓库 ⇒ **自动**建档 / 扶正（无感；失败降级，不拖垮抓取）
+            unknown = unknown_warehouses(s, rows)
+            recovery_result = recover_unknown_warehouses(
+                s, unknown_wh=unknown, load_warehouse_rows=_wh_loader(wh_rows), operator=operator)
 
-    run = save_run_record(s, **fetch_task.fetch_record_payload(
-        object_desc=target, success=len(rows), fail=0),
-        # ⭐ 「待人工」清单随抓取记录落库（`TAIL-30`-③）—— 回执里那句话**只出现一次**，
-        #    而人要在 `m01` 上处理它 ⇒ 得先留住（读侧 = `pending.live_pending`）。
-        detail=record_detail(recovery_result.get("unresolved_items")), operator=operator,
-        started_at=t0)
-    return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
-            "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
-            "run_record_id": getattr(run, "id", None)}
+            run = save_run_record(s, **fetch_task.fetch_record_payload(
+                object_desc=target, success=len(rows), fail=0),
+                # ⭐ 「待人工」清单随抓取记录落库（`TAIL-30`-③）—— 回执里那句话**只出现一次**，
+                #    而人要在 `m01` 上处理它 ⇒ 得先留住（读侧 = `pending.live_pending`）。
+                detail=record_detail(recovery_result.get("unresolved_items")), operator=operator,
+                started_at=t0)
+            return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
+                    "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
+                    "run_record_id": getattr(run, "id", None)}
 
 
 __all__ = ["TABLE", "SPEC_KEY", "CONFIRM_TOKEN", "KICK_WARNING",
