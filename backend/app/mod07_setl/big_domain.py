@@ -264,9 +264,9 @@ def use_rate(total_cum, mech_est) -> Decimal | None:
 
 
 def output_rate(output_cum, contract) -> Decimal | None:
-    """产值完成率 = **产值累计 ÷ 合同（预估）价**；分母为空 / 0 ⇒ `None`。"""
+    """产值累计或合同价缺失、合同价为零时，产值完成率不可得。"""
     den = _dec(contract)
-    if den == 0:
+    if den == 0 or output_cum is None or output_cum == "":
         return None
     return (to_money(output_cum) / den).quantize(Decimal("0.0001"))
 

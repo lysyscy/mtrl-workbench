@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** needs-triage
+**Status:** needs-human
 
 - [ ] 核实两条数据库连接凭据的暴露载体与实际访问范围，报告中不复写凭据；核旧pytest真实目标及写入影响，未能核实者保留未知。
 - [ ] 在另行明确授权后完成必要口令轮换及其消费者更新、服务重启与有效性核验；原数据库和正常业务记录保持。
@@ -20,3 +20,5 @@
 原始输出及未登记散件原位保护，尤其`C:/Users/Administrator/AppData/Local/Temp/tail466_b14_raw.txt`。13份散件精确路径/散列及修正经过，从可达提交`642725be3d8fcb157dbeb0b66ed205f2fb758869`的`.scratch/site-performance/TAIL-466-start.md`第7.2b节及同提交plan.md事故记录追溯。这里不复制凭据、原日志或业务输入；未将这些散件自动纳入到期删除。
 
 2026-11-03 · Created.
+
+2026-11-05 · 已完成本机只读核对。详细记录仅留本机，后续处置待分别授权，本票继续开放。

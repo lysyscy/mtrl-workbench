@@ -141,6 +141,15 @@ def test_派生列独立复算():
     # （壳里合计/使用率/产值完成率走 `M(...)`/`pct(...)`，⛔ 不经手填 `cell()` ✓）。
 
 
+@pytest.mark.parametrize(
+    ("output_cum", "expected"),
+    [(None, None), ("", None), (Decimal("0.00"), Decimal("0.0000")),
+     (Decimal("50.00"), Decimal("0.2500"))],
+)
+def test_产值完成率区分空值与零(output_cum, expected):
+    assert B.output_rate(output_cum, Decimal("200.00")) == expected
+
+
 def test_主材累计取集采结算额_只计纳入台账(monkeypatch):
     """主材口径在MOD11 owner interface验证，不保留失去生产调用者的helper。"""
     from app.mod11_jc import service as contracts, repository as repo

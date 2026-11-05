@@ -64,6 +64,63 @@ def test_real_month_cell_focus_width_and_save_identity(server,browser_page,api,d
     assert Decimal(next(r for r in fresh['rows'] if r['warehouse']==row['warehouse'])['manual']['mech_est']['value'])==value
 
 
+def test_real_contract_save_reads_back_with_missing_output(server, browser_page, api, disposable):
+    page, _ = browser_page
+    data = get(api, '/api/m07/big')
+    row = next((item for item in data['rows']
+                if item['manual']['output_cum']['value'] is None
+                and item['manual']['contract']['value'] is None), None)
+    assert row is not None, '真实副本缺少合同价和产值累计均为空的项目'
+    open_page(page, server, 'big', '月度会大表')
+    choose_month(page, data['month'])
+    grid = '.big-month:not([hidden]) .big-grid'
+    dom = grid_row(page, grid, row['warehouse'])
+    field = dom.locator('[col-id="contract"] input')
+    rate = dom.locator('[col-id="output_rate"]')
+    expect(rate).to_have_text('—')
+
+    field.fill('200.00')
+    read_url = f'/api/m07/big?period={data["month"]}'
+    with page.expect_response(lambda r: r.url.endswith(read_url) and r.request.method == 'GET') as readback:
+        with page.expect_response(lambda r: r.url.endswith('/api/m07/big/cell') and r.request.method == 'POST') as save:
+            page.get_by_role('heading', name='月度会大表', exact=True).click()
+    assert save.value.ok and save.value.json()['ok']
+    assert readback.value.ok, f'保存后的大表重读 HTTP {readback.value.status}'
+    expect(page.get_by_role('button', name='取消未保存修改')).to_be_disabled()
+    expect(field).to_have_value('200.00')
+    expect(rate).to_have_text('—')
+
+    fresh = get(api, '/api/m07/big', period=data['month'])
+    saved_row = next(item for item in fresh['rows'] if item['warehouse'] == row['warehouse'])
+    assert Decimal(saved_row['manual']['contract']['value']) == Decimal('200.00')
+    assert saved_row['derived']['output_rate'] is None
+    for key in row['manual'].keys() - {'contract'}:
+        assert saved_row['manual'][key] == row['manual'][key]
+    assert [item for item in fresh['rows'] if item['warehouse'] != row['warehouse']] == [
+        item for item in data['rows'] if item['warehouse'] != row['warehouse']
+    ]
+
+    writes = []
+    page.on('request', lambda req: writes.append(req) if req.url.endswith('/api/m07/big/cell') and req.method == 'POST' else None)
+    page.route('**' + read_url, lambda route: route.abort('failed'))
+    field.fill('201.25')
+    page.get_by_role('heading', name='月度会大表', exact=True).click()
+    expect(page.get_by_role('alert').filter(has_text='已保存，重读失败')).to_be_visible()
+    expect(field).to_have_value('201.25')
+    expect(field).to_be_disabled()
+    confirm = page.get_by_role('button', name='已核对，继续', exact=True)
+    expect(confirm).to_be_disabled()
+
+    page.unroute('**' + read_url)
+    page.get_by_role('button', name='重读核对', exact=True).click()
+    expect(confirm).to_be_enabled()
+    confirm.click()
+    expect(field).to_be_editable()
+    expect(field).to_have_value('201.25')
+    expect(page.get_by_role('button', name='取消未保存修改')).to_be_disabled()
+    assert len(writes) == 1
+
+
 def test_real_selection_freezes_by_month_and_post_export(server,browser_page,api,disposable,tmp_path):
     page,_=browser_page
     baseline=get(api,'/api/m07/big');month=baseline['month']
