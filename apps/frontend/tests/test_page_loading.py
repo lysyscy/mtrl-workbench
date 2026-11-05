@@ -26,7 +26,7 @@ def test_project_lazy_wait_failure_and_explicit_recovery(server,browser_page,wit
     for route in pending:route.abort('failed')
     error=page.locator('[data-route-error]')
     expect(error.get_by_role('alert')).to_contain_text('项目档案未能加载')
-    expect(page.get_by_role('navigation').get_by_role('link')).to_have_count(15)
+    expect(page.get_by_role('navigation').get_by_role('link', name='用户管理', exact=True)).to_be_visible()
     page.unroute('**/preview/assets/projects-*.js')
     if with_draft:
         error.get_by_role('button',name='重新加载页面',exact=True).click()

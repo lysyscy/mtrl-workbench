@@ -18,7 +18,7 @@ import { categories, dataKeys, getProcess, mechKeys, mechLabels, saveProcess, ta
 import type { Confirmation, Difference, ProcessData, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
-import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 const differenceRowId = (row: Difference) => String(row.id);
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; expected:string|null; revision:number; error:string }
@@ -171,12 +171,14 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     </ReadStatusLane>
     {(error||uncertain)&&<div className="notice" role="alert">{error||'保存结果待核实，请重新核对；输入已保留。'}{(query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重新核对</Button>}</div>}
     {uncertain&&<div className="notice process-uncertain" role="alert">{attempt.current&&<p>{name(attempt.current.warehouse)}，{attempt.current.ym} {matrixColumns.find(column=>column.field===attempt.current!.column)?.label}，本次输入：{attempt.current.value.trim()?displayAmount(attempt.current.value):'留空'}。</p>}<p>{query.isFetching?'正在重新核对…':verified?'已重读，请对照当前金额和本次输入核对结果。':'保存结果待核实，核对前暂停后续保存。'}</p><Button disabled={paused||!me||busy||!verified||query.isFetching||query.isError||projects.isError} onClick={confirmResult}>已核对，保留输入继续</Button></div>}
+    <FirstReadRegion className={tab!==2 ? "process-first-read-matrix" : ''} phase={query.data !== undefined ? 'content' : readState==='error' ? 'error' : 'pending'} canPublish={!query.data?.projects.length || Boolean(warehouse)} placeholder={<div className="process-read-body"><ReadPlaceholder rows={6} quiet={readState==='error'} /></div>}>
     {matrix?<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,cancel:key=>saves.update(current=>{const next={...current};delete next[key];return next;})}}>
         <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale} sources={query.data?.sources[warehouse]}/>
       </ProcessCells.Provider></>}
     </>:<div className="process-read-body">{regionBody}</div>}
+    </FirstReadRegion>
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
       <p>{name(source.draft.warehouse)}，{source.draft.ym} {mechLabels[mechKeys.indexOf(source.draft.column)]}</p><p>该项目本月已有机械明细。此格将采用手填金额，原明细保留。</p>
       <p>原金额 {source.draft.expected===null?'未录入':show(source.draft.expected)+' 元'} → 新金额 {source.draft.value.trim()?show(source.draft.value)+' 元':'留空'}</p>

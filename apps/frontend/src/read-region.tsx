@@ -1,6 +1,49 @@
 import './read-region.css';
 import Button from 'antd/es/button';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { PageActivity } from './page-activity';
+
+type GridPreparation = 'preparing' | 'ready' | 'error';
+type FirstReadRegistration = { register: (id: symbol) => () => void; update: (id: symbol, state: GridPreparation) => void };
+const FirstReadContext = createContext<FirstReadRegistration | null>(null);
+
+// The two grid adapters participate without exposing their count or DOM to pages.
+export function useFirstReadGrid(state: GridPreparation) {
+  const region = useContext(FirstReadContext), active = useContext(PageActivity), id = useRef(Symbol('first-read-grid'));
+  useLayoutEffect(() => active ? region?.register(id.current) : undefined, [region, active]);
+  useLayoutEffect(() => { if (active) region?.update(id.current, state); }, [region, active, state]);
+}
+
+export function FirstReadRegion({ phase, children, placeholder, canPublish = true, onSettledChange, onPublished, className, style }: {
+  phase: 'pending' | 'content' | 'error'; children: ReactNode; placeholder: ReactNode;
+  canPublish?: boolean; onSettledChange?: (settled: boolean) => void; onPublished?: () => void; className?: string | undefined; style?: CSSProperties;
+}) {
+  const active = useContext(PageActivity);
+  const grids = useRef(new Map<symbol, GridPreparation>());
+  const [revision, setRevision] = useState(0), [published, setPublished] = useState(false);
+  const callback = useRef(onSettledChange); callback.current = onSettledChange;
+  const publishedCallback = useRef(onPublished); publishedCallback.current = onPublished;
+  const notified = useRef<boolean | undefined>(undefined);
+  const registry = useMemo<FirstReadRegistration>(() => ({
+    register(id) { grids.current.set(id, 'preparing'); setRevision(n => n + 1); return () => { if (grids.current.delete(id)) setRevision(n => n + 1); }; },
+    update(id, state) { if (grids.current.has(id) && grids.current.get(id) !== state) { grids.current.set(id, state); setRevision(n => n + 1); } },
+  }), []);
+  // Once a successor has been released, a retry must not hide it again.
+  const settled = notified.current === true || published || (phase === 'error' && canPublish);
+  useLayoutEffect(() => {
+    if (!published && active && phase === 'content' && canPublish && [...grids.current.values()].every(value => value !== 'preparing')) setPublished(true);
+  }, [active, canPublish, phase, published, revision]);
+  useLayoutEffect(() => {
+    if (notified.current !== settled) { notified.current = settled; callback.current?.(settled); }
+  }, [settled]);
+  useLayoutEffect(() => { if (published) publishedCallback.current?.(); }, [published]);
+  const state = published ? 'ready' : phase === 'error' ? 'error' : phase === 'pending' ? 'pending' : 'preparing';
+  return <FirstReadContext.Provider value={registry}><div className={className ? `first-read-region ${className}` : 'first-read-region'} style={style} data-first-read-state={state}>
+    {!published && placeholder}
+    {(published || phase === 'content') && <div className={published ? 'first-read-content' : 'first-read-content first-read-measuring'} inert={!published}>{children}</div>}
+  </div></FirstReadContext.Provider>;
+}
 
 /** The minimal read query shape a region needs to describe itself. */
 export interface ReadLike<T = unknown> {

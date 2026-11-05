@@ -72,6 +72,9 @@ def test_project_loading_keeps_ledger_space_and_hides_old_values(server,browser_
     first,second=available[:2]
     pick_option(page,'选择项目',first['disp'])
     expect(page.locator('.ledger-sides')).to_be_visible()
+    for grid in page.locator('.ledger-sides .ledger-grid').all():
+        expect(grid).to_have_attribute('aria-busy', 'false')
+        expect(grid).to_be_visible()
     before=page.locator('.ledger-card').bounding_box();pending=[]
     page.route('**/api/m05/ledger?**',lambda route:pending.append(route))
     pick_option(page,'选择项目',second['disp'])

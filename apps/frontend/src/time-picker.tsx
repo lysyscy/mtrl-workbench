@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { currentMonth } from './business-time';
+export { timeRange, timeMatches } from './business-time';
+export type { TimeRange } from './business-time';
 import DatePicker from 'antd/es/date-picker';
 import Select from 'antd/es/select';
 import Button from 'antd/es/button';
@@ -11,7 +13,6 @@ import 'dayjs/locale/zh-cn';
 dayjs.locale('zh-cn');
 
 export type TimeMode = '月' | '跨月' | '年' | '季度' | '周' | '全部';
-export interface TimeRange { dateFrom: string; dateTo: string }
 export interface TimePickerProps {
   value: string;
   onChange: (value: string) => void;
@@ -22,7 +23,6 @@ export interface TimePickerProps {
 }
 const pad = (n: number) => String(n).padStart(2, '0');
 const dateText = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
-const monthEnd = (month: string) => dateText(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)));
 function monday(day: string) {
   const date = new Date(`${day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
@@ -36,29 +36,6 @@ function modeOf(value: string): TimeMode {
   return value.length === 4 ? '年' : '月';
 }
 export function timeLabel(value: string) { return !value || value === '全部' ? '全部时间' : value.replace('~', ' ~ '); }
-/** Closed document/payment date interval. A week is stored as its Monday. */
-export function timeRange(value: string): TimeRange {
-  if (!value || value === '全部') return { dateFrom: '', dateTo: '' };
-  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return { dateFrom: `${value}-01`, dateTo: monthEnd(value) };
-  if (/^\d{4}$/.test(value)) return { dateFrom: `${value}-01-01`, dateTo: `${value}-12-31` };
-  const range = /^(\d{4})-(0[1-9]|1[0-2])~\1-(0[1-9]|1[0-2])$/.exec(value);
-  if (range && range[2]! <= range[3]!) return { dateFrom: `${value.slice(0, 7)}-01`, dateTo: monthEnd(value.slice(8)) };
-  const quarter = /^(\d{4})Q([1-4])$/.exec(value);
-  if (quarter) return { dateFrom: `${quarter[1]}-${pad(Number(quarter[2]) * 3 - 2)}-01`, dateTo: monthEnd(`${quarter[1]}-${pad(Number(quarter[2]) * 3)}`) };
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const date = new Date(`${value}T00:00:00Z`);
-    if (!Number.isNaN(date.getTime()) && dateText(date) === value && date.getUTCDay() === 1) {
-      date.setUTCDate(date.getUTCDate() + 6);
-      return { dateFrom: value, dateTo: dateText(date) };
-    }
-  }
-  throw new RangeError('时间范围无效');
-}
-export function timeMatches(value: string, date: string) {
-  const { dateFrom, dateTo } = timeRange(value);
-  return !dateFrom || (date.slice(0, 10) >= dateFrom && date.slice(0, 10) <= dateTo);
-}
-
 export function BusinessDate({ value, onChange, disabled = false, label }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string }) {
   return <DatePicker aria-label={label} value={value ? dayjs(value) : null} onChange={date => onChange(date ? date.format('YYYY-MM-DD') : '')}
     disabled={disabled} format="YYYY-MM-DD" className="business-date-picker" classNames={{ popup: { root: 'ag-custom-component-popup' } }}

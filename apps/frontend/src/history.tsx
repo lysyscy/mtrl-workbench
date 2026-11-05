@@ -30,14 +30,16 @@ function guardReason(guards: Map<string, () => string> | null) {
 }
 export function useHistoryProtection() {
   const guards = useContext(Guards);
-  return () => guardReason(guards);
+  const { busy, uncertain } = useHistoryState();
+  return () => busy ? '操作历史正在处理，请稍候。' : uncertain ? '操作历史结果待核实，请先重读核对。' : guardReason(guards);
 }
 export function useHistoryGuard(name: string, reason: () => string) {
   const guards = useContext(Guards), current = useRef(reason); current.current = reason;
   useEffect(() => { guards?.set(name, () => current.current()); return () => { guards?.delete(name); }; }, [guards, name]);
 }
-export function HistoryScope({ children }: { children: ReactNode }) {
-  const [guards] = useState(() => new Map<string, () => string>());
+export function HistoryScope({ children, workspaceGuard = '' }: { children: ReactNode; workspaceGuard?: string }) {
+  const currentWorkspaceGuard = useRef(workspaceGuard); currentWorkspaceGuard.current = workspaceGuard;
+  const [guards] = useState(() => new Map<string, () => string>([['workspace', () => currentWorkspaceGuard.current]]));
   const [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false);
   const state = useMemo(() => ({ busy, uncertain, setBusy, setUncertain }), [busy, uncertain]);
   return <ReplayState.Provider value={state}><Guards.Provider value={guards}>{children}</Guards.Provider></ReplayState.Provider>;

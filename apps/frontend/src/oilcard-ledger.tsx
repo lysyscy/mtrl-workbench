@@ -17,7 +17,7 @@ import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
 import { OilInvoiceSheet } from './oilcard-invoices';
-import { ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
 import { getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
@@ -189,7 +189,9 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
         {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
       </ReadStatusLane>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
+      <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
       {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
+      </FirstReadRegion>
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     {transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
       const from = archives.accounts.find(account => account.id === values.out_account_id)?.name ?? '转出账户';

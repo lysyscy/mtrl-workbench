@@ -46,9 +46,8 @@
 .project-sync-account dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .project-sync-summary{color:var(--tx2);margin:calc(16px * var(--fscale)) 0}
 
-/* Read state per region (read-region.css): the archive list always keeps one status line, so the
-   result count and the grid below never move when the read fails or is re-read. The two pending
-   lists and the trail list are optional content: their lane appears only while it has something to
-   report (reading, or a failure) and otherwise collapses, so no empty control line is left behind. */
+/* Optional task lists precede the archive, so their first result settles before the archive is
+   published. Read errors share its fixed status lane rather than removing temporary lines. */
 .project-read-status{--read-status-pad:0}
 .project-read-reserve{padding:0;min-height:calc(320px * var(--fscale))}
+.project-first-reserve{height:calc(65dvh + 36px * var(--fscale));padding:0 calc(16px * var(--fscale))}

@@ -9,6 +9,7 @@ import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
 import type { TextGridColumn } from './grid-layout';
 import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
+import { useFirstReadGrid } from './read-region';
 
 export type GridMeasurement<T> = TextGridColumn<T>[] | {
   signature?: (row: T, column: string, pinned: boolean) => string;
@@ -53,6 +54,7 @@ export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClass
   attachRoot?: boolean;
 }) {
   const {visible} = presentation, {root, definitions, context, geometry, preparation, widths, rows, totals} = presentation[details];
+  useFirstReadGrid(preparation.state === 'error' ? 'error' : preparation.state === 'ready' && visible ? 'ready' : 'preparing');
   const {onGridReady, ...options} = grid;
   const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
       data-layout-state={preparation.state} data-layout-error={preparation.error || undefined} aria-busy={preparation.state !== 'ready'}>

@@ -37,6 +37,8 @@
 .debt-workspace .ledger-card-body,.debt-workspace .ledger-content{display:flex;flex-direction:column;min-height:min-content}
 .debt-workspace .ledger-content:has(>.ledger-placeholder){min-height:calc(320px * var(--fscale))}
 .debt-workspace .ledger-sides{min-height:min-content;align-items:start}
+/* The sides' existing 12px top margin is included in the original 320px reserve. */
+.ledger-first-reserve{min-height:calc(308px * var(--fscale))}
 .debt-workspace .ledger-side{display:flex;flex-direction:column;min-height:0}
 .debt-workspace .ledger-summary{flex:none;min-height:calc(32px * var(--fscale));align-items:center}
 .debt-workspace .ledger-table-scroll{display:flex;min-height:0}

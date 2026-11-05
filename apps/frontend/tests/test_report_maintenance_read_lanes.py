@@ -258,25 +258,47 @@ def test_rules_blocks_read_independently_and_report_in_place(server, browser_pag
     expect(first.locator('.rules-read-status .notice')).to_have_count(0)
 
 
+def test_projects_export_waits_for_real_publication_after_a_failed_read(server, browser_page):
+    page, _ = browser_page
+    pending = hold(page, '**/api/m01/promote-pending')
+    page.route('**/api/m01/projects?status=all', lambda route: route.fulfill(
+        status=503, content_type='application/json', body='{"detail":"项目读取暂时失败"}'))
+    login(page, server)
+    failure = page.locator('.project-read-status .notice')
+    expect(failure).to_be_visible()
+    page.unroute('**/api/m01/projects?status=all')
+    with page.expect_response(lambda response: '/api/m01/projects?status=all' in response.url and response.ok):
+        failure.get_by_role('button', name='重试读取').click()
+    expect(failure).to_have_count(0)
+    export = page.get_by_role('button', name='导出 Excel', exact=True)
+    expect(export).to_be_disabled()
+    assert pending, '未覆盖可选待办仍在读取时的导出门控'
+    for route in pending:
+        route.fulfill(response=route.fetch())
+    page.unroute('**/api/m01/promote-pending')
+    expect(page.get_by_role('region', name='项目列表', exact=True)).to_be_visible(timeout=30000)
+    expect(export).to_be_enabled()
+
+
 def test_projects_first_read_publishes_the_page_and_keeps_the_list_box(server, browser_page):
     page, _ = browser_page
     login(page, server)
     held = hold(page, '**/api/m01/projects?status=all')
     page.reload()
     expect(page.locator('#page-title')).to_have_text('项目档案')
-    expect(page.locator('.project-read-reserve')).to_be_visible()
+    expect(page.locator('.project-first-reserve')).to_be_visible()
     assert held, 'The actual project list read was not held'
 
     # The page is published with usable filters, not held by its list read.
     expect(page.locator('.page-loading')).to_have_count(0)
     expect(page.locator('.project-read-status [role=status]')).to_have_count(1)
-    expect(page.locator('.project-read-reserve .read-placeholder')).to_have_count(1)
+    expect(page.locator('.project-first-reserve .read-placeholder')).to_have_count(1)
     expect(page.get_by_label('项目搜索', exact=True)).to_be_enabled()
     # The count line, the table and the export are not invented before the read.
     expect(page.locator('.projects-page .result')).to_have_count(0)
     expect(page.locator('.project-table:not(.project-read-reserve)')).to_have_count(0)
     expect(page.get_by_role('button', name='导出 Excel', exact=True)).to_be_disabled()
-    before = page.locator('.project-read-reserve').bounding_box()
+    before = page.locator('.project-first-reserve').bounding_box()
 
     fail_held(held, '项目档案读取暂时失败')
     page.unroute('**/api/m01/projects?status=all')
@@ -285,7 +307,7 @@ def test_projects_first_read_publishes_the_page_and_keeps_the_list_box(server, b
     expect(failure).to_have_attribute('role', 'alert')
     expect(failure.get_by_role('button', name='重试读取')).to_be_visible()
     expect(page.locator('.projects-page .result')).to_have_count(0)
-    after = page.locator('.project-read-reserve').bounding_box()
+    after = page.locator('.project-first-reserve').bounding_box()
     assert abs(after['y'] - before['y']) < 1, (before, after)
 
     failure.get_by_role('button', name='重试读取').click()

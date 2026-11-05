@@ -15,7 +15,7 @@ import { feeWrite, getFeeYear } from './fees-api';
 import type { FeeYearData, FeeYearRow } from './fees-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { useCellSaveQueue } from './use-cell-save';
-import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const rowId=(row:FeeYearRow)=>row.item_id ? `item-${row.item_id}` : `auto-${encodeURIComponent(row.business_key ?? row.item)}`;
 type Draft={itemId:number; item:string; ym:string; field:'name'|'amount'; value:string; original:string; error:string};
@@ -108,7 +108,9 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
       {projects.isError&&<ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}
     </ReadStatusLane>
     {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item}，{d.field==='name'?'项名':'金额'}：{d.error} <Button size="small" disabled={disabled||busy} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.save(key,true)}>保存</Button><Button size="small" disabled={busy||blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(ds=>{const next={...ds};delete next[key];return next;})}>取消这项修改</Button></p>)}
+    <FirstReadRegion phase={!placeheld ? 'content' : readState==='error' ? 'error' : 'pending'} placeholder={<div className="fees-grid fees-annual-grid fees-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState==='error'}/></div>}>
     {placeheld?<div className="fees-grid fees-annual-grid fees-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState==='error'}/></div>:<FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled||busy||dirty||query.isFetching,remove,save:saves.save,
       change:d=>saves.update((ds,writing)=>{const key=keyOf(d.itemId,d.field,d.ym),old=ds[key],next={...ds,[key]:{...d,original:old?.original??d.original}};if(d.value===(old?.original??d.original)&&!writing)delete next[key];return next;})}}><PreparedGrid presentation={presentation} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" grid={{theme:gridTheme,domLayout:'autoHeight',getRowId:p=>rowId(p.data),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,animateRows:false}} /></FeeCells.Provider>}
+    </FirstReadRegion>
   </section>;
 }

@@ -18,6 +18,11 @@
    so a placeholder never spills out of the space the table will take. */
 .read-reserve{overflow:hidden}
 
+/* Keep the real first result at its final width without letting preparation alter flow. */
+.first-read-region{position:relative;min-width:0}
+.first-read-region:has(>.first-read-measuring){overflow:clip}
+.first-read-measuring{position:absolute;inset-inline:0;top:0;width:100%;visibility:hidden;pointer-events:none}
+
 /* One fixed status lane per region, present in every state. The lane is one control line tall, so
    an idle, running, failed or retained-result notice all occupy exactly the same height and never
    move the region's table or the content below it.

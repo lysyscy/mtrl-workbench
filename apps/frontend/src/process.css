@@ -68,3 +68,11 @@
 .process-uncertain p{margin-block:calc(4px * var(--fscale));white-space:normal}
 .process-matrix .process-segment-total{display:flex;flex-wrap:wrap;justify-content:flex-end;column-gap:.35em;line-height:1.5}
 .process-matrix .process-segment-total>span{white-space:nowrap}
+
+/* The first-read shell occupies the same fixed workspace as the matrix it contains. */
+.process-page:has(.process-first-read-matrix){display:flex;flex-direction:column;max-height:calc(100dvh - 104px * var(--fscale))}
+.workspace .page-view .process-page:has(.process-first-read-matrix){height:calc(100dvh - 104px * var(--fscale));min-height:calc(400px * var(--fscale))}
+.process-first-read-matrix{flex:1 1 auto;min-height:calc(220px * var(--fscale));display:flex;flex-direction:column}
+.process-first-read-matrix>.first-read-content{flex:1;min-height:0;display:flex;flex-direction:column}
+.process-first-read-matrix>.first-read-measuring{height:100%}
+.process-page:has(.process-matrix-scroll)>.process-first-read-matrix{flex:1 1 auto}

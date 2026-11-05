@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button, Checkbox, Input, Select } from 'antd';
 import { requestJson } from './api';
 import { randomUUID } from './random-id';
@@ -13,8 +14,15 @@ import { useI8Session } from './i8-session';
 import { numberColumnWidth, textWidth } from './grid';
 import { EllipsisText } from './grid-text';
 import type { ColDef,ColGroupDef } from 'ag-grid-community';
+import { PageActivity } from './page-activity';
 
 const kinds = [['usage','班组使用累计'],['project','项目结算累计'],['team','班组审批累计']] as const;
+function ReconciledDetails({ count, children }: { count: number; children: ReactNode }) {
+  const active = useContext(PageActivity), [open, setOpen] = useState(false);
+  return <details onToggle={event=>setOpen(event.currentTarget.open)}><summary>已对平／已忽略（{count}）</summary>
+    <PageActivity.Provider value={active && open}>{children}</PageActivity.Provider>
+  </details>;
+}
 const metadataLabels: Record<string,string> = {origin:'关联月份',due:'约定月份',amount:'约定金额',mode:'处理方式',evidence:'依据',status:'历史状态',flow:'核查进度',reply:'项目回复'};
 const AdoptionSelection=createContext<{selected:string[];disabled:boolean;label:(warehouse:string)=>string;toggle:(warehouse:string,checked:boolean)=>void}>(null!);
 function AdoptionCheckbox({data:project}:{data:I8Preview['projects'][number]}) {
@@ -156,7 +164,7 @@ export function MechanicalWork({ data, warehouses, label, writable, busy, paused
       ...kinds.map(([kind,name])=>({colId:kind,headerName:name,...numberColumnWidth(findings.filter(d=>!d.warehouse).map(d=>money(d.totals?.[kind]))),cellClass:'money',valueGetter:(p:{data:Discovery|undefined})=>money(p.data!.totals?.[kind])})),
       {colId:'actions',headerName:'操作',cellRenderer:({data:d}:{data:Discovery})=><Button disabled={blocked} onClick={()=>{setDiscovery(d);setNote(d.note||'');open('discovery');}}>核实发现</Button>},
     ]}/></section>}
-    {table(rows)}{normal.length>0&&<details><summary>已对平／已忽略（{normal.length}）</summary>{table(normal)}</details>}
+    {table(rows)}{normal.length>0&&<ReconciledDetails count={normal.length}>{table(normal)}</ReconciledDetails>}
     {feedback&&!dialog&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
     {dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='initialize'?'mechanical-history-base-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='initialize'?'补齐累计起点，'+label(warehouse):dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} dirty={historyDirty} paused={paused} close={()=>setDialog(null)}>{requestClose=><>
       {dialog==='fetch'&&(!preview?<><p>{blocked?'正在抓取 i8 当前累计…':'本次未取得可采用的预览。'}</p><footer><Button disabled={blocked} onClick={()=>setDialog(null)}>关闭</Button>{!blocked&&<Button disabled={!writable} onClick={()=>void fetchPreview(warehouse)}>重新抓取</Button>}</footer></>:<>

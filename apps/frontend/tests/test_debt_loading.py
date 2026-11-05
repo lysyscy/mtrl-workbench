@@ -48,14 +48,17 @@ def test_debt_overviews_report_their_own_read(server, browser_page):
     expect(page.locator('.debt-overviews [role=status]')).to_have_count(1)
     # A read that has not landed is not an empty result.
     expect(page.locator('.debt-overviews .muted')).to_have_count(0)
-    # A slow summary read never takes the ledger area away.
-    expect(page.locator('.ledger-card')).to_be_visible()
+    # Reads and measurement run in parallel, but the lower controls wait for their
+    # actual vertical position instead of appearing and then being pushed down.
+    expect(page.locator('.ledger-card')).to_be_hidden()
+    assert page.locator('.ledger-card').bounding_box()['width'] > 0
     assert len(pending) == 1, len(pending)
 
     route = pending.pop()
     route.fulfill(response=route.fetch())
     expect(page.locator('.debt-overviews .read-placeholder')).to_have_count(0)
     expect(page.locator('.debt-overviews [role=status]')).to_have_count(0)
+    expect(page.locator('.ledger-card')).to_be_visible()
     # The region now reports real rows or a genuine empty result, and nothing in between.
     rows = page.locator('.debt-overviews .bar-name').count()
     empty = page.locator('.debt-overviews .muted').count()
@@ -67,7 +70,7 @@ def test_debt_overviews_failure_does_not_move_the_ledger(server, browser_page):
     held = []
     page.route('**/api/m05/debt', lambda route: held.append(route))
     open_debt(page, server)
-    expect(page.locator('.ledger-card')).to_be_visible()
+    expect(page.locator('.ledger-card')).to_be_hidden()
     before = ledger_top(page)
     assert len(held) == 1, len(held)
 
@@ -88,6 +91,13 @@ def test_debt_overviews_failure_does_not_move_the_ledger(server, browser_page):
     # The failure reports inside its own region, so the ledger keeps its place.
     expect(page.locator('.ledger-card')).to_be_visible()
     assert abs(ledger_top(page) - before) < 1, (before, ledger_top(page))
+    failure.get_by_role('button', name='重试读取').click()
+    expect(page.locator('.debt-overviews [role=status]')).to_have_count(1)
+    expect(page.locator('.ledger-card')).to_be_visible()
+    assert len(held) == 1
+    route = held.pop()
+    route.fulfill(response=route.fetch())
+    page.unroute('**/api/m05/debt')
 
 
 def test_debt_overviews_keep_their_result_when_the_return_refresh_fails(server, browser_page):
@@ -133,8 +143,9 @@ def test_debt_overviews_failure_never_covers_a_heading_or_a_value(server, browse
     page.set_viewport_size({'width': 1280, 'height': 720})
     held = []
     page.route('**/api/m05/debt', lambda route: held.append(route))
-    open_debt(page, server)
-    expect(page.locator('.ledger-card')).to_be_visible()
+    with page.expect_request(lambda request: '/api/m05/debt' in request.url):
+        open_debt(page, server)
+    expect(page.locator('.ledger-card')).to_be_hidden()
     assert len(held) == 1, len(held)
 
     held.pop().fulfill(

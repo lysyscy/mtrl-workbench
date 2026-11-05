@@ -126,6 +126,9 @@ def test_debt_tables_publish_without_waiting_for_the_other_side(server, browser_
     frames=page.evaluate('window.__sideFrames')
     assert max(frames)-min(frames)<1, '首个可见帧后表高仍在变化'
     field = mechanical.locator('[col-id=remark] input').first
+    # Scrolling a virtualized grid to click its first mounted row may recycle
+    # that position. Keep the actual chosen business cell as the focus target.
+    field = mechanical.get_by_role('textbox', name=field.get_attribute('aria-label'), exact=True)
     field.click()
     expect(field).to_be_focused()
 

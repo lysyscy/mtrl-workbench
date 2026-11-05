@@ -13,7 +13,7 @@ import { TimePicker } from './time-picker';
 import { useCellSaveQueue } from './use-cell-save';
 import { enableOilBigLinkage, enableOilFeeLinkage, getOilLinkage, saveOilBigCustom, saveOilFeeCustom } from './oilcard-linkage-api';
 import type { OilFeeMonth, OilLinkage } from './oilcard-linkage-api';
-import { ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type Field = 'custom_amount' | 'remark' | 'big_amount' | 'big_remark';
 type Draft = { projectId: number; ym: string; field: Field; original: string; value: string; error: string };
@@ -108,9 +108,10 @@ export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLoc
     <ReadStatusLane phase={readState} announce="正在读取用油联动…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}
     </ReadStatusLane>
+    <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}>
     {query.data ? <LinkageCells.Provider value={{ rows, projects, drafts, disabled, structuralDisabled: disabled || busy || dirty || query.isFetching, save: saves.save,
       enable: (row, big) => { void saves.run(signal => (big ? enableOilBigLinkage : enableOilFeeLinkage)(row.project_id, signal), () => '', big ? '启用大表联动：' : '启用用油联动：'); },
       change: (row, field, value) => { if (disabled) return; const key = keyOf(row, field); saves.update((previous, writing) => { const next = { ...previous }, original = previous[key]?.original ?? valueOf(row, field); if (value === original && !writing) delete next[key]; else next[key] = { projectId: row.project_id, ym: row.ym, field, original, value, error: '' }; return next; }); } }}>
       {!rows.length ? <p className="state">尚无正式项目，请先维护项目档案。</p> : <BusinessGrid table="oilcard-linkage" label="用油联动项目月表" rows={rows} columns={columns} rowId={row => String(row.project_id)} scale={scale} domLayout="autoHeight" />}
-    </LinkageCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}</section>;
+    </LinkageCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}</FirstReadRegion></section>;
 }

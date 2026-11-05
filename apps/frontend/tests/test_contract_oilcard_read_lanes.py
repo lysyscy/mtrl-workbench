@@ -148,16 +148,17 @@ def test_oilcard_tabs_stay_usable_while_the_archive_read_lands(server, browser_p
     archives_tab.click()
     expect(archives_tab).to_have_attribute('aria-selected', 'true')
     # The page reports the unread archive once, in its own lane.
-    expect(page.locator('.read-status[data-read-phase="reading"]')).to_have_count(1, timeout=20000)
-    expect(page.locator('.read-status [role=status]')).to_have_count(1)
+    expect(page.locator('.oilcard-page > .read-status[data-read-phase="reading"]')).to_have_count(1, timeout=20000)
+    expect(page.locator('.oilcard-page > .read-status [role=status]')).to_have_count(1)
     assert held, 'The actual first archive read was not held'
 
     # The unread archive replaces only the pane content, and it is not an empty account list.
-    expect(page.locator('.oilcard-read-reserve .read-placeholder')).to_have_count(1)
-    expect(page.locator('#oilcard-panel-archives:not([hidden])')).to_have_count(0)
-    # No pane is rendered from an unread archive, so no empty-state conclusion can appear.
+    panel = page.locator('#oilcard-panel-archives:not([hidden])')
+    expect(panel).to_have_count(1)
+    expect(panel.locator('.oilcard-read-reserve .read-placeholder')).to_have_count(2)
+    # Section headings can appear immediately; no business empty-state conclusion is invented.
     expect(page.get_by_text('尚无符合条件的用卡账户。')).to_have_count(0)
-    before = page.locator('.oilcard-read-reserve').bounding_box()
+    before = [heading.bounding_box() for heading in panel.get_by_role('heading').all()]
 
     for route in held:
         route.continue_()
@@ -167,8 +168,25 @@ def test_oilcard_tabs_stay_usable_while_the_archive_read_lands(server, browser_p
     expect(panel).to_have_count(1)
     expect(panel.locator('.read-reserve')).to_have_count(0)
     expect(panel.get_by_role('status')).to_have_count(0)
-    after = panel.bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    after = [heading.bounding_box() for heading in panel.get_by_role('heading').all()]
+    assert len(before) == len(after) == 2
+    assert all(abs(a['y'] - b['y']) < 1 for a, b in zip(before, after)), (before, after)
+
+
+def test_oilcard_successful_archive_remains_readable_when_projects_fail(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    page.route('**/api/m01/projects?status=all&keyword=', lambda route: route.fulfill(
+        status=503, content_type='application/json', body='{"detail":"项目清单暂时失败"}'))
+    page.goto(server + '/preview/oilcard', wait_until='domcontentloaded')
+    expect(page.locator('.oilcard-page > .read-status .notice')).to_contain_text('读取失败')
+    overview = page.locator('#oilcard-panel-overview')
+    expect(overview.locator('.oilcard-read-reserve')).to_have_count(0, timeout=30000)
+    page.get_by_role('tab', name='账户与油卡', exact=True).click()
+    archives = page.locator('#oilcard-panel-archives')
+    expect(archives.locator('.oilcard-read-reserve')).to_have_count(0, timeout=30000)
+    expect(archives.get_by_role('button', name='新增账户', exact=True)).to_be_disabled()
+    expect(archives.get_by_role('button', name='新增油卡', exact=True)).to_be_disabled()
 
 
 def test_oilcard_reconciliation_failure_keeps_its_box_and_is_not_an_empty_account_list(server, browser_page):

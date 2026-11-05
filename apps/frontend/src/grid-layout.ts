@@ -60,7 +60,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
   scope: string; identity: string; columns: TextGridColumn<T>[]; rowId: (row: T) => string; minimum: number; headerMinimum: number;
   fit?: () => void;
 }) {
-  const [measurement, setMeasurement] = useState<ReactNode>(null);
+  const [measurement, setMeasurement] = useState<{ owner: symbol; content: ReactNode } | null>(null);
   const [api, attach] = useState<GridApi<T> | null>(null);
   const [state, setState] = useState<'preparing' | 'updating' | 'ready' | 'error'>('preparing');
   const [error, setError] = useState(''), [retry, setRetry] = useState(0);
@@ -111,6 +111,10 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       if (editable()) { pendingEdit = true; return; }
       pendingEdit = false;
       const started = performance.now();
+      // Effect-local versions can repeat after cleanup. Only this prepare's
+      // portal is ours to clear; its measuring host is always ours to remove.
+      const owner = Symbol();
+      const clearMeasurement = () => setMeasurement(current => current?.owner === owner ? null : current);
       let host: HTMLDivElement | undefined;
       try {
         const wrapping = columns.filter(c => c.wrap || c.render);
@@ -184,9 +188,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
             return cell;
           });
           if (batch.some(([, job]) => job.column.render)) {
-            flushSync(() => setMeasurement(createElement(Fragment, null, ...batch.flatMap(([, job], index) => job.column.render ? [createPortal(
+            flushSync(() => setMeasurement({owner, content: createElement(Fragment, null, ...batch.flatMap(([, job], index) => job.column.render ? [createPortal(
               createElement('div', {className: 'ag-cell-wrapper', style: {width: '100%', height: 'auto'}}, createElement('span', {className: 'ag-cell-value', style: {width: '100%'}}, job.column.render(job.row, job.pinned))), elements[index]!, batch[index]![0])]
-              : []))));
+              : []))}));
           }
           if (batch.some(([, job]) => job.column.render)) {
             // Only the rich controls actually measured here contribute labels and font weights.
@@ -194,7 +198,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
             if (cancelled(run)) return;
           }
           elements.forEach((cell, i) => cache.current.set(batch[i]![0], Math.ceil(cell.getBoundingClientRect().height + rowBorder)));
-          if (batch.some(([, job]) => job.column.render)) flushSync(() => setMeasurement(null));
+          if (batch.some(([, job]) => job.column.render)) flushSync(clearMeasurement);
           host.replaceChildren();
           if (start + 128 < pending.length && performance.now() - yieldedAt > 8) { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); yieldedAt = performance.now(); }
           if (cancelled(run)) return;
@@ -267,7 +271,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         ready.current = true; setState('ready'); setError('');
       } catch (failure) {
         if (!cancelled(run)) { setError(failure instanceof Error ? failure.message : '表格尺寸准备失败，请重试。'); setState(ready.current ? 'ready' : 'error'); }
-      } finally { setMeasurement(null); host?.remove(); }
+      } finally { clearMeasurement(); host?.remove(); }
     }
     let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
     const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; const changed = next !== width || grid.getGridOption('domLayout') !== 'autoHeight' && nextHeight !== height; width = next; height = nextHeight; if (next && changed) schedule(); });
@@ -283,5 +287,5 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     schedule();
     return () => { disposed = true; cancelAnimationFrame(frame); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); };
   }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, retry,fit]);
-  return { attach, state, error, measurement, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
+  return { attach, state, error, measurement: measurement?.content ?? null, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
 }

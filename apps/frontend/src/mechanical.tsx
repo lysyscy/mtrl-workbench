@@ -20,7 +20,7 @@ import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, CompanySummaryRow, InternalColumn, WorkbenchPage } from './mechanical-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
-import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { ProjectExport, ProjectSelectionOrder } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
 // These cells stay one line; let the existing native row-height path size them.
@@ -295,8 +295,9 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
       {(monthRead==='error'||monthRead==='stale')&&<ReadFailure read={state}/>}
       {projects.isError&&<ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}
     </ReadStatusLane>
+    {(tab==='zero'||tab==='monthly') && <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{const text=(state.data?.settings.plate_keywords??[]).join('\n');setKeywords(text);setKeywordsBaseline(JSON.stringify(plateKeywords(text)));setMessage('');setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button>{exportControl()}</div>}
+    <FirstReadRegion phase={state.data && projects.data ? 'content' : (!state.data && state.isError) || (!projects.data && projects.isError) ? 'error' : 'pending'} placeholder={<div className="mechanical-read-body"><ReadPlaceholder rows={6} quiet={(!state.data && state.isError) || (!projects.data && projects.isError)} /></div>}>
     {(tab==='zero'||tab==='monthly') && <>
-      <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{const text=(state.data?.settings.plate_keywords??[]).join('\n');setKeywords(text);setKeywordsBaseline(JSON.stringify(plateKeywords(text)));setMessage('');setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button>{exportControl()}</div>
       {state.data ? <DetailsTable scale={Number(me?.ui_scale_css)||1} groups={editingWarehouses.map(warehouse=>{const key=detailKey(warehouse,ym,category);return {warehouse,name:label(warehouse),saved:state.data?.details.find(d=>detailKey(d.warehouse,d.ym,d.category)===key),draft:detailDrafts[key]};})} ym={ym} category={category} keywords={state.data?.settings.plate_keywords??[]} problemsOnly={problemsOnly} writable={writable} change={edit} save={warehouse=>saves.save(detailKey(warehouse,ym,category),true)} /> : <div className="mechanical-read-body">{readBody}</div>}
 
     </>}
@@ -304,6 +305,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     {scopeError && !error && <p className="notice" role="alert">{scopeError}</p>}
     {!ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length && (monthRead==='ready'||monthRead==='empty') ? <p className="state" role="status">请选择项目查看报表。</p> : null}
     {!scopeMismatch && tab==='summary' && (state.data ? (warehouses.length > 0 && <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} ym={ym} projects={summaryProjects} detail={detail} internal={internal} data={state.data} warehouses={warehouses} />) : <div className="mechanical-read-body">{readBody}</div>)}
+    </FirstReadRegion>
     {dialog==='projects'&&<MechanicalDialog className="mechanical-project-dialog" title="选择显示项目及顺序" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><>
       <p>按勾选项目显示，顺序可调整；其他项目的数据保留。</p>
       <ProjectSelectionOrder projects={pickerOrder.flatMap(id=>candidates.filter(project=>project.id===id))} selected={pickerSelection} choose={setPickerIds} move={(index,offset)=>{const next=[...pickerOrder];[next[index+offset],next[index]]=[next[index]!,next[index+offset]!];setPickerOrder(next);}} disabled={writing} label="显示项目选择与顺序" />

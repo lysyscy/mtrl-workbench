@@ -1,12 +1,18 @@
 # 当前活动工作
 
-## 油卡已合并并正式上线
+## 当前运行与活动整改
+
+2026-11-05本轮只读核对：正式前端指向`var/frontend/releases/797dfe364d1c`，manifest产品提交为`797dfe364d1c8ef58104397479cb65b9f65d50a8`，HTTP `/app`实际索引散列与该清单一致。最近完整发布/进程验证见[11月5日上线回执](../.scratch/browser-session-loading-20261103/deployment-20261105.md)；源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
+
+当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。本轮尚未部署，正式业务与原i8配置保持。另发现的大表合同价/空产值重读错误已[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
+
+## 11月3日油卡交付记录
 
 2026-11-03 17:34，油卡管理已与同期机械费、集采及性能改进整合到master并正式发布，产品提交`a6fdd73a847c`，油卡原分支`a70ce4e7`亦已推送。[总票TAIL-452](../.scratch/tails/issues/TAIL-452-油卡管理与用油报表联动.md)为done。类型检查、84项前端单元检查、定向后端及CI通过，正式页面和油卡读取接口核验通过；原试用数据保留。见[发布记录](../.scratch/oilcard-management/release-20261103.md)。
 
 真实旧台账尚未接续，独立由[TAIL-474](../.scratch/tails/issues/TAIL-474-油卡旧台账核对与正式接续.md)持有，状态needs-info，待用户确认接续期间、归属及旧金额等信息；开票不代表执行正式数据写入。
 
-当前完整产物为`var/frontend/releases/a6fdd73a847c`，上一回退为`073aaedd1b16`；两库public已到`oilmerge261103`。油卡迁移前备份`var/backups/databases/20261103-173228-1042ea7d`已核归档、散列及大小，未做整库恢复演练。回退保留当前数据库和正常新业务，操作方法回[部署](guides/deployment.md)。下列有日期的交付段落记录当次版本与验证边界，当前运行状态以本节为准。
+当次完整产物为`var/frontend/releases/a6fdd73a847c`，当次上一回退为`073aaedd1b16`；两库public已到`oilmerge261103`。油卡迁移前备份`var/backups/databases/20261103-173228-1042ea7d`已核归档、散列及大小，未做整库恢复演练。回退保留当前数据库和正常新业务，操作方法回[部署](guides/deployment.md)。本段仅记录当次版本与验证边界。
 
 ## 集采台账调整已正式加载
 
@@ -14,7 +20,7 @@
 
 当次两库已备份并迁移到`c7d4e2a9b1f3`，原集采合同/发票/付款表计数及内容摘要保持；正式新增结果查询及271条合同默认排序只读核验通过，未重录业务或调用i8。当次资源`073aaedd1b16`，回退`8e4512ce31b1`；具体备份、首次预检兼容问题、原始发布回执与未验边界见[上线回执](../.scratch/jc-ledger-refinements/deployment.md)。当时保留8065副本预览，未将技术验证当作正式库GUI业务验收。
 
-## i8 日常会话复用与页面稳定加载（加载已验，连接修复中）
+## 11月5日i8会话复用与加载交付记录
 
 共同范围与验收沿[正式规格](../.scratch/browser-session-loading-20261103/spec.md)，[总票475](../.scratch/tails/issues/TAIL-475-i8会话复用与稳定加载.md)为入口，[实施票索引](../.scratch/browser-session-loading-20261103/ticket-plan.md)仅导航，各原票持有状态。接手目录、运行编号和资源回[交接](../.scratch/browser-session-loading-20261103/handoff.md)。
 

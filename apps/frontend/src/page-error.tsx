@@ -3,14 +3,20 @@ import { Component, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useHistoryProtection } from './history';
 
-function PageFailure({ title }: { title: string }) {
+// Every explicit document reload inside the account tree uses the same live
+// protection. A blocked retry leaves the navigation and owning input intact.
+export function WorkspaceReloadButton({ children }: { children: ReactNode }) {
   const protection = useHistoryProtection(), [reason, setReason] = useState('');
   function reload() {
     const blocked = protection();
     if (blocked) { setReason(blocked); return; }
     window.location.reload();
   }
-  return <div className="notice" role="alert"><span>{title}未能加载，请检查连接后重新加载页面。{reason && <span> {reason}</span>}</span><Button onClick={reload}>重新加载页面</Button></div>;
+  return <><Button onClick={reload}>{children}</Button>{reason && <span role="status">{reason}</span>}</>;
+}
+
+function PageFailure({ title }: { title: string }) {
+  return <div className="notice" role="alert"><span>{title}未能加载，请检查连接后重新加载页面。</span><WorkspaceReloadButton>重新加载页面</WorkspaceReloadButton></div>;
 }
 
 // React.lazy caches rejected imports. Keep the shell and other page drafts alive;

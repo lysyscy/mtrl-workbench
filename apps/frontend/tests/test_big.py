@@ -46,11 +46,12 @@ def test_real_month_cell_focus_width_and_save_identity(server,browser_page,api,d
     open_page(page,server,'big','月度会大表');choose_month(page,data['month'])
     grid=page.locator('.big-month:not([hidden]) .big-grid')
     grid.locator('.ag-body-horizontal-scroll-viewport').evaluate('e=>e.scrollLeft=e.scrollWidth')
-    field=grid_row(page,'.big-month:not([hidden]) .big-grid',row['warehouse']).locator('[col-id="oil"] input')
+    # 工程用油已由油卡核对带入；使用仍可维护的机械费测算验证保存与列宽。
+    field=grid_row(page,'.big-month:not([hidden]) .big-grid',row['warehouse']).locator('[col-id="mech_est"] input')
     expect(field).to_be_visible()
     widths=lambda:grid.locator('.ag-header-cell').evaluate_all('cells=>cells.map(c=>[c.getAttribute("col-id"),c.getBoundingClientRect().width])')
     before=widths();field.click();assert widths()==before
-    value=Decimal(row['manual']['oil']['value'] or '0')+Decimal('1.25')
+    value=Decimal(row['manual']['mech_est']['value'] or '0')+Decimal('1.25')
     origin=field.locator('xpath=..').inner_text()
     field.fill(str(value));assert widths()==before
     assert field.locator('xpath=..').inner_text()==origin
@@ -60,7 +61,7 @@ def test_real_month_cell_focus_width_and_save_identity(server,browser_page,api,d
     readback.value.finished()
     expect(page.locator('.big-month:not([hidden]) .big-draft,.big-month:not([hidden]) .big-feedback')).to_have_count(0)
     fresh=get(api,'/api/m07/big',period=data['month'])
-    assert Decimal(next(r for r in fresh['rows'] if r['warehouse']==row['warehouse'])['manual']['oil']['value'])==value
+    assert Decimal(next(r for r in fresh['rows'] if r['warehouse']==row['warehouse'])['manual']['mech_est']['value'])==value
 
 
 def test_real_selection_freezes_by_month_and_post_export(server,browser_page,api,disposable,tmp_path):

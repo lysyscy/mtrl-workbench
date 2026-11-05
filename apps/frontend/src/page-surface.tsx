@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import Button from 'antd/es/button';
 import { loadElementFonts } from './appearance-ready';
 import { PageActivity } from './page-activity';
+import { WorkspaceReloadButton } from './page-error';
 
 // Keep inactive grids at the content area's size so their layout queues can settle.
 // The retained page stays outside both the interaction and accessibility trees.
@@ -35,7 +35,10 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
         if (text() !== before) { schedule(); return; }
         complete.current = true; setReady(true); observer.disconnect(); unsubscribe();
       } catch (failure) {
-        if (!disposed) setError(failure instanceof Error ? failure.message : '字体加载失败，请重试。');
+        if (!disposed) {
+          setError(failure instanceof Error ? failure.message : '字体加载失败，请重试。');
+          observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame);
+        }
         preparing = false;
       }
     }
@@ -46,7 +49,7 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
     return () => { disposed = true; observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame); };
   }, [active, client]);
   return <>
-    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>重试字体加载</Button>}</div>}
+    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton>}</div>}
     <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} aria-hidden={active ? undefined : true} style={active ? { visibility: ready ? undefined : 'hidden' } : retainedBox}><PageActivity.Provider value={active}>{children}</PageActivity.Provider></div>
   </>;
 }

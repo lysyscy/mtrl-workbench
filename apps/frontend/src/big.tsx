@@ -18,7 +18,7 @@ import { SettlementExport } from './settlement-export';
 import { getBig, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
-import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import type { ReadLike } from './read-region';
 const bigRowId = (row: BigRow) => row.warehouse;
 const emptyBig: BigRow[] = [];
@@ -161,6 +161,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
     {Object.entries(drafts).filter(([,d])=>d.error).map(([id,d])=><div className="big-draft" key={id}><span>{d.display}，{labels[d.key]}：{d.value || '清空，恢复带入'}<span role="alert">，{d.error}</span></span>
       <Button size="small" disabled={disabled || busy} onMouseDown={e=>e.preventDefault()} onClick={()=>save(id,true)}>保存这项</Button>
       <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[id];return next;});}}>取消修改</Button></div>)}
+    <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="big-grid big-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}>
     {placeheld ? <div className="big-grid big-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div> : query.data && <BigCells.Provider value={{drafts,disabled,save,
       change:(row,key,value)=>{const id=keyOf(row.warehouse,key);saves.update((drafts,writing)=>{const old=drafts[id],next={...drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!writing&&value===next[id]!.original)delete next[id];return next;});},
       cancel:id=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[id];return next;})}}>
@@ -171,6 +172,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
         overlayNoRowsTemplate:`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`,
 }} />
     </BigCells.Provider>}
+    </FirstReadRegion>
     {picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}
   </>;
 }

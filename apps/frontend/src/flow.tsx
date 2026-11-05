@@ -42,6 +42,8 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   }});
   const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
   const phase=readPhase(debt,(debt.data?.length??0)===0);
+  const [summarySettled, setSummarySettled] = useState(false);
+  useEffect(() => { if (debt.data !== undefined || debt.isError) setSummarySettled(true); }, [debt.data, debt.isError]);
   // A first read that failed has nothing trustworthy to show, so the placeholder keeps the same
   // rows as empty space instead of swapping one box for another.
   const placeholder=phase==='idle'||phase==='reading'||phase==='error';
@@ -62,7 +64,11 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
         })}
       </div>
     </section>
-    <LedgerPage {...props}/>
+    {/* The summary's first natural height determines the ledger's vertical position. Reads and
+        table preparation still run in parallel while that position is not yet known. */}
+    <div inert={!summarySettled} style={{visibility: summarySettled ? undefined : 'hidden'}}>
+      <LedgerPage {...props}/>
+    </div>
   </div>;
 }
 export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuard: string }) {

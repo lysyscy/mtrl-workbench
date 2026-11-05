@@ -1,5 +1,5 @@
 import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
-import { timeMatches } from './time-picker';
+import { timeMatches } from './business-time';
 
 export const fields = [
   ['doc_no','单据编号','text'],['seq','序号','text'],['material','物料','text'],['material_property','物料性质','enum'],

@@ -13,6 +13,7 @@ import { addLedgerRow, amount, deleteLedgerRow, editable, loadLedger, same, save
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
+import { FirstReadRegion, ReadPlaceholder } from './read-region';
 const ledgerRowId = (row: LedgerRow) => row.key;
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
@@ -110,7 +111,8 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
       if (input) { input.scrollIntoView({ block: 'nearest', inline: 'nearest' }); input.focus({ preventScroll: true }); focused(); }
     });
   }, [focusRecord, visible, side.category, focused]);
-  return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
+  return <FirstReadRegion phase="content" placeholder={<div className="ledger-first-reserve"><ReadPlaceholder rows={8}/></div>}>
+    <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div ref={summaryRoot} className="ledger-summary" inert={!presentation.visible} style={{visibility:presentation.visible ? undefined : 'hidden'}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
     <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" style={{height:tableHeight,maxHeight:'60dvh'}} grid={{theme:gridTheme,alwaysShowVerticalScroll:false,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
       getRowId:params=>params.data.key,defaultColDef:defaultColumn,suppressCellFocus:true,suppressScrollOnNewData:true,
@@ -126,7 +128,7 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
       },
       onModelUpdated:()=>requestAnimationFrame(sizeTable),onGridSizeChanged:()=>requestAnimationFrame(sizeTable),
       onFirstDataRendered:event=>{sizeTable();if(visible.length)event.api.ensureIndexVisible(visible.length-1,'bottom');}}} />
-  </div>;
+  </div></FirstReadRegion>;
 }
 export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
   const client = useQueryClient();

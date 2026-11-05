@@ -1,7 +1,7 @@
 import './styles.css';
 import { prepareAppearance, loadTextFonts } from './appearance-ready';
 import { PageSurface } from './page-surface';
-import { PageErrorBoundary } from './page-error';
+import { PageErrorBoundary, WorkspaceReloadButton } from './page-error';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
 import { UiProvider } from './ui-provider';
@@ -56,7 +56,7 @@ const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 function loginUrl() { return '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash); }
 
 function Notice({ message, retry }: { message: string; retry?: () => void }) {
-  return <div className="notice" role="alert"><span>{message}</span>{retry && <Button htmlType="submit" onClick={message.includes('字体加载失败') ? () => window.location.reload() : retry}>{message.includes('字体加载失败') ? '重试字体加载' : '重试'}</Button>}</div>;
+  return <div className="notice" role="alert"><span>{message}</span>{retry && <Button onClick={retry}>重试</Button>}</div>;
 }
 
 function AccountMenu({ me, busy, logout, appearance }: { me: Identity; busy: boolean; logout: () => void; appearance: () => void }) {
@@ -65,7 +65,7 @@ function AccountMenu({ me, busy, logout, appearance }: { me: Identity; busy: boo
   </Dropdown>;
 }
 
-function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; preparing: boolean; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
+function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; preparing: boolean; fontError: string; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
@@ -94,7 +94,9 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
       window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
+  return <QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={ledgerExportGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}>
+    {fontError && !obscured && <div className={preparing ? 'page-loading' : 'session-notice'} role="alert"><span>{fontError}</span><WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton></div>}
+    <div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
@@ -124,6 +126,7 @@ function App() {
   const [expired, setExpired] = useState(false);
   const [checking, setChecking] = useState(true);
   const [fontsReady, setFontsReady] = useState(false);
+  const [fontError, setFontError] = useState('');
   const request = useRef<AbortController | null>(null);
   const knownIdentity = useRef<Identity | null>(null), identityPending = useRef(false);
   async function check(pause = true, background = false) {
@@ -143,9 +146,15 @@ function App() {
       knownIdentity.current = next; setMe(next); setChecking(false);
       // Identity and appearance are verified; font I/O must not hold API intents.
       finishVerification();
-      // Mount read queries while shell glyphs load; only first paint waits for those glyphs.
-      await loadTextFonts(pages.map(entry => entry.title).join('') + groups.map(group => group.title).join('') + '材料工作台独立预览管理员外观与字号撤销重做退出登录' + (next?.name ?? next?.account ?? ''));
-      if (!controller.signal.aborted) setFontsReady(true);
+      // Mount reads while shell glyphs load. A later font failure is not an
+      // identity failure: an already shown workspace stays available so its
+      // owner can resolve pending input or history before any document reload.
+      try {
+        await loadTextFonts(pages.map(entry => entry.title).join('') + groups.map(group => group.title).join('') + '材料工作台独立预览管理员外观与字号撤销重做退出登录' + (next?.name ?? next?.account ?? ''));
+        if (!controller.signal.aborted) { setFontsReady(true); setFontError(''); }
+      } catch (failure) {
+        if (!controller.signal.aborted) setFontError(failure instanceof Error ? failure.message : '字体加载失败，请重试。');
+      }
     } catch (failure) {
       if (!controller.signal.aborted) {
         verificationError = '账号暂时无法核实，请重试后再操作。';
@@ -159,16 +168,16 @@ function App() {
     void check();
     // Keep local navigation/input responsive; API intents wait at the identity gate.
     const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(false, true); };
-    const lost = () => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
+    const lost = () => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setFontError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
   }, []);
   if (me === undefined) return <main className="startup">{error ? <Notice message={error} retry={() => void check()} /> : <p role="status">正在识别账号…</p>}</main>;
   return <UiProvider appearanceKey={`${me?.account}:${me?.theme}:${me?.ui_scale_css}`}>
-    {!fontsReady && !error && <p className="page-loading" role="status">正在准备界面…</p>}
+    {!fontsReady && !error && !fontError && <p className="page-loading" role="status">正在准备界面…</p>}
     {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl()}>重新登录</a></div>}
     {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : null}
-    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} onPreferencesSaved={() => check(false)} onLogout={() => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
+    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} fontError={fontError} onPreferencesSaved={() => check(false)} onLogout={() => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setFontError(''); setChecking(false); }} />
   </UiProvider>;
 }
 

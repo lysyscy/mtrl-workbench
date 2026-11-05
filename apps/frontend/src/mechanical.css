@@ -109,3 +109,7 @@
 .mechanical-history-base-note{margin-top:calc(16px * var(--fscale))}
 .mechanical-history-base-note textarea{min-height:0;margin-block:calc(6px * var(--fscale)) 0}
 @media(max-width:520px){.mechanical-history-base-fields{grid-template-columns:1fr}}
+
+/* Keep the summary card geometry when its grid is inside the first-read shell. */
+.mechanical-card:has(>.first-read-region .mechanical-grid){display:flex;flex-direction:column;height:auto;min-height:0}
+.mechanical-card:has(>.first-read-region .mechanical-grid)>:not(.first-read-region){flex-shrink:0}
