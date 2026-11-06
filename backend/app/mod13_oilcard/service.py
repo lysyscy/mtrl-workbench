@@ -258,20 +258,6 @@ def fee_facts(session, *, project_id, end_ym):
     return read(session, project_id=project_id, end_ym=end_ym)
 
 
-def save_fee_custom(session, **values):
-    from .reporting import save_fee_custom as save
-    return save(session, **values)
-
-
-def lock_reporting(session):
-    _lock(session)
-
-
 def big_oil_amount(session, *, project_id, ym):
     from .reporting import big_amount
     return big_amount(session, project_id=project_id, ym=ym)
-
-
-def stage_big_custom(session, **values):
-    from .reporting import stage_big_custom as stage
-    return stage(session, **values)

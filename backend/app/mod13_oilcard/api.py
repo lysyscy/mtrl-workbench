@@ -189,9 +189,9 @@ def save_fee_custom(project_id: int, ym: str, req: FeeCustomUpdate):
 
 @router.post('/linkage/{project_id}/enable')
 def enable_empty_linkage(project_id: int):
-    from app.mod09_fee import service as fees
+    from . import linkage
     with session_scope() as session:
-        return {'ok': True, **fees.enable_empty_oil_linkage(session, project_id=project_id)}
+        return {'ok': True, **linkage.enable_empty_fee(session, project_id=project_id)}
 
 
 class BigCustomUpdate(FeeCustomUpdate):
@@ -210,9 +210,9 @@ def save_big_custom(project_id: int, ym: str, req: BigCustomUpdate):
 
 @router.post('/linkage/{project_id}/big/enable')
 def enable_empty_big_linkage(project_id: int):
-    from app.mod07_setl import service as big
+    from . import linkage
     with session_scope() as session:
-        return {'ok': True, **big.enable_empty_big_oil(session, project_id=project_id)}
+        return {'ok': True, **linkage.enable_empty_big(session, project_id=project_id)}
 
 
 @router.get('/export')
@@ -297,10 +297,7 @@ def receive_invoice(file: UploadFile = File(...)):
     content = file.file.read(MAX_PDF_BYTES + 1)
     recognized = recognize_pdf(content)
     with session_scope() as session:
-        original = invoices.receive_pdf(session, content, recognized)
-        item = invoices.invoice_data(session, session.get(invoices.OilInvoice, original.invoice_id))
-        return {'ok': True, 'original': next(o for o in item['originals'] if o['id'] == original.id),
-                'item': item, **invoices.receipt_outcome(session, original)}
+        return invoices.receive_pdf(session, content, recognized).upload_response(session)
 
 
 @router.get('/invoices/receipts/{digest}')

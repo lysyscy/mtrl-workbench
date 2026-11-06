@@ -1,25 +1,24 @@
 import Button from 'antd/es/button';
-import App from 'antd/es/app';
 import Pagination from 'antd/es/pagination';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import { useEffect, useId, useRef, useState } from 'react';
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { ReactNode } from 'react';
 import { useHref, useLinkClickHandler } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ApiError, requestJson } from './api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import { contractHistoryDate, contractWrite, readContracts } from './contracts-api';
+import { contractHistoryDate } from './contracts-api';
 import type { ContractRow } from './contracts-api';
 import { useHistoryGuard } from './history';
 import { live, money, readNotices } from './notices-api';
-import { draftProblem, emptySubtableDraft, loadSubtables, readSubtableOperation, writeSubtable } from './contract-subtables-api';
-import type { SubtableDraft, SubtableKind } from './contract-subtables-api';
+import { draftProblem, loadSubtables } from './contract-subtables-api';
+import type { SubtableKind } from './contract-subtables-api';
 import type { InvoiceRow, PaymentDisplayRow } from './contract-subtables-api';
 import { subtableOverage } from './contract-subtable-overage';
-import { clearSubtableSnapshot, newSubtableRequestId, readSubtableSnapshot, snapshotIsEmpty, subtableStorageAvailable, writeSubtableSnapshot } from './contract-subtable-recovery';
-import type { SubtableOperation, SubtableSnapshot } from './contract-subtable-recovery';
+import { subtableDraftDirty as draftDirty } from './contract-subtable-workspace';
+import type { ContractSubtableWorkspace, SubtableView } from './contract-subtable-workspace';
 import { ReadGrid } from './business-grid';
 import { numberColumnWidth, pageGridGeometry, textWidth } from './grid';
 import { completeColumnWidth } from './grid-text';
@@ -42,145 +41,29 @@ function detailHeight(scale: number, rows: number): string {
   return `min(${natural}px, var(--subtable-detail-max))`;
 }
 
-const KINDS: readonly SubtableKind[] = ['supplier', 'trade', 'payment'];
-
-/** 结果未确认的提交：checking 查询中，unknown 查询失败（不可再写），not_found 未落地（可同 ID 重试）。 */
-type Unresolved = 'checking' | 'unknown' | 'not_found';
-
-function without<T extends object>(record: T, key: SubtableKind): T {
-  const next = { ...record };
-  delete (next as Record<string, unknown>)[key];
-  return next;
-}
-
-function messageOf(failure: unknown): string {
-  return failure instanceof Error ? failure.message : '请联系维护人员。';
-}
-
-export interface SubtableState {
-  drafts: Record<SubtableKind, SubtableDraft>; busy: boolean; uncertain: boolean; error: string; feedback: string;
-  deleting: { kind: SubtableKind; id: number; date: string; amount: string } | null;
-  focus: { kind: SubtableKind; id: number } | null;
-  /** 尚未确认结果的真实提交；重试与刷新恢复都复用同一 requestId。 */
-  pending: Partial<Record<SubtableKind, SubtableOperation>>;
-  unresolved: Partial<Record<SubtableKind, Unresolved>>;
-}
-export type SubtableWorkspace = Record<number, SubtableState>;
-export type ChangeSubtables = Dispatch<SetStateAction<SubtableWorkspace>>;
-export function newSubtableState(historyDate = ''): SubtableState {
-  const supplier = emptySubtableDraft();
-  if (historyDate) { supplier.date = historyDate; supplier.initialDate = historyDate; }
-  return { drafts: { supplier, trade: emptySubtableDraft(), payment: emptySubtableDraft() }, busy: false, uncertain: false, error: '', feedback: '', deleting: null, focus: null, pending: {}, unresolved: {} };
-}
-const draftDirty = (d: SubtableDraft) => d.amount !== '' || d.date !== d.initialDate;
-export function hasSubtableDrafts(state: SubtableState | undefined): boolean { return Boolean(state && Object.values(state.drafts).some(draftDirty)); }
-
 function NoticeButton({ id, children }: { id: number; children: ReactNode }) {
   const to = `/notices?notice=${id}`, href = useHref(to), onClick = useLinkClickHandler<HTMLAnchorElement>(to);
   return <Button size="small" href={href} onClick={onClick}>{children}</Button>;
-}
-
-/** 一次提交的本地快照：只保留未保存草稿与未确认提交，用于 F5 恢复与结果确认。 */
-function snapshotOf(accountId: number, contractId: number, state: SubtableState): SubtableSnapshot {
-  const drafts: SubtableSnapshot['drafts'] = {}, operations: SubtableSnapshot['operations'] = {};
-  for (const kind of KINDS) {
-    if (draftDirty(state.drafts[kind])) drafts[kind] = state.drafts[kind];
-    const operation = state.pending[kind];
-    if (operation) operations[kind] = operation;
-  }
-  return { version: 1, accountId, contractId, operations, drafts };
-}
-
-function submittedDrafts(drafts: Record<SubtableKind, SubtableDraft>, kind: SubtableKind, operation: SubtableOperation, historyDate: string) {
-  const current = drafts[kind];
-  // 只退掉"就是这一次提交"的草稿；用户之后的新输入必须保留。
-  if (current.date.trim() !== operation.date || current.amount.trim() !== operation.amount) return drafts;
-  return { ...drafts, [kind]: newSubtableState(historyDate).drafts[kind] };
-}
-
-function confirmedFocus(kind: SubtableKind, result: Record<string, unknown>) {
-  return typeof result.id === 'number' && Number.isSafeInteger(result.id) && result.id > 0 ? { kind, id: result.id } : null;
 }
 
 function WarningMark() {
   return <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 4.6 20.6 20H3.4z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/><path d="M12 10v4.4M12 17.2v.1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>;
 }
 
-export function ContractSubtables({ contractId, accountId, historyDate, workspace, change, writable, paused, onlyKind, summaryRow, contracts = [] }: {
-  contractId: number; accountId?: number | undefined; historyDate: string; workspace: SubtableWorkspace; change: ChangeSubtables;
+export function ContractSubtables({ contractId, historyDate, workspace, writable, paused, onlyKind, summaryRow, contracts = [] }: {
+  contractId: number; historyDate: string; workspace: ContractSubtableWorkspace;
   writable: boolean; paused: boolean; onlyKind?: SubtableKind; summaryRow?: ContractRow; contracts?: ContractRow[];
 }) {
-  const { message } = App.useApp();
-  const client = useQueryClient(), root = useRef<HTMLDivElement>(null), lock = useRef(false), guard = useId();
+  const root = useRef<HTMLDivElement>(null), guard = useId();
   const [referencing, setReferencing] = useState(false);
-  const focused = useRef<SubtableState['focus']>(null);
+  const focused = useRef<SubtableView['focus']>(null);
   const [linkPage, setLinkPage] = useState(1);
-  const [storageWarning, setStorageWarning] = useState('');
-  const recovered = useRef(false);
-  // 恢复完成前不允许回写快照，否则未合并的草稿会被这一轮内存状态覆盖掉。
-  const [restored, setRestored] = useState(false);
   const linkPageSize = 8;
   const labels: Record<SubtableKind, string> = { supplier: historyDate ? '历史未结金额' : '供应商发票', trade: '贸易公司发票', payment: '手工付款' };
-  const state = workspace[contractId], liveRef = useRef({ writable, paused }); liveRef.current = { writable, paused };
+  const state = workspace.view(contractId);
   const query = useQuery({ queryKey: ['contract-subtables', contractId], enabled: !paused, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: false, retry: (count, failure) => count < 1 && !(failure instanceof ApiError && failure.status >= 400 && failure.status < 500), retryDelay: 500, queryFn: ({ signal }) => loadSubtables(contractId, signal) });
-  function update(fn: (s: SubtableState) => SubtableState) { change(old => ({ ...old, [contractId]: fn(old[contractId] ?? newSubtableState(historyDate)) })); }
-  useEffect(() => { change(old => old[contractId] ? old : { ...old, [contractId]: newSubtableState(historyDate) }); }, [contractId, historyDate, change]);
-  useHistoryGuard(guard, () => paused ? '' : state?.busy ? '合同子表正在保存，请稍候。' : state?.uncertain ? '合同子表保存结果待确认，正在自动核对，可刷新页面恢复。' : hasSubtableDrafts(state) ? '合同子表有未保存输入，请先处理。' : '');
-
-  async function refresh() {
-    await client.invalidateQueries({ refetchType: 'none' });
-    void client.invalidateQueries({ predicate: q => q.queryKey[0] === 'history' && q.isActive() });
-    await Promise.all([query.refetch({ throwOnError: true }), client.fetchQuery({ queryKey: ['contracts'], staleTime: 0, queryFn: async ({ signal }) => readContracts(await requestJson('/api/m11/list', { signal })) })]);
-  }
-
-  /**
-   * 查询一次已有提交的结果。只用固定 requestId，绝不新 ID 重投：
-   * 已完成 → 更新数据、退掉该次草稿（保留之后输入）；未找到 → 保留同一 ID 供安全重试；查询失败 → 明确提示刷新。
-   */
-  async function confirmOperation(kind: SubtableKind, operation: SubtableOperation) {
-    try {
-      const lookup = await readSubtableOperation(operation.requestId);
-      if (lookup.status === 'completed') {
-        update(s => ({ ...s, pending: without(s.pending, kind), unresolved: without(s.unresolved, kind), uncertain: false, error: '', feedback: '', drafts: operation.action === 'add' ? submittedDrafts(s.drafts, kind, operation, historyDate) : s.drafts, focus: confirmedFocus(kind, lookup.result) ?? s.focus }));
-        await refresh().catch(() => { update(s => ({ ...s, feedback: '', error: `${labels[kind]}已保存，明细重读失败，可刷新页面查看。` })); });
-        void message.success({ key: 'contract-subtable-success', content: operation.action === 'del' ? '已删除。' : `${labels[kind]}已保存。`, duration: 3 });
-        return;
-      }
-      update(s => ({ ...s, unresolved: { ...s.unresolved, [kind]: 'not_found' }, uncertain: false, error: '', feedback: `暂未查到上次${labels[kind]}操作的保存结果，可重试上次操作；将沿用原提交，不会重复记账。` }));
-    } catch (failure) {
-      update(s => ({ ...s, unresolved: { ...s.unresolved, [kind]: 'unknown' }, uncertain: true, error: `未能确认本次${labels[kind]}是否已保存：${messageOf(failure)}请刷新页面后重试核对；同一次提交不会重复记账。` }));
-    }
-  }
-
-  // 刷新/重新进入后先只查询已有提交的结果，不重放任何未点保存的草稿。
-  useEffect(() => {
-    if (!accountId || paused || recovered.current) return;
-    recovered.current = true;
-    // 恢复前不许回写快照：否则这一轮内存状态（还没有并入快照草稿）会覆盖掉待恢复内容。
-    if (!subtableStorageAvailable()) { setStorageWarning('本次保护有限：浏览器禁止本地暂存，刷新页面会丢失未保存的输入。'); setRestored(true); return; }
-    const snapshot = readSubtableSnapshot(accountId, contractId);
-    if (!snapshot) { setRestored(true); return; }
-    const operations = KINDS.flatMap(kind => { const operation = snapshot.operations[kind]; return operation ? [[kind, operation] as const] : []; });
-    const drafts = snapshot.drafts;
-    update(s => {
-      const merged = { ...s.drafts };
-      for (const kind of KINDS) { const saved = drafts[kind]; if (saved && !draftDirty(s.drafts[kind])) merged[kind] = saved; }
-      const pending = { ...s.pending }, unresolved = { ...s.unresolved };
-      for (const [kind, operation] of operations) { pending[kind] = operation; unresolved[kind] = 'checking'; }
-      return { ...s, drafts: merged, pending, unresolved, uncertain: operations.length ? true : s.uncertain, feedback: operations.length ? '正在核对上次提交的保存结果…' : s.feedback };
-    });
-    setRestored(true);
-    if (!operations.length) return;
-    void (async () => { for (const [kind, operation] of operations) await confirmOperation(kind, operation); })();
-  }, [accountId, contractId, paused]);
-
-  // 草稿与未确认提交按账号+合同落到本浏览器会话，换号读不到别人的记录。
-  useEffect(() => {
-    if (!accountId || paused || !restored || !state) return;
-    const snapshot = snapshotOf(accountId, contractId, state);
-    if (snapshotIsEmpty(snapshot)) { clearSubtableSnapshot(accountId, contractId); return; }
-    if (!writeSubtableSnapshot(snapshot)) setStorageWarning('本次保护有限：浏览器未能暂存子表输入，刷新页面可能丢失。');
-  }, [accountId, contractId, paused, restored, state]);
+  useEffect(() => { if (!paused) void workspace.activate(contractId, historyDate); }, [workspace, contractId, historyDate, paused]);
+  useHistoryGuard(guard, () => paused ? '' : state?.busy ? '合同子表正在保存，请稍候。' : state?.uncertain ? '合同子表保存结果待确认，正在自动核对，可刷新页面恢复。' : state?.dirty ? '合同子表有未保存输入，请先处理。' : '');
 
   useEffect(() => {
     const focus = state?.focus;
@@ -198,60 +81,22 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
 
-  async function save(kind: SubtableKind, deleting = false) {
-    if (unavailable || lock.current || !state) return;
-    const draft = state.drafts[kind], target = state.deleting;
-    const previous = state.pending[kind];
-    const retry = previous && state.unresolved[kind] === 'not_found' ? previous : undefined;
-    if (!retry && deleting && (!target || target.kind !== kind)) return;
-    const problem = retry || deleting ? '' : draftProblem(draft);
-    if (problem) { update(s => ({ ...s, error: `${labels[kind]}：${problem}` })); return; }
-    // 未查到回执仍可能有在途事务；重试必须沿用原操作快照，新草稿留给后续提交。
-    const operation: SubtableOperation = retry ?? {
-      requestId: newSubtableRequestId(), kind, action: deleting ? 'del' : 'add',
-      date: deleting ? '' : draft.date.trim(), amount: deleting ? '' : draft.amount.trim(), rowId: deleting ? target!.id : null, at: Date.now(),
-    };
-    const removing = operation.action === 'del';
-    // 必须在发请求前同步保存操作身份，避免 F5 早于 React effect 落盘。
-    if (accountId && !writeSubtableSnapshot(snapshotOf(accountId, contractId, { ...state, pending: { ...state.pending, [kind]: operation } }))) {
-      setStorageWarning('本次保护有限：浏览器未能暂存子表输入，刷新页面可能丢失。');
-    }
-    lock.current = true;
-    let written = false;
-    update(s => ({ ...s, busy: true, error: '', feedback: '', pending: { ...s.pending, [kind]: operation }, unresolved: { ...s.unresolved, [kind]: 'checking' } }));
-    try {
-      const id = await writeSubtable(contractId, kind, removing ? null : { date: operation.date, amount: operation.amount, initialDate: operation.date }, operation.rowId ?? undefined, operation.requestId);
-      written = true;
-      update(s => ({ ...s, deleting: null, focus: id === null ? null : { kind, id }, pending: without(s.pending, kind), unresolved: without(s.unresolved, kind), uncertain: false, drafts: removing ? s.drafts : submittedDrafts(s.drafts, kind, operation, historyDate) }));
-      try { await refresh(); void message.success({ key: 'contract-subtable-success', content: removing ? '已删除。' : `${labels[kind]}已新增。`, duration: 3 }); }
-      catch (failure) { update(s => ({ ...s, error: `已保存，明细重读失败，可刷新页面查看。${messageOf(failure)}` })); }
-    } catch (failure) {
-      const rejected = failure instanceof ApiError && failure.code !== 'invalid_response' && (failure.status === 200 || failure.status >= 400 && failure.status < 500);
-      if (rejected || written) {
-        update(s => ({ ...s, pending: without(s.pending, kind), unresolved: without(s.unresolved, kind), uncertain: false, error: `未保存。${messageOf(failure)}` }));
-      } else {
-        // 结果未知：先自动查一次这次提交的结果，查不到再让人刷新，绝不新 ID 重投。
-        update(s => ({ ...s, uncertain: true, unresolved: { ...s.unresolved, [kind]: 'checking' }, error: '', feedback: `未取得${labels[kind]}保存确认，正在核对本次结果…` }));
-        await confirmOperation(kind, operation);
-      }
-    } finally { lock.current = false; update(s => ({ ...s, busy: false })); }
-  }
-
-  function input(kind: SubtableKind, key: 'date' | 'amount', value: string) { update(s => ({ ...s, drafts: { ...s.drafts, [kind]: { ...s.drafts[kind], [key]: value } } })); }
+  async function save(kind: SubtableKind, deleting = false) { if (!unavailable) await workspace.submit(contractId, kind, deleting); }
+  function input(kind: SubtableKind, key: 'date' | 'amount', value: string) { workspace.edit(contractId, kind, key, value); }
   function draftRow(kind: SubtableKind) {
     if (!state) return null;
-    const retry = Boolean(state.pending[kind]) && state.unresolved[kind] === 'not_found';
+    const retry = state.retry.includes(kind);
     return <div className="subtable-draft subtable-entry">
       <label>{kind === 'supplier' && historyDate ? '核对截至日' : '日期'}<BusinessDate label={kind === 'supplier' && historyDate ? '核对截至日' : labels[kind] + '日期'} value={state.drafts[kind].date} disabled={!writable || paused || state.busy || state.uncertain} onChange={value => input(kind, 'date', value)}/></label>
       <label>金额（元）<Input aria-label={kind === 'supplier' && historyDate ? '历史未结金额（元）' : labels[kind] + '金额（元）'} inputMode="decimal" value={state.drafts[kind].amount} disabled={!writable || paused || state.busy || state.uncertain} onChange={e => input(kind, 'amount', e.target.value)}/></label>
       {kind === 'payment' && <span>手工录入</span>}
       <div className="subtable-draft-actions">
         <Button htmlType="button" className="primary" disabled={unavailable} onClick={() => void save(kind)}>{retry ? `重试上次${labels[kind]}` : `新增${labels[kind]}`}</Button>
-        <Button htmlType="button" disabled={!writable || paused || state.busy || state.uncertain || !draftDirty(state.drafts[kind])} onClick={() => update(s => ({ ...s, drafts: { ...s.drafts, [kind]: newSubtableState(historyDate).drafts[kind] } }))}>取消</Button>
+        <Button htmlType="button" disabled={!writable || paused || state.busy || state.uncertain || !draftDirty(state.drafts[kind])} onClick={() => workspace.discard(contractId, kind)}>取消</Button>
       </div>
     </div>;
   }
-  function remove(kind: SubtableKind, row: { id: number; date: string; amount: string }) { update(s => ({ ...s, deleting: { kind, ...row } })); }
+  function remove(kind: SubtableKind, row: { id: number; date: string; amount: string }) { workspace.selectDeletion(contractId, { kind, ...row }); }
   const data = query.data, scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const linkedNotices = [...new Set((data?.payments ?? []).filter(p => p.source === 'notice').map(p => p.notice_id!))];
   const currentLinkPage = Math.max(1, Math.min(linkPage, Math.ceil(linkedNotices.length / linkPageSize)));
@@ -288,7 +133,7 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
       </dl>
       {onlyKind !== 'payment' && overageLine(onlyKind)}
     </div>}
-    {storageWarning && <p className="subtable-storage-note" role="status">{storageWarning}</p>}
+    {state?.storageWarning && <p className="subtable-storage-note" role="status">{state.storageWarning}</p>}
     <ReadStatusLane phase={readState} announce="正在读取合同子表…" className="subtable-read-status">
       {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="明细更新失败，保留上次结果。"/>}
     </ReadStatusLane>
@@ -313,31 +158,31 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
       ]}/></div>{draftRow('payment')}</section>}
       {(!onlyKind || onlyKind === 'payment') && linkedNotices.length > 0 && <div className="subtable-linked-group"><div className="subtable-links"><span>已关联通知书</span>{linkedNotices.slice((currentLinkPage - 1) * linkPageSize, currentLinkPage * linkPageSize).map((id, index) => <NoticeButton key={id} id={id}>通知书 {(currentLinkPage - 1) * linkPageSize + index + 1}</NoticeButton>)}</div>{linkedNotices.length > linkPageSize && <Pagination aria-label="已关联通知书分页" size="small" current={currentLinkPage} pageSize={linkPageSize} total={linkedNotices.length} showSizeChanger={false} onChange={setLinkPage}/>}</div>}
     </> : placeheld && <div className="subtable-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={readState === 'error'}/></div>}
-    {referencing && <ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} state={state} update={update} refresh={refresh} close={() => setReferencing(false)}/>}
-    {state?.deleting && (!onlyKind || state.deleting.kind === onlyKind) && <div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date || '日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={() => update(s => ({ ...s, deleting: null }))}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={() => void save(state.deleting!.kind, true)}>确认删除</Button></div>}
+    {referencing && <ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} workspace={workspace} close={() => setReferencing(false)}/>}
+    {state?.deleting && (!onlyKind || state.deleting.kind === onlyKind) && <div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date || '日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={() => workspace.selectDeletion(contractId, null)}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={() => void save(state.deleting!.kind, true)}>确认删除</Button></div>}
     {state?.feedback && <p role="status">{state.feedback}</p>}{state?.error && <p className="notice" role="alert">{state.error}</p>}
   </div>;
 }
 
-export function ContractSubtableDialog({ row, kind, accountId, contracts, workspace, change, paused, writable, close }: {
-  row: ContractRow; kind: SubtableKind; accountId?: number | undefined; contracts: ContractRow[]; workspace: SubtableWorkspace; change: ChangeSubtables; paused: boolean; writable: boolean; close: () => void;
+export function ContractSubtableDialog({ row, kind, contracts, workspace, paused, writable, close }: {
+  row: ContractRow; kind: SubtableKind; contracts: ContractRow[]; workspace: ContractSubtableWorkspace; paused: boolean; writable: boolean; close: () => void;
 }) {
-  const state = workspace[row.id], historyDate = contractHistoryDate(row.remark), titleId = useId();
+  const state = workspace.view(row.id), historyDate = contractHistoryDate(row.remark), titleId = useId();
   const closing = useDialogClose({ busy: Boolean(state?.busy), dirty: Boolean(state && draftDirty(state.drafts[kind])), active: !paused, close: () => {
-    change(old => old[row.id] ? { ...old, [row.id]: { ...old[row.id]!, drafts: { ...old[row.id]!.drafts, [kind]: newSubtableState(historyDate).drafts[kind] }, deleting: old[row.id]!.deleting?.kind === kind ? null : old[row.id]!.deleting } } : old);
+    workspace.discard(row.id, kind);
     close();
   } });
   const title = kind === 'payment' ? '付款子表' : kind === 'trade' ? '贸易公司发票子表' : historyDate ? '历史未结金额' : '供应商发票子表';
   return <BusinessModal open={!paused} centered={false} className="project-dialog contract-subtable-dialog" titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
-    <ContractSubtables contractId={row.id} accountId={accountId} historyDate={historyDate} contracts={contracts} workspace={workspace} change={change} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
+    <ContractSubtables contractId={row.id} historyDate={historyDate} contracts={contracts} workspace={workspace} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
     <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
   </DialogContents></BusinessModal>;
 }
 
-function ContractPaymentReference({ contractId, contracts, paused, writable, state, update, refresh, close }: {
-  contractId: number; contracts: ContractRow[]; paused: boolean; writable: boolean; state: SubtableState | undefined; update: (fn: (s: SubtableState) => SubtableState) => void; refresh: () => Promise<void>; close: () => void;
+function ContractPaymentReference({ contractId, contracts, paused, writable, workspace, close }: {
+  contractId: number; contracts: ContractRow[]; paused: boolean; writable: boolean; workspace: ContractSubtableWorkspace; close: () => void;
 }) {
-  const { message } = App.useApp();
+  const state = workspace.view(contractId);
   const [selected, setSelected] = useState<number | undefined>(), [saved, setSaved] = useState(false), [error, setError] = useState('');
   const lock = useRef(false), titleId = useId();
   const closing = useDialogClose({ busy: Boolean(state?.busy), dirty: !saved && selected !== undefined, close, active: !paused });
@@ -348,15 +193,12 @@ function ContractPaymentReference({ contractId, contracts, paused, writable, sta
   const unavailable = paused || !writable || Boolean(state?.busy || state?.uncertain) || saved || query.isFetching || query.isError || !chosen;
   async function reference() {
     if (unavailable || lock.current || !chosen) return;
-    lock.current = true; update(s => ({ ...s, busy: true, error: '', feedback: '' })); setError(''); let written = false;
+    lock.current = true; setError('');
     try {
-      await contractWrite('/api/m11/link', { notice_id: chosen.notice_id, contract_id: contractId }); written = true; setSaved(true);
-      await refresh(); void message.success({ key: 'contract-subtable-success', content: '已引用付款记录。', duration: 3 }); close();
-    } catch (failure) {
-      const rejected = failure instanceof ApiError && failure.code !== 'invalid_response' && (failure.status === 200 || failure.status >= 400 && failure.status < 500);
-      const text = `${written ? '已关联，明细重读失败，请刷新页面核对，勿重复引用。' : rejected ? '未关联。' : '关联结果待确认，请刷新页面核对，勿重复引用。'}${messageOf(failure)}`;
-      update(s => ({ ...s, uncertain: !written && !rejected, error: text })); setError(text);
-    } finally { lock.current = false; update(s => ({ ...s, busy: false })); }
+      const result = await workspace.reference(contractId, chosen.notice_id);
+      if (result === 'saved') { setSaved(true); close(); }
+      else { if (result === 'written') setSaved(true); setError(workspace.view(contractId)?.error ?? ''); }
+    } finally { lock.current = false; }
   }
   return <BusinessModal open={!paused} className="project-dialog contract-payment-reference" titleId={titleId} requestClose={closing.requestClose}><DialogContents title="从付款域引用付款记录" titleId={titleId} closing={closing}>
     <p>按集采实际供应商核对；同一通知书只能引用一次。</p>

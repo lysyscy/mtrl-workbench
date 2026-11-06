@@ -246,11 +246,7 @@ def review_big_oil(session, *, project_id):
     return review(session, project_id=project_id)
 
 
-def enable_big_oil(session, **values):
-    from .oil_linkage import enable
-    return enable(session, **values)
-
-
-def enable_empty_big_oil(session, *, project_id):
-    from .oil_linkage import enable_empty
-    return enable_empty(session, project_id=project_id)
+def bind_big_oil(session, **values):
+    """旧大表证据的绑定步骤；完整启用由油卡接续编排持有。"""
+    from .oil_linkage import bind
+    return bind(session, **values)

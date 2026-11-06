@@ -1,4 +1,5 @@
 """One receipt service for uploads and delivery adapters; money comes from allocations."""
+from dataclasses import dataclass
 from datetime import date
 from hashlib import sha256
 import json
@@ -8,7 +9,7 @@ from uuid import uuid4
 from sqlalchemy import cast, select
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.core.errors import MustReportError
+from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import sum_money
 from app.mod01_projects import service as projects
@@ -55,6 +56,38 @@ def invoice_data(session, row):
         'allocations': [allocation_data(a) for a in allocations], 'originals': [original_data(o, json.loads(row.review_json)) for o in originals]}
 
 
+@dataclass(frozen=True)
+class ReceivedOriginal:
+    """Receipt identity and per-delivery repetition; upload replay stays unchanged."""
+    _source: OilInvoiceOriginal
+    repeated: bool = False
+
+    @property
+    def original_id(self):
+        return self._source.id
+
+    @property
+    def invoice_id(self):
+        return self._source.invoice_id
+
+    @property
+    def duplicate(self):
+        return self.repeated or self._source.outcome == 'duplicate'
+
+    def upload_response(self, session):
+        item = invoice_data(session, session.get(OilInvoice, self.invoice_id))
+        return {'ok': True, 'original': next(o for o in item['originals'] if o['id'] == self.original_id),
+            'item': item, **receipt_outcome(session, self._source)}
+
+
+def _archive(session, content, recognized, invoice_id, outcome, reason):
+    source = OilInvoiceOriginal(sha256=sha256(content).hexdigest(), invoice_id=invoice_id,
+        content=content, byte_size=len(content), outcome=outcome, reason=reason,
+        recognized_json=json.dumps(recognized, ensure_ascii=False, sort_keys=True), received_by=current_operator())
+    session.add(source); session.flush()
+    return ReceivedOriginal(source)
+
+
 def receive_pdf(session, content, recognized):
     """Caller extracts first. Hash + invoice number are cross-batch identities.
 
@@ -65,7 +98,7 @@ def receive_pdf(session, content, recognized):
     digest = sha256(content).hexdigest()
     existing = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.sha256 == digest))
     if existing is not None:
-        return existing
+        return ReceivedOriginal(existing, repeated=True)
     number = recognized['invoice_no']
     known = number_owner(session, number) if number else None
     invoice = session.get(OilInvoice, known) if known else None
@@ -94,10 +127,31 @@ def receive_pdf(session, content, recognized):
                     project_id=account.project_id, card_id=account.card_id, amount=invoice.amount))
             else:
                 invoice.reason = '完整卡号有多个在用账户，请确认归属。' if candidates else '完整卡号没有在用账户，请确认归属。'
-    source = OilInvoiceOriginal(sha256=digest, invoice_id=invoice.id, content=content, byte_size=len(content),
-        outcome=outcome, reason=reason, recognized_json=json.dumps(recognized, ensure_ascii=False, sort_keys=True), received_by=current_operator())
-    session.add(source); session.flush()
-    return source
+    return _archive(session, content, recognized, invoice.id, outcome, reason)
+
+
+def attach_original(session, *, content, digest, invoice_id, version):
+    """Explicitly reviewed historical PDF: archive only, never register more money."""
+    from .invoice_pdf import recognize_pdf
+    _lock(session)
+    if content is None or sha256(content).hexdigest() != digest:
+        raise DataConflictError('补档原件未提供或hash与已核来源不一致。')
+    recognized = recognize_pdf(content)
+    row = _get(session, OilInvoice, invoice_id)
+    _check_version(row, version)
+    require_editable(row)
+    facts = (recognized['invoice_no'], recognized['invoice_date'], recognized['amount'])
+    if row.status != 'registered' or facts != (row.invoice_no,
+            row.invoice_date.isoformat() if row.invoice_date else None, str(row.amount)) or not all(facts):
+        raise DataConflictError('PDF票号、日期、金额与已记发票未能核对，保留待核，不新增金额。')
+    if number_owner(session, row.invoice_no) != row.id:
+        raise DataConflictError('PDF票号已有冲突，不能补档。')
+    existing = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.sha256 == digest))
+    if existing is not None:
+        if existing.invoice_id != row.id:
+            raise DataConflictError('此PDF已属于另一发票，请核对，不能改挂。')
+        return ReceivedOriginal(existing, repeated=True)
+    return _archive(session, content, recognized, row.id, 'duplicate', '首次接续人工核对补档；原已记金额保持。')
 
 
 def receipt(session, digest):

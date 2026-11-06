@@ -21,6 +21,9 @@ def test_actual_subtable_draft_survives_navigation_and_close_confirm(server,brow
     modal.get_by_role('button',name='关闭',exact=True).click();expect(modal.get_by_role('heading',name='放弃未保存的修改？')).to_be_visible()
     modal.get_by_role('button',name='继续编辑',exact=True).click();expect(amount).to_have_value('1.25')
     modal.get_by_role('button',name='关闭',exact=True).click();modal.get_by_role('button',name='放弃并关闭',exact=True).click();expect(modal).not_to_be_visible()
+    page.reload()
+    modal=open_payment(page,server,row,label)
+    expect(modal.get_by_label('手工付款金额（元）',exact=True)).to_have_value('')
 
 
 def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disposable):
@@ -39,10 +42,17 @@ def test_actual_manual_payment_add_delete_roundtrip(server,browser_page,api,disp
     # 结果未知 → 自动查询这次提交（无需手工"重读明细/已核对"）；确实未落地就明确说未保存。
     expect(modal.get_by_text('暂未查到上次手工付款操作的保存结果')).to_be_visible()
     assert len(writes)==1 and len(lookups)==1 and 'request_id=' in lookups[0]
+    amount.fill('9.50')
+    page.reload()
+    modal=open_payment(page,server,row,label)
+    expect(modal.get_by_label('手工付款金额（元）',exact=True)).to_have_value('9.50')
     retry=modal.get_by_role('button',name='重试上次手工付款',exact=True);expect(retry).to_be_enabled()
+    assert len(writes)==1 and len(lookups)==2
     page.unroute('**/api/m11/subtable-operation?*');retry.click()
     expect(page.get_by_text('手工付款已新增。',exact=True)).to_be_visible()
     assert len(writes)==2 and writes[0]['request_id']==writes[1]['request_id']
+    assert writes[1]==writes[0]
+    expect(modal.get_by_label('手工付款金额（元）',exact=True)).to_have_value('9.50')
     after=get(api,'/api/m11/detail',id=row['id'])['data']
     assert Decimal(after['pay_sum'])==Decimal(before['pay_sum'])+Decimal('1.25') and len(after['payments'])==len(before['payments'])+1
     ids={p['id'] for p in before['payments']};added=next(p for p in after['payments'] if p['id'] not in ids)

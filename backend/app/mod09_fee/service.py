@@ -365,9 +365,6 @@ def review_oil_linkage(session, *, project_id):
     return O.review(session, project_id=project_id)
 
 
-def enable_oil_linkage(session, **values):
-    return O.enable(session, **values)
-
-
-def enable_empty_oil_linkage(session, *, project_id):
-    return O.enable_empty(session, project_id=project_id)
+def bind_oil_linkage(session, **values):
+    """旧费用证据的绑定步骤；完整启用由油卡接续编排持有。"""
+    return O.bind(session, **values)

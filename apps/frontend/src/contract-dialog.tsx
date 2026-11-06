@@ -15,8 +15,8 @@ import type { ContractFields, ContractRow } from './contracts-api';
 import { money } from './notices-api';
 import { todayBeijing } from './contract-subtables-api';
 
-import { ContractSubtables, hasSubtableDrafts, newSubtableState } from './contract-subtables';
-import type { SubtableWorkspace, ChangeSubtables } from './contract-subtables';
+import { ContractSubtables } from './contract-subtables';
+import type { ContractSubtableWorkspace } from './contract-subtable-workspace';
 
 export function nextContractArchiveNo(contracts:ContractRow[],row:ContractRow):string {
   let max=0n;
@@ -28,8 +28,8 @@ export function nextContractArchiveNo(contracts:ContractRow[],row:ContractRow):s
 export const archiveNoHint = (next: string) => `建议 ${next}`;
 const emptyFields = (): ContractFields => ({ material_name:'',payment_term:'',payment_method:'',remark:'',arch:'未存档',arch_no:'',ret_date:'' });
 
-interface Props { inline?:boolean;materialOnly?:boolean;subtables:SubtableWorkspace; changeSubtables:ChangeSubtables; contracts:ContractRow[]; created:(id:number)=>void; row: ContractRow | null; projects: Project[]; methods: string[]; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (text: string) => void }
-export function ContractEditor({ inline=false, materialOnly=false, subtables, changeSubtables, contracts, created, row, projects, methods, me, blocked, close, refresh, announce }: Props) {
+interface Props { inline?:boolean;materialOnly?:boolean;subtables:ContractSubtableWorkspace; contracts:ContractRow[]; created:(id:number)=>void; row: ContractRow | null; projects: Project[]; methods: string[]; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (text: string) => void }
+export function ContractEditor({ inline=false, materialOnly=false, subtables, contracts, created, row, projects, methods, me, blocked, close, refresh, announce }: Props) {
   const [fields,setFields] = useState(emptyFields), [baseline,setBaseline] = useState<ContractFields|null>(null);
   const initialDate=useRef(todayBeijing());
   const [project,setProject] = useState<number[]>([]), [date,setDate] = useState(initialDate.current), [supplier,setSupplier] = useState('');
@@ -43,8 +43,8 @@ export function ContractEditor({ inline=false, materialOnly=false, subtables, ch
   const source = detail.data ?? row, historyDate=contractHistoryDate((detail.data??row)?.remark??'');
   const keys=materialOnly?(['material_name'] as const):editableContractKeys;
   const dirty = !saved && (row ? baseline !== null && keys.some(k => fields[k] !== baseline[k]) : Boolean(history || cutoff || project.length || date!==initialDate.current || supplier || amount!=='0.00' || trade || tradeAmount || keys.some(k=>fields[k]!==emptyFields()[k])));
-  const substate=row&&!materialOnly?subtables[row.id]:undefined, subdirty=hasSubtableDrafts(substate), subBusy=Boolean(substate?.busy);
-  const closing = useDialogClose({ busy:busy||subBusy,dirty:dirty||subdirty,close:()=>{if(row&&!materialOnly)changeSubtables(old=>old[row.id]?{...old,[row.id]:{...old[row.id]!,drafts:newSubtableState(historyDate).drafts,deleting:null,focus:null}}:old);close();},active:!blocked });
+  const substate=row&&!materialOnly?subtables.view(row.id):undefined, subdirty=Boolean(substate?.dirty), subBusy=Boolean(substate?.busy);
+  const closing = useDialogClose({ busy:busy||subBusy,dirty:dirty||subdirty,close:()=>{if(row&&!materialOnly)subtables.discard(row.id);close();},active:!blocked });
   const unavailable = blocked || !me || subBusy || Boolean(substate?.uncertain) || busy || saved || uncertain || Boolean(row && (!baseline || detail.isPending || detail.isError));
   function change(key: keyof ContractFields,value:string) { setFields(old=>({...old,[key]:value})); }
   async function save() {
@@ -87,7 +87,7 @@ export function ContractEditor({ inline=false, materialOnly=false, subtables, ch
       {!row && <div className="contract-form-grid"><label>项目<ProjectPicker projects={projects.filter(p=>Boolean(p.warehouse_name))} selected={project} pick={setProject} label="合同项目" disabled={unavailable} /></label><label>合同日期<BusinessDate label="合同日期" value={history?'':date} disabled={unavailable||history} onChange={setDate} /></label><label>供应商<Input value={history?'':supplier} maxLength={128} disabled={unavailable||history} onChange={e=>setSupplier(e.target.value)} /></label><label>合同金额（元）<Input value={history?'':amount} inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" disabled={unavailable||history} onChange={e=>setAmount(e.target.value)} /></label><label>贸易公司<Input value={history?'':trade} disabled={unavailable||history} onChange={e=>setTrade(e.target.value)} /></label><label>贸易公司合同金额（元）<Input value={history?'':tradeAmount} inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" disabled={unavailable||history} onChange={e=>setTradeAmount(e.target.value)} /></label></div>}
       <div className="contract-form-grid"><label>材料名<Input autoFocus={materialOnly} value={!row&&history?projects.find(p=>p.id===project[0])?.name_full??'':fields.material_name} maxLength={128} disabled={unavailable||!row&&history} onChange={e=>change('material_name',e.target.value)} /></label>{!materialOnly&&<><label>账期<Input value={fields.payment_term} maxLength={32} disabled={unavailable} onChange={e=>change('payment_term',e.target.value)} /></label><label>合同付款方式<Select aria-label="合同付款方式" value={fields.payment_method} disabled={unavailable} options={['',...methods].map(value=>({value,label:value||'未约定'}))} onChange={value=>change('payment_method',value)} /></label>{row && <><label>存档情况<Select aria-label="存档情况" value={fields.arch} disabled={unavailable} options={['未存档','资产处','已存档'].map(value=>({value,label:value}))} onChange={value=>change('arch',value)} /></label><label>存档号<Input value={fields.arch_no} maxLength={32} placeholder={archiveNoHint(row?nextContractArchiveNo(contracts,row):'1')} title="本项目下一个存档号；空框按两次回车填入并保存" disabled={unavailable} onChange={e=>change('arch_no',e.target.value)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(!fields.arch_no.trim())change('arch_no',nextContractArchiveNo(contracts,row!));else void save();}} /></label><label>寄回日期<BusinessDate label="寄回日期" value={fields.ret_date} disabled={unavailable} onChange={value=>change('ret_date',value)} /></label></>}</>}</div>
       {!materialOnly&&<label className="contract-remark">备注<Input.TextArea value={historyDate?contractRemarkText(fields.remark):fields.remark} maxLength={255-(!row&&history||historyDate?historyContractRemark(historyDate||cutoff,'').length:0)} autoSize={{minRows:2,maxRows:5}} disabled={unavailable} onChange={e=>change('remark',historyDate?historyContractRemark(historyDate,e.target.value):e.target.value)} /></label>}
-      {row&&!materialOnly&&<ContractSubtables key={row.id} accountId={me?.id} contracts={contracts} contractId={row.id} historyDate={historyDate} summaryRow={row} workspace={subtables} change={changeSubtables} writable={Boolean(me)&&!busy&&!uncertain} paused={blocked}/>}
+      {row&&!materialOnly&&<ContractSubtables key={row.id} contracts={contracts} contractId={row.id} historyDate={historyDate} summaryRow={row} workspace={subtables} writable={Boolean(me)&&!busy&&!uncertain} paused={blocked}/>}
     </>}
     {error && <p className="notice" role="alert">{error}</p>}
 

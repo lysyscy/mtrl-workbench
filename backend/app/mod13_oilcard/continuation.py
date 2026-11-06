@@ -12,8 +12,7 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import sum_money
-from . import invoice_adjustments, invoices, ledger, reporting, transfers
-from .invoice_pdf import recognize_pdf
+from . import invoice_adjustments, invoices, ledger, linkage, reporting, transfers
 from .models import (OilContinuationSource, OilEntry, OilOpeningBalance, OilInvoice,
     OilInvoiceOriginal, OilFeeCustom, OilBigCustom)
 from .service import _check_version, _get, _lock
@@ -195,37 +194,15 @@ def _apply(session, source_id, item, decision, contents):
             invoice_adjustments.correct(session, row.id, {**decision, 'amount': raw['amount'], 'version': row.version})
         return [('invoice', row.id)]
     if kind == 'pdf':
-        content = contents.get(key)
-        if content is None or sha256(content).hexdigest() != raw['sha256']:
-            raise DataConflictError('补档原件未提供或hash与已核来源不一致。')
-        recognized = recognize_pdf(content)
-        row = _get(session, OilInvoice, decision['invoice_id'])
-        _check_version(row, decision['version'])
-        invoices.require_editable(row)
-        facts = (recognized['invoice_no'], recognized['invoice_date'], recognized['amount'])
-        if row.status != 'registered' or facts != (row.invoice_no,
-                row.invoice_date.isoformat() if row.invoice_date else None, str(row.amount)) or not all(facts):
-            raise DataConflictError('PDF票号、日期、金额与已记发票未能核对，保留待核，不新增金额。')
-        if invoices.number_owner(session, row.invoice_no) != row.id:
-            raise DataConflictError('PDF票号已有冲突，不能补档。')
-        existing = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.sha256 == raw['sha256']))
-        if existing is not None:
-            if existing.invoice_id != row.id:
-                raise DataConflictError('此PDF已属于另一发票，请核对，不能改挂。')
-        else:
-            existing = OilInvoiceOriginal(sha256=raw['sha256'], invoice_id=row.id, content=content,
-                byte_size=len(content), outcome='duplicate', reason='首次接续人工核对补档；原已记金额保持。',
-                recognized_json=_json(recognized), received_by=current_operator())
-            session.add(existing); session.flush()
-        return [('pdf', existing.id), ('invoice', row.id)]
+        received = invoices.attach_original(session, content=contents.get(key), digest=raw['sha256'],
+            invoice_id=decision['invoice_id'], version=decision['version'])
+        return [('pdf', received.original_id), ('invoice', received.invoice_id)]
     if kind == 'fee_legacy':
-        from app.mod09_fee import service as fees
-        fees.enable_oil_linkage(session, project_id=raw['project_id'], fee_item_id=decision['fee_item_id'],
+        linkage.enable_fee(session, project_id=raw['project_id'], fee_item_id=decision['fee_item_id'],
             reviewed_items=raw['reviewed_items'], converted_customs=decision['converted_customs'], source_note=note)
         return [('fee_legacy', raw['project_id'])]
     if kind == 'big_legacy':
-        from app.mod07_setl import service as big
-        big.enable_big_oil(session, project_id=raw['project_id'], reviewed_rows=raw['reviewed_rows'],
+        linkage.enable_big(session, project_id=raw['project_id'], reviewed_rows=raw['reviewed_rows'],
             converted_customs=decision['converted_customs'], source_note=note)
         return [('big_legacy', raw['project_id'])]
     raise MustReportError('档案候选需先通过现有档案流程明确建立；不能由源名称自动建档。')

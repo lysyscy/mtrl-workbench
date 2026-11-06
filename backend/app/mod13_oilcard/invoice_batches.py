@@ -113,11 +113,9 @@ def _complete(session, link_id, attempt, content, recognized):
     link = _get(session, OilDeliveryLink, link_id)
     if link.state != 'running' or link.attempt != attempt:
         return False
-    digest = sha256(content).hexdigest()
-    existing = session.scalar(select(OilInvoiceOriginal.id).where(OilInvoiceOriginal.sha256 == digest))
-    source = invoices.receive_pdf(session, content, recognized)
-    link.original_id, link.state = source.id, 'done'
-    link.duplicate = existing is not None or source.outcome == 'duplicate'
+    received = invoices.receive_pdf(session, content, recognized)
+    link.original_id, link.state = received.original_id, 'done'
+    link.duplicate = received.duplicate
     link.message = ''; session.flush()
     return True
 

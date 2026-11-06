@@ -13,6 +13,8 @@ from app.history_bindings import configure
 from app.mod07_setl import service as big
 from app.mod07_setl.models import AnalysisBigManual
 from app.mod13_oilcard.ledger import stage_opening
+from app.mod13_oilcard import linkage
+from app.mod13_oilcard.models import OilBigCustom
 from tests.test_oilcard_archives import scene, create, edit  # noqa: F401
 from tests.test_oilcard_ledger import entry
 from tests.test_oilcard_fee_linkage import row, save, enable
@@ -22,6 +24,27 @@ from tests.test_operation_history import perform, replay
 def enable_big(client, project):
     result = client.post(f'/api/m13/linkage/{project}/big/enable')
     assert result.status_code == 200, result.text
+
+
+def test_rejected_conversion_keeps_old_totals_and_no_partial_binding(scene):
+    client, (project, _) = scene
+    enable(client, project)
+    with session_scope() as session:
+        for ym in ('2026-10', '2026-11'):
+            session.add(AnalysisBigManual(ym=ym, warehouse_name='__oilcard_a__', project_id=project, oil=Decimal('100')))
+        session.flush()
+        reviewed = big.review_big_oil(session, project_id=project)
+        converted = [{'ym': '2026-10', 'amount': '10', 'remark': ''},
+            {'ym': '2026-11', 'amount': '', 'remark': ''}]
+        with pytest.raises(MustReportError):
+            linkage.enable_big(session, project_id=project, reviewed_rows=reviewed,
+                converted_customs=converted, source_note='第二月未确认')
+        assert not big.big_oil_status(session, project_id=project)['enabled']
+        assert session.query(OilBigCustom).filter_by(project_id=project).count() == 0
+        assert big.review_big_oil(session, project_id=project) == reviewed
+        converted[1]['amount'] = '0'
+        assert linkage.enable_big(session, project_id=project, reviewed_rows=reviewed,
+            converted_customs=converted, source_note='确认零值')['enabled']
 
 
 def extra(client, current, amount, remark=''):
@@ -152,12 +175,12 @@ def test_explicit_old_totals_preserved_other_fields_work_and_remarks_independent
     assert client.post('/api/m07/big/cell', json={'month': '2026-10', 'warehouse': '__oilcard_a__', 'key': 'oil', 'raw': '999'}).json()['ok'] is False
     with pytest.raises(DataConflictError):
         with session_scope() as session:
-            big.enable_big_oil(session, project_id=project, reviewed_rows=[], converted_customs=[], source_note='过期清单')
+            linkage.enable_big(session, project_id=project, reviewed_rows=[], converted_customs=[], source_note='过期清单')
     with pytest.raises(MustReportError, match='逐月'):
         with session_scope() as session:
-            big.enable_big_oil(session, project_id=project, reviewed_rows=reviewed, converted_customs=[], source_note='缺差额')
+            linkage.enable_big(session, project_id=project, reviewed_rows=reviewed, converted_customs=[], source_note='缺差额')
     with session_scope() as session:
-        big.enable_big_oil(session, project_id=project, reviewed_rows=reviewed,
+        linkage.enable_big(session, project_id=project, reviewed_rows=reviewed,
             converted_customs=[{'ym': '2026-10', 'amount': '2000', 'remark': '单独用油说明'}], source_note='已核旧12000与累计10000')
         assert session.get(AnalysisBigManual, old_id).oil == Decimal('12000')
     result = big_row(client)
@@ -213,6 +236,6 @@ def test_old_oil_history_cannot_bypass_retirement_from_other_account(scene, kind
     with session_scope() as session:
         reviewed = big.review_big_oil(session, project_id=project)
         converted = [{'ym': item['ym'], 'amount': item['oil'], 'remark': '已核额外值'} for item in reviewed if item['oil'] is not None]
-        big.enable_big_oil(session, project_id=project, reviewed_rows=reviewed, converted_customs=converted, source_note='独立账号接续')
+        linkage.enable_big(session, project_id=project, reviewed_rows=reviewed, converted_customs=converted, source_note='独立账号接续')
     with pytest.raises(MustReportError, match='已退出编辑|恢复规则'):
         replay(direction, actor=actor)

@@ -11,6 +11,8 @@ from app.mod09_fee import service as fees
 from app.mod09_fee.models import FeeItem, FeeManualItem, FeeOilBinding
 from app.mod09_fee.oil_linkage import OIL_NAME
 from app.mod13_oilcard.ledger import stage_opening
+from app.mod13_oilcard import linkage
+from app.mod13_oilcard.models import OilFeeCustom
 from tests.test_oilcard_archives import scene, create  # noqa: F401
 from tests.test_oilcard_ledger import entry
 
@@ -33,6 +35,26 @@ def enable(client, project):
     result = client.post(f'/api/m13/linkage/{project}/enable')
     assert result.status_code == 200, result.text
     assert result.json()['enabled']
+
+
+def test_rejected_conversion_keeps_callers_transaction_and_leaves_no_partial_binding(scene):
+    _, (project, _) = scene
+    with session_scope() as session:
+        item_id, _ = legacy_item(session, project, amount='100')
+        session.add(FeeManualItem(fee_item_id=item_id, project_id=project, item_name='工程用油', ym='2026-11', amount=Decimal('200')))
+        session.flush()
+        reviewed = fees.review_oil_linkage(session, project_id=project)
+        converted = [{'ym': '2026-10', 'amount': '10', 'remark': ''},
+            {'ym': '2026-11', 'amount': 'invalid', 'remark': ''}]
+        with pytest.raises(MustReportError):
+            linkage.enable_fee(session, project_id=project, fee_item_id=item_id,
+                reviewed_items=reviewed, converted_customs=converted, source_note='核对失败反例')
+        assert not fees.oil_linkage_status(session, project_id=project)['enabled']
+        assert session.query(OilFeeCustom).filter_by(project_id=project).count() == 0
+        assert fees.review_oil_linkage(session, project_id=project) == reviewed
+        converted[1]['amount'] = '20'
+        assert linkage.enable_fee(session, project_id=project, fee_item_id=item_id,
+            reviewed_items=reviewed, converted_customs=converted, source_note='有效核对')['enabled']
 
 
 def test_monthly_result_adjustments_transfers_invoice_exclusion_and_export(scene, tmp_path, monkeypatch):
@@ -144,12 +166,12 @@ def test_pending_legacy_not_guessed_and_binding_preserves_original_blocks_all_ol
     assert client.post(f'/api/m13/linkage/{project}/enable').status_code == 400
     with pytest.raises(DataConflictError):
         with session_scope() as session:
-            fees.enable_oil_linkage(session, project_id=project, fee_item_id=item_id, reviewed_items=[], converted_customs=[], source_note='过期清单')
+            linkage.enable_fee(session, project_id=project, fee_item_id=item_id, reviewed_items=[], converted_customs=[], source_note='过期清单')
     with pytest.raises(MustReportError, match='逐月'):
         with session_scope() as session:
-            fees.enable_oil_linkage(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed, converted_customs=[], source_note='缺月')
+            linkage.enable_fee(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed, converted_customs=[], source_note='缺月')
     with session_scope() as session:
-        fees.enable_oil_linkage(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed,
+        linkage.enable_fee(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed,
             converted_customs=[{'ym': '2026-10', 'amount': '2000', 'remark': '已核差额'}], source_note='合成旧12000与自动10000核对')
         assert session.get(FeeManualItem, monthly_id).amount == Decimal('12000')
         assert fees.build_year_data(session, year='2026', project='__oilcard_a__')['months'][9] == Decimal('12200')
@@ -186,7 +208,7 @@ def test_binding_invalidates_other_accounts_old_parent_and_redo_credentials(scen
         replay('undo', actor=actor)
     with session_scope() as session:
         reviewed = fees.review_oil_linkage(session, project_id=project)
-        fees.enable_oil_linkage(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed,
+        linkage.enable_fee(session, project_id=project, fee_item_id=item_id, reviewed_items=reviewed,
             converted_customs=[{'ym': '2026-10', 'amount': '80', 'remark': '已核自定义额'}], source_note='另一账号明确接续')
     with pytest.raises(MustReportError, match='后续操作'):
         replay('redo' if prior_action == 'amount_redo' else 'undo', actor=actor)

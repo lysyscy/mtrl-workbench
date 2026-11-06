@@ -6,8 +6,6 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import to_money
-from app.core.history import record_barrier
-from app.core.session import current_name
 from app.mod01_projects import service as projects
 from app.mod09_fee import service as fees
 from app.mod13_oilcard import service as oilcards
@@ -46,9 +44,7 @@ def status(session, *, project_id):
     return {'enabled': False, 'can_enable': bool(fee_ready and empty)}
 
 
-def enable(session, *, project_id, reviewed_rows, converted_customs, source_note):
-    record_barrier(session, str(current_name() or current_operator()), '启用已核对的大表用油联动')
-    oilcards.lock_reporting(session)
+def bind(session, *, project_id, reviewed_rows, converted_customs, source_note):
     projects.get_project(session, project_id, for_update=True)
     project = _project(session, project_id)
     if not str(source_note).strip() or not fees.oil_linkage_status(session, project_id=project_id)['enabled']:
@@ -68,16 +64,7 @@ def enable(session, *, project_id, reviewed_rows, converted_customs, source_note
         {'rows': current, 'converted_customs': converted_customs}, ensure_ascii=False, sort_keys=True),
         source_note=source_note, enabled_by=current_operator()))
     session.flush()
-    for row in converted_customs:
-        oilcards.stage_big_custom(session, project_id=project_id, ym=row['ym'], amount=row['amount'], remark=row['remark'])
     return status(session, project_id=project_id)
-
-
-def enable_empty(session, *, project_id):
-    if not status(session, project_id=project_id)['can_enable']:
-        raise MustReportError('请先完成特殊费用接续；有旧大表用油金额的项目还需核对旧总额。')
-    return enable(session, project_id=project_id, reviewed_rows=review(session, project_id=project_id),
-        converted_customs=[], source_note='油卡页面明确启用；系统核对无旧大表完整用油金额。')
 
 
 def apply_rows(session, rows, *, ym):

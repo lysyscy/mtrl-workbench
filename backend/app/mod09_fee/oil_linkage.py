@@ -36,12 +36,8 @@ def review(session, *, project_id):
         for item in items]
 
 
-def enable(session, *, project_id, fee_item_id, reviewed_items, converted_customs, source_note):
+def bind(session, *, project_id, fee_item_id, reviewed_items, converted_customs, source_note):
     """显式指定旧项或无旧项；调用方提供已核差额，绝不自动用旧总额作custom。"""
-    from app.core.history import record_barrier
-    from app.core.session import current_name
-    record_barrier(session, str(current_name() or current_operator()), '启用已核对的特殊费用用油联动')
-    oilcards.lock_reporting(session)
     project = projects.get_project(session, project_id, for_update=True)
     if project is None or project.project_type == 'shell' or not str(source_note).strip():
         raise MustReportError('用油接续需要正式项目及已核对依据。')
@@ -66,17 +62,7 @@ def enable(session, *, project_id, fee_item_id, reviewed_items, converted_custom
         # 绑定是结构切换；原金额保持，旧历史凭据从此不能越过接续改写原依据。
         session.get(FeeItem, fee_item_id).updated_at = datetime.now()
         session.flush()
-    for row in converted_customs:
-        oilcards.save_fee_custom(session, project_id=project_id, ym=row['ym'], amount=row['amount'],
-            remark=row['remark'], version=None)
     return status(session, project_id=project_id)
-
-
-def enable_empty(session, *, project_id):
-    if not status(session, project_id=project_id)['can_enable']:
-        raise MustReportError('此项目已有特殊费用依据，请先完成旧用油接续核对。')
-    return enable(session, project_id=project_id, fee_item_id=None, reviewed_items=[],
-        converted_customs=[], source_note='油卡页面明确启用；系统核对无旧特殊费用项及原始记录。')
 
 
 def effective_items(session, *, project_id, end_ym, items):

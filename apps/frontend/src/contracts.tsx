@@ -28,8 +28,8 @@ import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { ContractFetch, ContractSettings } from './contract-tools';
 import { ContractExports } from './contract-export';
-import { ContractSubtableDialog, hasSubtableDrafts } from './contract-subtables';
-import type { SubtableWorkspace } from './contract-subtables';
+import { ContractSubtableDialog } from './contract-subtables';
+import { useContractSubtables } from './use-contract-subtables';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
@@ -81,7 +81,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const [remarkEditor,setRemarkEditor]=useState<{row:ContractRow;initial:string}|null>(null);
   function openRemark(row:ContractRow,value:string){setRemarkEditor({row,initial:value});}
   const inlineDraftRef=useRef(inlineDrafts);inlineDraftRef.current=inlineDrafts;
-  const [subtables,changeSubtables]=useState<SubtableWorkspace>({}),[sort,setSort]=useState('');
+  const subtables=useContractSubtables(me?.id,!blocked&&active&&Boolean(me)),[sort,setSort]=useState('');
   const query=useQuery({queryKey:['contracts'],enabled:!blocked&&active,refetchOnMount:'always',queryFn:async({signal})=>readContracts(await requestJson('/api/m11/list',{signal}))});
   const projects=useQuery({queryKey:['projects','all'],enabled:!blocked&&active,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
@@ -98,7 +98,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const totalRow=useMemo(()=>shown.length?[{id:-1,material:'合计',...Object.fromEntries(contractMoneyKeys.map(key=>[key,decimalCents(shown.reduce((sum,row)=>sum+cents(row[key]??'0'),0n))]))} as ContractRow]:[],[shown]);
   const selected=rows.filter(row=>picked.has(row.id)),hidden=selected.filter(row=>!shown.some(v=>v.id===row.id)).length;
   const unavailable=blocked||!active||!me||busy||uncertain||query.isPending||query.isError||query.isFetching||!projects.data||projects.isError;
-  useHistoryGuard('contracts',()=>busy||lock.current||Object.values(subtables).some(s=>s.busy)?'集采合同正在处理，请稍候。':uncertain||Object.values(subtables).some(s=>s.uncertain)?'合同操作结果待核实，请先重读。':Object.values(subtables).some(hasSubtableDrafts)?'合同子表有未保存输入，请先处理。':Object.keys(inlineDraftRef.current).length?'合同收发登记有未保存输入，请先处理。':'');
+  useHistoryGuard('contracts',()=>busy||lock.current||subtables.summary.busy?'集采合同正在处理，请稍候。':uncertain||subtables.summary.uncertain?'合同操作结果待核实，请先重读。':subtables.summary.dirty?'合同子表有未保存输入，请先处理。':Object.keys(inlineDraftRef.current).length?'合同收发登记有未保存输入，请先处理。':'');
   useEffect(()=>{const valid=new Set(rows.map(row=>row.id));setPicked(old=>{const next=new Set([...old].filter(id=>valid.has(id)));return next.size===old.size?old:next;});},[rows]);
   useEffect(()=>{if(!active)return;const id=Number(params.get('contract'));if(id>0&&query.data){const row=query.data.rows.find(row=>row.id===id);pendingFocus.current=id;if(row){setEditorId(null);setFilters({...initialFilters(),tag:''});setSearch('');grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');}else {setEditorId(null);setError('合同已不在列表中，请重读核对。');}}},[params.get('contract'),active,Boolean(query.data)]);
   // Uncertain flips do not change row data, so cells must be forced to re-render their disabled state.
@@ -242,7 +242,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const decoratedColumns=useMemo(()=>columns.map(c=>c.field==='material'&&resetColumn?resetColumn:c),[columns,resetColumn]);
   const retainedColumns=useRetainedGridColumns(decoratedColumns,root,widths.layoutKey);
   const widthColumns=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
-  const subBusy=Object.values(subtables).some(s=>s.busy), subUncertain=Object.values(subtables).some(s=>s.uncertain), subDirty=Object.values(subtables).some(hasSubtableDrafts);
+  const {busy:subBusy,uncertain:subUncertain,dirty:subDirty}=subtables.summary;
   const exportUnavailable=blocked||!active?'当前页面暂不可操作。':!me?'请先登录。':busy||subBusy?'合同正在保存，请稍候。':uncertain||subUncertain?'合同操作结果待核实，请先重读。':subDirty?'合同子表有未保存输入，请先处理。':query.isPending||query.isFetching||projects.isPending||projects.isFetching?'正在读取合同及项目，请稍候。':query.isError||projects.isError?'合同或项目读取失败，请先重读。':Object.keys(inlineDrafts).length?'请先保存收发登记输入。':Object.keys(editors).length||tool||subtable||remarkEditor?'请先处理并关闭合同窗口。':'';
   function exportIds(){if(!grid.current)throw new Error('合同列表尚未准备好，请稍候。');const ids:number[]=[];grid.current.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});return ids;}
   // 首读以同几何表框占位，只有实际失败反馈占行。
@@ -258,10 +258,10 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       {(readState==='error'||readState==='stale')&&<ReadFailure read={query} retained="合同更新失败，保留上次结果。"/>}
       {projects.isError&&<ReadFailure read={projects} label="项目清单"/>}
     </ReadStatusLane>
-    {editors.new&&<ContractEditor key="new" inline subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
+    {editors.new&&<ContractEditor key="new" inline subtables={subtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
     {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
-    {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} changeSubtables={changeSubtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}
-    {subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} accountId={me?.id} contracts={rows} workspace={subtables} change={changeSubtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
+    {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}
+    {subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
     {remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}
     {tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}
     {tool==='party'&&<ContractSettings kind={tool} me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}

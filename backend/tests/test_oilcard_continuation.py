@@ -73,6 +73,14 @@ def test_confirmed_drill_repeated_source_pdf_allocation_reports_and_real_exports
     assert read_invoice['total_amount'] == '10000.00' and len(read_invoice['invoices']) == 1
     original = read_invoice['invoices'][0]['originals'][0]
     assert client.get(f"/api/m13/invoices/originals/{original['id']}").content == content
+    # The ordinary upload entry must reuse a manually attached original and its
+    # existing allocation, including replay of the same upload response.
+    uploaded = client.post('/api/m13/invoices/receive', files={'file': ('repeat.pdf', content, 'application/pdf')})
+    assert uploaded.status_code == 200
+    assert uploaded.json()['original']['id'] == original['id']
+    assert uploaded.json()['item']['id'] == invoice_id
+    assert client.post('/api/m13/invoices/receive', files={'file': ('repeat.pdf', content, 'application/pdf')}).json() == uploaded.json()
+    assert client.get('/api/m13/invoices').json() == read_invoice
     reconciliation = client.get('/api/m13/reconciliation').json()
     assert (reconciliation['total_amount'], reconciliation['invoiced_amount'], reconciliation['difference_amount']) == ('15670.00', '10000.00', '5670.00')
     assert [(r['total_amount'], r['invoiced_amount']) for r in reconciliation['rows']] == [('15640.00', '6000.00'), ('30.00', '4000.00')]
