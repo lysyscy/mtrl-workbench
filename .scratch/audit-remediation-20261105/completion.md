@@ -12,7 +12,7 @@
 
 | 任务 | 结论 | 当前证据与未验范围 |
 |---|---|---|
-| TASK-001 字体恢复 | 已有修复，不重复改动 | `main.tsx`账号HistoryScope内的字体恢复、`page-surface.tsx`与`page-error.tsx`共用WorkspaceReloadButton，`history.tsx`保护busy、uncertain与页面guard。沿用[加载整改验证](../loading-structure-20261105/verification.md)的草稿、冷启动及DOM保护结果，不声称本轮重新执行这些用例。 |
+| TASK-001 字体恢复 | 已有修复，不重复改动 | `main.tsx`账号HistoryScope内的字体恢复、`page-surface.tsx`与`page-error.tsx`共用WorkspaceReloadButton，`history.tsx`保护busy、uncertain与页面guard。沿用[加载整改验证](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/loading-structure-20261105/verification.md)的草稿、冷启动及DOM保护结果，不声称本轮重新执行这些用例。 |
 | TASK-002 测量所有权 | 已有修复，不重复改动 | `grid-layout.ts`为每个prepare分配Symbol，清共享measurement前核owner，finally仍释放本批host。沿用同effect/跨effect反例、实际几何与释放结果；本轮测量完成状态的临时host计数均为0，不能替代原交错测试。 |
 | TASK-003 纯时间规则 | 已有修复，不重复改动 | `business-time.ts`拥有区间纯规则；`inventory-api.ts`直接消费，`time-picker.tsx`保兼容出口。相关源码相对`b8ee0b24`无后续差异，原时间/库存验证输入仍适用。 |
 | TASK-004 有界性能调查 | 完成本轮可得范围的调查，保持现状 | 两页、三个实际范围，每范围五次序列，共45个阶段样本；冷热与保活分开，另采trace。大表没有独立更高档真实范围；通知书用默认范围与正式首页深链，未覆盖指定月份的四组合基准，见下文限制。 |
@@ -65,7 +65,7 @@
 
 ## TAIL-450关联核对
 
-[TAIL-450](../tails/issues/TAIL-450-架构差额后续实证与深化.md)的请求内事实复用与所选付款预览下推已有当前实现，分别在`mod05_flow/router.py`一次组装并传递facts、`mod03_notice/list_view.py`向流水/关联/留痕下传所选ID；不重开已关闭性能effort。
+[TAIL-450](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)的请求内事实复用与所选付款预览下推已有当前实现，分别在`mod05_flow/router.py`一次组装并传递facts、`mod03_notice/list_view.py`向流水/关联/留痕下传所选ID；不重开已关闭性能effort。
 
 其余候选与任务书本轮剩余性能调查、可选查询抽取没有直接实施依赖，继续单列：
 

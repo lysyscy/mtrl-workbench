@@ -86,6 +86,8 @@
 
 原有生产者的固定输出、系统临时API、旧 .artifacts/.scratch/validation/outputs 不自动搬迁或登记；仍沿各自消费者和旧任务规则退出。禁止用返回目录存原始业务输入或永久数据。后台配置状态以个人调度回执为准，本文接入不证明任务已安装。
 
+本机周期执行入口为Windows任务`PersonalSkillArtifactCleanup`，限定既有六个AgentArtifacts登记根，当前用户登录后每日09:00运行、错过后补跑；同名Codex自动化保持暂停以避免重复。2026-11-06已核Enabled、真实一轮六区返回0及异常会话消息发送；当前状态仍以任务的`LastTaskResult`和`C:/Users/Administrator/.codex/automations/automation/windows-task-result.json`为准，不承诺关机或注销时执行。实现和未验边界见[已保存回执](https://github.com/lysyscy/mtrl-workbench/blob/977193e9ce5166dd0e06e5b09a4dc3bc6e703226/.scratch/quality-wayfinding-20261106/workflow-close.md#每日计划任务)。运行组结项不代替[任务文件退出](../agents/workflow.md#任务文件退出)。
+
 ## 已核实的原生产者
 
 - `tools/audit/workspace_paths.py` 的默认新运行直接生成已登记产物；父子进程共享同一运行身份。明确成功结项后删除work并封存30天证据；失败或无明确结项的退出保留并登记复查保护。
