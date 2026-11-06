@@ -2,11 +2,11 @@
 
 ## 工程质量基线与本轮整改已完成
 
-2026-11-06，[材料工作台工程质量达标路线](../.scratch/tails/issues/TAIL-483-工程质量达标路线.md)完成具名全库基线、差距处置及已选整改：隔离取证保护、规则未知新增与项目辅助读取恢复、集采发票布局、大表待核状态及现行契约同步。产品提交`63635183`已正常推送master并核远端SHA；类型/构建、160项前端unit、3项恢复浏览器、真实副本显示复验、对应后端证据及独立双轴审查通过，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42183757984)成功。临时预览/schema/build均退出，必要证据结项保留30天，无附加工作树；未部署，正式加载仍见下节。[实施与验证](../.scratch/quality-wayfinding-20261106/implementation.md)记录完整回执，[处置](../.scratch/quality-wayfinding-20261106/decisions.md)保留未验边界与重开条件，不宣称全系统认证或未证实的性能收益。原无关修改与TAIL-474真实旧接续保持。
+2026-11-06，[材料工作台工程质量达标路线](../.scratch/tails/issues/TAIL-483-工程质量达标路线.md)完成具名全库基线、差距处置及已选整改：隔离取证保护、规则未知新增与项目辅助读取恢复、集采发票布局、大表待核状态及现行契约同步。产品提交`63635183`已正常推送master并核远端SHA；类型/构建、160项前端unit、3项恢复浏览器、真实副本显示复验、对应后端证据及独立双轴审查通过，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42183757984)成功。临时预览/schema/build均退出，必要证据结项保留30天，无附加工作树；用户随后授权正式发布，实际加载见下节。[实施与验证](../.scratch/quality-wayfinding-20261106/implementation.md)记录完整回执，[处置](../.scratch/quality-wayfinding-20261106/decisions.md)保留未验边界与重开条件，不宣称全系统认证或未证实的性能收益。原无关修改与TAIL-474真实旧接续保持。
 
 ## 当前运行与活动整改
 
-2026-11-06 11:58按用户明确授权提交、推送并部署：正式前端指向`var/frontend/releases/7156a5aef8d4`，产品提交`7156a5aef8d45b54e7db8769a87e0f94080873e3`，标准publish及服务重启完成。通知书金额维护已加载：单格只提交记录、字段和值，后端保全非目标字段，沿用原金额校验、统计留痕及未知结果保护。81项定向后端、157项前端unit、typecheck及[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42159570276)通过；健康200、实际索引、44份资源与8000监听归属通过，回退保留`17495586c2a1`。详见[本轮实施与发布](../.scratch/notice-amount-deepening-20261106/implementation.md)，原始回执归本机受管组`115805-673602-32112/files/reports/deployment.json`；前轮三项深化回[原记录](../.scratch/architecture-deepening-20261106/implementation.md)。本轮无迁移、真实i8、打印或正式业务写入，未做新增GUI验收；无关未提交内容保持。源码HEAD与运行产物分别记录，不用后续文档提交替代部署身份；下面各节保留当次历史事实。
+2026-11-06 16:46按用户明确“授权发布并重启”：正式前端指向`var/frontend/releases/b3ba025f373b`，产品提交`b3ba025f373b113002c21fa2674266a4ce21883d`，本轮质量修复已通过标准publish完整构建并重启加载。健康200、实际索引、44份资源与8000监听归属通过，回退保留`7156a5aef8d4`；临时发布构建已退出。详见[正式发布回执](../.scratch/quality-wayfinding-20261106/implementation.md#用户授权后的正式发布与重启)，原始记录归本机受管组`164549-345753-21764/files/reports/deployment.json`。本轮无迁移、真实i8、打印或正式业务写入，未做新增正式业务GUI验收；无关未提交内容保持。源码HEAD与运行产物分别记录，不用后续文档提交替代部署身份；下面各节保留当次历史事实。
 
 当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。2026-11-05 13:34已按用户授权部署并重启，正式加载b8ee0b24，HTTP200、42份资源及监听归属核验通过；原i8配置保持。另发现的大表合同价/空产值重读错误已开TAIL-482并[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
 
