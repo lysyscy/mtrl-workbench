@@ -65,7 +65,7 @@ def test_first_real_amounts_replace_placeholder_widths(server, browser_page, api
 
 @pytest.mark.parametrize('route,title,grid,column,endpoint,widths',[
     ('contracts','集采台账','.contracts-grid','remark','**/api/m11/fields',{'arch':50,'arch_no':50,'material':160}),
-    ('notices','付款通知书','.notice-grid','stat_settle','**/api/m03/actions/stat',{'project_display':60,'amount_approved':65,'stat_settle':70}),
+    ('notices','付款通知书','.notice-grid','stat_settle','**/api/m03/actions/amount',{'project_display':60,'amount_approved':65,'stat_settle':70}),
 ])
 def test_save_preserves_narrow_manual_columns_on_full_list(server,browser_page,api,disposable,route,title,grid,column,endpoint,widths):
     page,context=browser_page

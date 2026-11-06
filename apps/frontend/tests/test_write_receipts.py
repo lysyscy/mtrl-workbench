@@ -31,10 +31,10 @@ def test_real_notice_stat_save_is_silent_and_does_not_move_grid(server,browser_p
     open_page(page,server,'notices','付款通知书');page.get_by_label('通知书搜索',exact=True).fill(row['bill_no'])
     field=page.get_by_label(row['bill_no']+'统计结算金额',exact=True);field.fill(value)
     grid=page.locator('.notice-grid');before=grid.bounding_box();pending=[];reads=[]
-    page.route('**/api/m03/actions/stat',lambda route:pending.append(route))
+    page.route('**/api/m03/actions/amount',lambda route:pending.append(route))
     page.on('request',lambda request:reads.append(request.url.split('/api/',1)[1].split('?',1)[0])
             if request.method=='GET' and '/api/' in request.url else None)
-    with page.expect_request('**/api/m03/actions/stat'):
+    with page.expect_request('**/api/m03/actions/amount'):
         field.blur()
     expect(page.get_by_text('正在保存，请稍候…',exact=True)).to_have_count(0)
     current=grid.bounding_box()
@@ -85,7 +85,7 @@ def notice_edit_sample(page, server, api):
 def test_notice_two_cells_accept_input_while_write_and_readback_are_pending(server,browser_page,api,disposable):
     page,_=browser_page;row,first,second,values=notice_edit_sample(page,server,api)
     pending=[];reads=[];writes=[]
-    page.route('**/api/m03/actions/stat',lambda route:pending.append(route))
+    page.route('**/api/m03/actions/amount',lambda route:pending.append(route))
     first.fill(values[0]);second.click();expect(second).to_be_enabled();expect(second).to_be_focused()
     second.fill(values[1]);assert len(pending)==1
     first.evaluate('e=>window.noticeFirst=e');second.evaluate('e=>window.noticeSecond=e')
@@ -97,7 +97,7 @@ def test_notice_two_cells_accept_input_while_write_and_readback_are_pending(serv
     second.blur();assert len(pending)==0,'下一笔提交必须等待上一笔可靠读回'
     route=reads.pop();response=route.fetch();assert response.ok
     page.unroute('**/api/m03/notice-list?*')
-    with page.expect_request('**/api/m03/actions/stat'):route.fulfill(response=response)
+    with page.expect_request('**/api/m03/actions/amount'):route.fulfill(response=response)
     for _ in range(50):
         if pending:break
         page.wait_for_timeout(20)
@@ -117,7 +117,7 @@ def test_notice_lost_cell_receipt_preserves_next_draft_and_never_reposts(server,
         assert Decimal(row['amount_approved'])>=Decimal(saved_amount),'真实副本首条金额不满足格式化输入场景'
         values[0]=input_amount
     pending=[];writes=[]
-    page.route('**/api/m03/actions/stat',lambda route:pending.append(route))
+    page.route('**/api/m03/actions/amount',lambda route:pending.append(route))
     first.fill(values[0]);second.click();second.fill(values[1]);assert len(pending)==1
     route=pending.pop();response=route.fetch();assert response.ok and response.json()['ok'];writes.append(route.request.post_data_json);route.abort('failed')
     expect(page.get_by_role('alert').filter(has_text='保存结果待核实')).to_be_visible()
@@ -132,7 +132,7 @@ def test_notice_lost_cell_receipt_preserves_next_draft_and_never_reposts(server,
 
 def test_notice_escape_cancels_only_unsent_input_during_another_save(server,browser_page,api,disposable):
     page,_=browser_page;row,first,second,values=notice_edit_sample(page,server,api);pending=[]
-    page.route('**/api/m03/actions/stat',lambda route:pending.append(route))
+    page.route('**/api/m03/actions/amount',lambda route:pending.append(route))
     first.fill(values[0]);second.click();second.fill(values[1]);second.press('Escape');expect(second).to_have_value(row['stat_paid'])
     first.click();first.fill('0.01');first.press('Escape');expect(first).to_have_value(values[0]);first.blur()
     assert len(pending)==1
@@ -144,7 +144,7 @@ def test_notice_escape_cancels_only_unsent_input_during_another_save(server,brow
 
 def test_notice_history_read_failure_keeps_confirmation_locked(server,browser_page,api,disposable,preview_screenshot):
     page,_=browser_page;row,first,second,values=notice_edit_sample(page,server,api)
-    writes=[];page.on('request',lambda r:writes.append(r.url) if r.method=='POST' and '/api/m03/actions/stat' in r.url else None)
+    writes=[];page.on('request',lambda r:writes.append(r.url) if r.method=='POST' and '/api/m03/actions/amount' in r.url else None)
     page.route('**/api/history/status',lambda route:route.abort('failed'))
     first.fill(values[0]);first.blur()
     expect(page.get_by_role('alert').filter(has_text='已保存，重读失败')).to_be_visible();expect(second).to_be_disabled();assert len(writes)==1

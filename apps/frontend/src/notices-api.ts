@@ -1,4 +1,4 @@
-import { ApiError, cents, confirmWrite, decimal, record } from './api';
+import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 import Decimal from 'decimal.js';
 export { body, cents, decimal, money } from './api';
 export interface NoticeRow {
@@ -20,17 +20,17 @@ export function noticeAmountMatches(input: string, actual: string) {
   } catch { return false; }
 }
 export function confirmNoticeAmount(value: unknown, id: number, field: NoticeAmountField) {
-  const common = record(value) && value.ok === true && typeof value.message === 'string';
-  if (field === 'amount_approved') {
-    confirmWrite(common && value.row_id === String(id), '审批金额保存回执未能核对，请重读，勿重复保存。');
-    return;
-  }
-  const changed = common && typeof value.changed === 'boolean' && (!value.changed || value.notice_id === id && value.field === field && typeof value.before === 'string' && typeof value.after === 'string' && typeof value.label === 'string');
-  confirmWrite(changed, '统计金额保存回执未能核对，请重读，勿重复保存。');
+  const common = record(value) && value.ok === true && value.notice_id === id && value.field === field && typeof value.message === 'string';
+  const valid = common && typeof value.changed === 'boolean' && (!value.changed || typeof value.before === 'string' && typeof value.after === 'string' && typeof value.label === 'string');
+  confirmWrite(valid, '金额保存回执未能核对，请重读，勿重复保存。');
   if (record(value) && value.changed) {
     try { cents(String(value.before)); cents(String(value.after)); }
-    catch { confirmWrite(false, '统计金额回执中的金额未能核对，请重读，勿重复保存。'); }
+    catch { confirmWrite(false, '金额回执中的金额未能核对，请重读，勿重复保存。'); }
   }
+}
+export async function saveNoticeAmount(id: number, field: NoticeAmountField, value: string, signal?: AbortSignal) {
+  const result = await requestJson('/api/m03/actions/amount', {method: 'POST', ...(signal ? {signal} : {}), ...body({notice_id: id, field, value})});
+  confirmNoticeAmount(result, id, field);
 }
 export function readNotices(value: unknown): NoticeRow[] {
   if (!record(value) || !Array.isArray(value.items)) throw new ApiError('通知书列表读取不完整，请重试。');

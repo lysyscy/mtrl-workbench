@@ -1,7 +1,6 @@
 import { createContext, useContext, useRef } from 'react';
-import { ApiError, body, requestJson, uncertainWrite } from './api';
-import { manualDraft } from './notice-maintenance';
-import { confirmNoticeAmount, money, noticeAmountLabels, noticeAmountMatches } from './notices-api';
+import { ApiError, uncertainWrite } from './api';
+import { saveNoticeAmount, money, noticeAmountLabels, noticeAmountMatches } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import type { NoticeAmountField } from './notices-api';
 import { useCellSaveQueue } from './use-cell-save';
@@ -29,12 +28,8 @@ export function useNoticeCellSaves({ rows, enabled, canWrite, read }: {
       attempt.current = draft;
       const row = latest.current?.find(item => item.notice_id === draft.id);
       if (!row || row.is_excluded || row.is_revoked || draft.field === 'amount_approved' && !row.is_manual) throw new ApiError('本条通知书已不可编辑，请核对后取消修改。', 409);
-      const manual = draft.field === 'amount_approved';
       try {
-        const result = await requestJson(manual ? '/api/m03/actions/manual-save' : '/api/m03/actions/stat', {
-          method: 'POST', signal, ...body(manual ? { ...manualDraft(row), amount_approved: draft.value } : { notice_id: draft.id, field: draft.field, value: draft.value }),
-        });
-        confirmNoticeAmount(result, draft.id, draft.field);
+        await saveNoticeAmount(draft.id, draft.field, draft.value, signal);
       } catch (failure) { if (!uncertainWrite(failure)) attempt.current = null; throw failure; }
     },
     acknowledge: (current, submitted) => { attempt.current = null; return current.revision === submitted.revision ? undefined : current; },

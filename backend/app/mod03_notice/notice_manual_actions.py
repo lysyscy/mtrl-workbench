@@ -83,6 +83,33 @@ class ManualRow:
     notes: list[str] = field(default_factory=list)
 
 
+def manual_amounts(amount_approved, stat_settle, stat_paid):
+    """Shared manual-row amount rules for full editing and approval-cell editing."""
+    try:
+        approved = require_non_negative(amount_approved, field="审批金额")
+    except MoneyError as exc:
+        raise MustReportError(f"手动行的审批金额不合法（{exc}）—— 该行没有 i8 结算，审批金额**由人定**") from exc
+
+    try:
+        paid = to_money(stat_paid) if stat_paid not in (None, "") else _ZERO
+        paid = require_non_negative(paid, field="统计付款金额")
+    except MoneyError as exc:
+        raise MustReportError(f"统计付款金额输入不合法（{exc}）—— 已保留原值") from exc
+    if paid > approved:
+        raise MustReportError(
+            f"统计付款金额不能超过审批金额 {approved}（按发票走，只能少付、不能多付）—— 已保留原值"
+        )
+
+    try:
+        settle = require_non_negative(stat_settle if stat_settle not in (None, "") else 0,
+                                      field="统计结算金额")
+    except MoneyError as exc:
+        raise MustReportError(f"统计结算金额输入不合法（{exc}）—— 已保留原值") from exc
+    if settle > approved:
+        raise MustReportError(f"统计结算金额不能超过审批金额 {approved}—— 已保留原值")
+    return approved, settle, paid
+
+
 def manual_row_payload(
     *,
     entered_by: str,
@@ -121,29 +148,7 @@ def manual_row_payload(
             "手动新增行必须填「单据日期」—— 它是**归月依据**（抓取 / 筛选 / 逐月台账同一条时间轴，§4.5.4）"
         )
 
-    try:
-        approved = require_non_negative(amount_approved, field="审批金额")
-    except MoneyError as exc:
-        raise MustReportError(f"手动行的审批金额不合法（{exc}）—— 该行没有 i8 结算，审批金额**由人定**") from exc
-
-    try:
-        paid = to_money(stat_paid) if stat_paid not in (None, "") else _ZERO
-        paid = require_non_negative(paid, field="统计付款金额")
-    except MoneyError as exc:
-        raise MustReportError(f"统计付款金额输入不合法（{exc}）—— 已保留原值") from exc
-
-    if paid > approved:
-        raise MustReportError(
-            f"统计付款金额不能超过审批金额 {approved}（按发票走，只能少付、不能多付）—— 已保留原值"
-        )
-
-    try:
-        settle = require_non_negative(stat_settle if stat_settle not in (None, "") else 0,
-                                      field="统计结算金额")
-    except MoneyError as exc:
-        raise MustReportError(f"统计结算金额输入不合法（{exc}）—— 已保留原值") from exc
-    if settle > approved:
-        raise MustReportError(f"统计结算金额不能超过审批金额 {approved}—— 已保留原值")
+    approved, settle, paid = manual_amounts(amount_approved, stat_settle, stat_paid)
 
     cat = str(category or "").strip()
     if cat and cat not in CATEGORY_CHOICES:

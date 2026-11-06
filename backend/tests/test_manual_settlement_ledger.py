@@ -38,3 +38,30 @@ def test_two_recharges_manual_edit_and_omitted_field_preserve_actual_flows(sessi
     logs = session.query(NoticeStatLog).filter_by(notice_id=manual.id, field='stat_settle').all()
     assert len(logs) == 1
     assert sum(f.amount for f in session.query(PaymentFlow).filter(PaymentFlow.notice_id.in_([original.id,manual.id]))) == Decimal('40000')
+
+
+def test_amount_cell_round_trip_preserves_all_other_columns_and_flows(session):
+    from copy import deepcopy
+    from sqlalchemy import select
+    from app.mod03_notice.notice_api_router import api_amount, NoticeAmountIn
+
+    p = project(session, '__amount_cell__')
+    row = PaymentNotice(ph_id='MANUAL-amount-cell', is_manual=True, bill_no='CELL-1',
+                        doc_date='2026-10-01', ownership_id=p.id, project_name='原项目名',
+                        category='material', amount_approved=1000, stat_settle=500, stat_paid=300,
+                        fields={'BillName': '原单名', 'Remark': '原备注', 'Evidence': {'row': 3}})
+    session.add(row)
+    session.flush()
+    flow = PaymentFlow(notice_id=row.id, flow_no='__amount_cell_flow__', amount=250,
+                       pay_date='2026-10-02', pay_method='现汇', status='effective')
+    session.add(flow)
+    session.flush()
+    before = {column.key: deepcopy(getattr(row, column.key)) for column in PaymentNotice.__table__.columns}
+    result = api_amount(NoticeAmountIn(notice_id=row.id, field='amount_approved', value='1,200.345'), session)
+    assert result['ok'] and result['after'] == '1200.35'
+    session.expire_all()
+    actual = session.get(PaymentNotice, row.id)
+    after = {column.key: getattr(actual, column.key) for column in PaymentNotice.__table__.columns}
+    assert after == {**before, 'amount_approved': Decimal('1200.35')}
+    assert session.get(PaymentFlow, flow.id).amount == Decimal('250')
+    assert list(session.scalars(select(NoticeStatLog).where(NoticeStatLog.notice_id == row.id))) == []

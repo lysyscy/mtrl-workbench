@@ -162,13 +162,14 @@ def test_API的统计列仍不含HTML():
 
 
 @pytest.mark.parametrize('manual', [False, True])
-def test_API_统计手改落库并留痕(manual):
+@pytest.mark.parametrize('action', ['stat', 'amount'])
+def test_API_统计手改落库并留痕(manual, action):
     """**统计手改走 JSON API**：值真的落库 ＋ 留痕真的写进库（壳判「黄底」的唯一事实来源）。"""
     from app.mod03_notice.models import NoticeStatLog
 
     client, fake = _client([_notice(1, is_manual=manual)])
     fake.by_model.setdefault(NoticeStatLog, [])
-    r = client.post("/api/m03/actions/stat",
+    r = client.post(f"/api/m03/actions/{action}",
                     json={"notice_id": 1, "field": "stat_settle", "value": "8000"})
     assert r.status_code == 200, "JSON 动作 API 一律恒 200（成败看 `ok`）"
     body = r.json()
@@ -181,13 +182,14 @@ def test_API_统计手改落库并留痕(manual):
     assert "已留痕" in body["message"] and "欠款已实时重算" in body["message"]
 
 
-def test_API_统计手改超上限被拦且保留原值():
+@pytest.mark.parametrize('action', ['stat', 'amount'])
+def test_API_统计手改超上限被拦且保留原值(action):
     """上限 = 审批金额（§4.5.3「按发票走、只能少不能多」）⇒ **拦下并保留原值**，且**不留痕**。"""
     from app.mod03_notice.models import NoticeStatLog
 
     client, fake = _client([_notice(1)])
     fake.by_model.setdefault(NoticeStatLog, [])
-    r = client.post("/api/m03/actions/stat",
+    r = client.post(f"/api/m03/actions/{action}",
                     json={"notice_id": 1, "field": "stat_paid", "value": "20000"})
     assert r.status_code == 200
     body = r.json()
@@ -197,13 +199,14 @@ def test_API_统计手改超上限被拦且保留原值():
     assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []         # 不留痕
 
 
-def test_API_统计手改值没变时说清什么都没做():
+@pytest.mark.parametrize('action', ['stat', 'amount'])
+def test_API_统计手改值没变时说清什么都没做(action):
     """§4.2.7：值没变 ⇒ **不做无意义的重算、不留空痕** —— 但要让用户看见「什么都没做」（不是静默）。"""
     from app.mod03_notice.models import NoticeStatLog
 
     client, fake = _client([_notice(1)])
     fake.by_model.setdefault(NoticeStatLog, [])
-    r = client.post("/api/m03/actions/stat",
+    r = client.post(f"/api/m03/actions/{action}",
                     json={"notice_id": 1, "field": "stat_settle", "value": "10000.00"})
     body = r.json()
     assert body["ok"] is True and body["changed"] is False
@@ -283,6 +286,47 @@ def test_API_编辑手动行按改动字段回报():
     assert row.stat_paid == Decimal("30000.00")
     assert row.stat_settle == Decimal("20000.00")
     assert [x for x in fake.added if isinstance(x, PaymentNotice)] == [], "编辑不该新增行"
+
+
+def test_approval_cell_preserves_non_target_facts():
+    original_fields = {"BillName": "手动材料款", "Remark": "原始备注", "Evidence": {"source": "人工依据"}}
+    row = _notice(1, is_manual=True, ph_id="MANUAL-cell", fields=original_fields,
+                  project_name="原项目名称", stat_settle=Decimal("100.00"), stat_paid=Decimal("50.00"))
+    client, _ = _client([row])
+    result = client.post("/api/m03/actions/amount", json={
+        "notice_id": row.id, "field": "amount_approved", "value": "12000",
+    }).json()
+    assert result["ok"] is True
+    assert (result["notice_id"], result["field"], result["before"], result["after"]) == (1, "amount_approved", "10000.00", "12000.00")
+    assert row.amount_approved == Decimal("12000.00")
+    assert row.project_name == "原项目名称"
+    assert row.fields == original_fields
+    assert (row.stat_settle, row.stat_paid) == (Decimal("100.00"), Decimal("50.00"))
+
+
+@pytest.mark.parametrize('settle,paid', [('200', '50'), ('50', '200')])
+def test_approval_cell_rejects_below_each_existing_stat(settle, paid):
+    row = _notice(1, is_manual=True, stat_settle=Decimal(settle), stat_paid=Decimal(paid))
+    client, _ = _client([row])
+    result = client.post('/api/m03/actions/amount', json={
+        'notice_id': 1, 'field': 'amount_approved', 'value': '100',
+    }).json()
+    assert result['ok'] is False and '审批金额' in result['message']
+    assert (row.amount_approved, row.stat_settle, row.stat_paid) == (Decimal('10000'), Decimal(settle), Decimal(paid))
+
+
+def test_approval_cell_rejects_i8_source_and_unchanged_has_identified_receipt():
+    row = _notice(1)
+    client, fake = _client([row])
+    payload = {'notice_id': 1, 'field': 'amount_approved', 'value': '12000'}
+    result = client.post('/api/m03/actions/amount', json=payload).json()
+    assert result['ok'] is False and '手动' in result['message']
+    assert row.amount_approved == Decimal('10000')
+    row.is_manual = True
+    result = client.post('/api/m03/actions/amount', json={**payload, 'value': '10000'}).json()
+    assert result['ok'] is True and result['changed'] is False
+    assert (result['notice_id'], result['field']) == (1, 'amount_approved')
+    assert not fake.added
 
 
 def test_手动行保存的API只许走唯一出口():
