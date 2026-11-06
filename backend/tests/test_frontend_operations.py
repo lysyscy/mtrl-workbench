@@ -141,6 +141,7 @@ class ReleaseTests(unittest.TestCase):
         files = managed / 'groups/release-check/files'
         self.candidate = make_release(files / 'work/build', 'c' * 40, 'registered build')
         lifecycle = SimpleNamespace(enrolled=lambda path: managed,
+            configuration=lambda path: {'layout': 'groups'},
             load=lambda path, group: (None, files, {'state': 'active', 'hold': False}))
         with patch('tools.audit.workspace_paths._lifecycle', return_value=(lifecycle, managed)):
             result = self.apply()
@@ -153,6 +154,7 @@ class ReleaseTests(unittest.TestCase):
         files = managed / 'groups/release-check/files'
         self.candidate = make_release(files / 'work/build', 'c' * 40, 'held build')
         lifecycle = SimpleNamespace(enrolled=lambda path: managed,
+            configuration=lambda path: {'layout': 'groups'},
             load=lambda path, group: (None, files, {'state': 'active', 'hold': True}))
         with patch('tools.audit.workspace_paths._lifecycle', return_value=(lifecycle, managed)):
             with self.assertRaisesRegex(RuntimeError, '已登记运行'):

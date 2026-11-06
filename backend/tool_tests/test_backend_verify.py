@@ -27,6 +27,8 @@ def prepared(tmp_path,monkeypatch):
         path=tmp_path/kind;path.mkdir(exist_ok=True);return path
     monkeypatch.setattr(runner,'output_dir',output)
     monkeypatch.setattr(runner,'close_runs',lambda *,success:None)
+    monkeypatch.setattr(runner,'development_run',lambda:None)
+    monkeypatch.setattr(runner,'protect_run',lambda *args:None)
     monkeypatch.setattr(runner,'source_state',lambda:{'commit':'fixture','dirty':False})
     return source
 
@@ -43,7 +45,8 @@ def test_test_only_environment_and_exact_exit_after_cleanup(prepared,monkeypatch
         assert env['MTRL_TEST_SOURCE_ENV']==str(prepared)
         assert DEV not in env.values()
         temporary=runner.Path(command[command.index('--basetemp')+1])
-        assert temporary.is_absolute() and temporary.parent==prepared.parent/'work'
+        import tempfile
+        assert temporary.is_absolute() and temporary.parent.samefile(tempfile.gettempdir())
         (temporary/'generated.txt').write_text('owned temporary output',encoding='utf-8')
         return SimpleNamespace(returncode=exit_code)
     monkeypatch.setattr(runner,'isolated_database',isolated);monkeypatch.setattr(runner.subprocess,'run',child)
@@ -57,6 +60,34 @@ def test_test_only_environment_and_exact_exit_after_cleanup(prepared,monkeypatch
 def test_empty_selection_rejected_before_database(prepared,monkeypatch):
     monkeypatch.setattr(runner,'isolated_database',lambda *a,**k:pytest.fail('No test selection must not create schema'))
     with pytest.raises(ValueError):runner.verify(prepared,[])
+
+
+def test_temporary_cleanup_failure_keeps_actual_test_result(prepared, monkeypatch):
+    allocated = []
+    real_temporary = runner.TemporaryDirectory
+    def occupied(**kwargs):
+        temporary = real_temporary(**kwargs)
+        allocated.append(temporary)
+        def fail_cleanup():
+            raise PermissionError('synthetic occupied file')
+        temporary.cleanup = fail_cleanup
+        return temporary
+    @contextmanager
+    def isolated(*args, **kwargs):
+        yield {'DATABASE_URL': TEST, 'PGOPTIONS': '-c search_path=backend_verify_fixture'}
+    monkeypatch.setattr(runner, 'TemporaryDirectory', occupied)
+    monkeypatch.setattr(runner, 'isolated_database', isolated)
+    monkeypatch.setattr(runner.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0))
+    try:
+        code, path = runner.verify(prepared, ['tests/test_example.py'])
+        report = json.loads(path.read_text(encoding='utf-8'))
+        assert code == report['pytest_returncode'] == 0
+        assert report['cleanup_completed'] is True
+        assert report['temporary_cleanup_completed'] is False
+        assert report['temporary_cleanup_error'] == 'PermissionError'
+    finally:
+        for temporary in allocated:
+            real_temporary.cleanup(temporary)
 
 def test_setup_failure_is_nonzero_and_not_reported_as_pytest_success(prepared,monkeypatch):
     @contextmanager

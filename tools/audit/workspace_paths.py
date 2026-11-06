@@ -8,22 +8,113 @@ from pathlib import Path
 import re
 import shutil
 import importlib.util
+import json
+import sys
+from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_SOURCE = ROOT / 'tools/_vendor/setup_solo_workflow/artifact_lifecycle.py'
 STATE = ROOT / 'var/state/verification'
 _owned: dict[Path, Path] = {}
 _owns_run = False
 _managed = {}
+_borrowed = {}
+_development = False
+_abandonment_safe = False
+_protection = None
 
 
 def _lifecycle():
-    source = Path.home() / '.skills-manager/skills/setup-solo-workflow/scripts/artifact_lifecycle.py'
+    source = RUNTIME_SOURCE
+    if not source.is_file():
+        raise RuntimeError('项目产物工具尚未部署，请通过setup部署固定版本')
     spec = importlib.util.spec_from_file_location('mtrl_artifact_lifecycle', source)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    target = Path(os.environ.get('MTRL_LIFECYCLE_ROOT', str(Path.home() / 'AppData/Local/AgentArtifacts/projects/mtrl-workbench')))
+    previous = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
+    target = Path(os.environ.get('MTRL_LIFECYCLE_ROOT', str(ROOT / '.artifacts/runs')))
     module.enrolled(target)
+    config = module.configuration(target)
+    if config.get('layout') == 'runs' and not Path(config['project']).samefile(ROOT):
+        raise RuntimeError('产物区属于另一项目或工作树')
     return module, target
+
+
+def development_run(*, abandonment_safe=False):
+    """Opt in only at a verified disposable development entry, before output starts."""
+    global _development, _abandonment_safe
+    if _managed:
+        raise RuntimeError('运行已经开始，不能补认可弃声明')
+    _development = True
+    # External subprocesses that do not join consume() cannot be proven finished
+    # after their launcher dies. Only fully cooperating producers opt into this.
+    _abandonment_safe = bool(abandonment_safe)
+
+
+def protect_run(reason, condition):
+    """A disposable test may still discover an unresolved resource/recovery outcome."""
+    global _protection
+    if not str(reason).strip() or not str(condition).strip():
+        raise ValueError('须明确保护原因与解除条件')
+    _protection = (str(reason), str(condition))
+
+
+def _binding(module, managed_root, run, *, workspace=ROOT):
+    config = module.configuration(managed_root)
+    project_layout = config.get('layout') == 'runs'
+    if project_layout:
+        if not Path(config['project']).samefile(workspace):
+            raise ValueError('产物区项目归属不符')
+        name = run.name
+    else:
+        if run.name != 'files' or run.parent.parent.name != 'groups':
+            raise ValueError('不是已登记运行的files目录')
+        name = run.parent.name
+    _, files, record = module.load(managed_root, name)
+    if not files.samefile(run) or record['state'] not in {'active', 'closed'}:
+        raise ValueError('运行归属或状态不符')
+    if record.get('workspace') and not Path(record['workspace']).samefile(workspace):
+        raise ValueError('运行属于另一工作树')
+    return name, files, record
+
+
+@contextmanager
+def consume_run(path, *, root=None, writing=True):
+    """Keep a build/preview consumer registered for its actual lifetime."""
+    root = ROOT if root is None else root
+    run = owned_run(path, root=root, writing=writing)
+    if run.is_relative_to(root / '.artifacts/active'):
+        yield run
+        return
+    module, managed_root = _lifecycle()
+    name, files, _ = _binding(module, managed_root, run, workspace=root)
+    if module.configuration(managed_root).get('layout') != 'runs':
+        yield files
+        return
+    with module.consume(managed_root, name, writing=writing):
+        yield files
+
+
+def attach_run(path, *, root=None):
+    """Bind an explicitly passed run in a child process without taking closure ownership."""
+    root = ROOT if root is None else root
+    run = owned_run(path, root=root, writing=True)
+    if run.is_relative_to(root / '.artifacts/active'):
+        os.environ.pop('MTRL_LIFECYCLE_OUTPUT', None)
+        os.environ.update(MTRL_EFFORT=run.parent.name, MTRL_RUN_ID=run.name)
+        return run
+    module, managed_root = _lifecycle()
+    name, files, _ = _binding(module, managed_root, run, workspace=root)
+    os.environ.update(MTRL_RUN_ID=name, MTRL_LIFECYCLE_OUTPUT=str(files))
+    if files not in _managed and files not in _borrowed and module.configuration(managed_root).get('layout') == 'runs':
+        lease = module.consume(managed_root, name)
+        lease.__enter__()
+        _borrowed[files] = lease
+    return files
 
 
 def _no_links(path: Path, root: Path) -> None:
@@ -58,14 +149,7 @@ def owned_run(path: Path, *, root: Path = ROOT, writing: bool = False) -> Path:
     try:
         module, managed_root = _lifecycle()
         managed_root = module.enrolled(managed_root)
-        if run.name != 'files' or run.parent.parent.name != 'groups':
-            raise ValueError('不是已登记运行的files目录')
-        _, files, record = module.load(managed_root, run.parent.name)
-        # Windows packaged-app redirection and 8.3 aliases can spell the same
-        # directory differently. Compare its filesystem identity, never just a
-        # matching group name, and retain the lifecycle's declared spelling.
-        if not files.samefile(run) or record['state'] not in {'active', 'closed'}:
-            raise ValueError('运行归属或状态不符')
+        _, files, record = _binding(module, managed_root, run, workspace=root)
         if writing and (record['state'] != 'active' or record['hold']):
             raise ValueError('运行已结束或暂缓，不能继续写入')
     except (OSError, ValueError) as error:
@@ -104,17 +188,21 @@ def output_dir(kind: str = 'reports', *, root: Path = ROOT) -> Path:
     if root == ROOT and (inherited or _owns_run):
         module, managed_root = _lifecycle()
         if inherited:
-            base = Path(inherited)
-            expected = managed_root / 'groups' / run / 'files'
-            if base != expected:
+            name, base, record = _binding(module, managed_root, Path(inherited), workspace=root)
+            if name != run:
                 raise ValueError('继承的生命周期输出身份不符')
             module.safe(base)
-            _, _, record = module.load(managed_root, run)
             if record['state'] != 'active' or record['hold']:
                 raise ValueError('输出轮次已结束或暂缓，不能继续写入')
+            if base not in _managed and base not in _borrowed and module.configuration(managed_root).get('layout') == 'runs':
+                lease = module.consume(managed_root, run)
+                lease.__enter__()
+                _borrowed[base] = lease
         else:
-            base = Path(module.register(managed_root, run, effort, '开发工具运行证据；用途结束后复查', 'evidence'))
-            lease = module.lock(managed_root)
+            development = _development and _abandonment_safe and module.configuration(managed_root).get('layout') == 'runs'
+            base = Path(module.register(managed_root, run, effort, '开发工具运行证据', 'evidence',
+                                        development=development, workspace=ROOT))
+            lease = module.consume(managed_root, run)
             lease.__enter__()
             os.environ['MTRL_LIFECYCLE_OUTPUT'] = str(base)
             _managed[base] = (module, managed_root, run, lease)
@@ -141,30 +229,89 @@ def output(name: str, *, kind: str = 'reports', root: Path = ROOT) -> Path:
     return target
 
 
-def close_runs(*, success: bool = True) -> None:
-    """只收本进程创建的轮次；临时 work 释放，实际结果保留最多30天。"""
-    import json
-    global _owns_run
+def _cleanup_warning(base, error):
+    value = {'ok': False, 'run': str(base), 'error': type(error).__name__,
+             'message': '运行产物清理未完成，文件保留待重试；原操作结果保持不变'}
+    print(json.dumps(value, ensure_ascii=False), file=sys.stderr)
+    try:
+        metadata = base / 'run.json' if (base / 'run.json').exists() else base.parent / 'record.json'
+        if base not in _owned:
+            _no_links(metadata, metadata.parent)
+            if json.loads(metadata.read_text(encoding='utf-8')).get('state') != 'active':
+                return value
+        report = base / 'reports/cleanup.json'
+        _no_links(report, base)
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
+    except (OSError, ValueError):
+        pass  # stderr remains the receipt if the output directory itself is unavailable.
+    return value
+
+
+def close_runs(*, success: bool = True):
+    """Close owned runs; cleanup failure never rewrites the producer's outcome."""
+    global _owns_run, _development, _abandonment_safe, _protection
+    results = []
+    for base, lease in list(_borrowed.items()):
+        try:
+            lease.__exit__(None, None, None)
+        except (OSError, ValueError, RuntimeError) as error:
+            results.append(_cleanup_warning(base, error))
+        _borrowed.pop(base)
     managed_ids = [entry[2] for entry in _managed.values()]
     for base, (module, managed_root, run, lease) in list(_managed.items()):
-        module.inventory(base)
-        if success and (base / 'work').exists():
-            shutil.rmtree(base / 'work')
-        # The group is still active when the write lease is released. A concurrent
-        # sweeper cannot delete it before the atomic close/hold below.
-        lease.__exit__(None, None, None)
-        if not success:
-            _, _, record = module.load(managed_root, run)
-            if not record['hold']:
-                module.hold(managed_root, run, '生产者失败或未明确结束；保留现场', '核实运行结果、活动消费者及永久依据后结项')
-        else:
-            # Only the owning producer calls this after its consumers have exited.
-            module.close(managed_root, run)
-        _managed.pop(base)
+        try:
+            lease.__exit__(None, None, None)
+            # Membership and deletion use one mutex; another consumer cannot join
+            # between this idle check and work release/closure.
+            with module.lock(managed_root):
+                record_path, files, record = module.load(managed_root, run)
+                if record['state'] != 'active':
+                    raise RuntimeError('运行已关闭，保留现有文件')
+                if _protection and not record['hold']:
+                    record['hold'] = {'reason': _protection[0], 'condition': _protection[1],
+                                      'review_at': (module.stamp() + timedelta(days=30)).isoformat()}
+                    module.atomic(record_path, record)
+                if record['hold']:
+                    results.append({'ok': True, 'run': str(base), 'protected': True})
+                    continue
+                if module.consumption_state(record) != 'ended':
+                    raise RuntimeError('运行仍有活动或无法核实的消费者')
+                module.data_inventory(files, record)
+                if success and (base / 'work').exists():
+                    work = _checked_path(base / 'work', base)
+                    if not work.is_relative_to(base.resolve()) or work == base.resolve():
+                        raise ValueError('work目录越界')
+                    shutil.rmtree(work)
+                if success or _development or record.get('development') is True:
+                    module.seal(record_path, files, record, module.stamp(),
+                                result='success' if success else 'failure')
+                elif not record['hold']:
+                    record['hold'] = {'reason': '生产者失败或未明确结束；保留现场',
+                                      'condition': '核实运行结果、活动消费者及永久依据后结项',
+                                      'review_at': (module.stamp() + timedelta(days=30)).isoformat()}
+                    module.atomic(record_path, record)
+            results.append({'ok': True, 'run': str(base)})
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            results.append(_cleanup_warning(base, error))
+        finally:
+            _managed.pop(base)
     if os.environ.get('MTRL_RUN_ID') in managed_ids:
         os.environ.pop('MTRL_RUN_ID', None)
         os.environ.pop('MTRL_LIFECYCLE_OUTPUT', None)
         _owns_run = False
+        _development = False
+        _abandonment_safe = False
+        _protection = None
+    try:
+        _close_legacy_runs()
+    except (OSError, ValueError, RuntimeError) as error:
+        for base in list(_owned):
+            results.append(_cleanup_warning(base, error))
+    return results
+
+
+def _close_legacy_runs():
     for base, root in list(_owned.items()):
         if not base.exists():
             _owned.pop(base)
@@ -205,6 +352,8 @@ def finish_run(code=0):
 
 def _exit_runs():
     # Process exit alone is not evidence that a business/verification run finished.
+    if _managed and _development and not _abandonment_safe:
+        protect_run('生产者未明确结束，外部消费者状态未核实', '确认所有外部进程与恢复用途已结束')
     close_runs(success=False)
 
 

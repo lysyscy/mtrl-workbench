@@ -1,0 +1,2 @@
+# Preserve the exact bytes recorded by setup's deployment manifest.
+/tools/_vendor/setup_solo_workflow/* text eol=lf

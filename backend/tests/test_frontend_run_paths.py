@@ -25,7 +25,7 @@ class RunPathTests(unittest.TestCase):
         base = Path(self.temporary.name).resolve()
         self.repo = base / 'repo'
         self.repo.mkdir()
-        # Consume the installed lifecycle's real enrollment/record validator.
+        # Consume the project's fixed lifecycle runtime, independent of personal skills.
         self.lifecycle, _ = paths._lifecycle()
         self.managed = base / 'managed'
         self.lifecycle.enroll(self.managed)
@@ -160,7 +160,7 @@ class RunPathTests(unittest.TestCase):
             self.assertEqual(release.main(), 0)
         self.assertEqual(len(builds), 1)
         run = builds[0].parent.parent
-        self.assertTrue(run.is_relative_to(self.managed / 'groups'))
+        self.assertTrue(run.is_relative_to(self.managed))
         self.assertEqual(json.loads((run / 'reports/preflight.json').read_text(encoding='utf-8'))['status'], 'checked')
         return run
 
@@ -172,6 +172,17 @@ class RunPathTests(unittest.TestCase):
 
     def test_explicit_managed_run_survives_publication_handoff(self):
         self.preflight(explicit=True)
+
+    def test_project_layout_publication_preserves_binding_and_releases_candidate(self):
+        self.managed = self.repo / '.artifacts/runs'
+        self.lifecycle.enroll(self.managed, project=self.repo)
+        with patch.dict(os.environ, {'MTRL_LIFECYCLE_ROOT': str(self.managed)}):
+            run = self.preflight(explicit=False)
+            _, _, record = self.lifecycle.load(self.managed, run.name)
+            self.assertEqual(record['state'], 'closed')
+            self.assertEqual(record['operation_result'], 'success')
+            self.assertEqual(record['consumers'], [])
+            self.assertFalse((run / 'work').exists())
 
 
 if __name__ == '__main__':

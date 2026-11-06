@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / 'backend')]
 from tools.dev.frontend_preview import IsolationInputError, isolated_database, verified_database_source
-from tools.audit.workspace_paths import output_dir, close_runs
+from tools.audit.workspace_paths import output_dir, close_runs, development_run, protect_run
 
 
 def source_state():
@@ -61,6 +61,7 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
     from tests.db_guard import database_identity
     source_env = source_env.resolve(strict=True)
     _, guard = verified_database_source(source_env)
+    development_run()
     os.environ.setdefault('MTRL_EFFORT', 'backend-verify')
     log_path = output_dir('logs') / 'backend-verify.log'
     report_path = output_dir('reports') / 'backend-verify.json'
@@ -70,10 +71,11 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
               'pytest_basetemp': None, 'temporary_cleanup_completed': None}
     code = 1
     pytest_temp = None
+    temporary = None
     try:
-        with TemporaryDirectory(prefix='pytest-', dir=output_dir('work')) as temporary, \
-                log_path.open('w', encoding='utf-8') as log:
-            pytest_temp = Path(temporary).resolve()
+        temporary = TemporaryDirectory(prefix='mtrl-pytest-')
+        with log_path.open('w', encoding='utf-8') as log:
+            pytest_temp = Path(temporary.name).resolve()
             report['pytest_basetemp'] = str(pytest_temp)
             with isolated_database(source_env, preview=False, log=log) as env:
                 report['database'] = database_identity(env['DATABASE_URL'])[2]
@@ -94,8 +96,16 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
         code = getattr(exc, 'returncode', 1) or 1
         report['error'] = type(exc).__name__
     finally:
+        if temporary is not None:
+            try:
+                temporary.cleanup()
+            except OSError as exc:
+                report['temporary_cleanup_error'] = type(exc).__name__
+                print('pytest临时文件清理未完成，保留现场；测试原始结果不变', file=sys.stderr)
         if pytest_temp is not None:
             report['temporary_cleanup_completed'] = not pytest_temp.exists()
+        if report['cleanup_completed'] is not True:
+            protect_run('测试隔离资源的退出结果尚未确认', '核实本次测试schema及其他隔离资源已退出')
         report['returncode'] = code
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

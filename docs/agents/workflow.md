@@ -16,7 +16,7 @@ React 重写已签收，现行业务和界面约束归 requirements 与 frontend
 
 ## 目录与退出
 
-本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；网页字体按`backend/app/web/fonts`、模板按`backend/app/resources/templates`的运行消费者保留；历史第三方源码由Git追溯。`.scratch/<effort>` 只放活动 Markdown/票；默认新工具输出由 `tools/audit/workspace_paths.py` 登记到本机受管区，明确成功后释放 work 并保留30天证据，失败或未结项则保护；实际路径以工具回执为准。显式指定旧运行的现场继续使用 `.artifacts/active/<effort>/<run>/<kind>` 及原退出方式。父运行负责自己创建的 run；手动指定 MTRL_EFFORT/MTRL_RUN_ID 后由操作者核实际消费者和退出去向。新登记产物直接按[实际接入](../guides/artifact-lifecycle.md#本项目实际接入)核验；仅未迁移旧生产者或固定旧运行才执行 workspace_check 的旧目录分支，旧 retention.json 保持日期格式与原最长30天检查；已触发检查非零须解决或保留阻塞。无相关产物/变化的简单任务不造 effort/run 或重复治理检查；仍供用户验收的主预览按原任务用途保留，不因回复结束停服。
+本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；网页字体、模板按运行消费者保留。`.scratch/<effort>`只放活动Markdown/票；默认开发输出由`tools/audit/workspace_paths.py`自动登记到项目`.artifacts/runs`，短命计算文件用系统TEMP。成功释放已结束消费者的work，必要证据及已核纯开发失败保留30天；未知、在用与恢复资料继续保护。setup负责随仓固定版本部署，实际路径、显式任务和失败分支见[实际接入](../guides/artifact-lifecycle.md#本项目实际接入)。旧AgentArtifacts登记区和显式`.artifacts/active`运行沿原入口与期限；未迁移旧运行才执行旧workspace_check，不扩扫历史目录。无相关产物的简单任务不造effort/run；仍供验收的主预览按原用途保留，不能因回复结束停服。
 
 历史有效独有知识先归现行正文；可达Git提交及原路径足够追溯且无活动用途时，旧正文退出。本项目仍保活动依赖、验收和范围裁决所需最小集合，终态不推定缺票已完成。恢复用可达提交及原路径，核后续修改后只取所需内容。
 
@@ -42,4 +42,4 @@ backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manag
 
 ## 已接入的个人产物生命周期
 
-2026-10-30采用个人包 e1ab206 的[产物生命周期](../guides/artifact-lifecycle.md)。新登记产物由 tools/artifact_lifecycle.py 管理，普通30天、明确跨月60天、未决局部保护。专用运行区在本机用户目录，保留本项目原件/云同步等例外；上文旧目录与retention约定仅继续服务未迁移的原生产者及固定旧任务，不把旧目录交给定时器扫描。
+2026-11-06按[ADR](../adr/0001-development-artifact-ownership.md)采用个人包`2e0e153c0b434da03a2b1363b45945599a76b0c9`的项目内默认与setup固定版本部署。实际CLI、保留分支、调度验收和旧运行边界统一见[产物生命周期](../guides/artifact-lifecycle.md)，其他项目不因此切换。

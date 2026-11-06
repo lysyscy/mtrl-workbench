@@ -131,6 +131,9 @@ def product_inputs(*, frontend_only=False):
             "tools/dev/frontend_preview.py", "tools/dev/frontend_preview_browser_check.py",
             "tools/dev/frontend_preview_copy.py", "tools/dev/frontend_preview_runtime.py",
             "tools/dev/frontend_preview_server.py", "backend/pyproject.toml", "backend/uv.lock",
+            "tools/audit/workspace_paths.py", "tools/artifact_lifecycle.py",
+            "tools/_vendor/setup_solo_workflow/artifact_lifecycle.py",
+            "tools/_vendor/setup_solo_workflow/deployment.json", "ops/frontend_release.py",
         ]
     return roots, files
 

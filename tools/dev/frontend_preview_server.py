@@ -17,7 +17,7 @@ import threading
 
 from tools.dev.frontend_preview_runtime import (ROOT, product_sources, process_identity,
     read_json, write_json, state_dir, verify_build, finish_preview)
-from tools.audit.workspace_paths import owned_run as validate_run, owned_work
+from tools.audit.workspace_paths import owned_run as validate_run, owned_work, consume_run, attach_run
 
 
 def arguments():
@@ -38,6 +38,11 @@ def arguments():
 
 
 def prepare_build(args):
+    with consume_run(args.run, root=ROOT):
+        return _prepare_build(args)
+
+
+def _prepare_build(args):
     run = owned_run(args.run)
     build = owned_work(args.prepare_build, root=ROOT, writing=True)
     if not build.is_relative_to(run / 'work') or build.exists():
@@ -209,11 +214,6 @@ def run(args):
     run = owned_run(args.run)
     from tools.dev.frontend_preview_browser_check import load_check
     browser_notice_check = load_check(args, run)
-    if run.is_relative_to(ROOT / '.artifacts/active'):
-        os.environ.update(MTRL_EFFORT=run.parent.name, MTRL_RUN_ID=run.name)
-    else:
-        os.environ.update(MTRL_RUN_ID=run.parent.name, MTRL_LIFECYCLE_OUTPUT=str(run))
-        os.environ.setdefault('MTRL_EFFORT', 'frontend-preview')
     if args.source_env is None:
         raise RuntimeError('须明确只读来源配置 --source-env')
     version = read_json(run / 'reports/version.json')
@@ -221,6 +221,8 @@ def run(args):
     _, guard = verified_database_source(args.source_env)
     if not args.existing and (not args.copy_source or not args.disposable):
         raise RuntimeError('新验证实例须显式 --copy-source --disposable，不能复用用户副本生命周期')
+    attach_run(run, root=ROOT)
+    os.environ.setdefault('MTRL_EFFORT', 'frontend-preview')
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', args.port))
         if args.existing:

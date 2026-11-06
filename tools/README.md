@@ -11,7 +11,7 @@
 | React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
 | 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用；--staged只检查Git index，显式无参数保全量模式，Git失败非零 |
 | 工作树退出证据 | audit/worktree_check.py；仅任务收尾按需调用，只读输出JSON，0表示扫描完整、2表示失败/不完整；不决定删除资格。退出判据由CONTRIBUTING持有 |
-| 运行输出与生命周期 | audit/workspace_paths.py、audit_work.py；只处理本任务拥有产物 |
+| 运行输出与生命周期 | audit/workspace_paths.py自动管理项目内新运行；artifact_lifecycle.py查询/清理已登记产物；audit_work.py仅保留旧目录检查 |
 | 开、关、列票 | oneoff/_tail_open.py、_tail_close.py、_list_tails.py；协议见docs/agents/issue-tracker.md，默认干跑 |
 | 疑似未调用公共定义 | audit/wiring_audit.py，只保W2候选提示，不自动判缺陷或删代码 |
 | 已有业务反例 | mut对应当前靶；先核隔离，再按实际风险显式运行，不作日常全量义务 |
@@ -19,6 +19,6 @@
 
 旧静态壳 UI 探针、专属注册表与已完成的单次补丁已退出；React 验证使用上表 dev 入口。probe/_shell_live.py 仍保留现行后端路由与通用导入退役的只读契约检查。
 
-oneoff保留仍有迁移/诊断/分发用途的实际入口，副作用以各脚本为准；真实回写另需确认摘要与授权，不能为证明历史结束而执行迁移。历史工具通过Git取回，不保归档目录或变异覆盖账。新的一次性脚本放本轮.artifacts的work，结束释放；不为同义检查建通用治理平台。
+oneoff保留仍有迁移/诊断/分发用途的实际入口，副作用以各脚本为准；真实回写另需确认摘要与授权，不能为证明历史结束而执行迁移。历史工具通过Git取回，不保归档目录或变异覆盖账。可弃的一次性脚本使用系统临时目录；跨进程或需留证时放登记run的work，独有实现先保留或归正式工具。用途结束按消费者释放，不为同义检查建通用治理平台。
 
 命令、隔离及产物路径见docs/guides/development-and-verification.md，服务/备份脚本在ops。
