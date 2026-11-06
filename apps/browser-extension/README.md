@@ -35,10 +35,11 @@
 
 ### 工作台地址范围（无需改 manifest）
 
-`manifest.json` 的 `externally_connectable.matches` 已经覆盖本仓已知的两个入口：
+`manifest.json` 的 `externally_connectable.matches` 与扩展内发送方检查共同限定以下入口：
 
 - 生产服务：`http://127.0.0.1:8000/`、`http://localhost:8000/`（`ops/nssm_install.ps1` 里的单 worker 服务）
 - 本仓预览：`http://127.0.0.1:8065/`、`http://localhost:8065/`（`docs/guides/frontend-preview.md` 的预览端口）
+- 局域网正式入口（0.1.2，用户2026-11-06确认）：`http://192.168.5.3:8000/`。其他电脑须在打开工作台和i8的同一浏览器配置中安装新版扩展；连接标识复用工作台的局域网HTTP兼容随机ID实现。
 
 **不要让用户去编辑 `manifest.json`。** 若换到别的地址/端口，那是权限面变更 —— 需要单独确认，由维护人改包，
 不是安装步骤的一部分。本扩展刻意**不申请 `<all_urls>`**。

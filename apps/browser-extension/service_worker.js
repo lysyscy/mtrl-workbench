@@ -22,9 +22,10 @@
 
 'use strict';
 
-// 允许唤起本扩展的工作台页面：生产（8000）与隔离预览（8065）。
+// 允许唤起本扩展的工作台页面：本机生产/预览与用户指定的局域网正式入口。
 // 与 manifest 的 `externally_connectable.matches` 必须一致；扩展这侧再核一遍 sender。
 const WORKBENCH_ORIGINS = [
+  'http://192.168.5.3:8000',
   'http://127.0.0.1:8000',
   'http://localhost:8000',
   'http://127.0.0.1:8065',

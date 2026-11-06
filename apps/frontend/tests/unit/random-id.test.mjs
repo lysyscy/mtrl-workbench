@@ -10,11 +10,24 @@ const hook = registerHooks({
       : context);
   },
 });
-let randomUUID;
-try { ({ randomUUID } = await import('../../src/random-id.ts')); }
+let randomUUID, deviceId, resetBrowserRelay;
+try {
+  ({ randomUUID } = await import('../../src/random-id.ts'));
+  ({ deviceId, resetBrowserRelay } = await import('../../src/i8-browser-relay.ts'));
+}
 finally { hook.deregister(); }
 const nativeCrypto = globalThis.crypto;
 const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test('browser relay device ID works on LAN HTTP without native randomUUID', t => {
+  t.mock.getter(globalThis, 'crypto', () => ({getRandomValues: array => nativeCrypto.getRandomValues(array)}));
+  resetBrowserRelay();
+  const id = deviceId();
+  assert.match(id.slice(4), uuidV4);
+  assert.equal(deviceId(), id);
+  resetBrowserRelay();
+  assert.notEqual(deviceId(), id);
+});
 
 test('LAN HTTP capability set retains cryptographically random v4 IDs without randomUUID', t => {
   let calls = 0;

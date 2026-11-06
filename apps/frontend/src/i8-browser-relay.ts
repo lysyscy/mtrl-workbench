@@ -12,6 +12,7 @@
  */
 
 import { ApiError, record, requestJson } from './api';
+import { randomUUID } from './random-id';
 
 /** 服务端长轮询上限（`browser_broker.PENDING_WAIT_SECONDS`）；页面只能要更短的。 */
 export const RELAY_POLL_SECONDS = 10;
@@ -111,7 +112,7 @@ function extensionRuntime(): RuntimeMessenger | null {
 let documentDeviceId = '';
 
 export function deviceId(): string {
-  if (!documentDeviceId) documentDeviceId = `dev-${crypto.randomUUID()}`;
+  if (!documentDeviceId) documentDeviceId = `dev-${randomUUID()}`;
   return documentDeviceId;
 }
 

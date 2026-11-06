@@ -36,6 +36,18 @@ const DEVICE = 'dev-test-1';
 /** 服务端在 connect 时给的代号（正整数），绑定时带回来。 */
 const GENERATION = 3;
 
+test('指定局域网工作台可以连接和取数，其他主机与端口不放行', async () => {
+  const manifest = JSON.parse(readFileSync(join(HERE, '..', 'manifest.json'), 'utf8'));
+  assert.ok(manifest.externally_connectable.matches.includes('http://192.168.5.3:8000/*'));
+  const sender = {...workbenchSender, origin: 'http://192.168.5.3:8000', url: 'http://192.168.5.3:8000/app/i8'};
+  const page = boot({fetchImpl: async () => reply()});
+  await page.bind({sender});
+  assert.equal((await page.call(exec(), sender)).ok, true);
+  for (const origin of ['http://192.168.5.4:8000', 'http://192.168.5.3:8080']) {
+    assert.equal((await page.call(exec(), {...sender, origin, url: origin + '/app/i8'})).ok, false);
+  }
+});
+
 /* ------------------------------------------------------------------ *
  * 最小 chrome 替身：只实现扩展真正用到的那几个口，别的一个不给。
  * ------------------------------------------------------------------ */
