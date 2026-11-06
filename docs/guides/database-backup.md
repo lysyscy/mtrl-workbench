@@ -4,7 +4,7 @@
 
 脚本从项目配置读取两个不同本机库，不把口令放参数或回执。每轮在 var/backups/databases/.partial-* 生成两份 custom 归档，校验 SHA256、字节数及 pg_restore 目录后才发布日期目录，last-run.json 保存结果；失败非零且半成品保留调查。完成备份不覆盖，也不自动按日期删除，目录权限限制 SYSTEM/Administrators。
 
-油卡发票原件字节持久保存在`oil_invoice_original`，与票据索引、票号别名`oil_invoice_number`、金额分配一起进入数据库归档，不依赖临时PDF缓存。恢复后通过原件接口核字节数及SHA256，并核旧识别号和更正号仍指向同票；备注或归属更正、撤销不删除原件。隔离演练证据归[TAIL-458](../../.scratch/oilcard-management/evidence/TAIL-458.md)及[TAIL-460](../../.scratch/oilcard-management/evidence/TAIL-460.md)，该专项演练不等于整机恢复或生产备份任务已执行。
+油卡发票原件字节持久保存在`oil_invoice_original`，与票据索引、票号别名`oil_invoice_number`、金额分配一起进入数据库归档，不依赖临时PDF缓存。恢复后通过原件接口核字节数及SHA256，并核旧识别号和更正号仍指向同票；备注或归属更正、撤销不删除原件。隔离演练证据归[TAIL-458](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/oilcard-management/evidence/TAIL-458.md)及[TAIL-460](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/oilcard-management/evidence/TAIL-460.md)，该专项演练不等于整机恢复或生产备份任务已执行。
 
 交付收票续办记录在`oil_delivery_batch/link/item`，随同原件归档恢复；其中链接令牌属于受保护的业务输入，不导出到公共源码或回执。专项data-only恢复须在既有外键启用条件下按依赖先恢复发票/原件再恢复链接及条目，核完成批次重跑仍复用原件；完整库恢复继续沿下文空库流程。
 

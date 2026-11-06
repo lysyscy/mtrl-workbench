@@ -55,4 +55,4 @@ publish沿预览运行时的同一输入声明检查已跟踪增删改及实际�
 
 发布前记录全部构建文件散列，使用正式检出内稳定的`var/frontend/releases/<版本>`目录，一次交付完整目录。界面回退切换到上一套完整React发布资源，保持已核后端、当前数据库和正常业务写入。清空`FRONTEND_APP_DIR`不再提供旧版界面；不能回退旧后端或恢复旧库快照覆盖正常新写入。
 
-切换前处理未保存/未知结果，按实际数据影响固定恢复点；迁移、服务操作和入口切换按当次具体授权。2026-10-28用户已验收React重写并批准旧版退役，过程依据回TAIL-423/424；实际正式版本以当前运行来源为准，源码退役与服务加载分别记录。
+切换前处理未保存/未知结果，按实际数据影响固定恢复点；迁移、服务操作和入口切换按当次具体授权。2026-10-28用户已验收React重写并批准旧版退役，[切换](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md)与[退役](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)的历史依据按Git追溯；实际正式版本以当前运行来源为准，源码退役与服务加载分别记录。

@@ -9,7 +9,7 @@ related_targets: ["apps/frontend/src/oilcard-reconciliation.tsx","apps/frontend/
 
 2026-10-31，用户在d15c494c后试用并明确要求整改。当前任务只改油卡工作区及总台账出口，保主题/字号、AG Grid、静默自动保存、独立双表、金额/归属/历史及未知结果保护。总票452和已完成453–463不改状态，不重启旧累计审查。
 
-用户已确认总台账是一份Excel，内含核对汇总、充值、发票、账户与油卡等分表。ab95d8c9后再次试用明确否定重复功能；首轮设计审查的ship不等于用户接受入口分类。本轮以[整改记录的再次试用反馈](../../.scratch/oilcard-management/ui-revision.md#再次试用反馈ab95d8c9后)及[当前油卡需求](../../docs/requirements/oil-cards.md)为准：账户/实体卡桌面横排，资料直接格内维护；发票只保一个修改表单与一个可撤销删除入口。
+用户已确认总台账是一份Excel，内含核对汇总、充值、发票、账户与油卡等分表。ab95d8c9后再次试用明确否定重复功能；首轮设计审查的ship不等于用户接受入口分类。本轮以[整改记录的再次试用反馈](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/oilcard-management/ui-revision.md#再次试用反馈ab95d8c9后)及[当前油卡需求](../../docs/requirements/oil-cards.md)为准：账户/实体卡桌面横排，资料直接格内维护；发票只保一个修改表单与一个可撤销删除入口。
 
 ## Direction contract
 

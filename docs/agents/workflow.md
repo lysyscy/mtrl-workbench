@@ -38,7 +38,7 @@ backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manag
 
 普通业务按已有业务入口和显式技能执行，记忆使用不触发工程实施、票务或额外收尾；开发代码、辅助工具或技能才读取本页实施方法。现行规则、关键理由与活动状态仍由项目文件持有，偏好、决定背景及验证经验按共同政策留存。首次完整接入和专项内容迁移才读取同源 `references/memory-adoption.md`，平常任务不重跑筛选。
 
-本仓历史React重写分支沿用同一记忆库。2026-10-28用户已签收正式React入口并批准旧版退役，原React与切换候选两棵冻结工作树在必要本机资料保全后均已退出；分支提交仍可达。源码退役、现场加载和资源退出分别记录，当前状态回status及TAIL-424；后续任务的预览按实际登记由对应owner持有。
+本仓历史React重写分支沿用同一记忆库。2026-10-28用户已签收正式React入口并批准旧版退役，原React与切换候选两棵冻结工作树在必要本机资料保全后均已退出；分支提交仍可达。源码退役、现场加载和资源退出分别记录，当前状态回status；[退役回执](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)按Git追溯，后续任务的预览按实际登记由对应owner持有。
 
 ## 已接入的个人产物生命周期
 

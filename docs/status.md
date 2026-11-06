@@ -6,11 +6,10 @@
 
 ## 油卡旧台账接续
 
-[TAIL-474](../.scratch/tails/issues/TAIL-474-油卡旧台账核对与正式接续.md)为needs-info，等待用户确认接续期间、归属与旧金额；仍依赖TAIL-452及463的来源定位证据。正式油卡产品已上线，旧数据接续未执行。规则归[油卡需求](requirements/oil-cards.md)，试用与恢复依据仍回[原交接](../.scratch/oilcard-management/handoff.md)。原件、未提交交接/发布回执和试用恢复材料保持保护，不能据服务已停止推定可删除。
+[TAIL-474](../.scratch/tails/issues/TAIL-474-油卡旧台账核对与正式接续.md)为needs-info，集中持有接续期间、归属与旧金额等待确认事项，以及原件、核对表和试用恢复入口。正式油卡产品已上线，旧数据接续未执行；本票无未完成技术前置，不再保留已完成的开发effort和票链。规则归[油卡需求](requirements/oil-cards.md)。本机业务原件、私有核对依据、试用schema及恢复点不随文档退出清理。
 
 ## 具名保留
 
-- `.scratch/audit-remediation-20261105/{completion,implementation}.md`仍被未跟踪的`.scratch/performance-architecture-audit-20261106/audit.md`消费；两份审计工作文档及油卡未保存资料保持原位，待原任务确定独有信息去向后再核退出。
 - [集合筛选研究](../.scratch/share-feasibility/research.md)沿用户2026-10-28决定原地作参考，暂不实施；后续局部采用筛选不自动撤销该保留决定。
 
 ## 已结束工作的追溯
