@@ -10,6 +10,7 @@
 | React布局采集 | dev/frontend_layout.py；指定本任务run并核唯一最新可丢弃副本，从真实导航采目标视口/字号与可见网格，未就绪/空样本/溢出非零；见预览指南布局入口。 |
 | React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
 | 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用；--staged只检查Git index，显式无参数保全量模式，Git失败非零 |
+| 工作树退出证据 | audit/worktree_check.py；仅任务收尾按需调用，只读输出JSON，0表示扫描完整、2表示失败/不完整；不决定删除资格。退出判据由CONTRIBUTING持有 |
 | 运行输出与生命周期 | audit/workspace_paths.py、audit_work.py；只处理本任务拥有产物 |
 | 开、关、列票 | oneoff/_tail_open.py、_tail_close.py、_list_tails.py；协议见docs/agents/issue-tracker.md，默认干跑 |
 | 疑似未调用公共定义 | audit/wiring_audit.py，只保W2候选提示，不自动判缺陷或删代码 |
