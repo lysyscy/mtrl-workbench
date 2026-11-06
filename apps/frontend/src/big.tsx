@@ -25,6 +25,7 @@ const emptyBig: BigRow[] = [];
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 const labels: Record<ManualKey,string> = {open_ym:'开工时间',mech_est:'机械费测算',contract:'合同（预估）价',output_cum:'产值累计（含税）',oil:'工程用油',note:'备注'};
+const oilPendingLabel = '待接续核对';
 interface Draft { warehouse: string; display: string; key: ManualKey; value: string; original: string; error: string; revision: number }
 const keyOf = (warehouse: string,key: ManualKey) => JSON.stringify([warehouse,key]);
 interface Cells {
@@ -118,6 +119,13 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
       const values = (query.data?.rows ?? []).map(row => value(key,{data:row}));
       values.push(query.data?.totals[key as TotalKey] ?? null);
       const texts = values.map(amount => amount == null ? '—' : key.endsWith('rate') ? `${(Number(amount)*100).toFixed(1)}%` : money(String(amount)));
+      if (key === 'oil') {
+        for (const row of query.data?.rows ?? []) {
+          if (row.oil_linked) continue;
+          const amount = value('oil', {data: row});
+          texts.push(`${amount == null ? '' : money(String(amount))} ${oilPendingLabel}`);
+        }
+      }
       // The shared density uses 4px on each side, plus the cell borders.
       const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?11:10;
       const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 14 : edge))));
@@ -137,7 +145,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
       boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),
       boundary({colId:'oil',headerName:labels.oil,headerTooltip:'油卡累计充值＋累计特殊费用自定义额＋截至月大表额外值；在油卡管理维护',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value('oil',p),...amountWidth('oil'),
-        cellRenderer:(p:ICellRendererParams<BigRow>)=>p.node.rowPinned ? p.value==null?'':money(String(p.value)) : p.data?.oil_linked ? money(String(p.value)) : <span title="旧用油完整总额，待接续核对；请在油卡管理查看">{p.value==null?'':money(String(p.value))}<span className="muted"> 待接续核对</span></span>}),boundary(manual('note')),
+        cellRenderer:(p:ICellRendererParams<BigRow>)=>p.node.rowPinned ? p.value==null?'':money(String(p.value)) : p.data?.oil_linked ? money(String(p.value)) : <span title="旧用油完整总额，待接续核对；请在油卡管理查看">{p.value==null?'':money(String(p.value))}<span className="muted"> {oilPendingLabel}</span></span>}),boundary(manual('note')),
     ];
   },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);

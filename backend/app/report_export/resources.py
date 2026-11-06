@@ -1,9 +1,9 @@
 """模板本体（**运行期交付物**）的**唯一路径出口** ＋ 完整性闸门。
 
-依据 = 工程侧实测结论 `docs/reference/template-export.md` §五：
+生成与字段映射约定见 `docs/reference/template-export.md`：
 - 模板本体**随系统走**（已入库 `backend/app/resources/templates/`，**与代码同行、进 git**）；
-- 该文档里**仍待做的一条实现侧硬性**：「模板缺失 ⇒ **必须显式报错**（不许静默产出空文件）」；
-- 同一节登记的 **SHA256** 就是「防回退 / 损坏判据」（交付面那两份被 WPS 同步回退过两次）
+- 模板缺失必须显式报错，不许静默产出空文件；
+- 本模块 `EXPECTED_SHA256` 登记的摘要是防回退/损坏判据
   ⇒ 本模块把它落成代码里的闸门：**每次导出前核对**，不一致就**显式拒做**并说清怎么办。
 
 ⛔ 路径只在本模块写一次（`mod07`/`mod08` 两条导出链路共用）—— 各写一份必然走形。
@@ -32,10 +32,10 @@ SETL_TEMPLATE: Path = TEMPLATE_DIR / "模板_收发结存表.xlsx"
 #: 库存单据明细表模板（`API-03` 的成品基底）
 KCDJ_TEMPLATE: Path = TEMPLATE_DIR / "模板_库存单据明细表.xlsx"
 
-#: 路径①（模板填充）模板；登记与映射回交付面模板清单。
-#: 来源 = 2026-09-18已入库的原始模板（那份 `模板清单.md` §二 是它们的**唯一登记处**）；
+#: 路径①（模板填充）模板；当前路径和散列由本模块登记。
+#: 来源包括2026-09-18已入库的原始模板；生成及映射约定见下述现行参考。
 #: ⚠️ 它们与上面两份同理：**要被 `openpyxl` 读**，所以是**运行时依赖**（必须随代码走、进 git）。
-#: 明细（每个模板含哪些 sheet / `DATA_START` 在哪 / 列映射）**一律回 `docs/requirements/report-templates.md`**，
+#: 生成方式、`DATA_START` 及列映射见 `docs/reference/template-export.md`，
 #: ⛔ 本文件不复述（复述必漂）。
 LEDGER_TEMPLATE: Path = TEMPLATE_DIR / "模板-逐月欠款台账.xlsx"      # sheet: 辅材 / 机械 / 特殊费用月报表
 PROC_TEMPLATE: Path = TEMPLATE_DIR / "模板-过程资料.xlsx"            # sheet: 汇总表
@@ -47,7 +47,7 @@ JC_PRINT_TEMPLATE: Path = TEMPLATE_DIR / "模板-集采打印台账.xlsx"
 
 PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE, JC_PRINT_TEMPLATE, MECHANICAL_TEMPLATE)
 
-#: 登记的 SHA256（**唯一登记处** = `docs/reference/template-export.md` §五 那张表；改模板必须同时改这里）
+#: 运行模板SHA256的唯一登记；批准修改模板时同步这里，正文不维护第二份哈希表。
 EXPECTED_SHA256: dict[str, str] = {
     "模板-机械费四页.xlsx": "1f8c6638a1235d573edd6f4021b40a38cad0f9824c7d2a91ea30976e64316f88",
     "模板-集采打印台账.xlsx": "a9654f0530479929cdb5bd687d8f1fa2fa61ed0979a79af969bd56e0a03f8e6d",

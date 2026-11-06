@@ -9,7 +9,7 @@
   装什么：语法/字节暂存检查与.env文件名拦截。文档和业务按影响入口执行，不在提交时重复跑。
 
   卸载：删掉 `.git/hooks/pre-commit` 即可。
-  跳过一次：`git commit --no-verify`（⛔ 不推荐）。
+  检查失败：修复报告的问题后正常提交，按项目贡献指南保留适用检查。
 
   用法（在仓库根）：
     powershell -NoProfile -ExecutionPolicy Bypass -File ops\install_hooks.ps1
@@ -29,7 +29,7 @@ $dst = Join-Path $dstDir 'pre-commit'
 Copy-Item -LiteralPath $src -Destination $dst -Force
 Write-Host "✅ 已装：$dst"
 Write-Host "   （来源 = ops\hooks\pre-commit · 幂等 ⇒ 改了源文件重跑本脚本即可）"
-Write-Host "   卸载 = 删掉那个文件 · 跳过一次 = git commit --no-verify（⛔ 不推荐）"
+Write-Host "   检查失败请先修复，再正常提交；安装或卸载按当次授权执行。"
 
 # git commit --dry-run不会调用钩子；真正验证以正常提交输出为准。
 Write-Host '真正的验证 = 下一次 git commit（由git调用sh）；不跳过适用检查。'

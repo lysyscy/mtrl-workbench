@@ -1,14 +1,16 @@
 import Button from 'antd/es/button';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import type { ColDef } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, record, requestJson } from './api';
+import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { useHistoryGuard } from './history';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { countNewRuleMatches } from './rule-add-recovery';
 
 const NO_RECOMPUTE = '规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。';
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '').replace(/，§[\d.]+/g, '').replace(/\s*[—-]+\s*§[\d.]+(\s*\/\s*§[\d.]+)*/g, '');
@@ -21,6 +23,11 @@ function readMessage(value: unknown, fallback: string): string {
 export interface RuleRow { id: number; kind: string; kindLabel: string; values: string; meaning: string }
 export interface RuleKind { kind: string; label: string }
 export interface RulesData { sourceLabel: string; rules: RuleRow[]; kinds: RuleKind[] }
+type RuleDraft = { id: number | null; kind: string; values: string; meaning: string };
+type AdditionRecovery =
+  | { state: 'unknown'; draft: RuleDraft; kindLabel: string; beforeIds: ReadonlySet<number>; matches: number | null; readFailed: boolean; reviewing: boolean }
+  | { state: 'confirmed-read-failed' };
+
 export function readRules(value: unknown): RulesData {
   if (!record(value) || !Array.isArray(value.rules) || !Array.isArray(value.kinds) || typeof value.source_label !== 'string') throw new ApiError('剔除规则读取不完整，请重试；仍失败请联系维护人员。');
   const rules = value.rules.map((row: unknown) => {
@@ -72,36 +79,105 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
 
 function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: boolean; writable: boolean; blocked: boolean; settled: (value: boolean) => void }) {
   const query = useQuery({ queryKey: ['rules', 'exclusions'], enabled, queryFn: async ({ signal }) => readRules(await requestJson('/api/m14/rules', { signal })) });
-  const [form, setForm] = useState<{ id: number | null; kind: string; values: string; meaning: string } | null>(null);
+  const [form, setForm] = useState<RuleDraft | null>(null);
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<RuleRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [receipt, setReceipt] = useState('');
   const [error, setError] = useState('');
+  const lock = useRef(false);
+  const recoveryRef = useRef<AdditionRecovery | null>(null);
+  const [addition, setAddition] = useState<AdditionRecovery | null>(null);
+  function changeAddition(next: AdditionRecovery | null) {
+    recoveryRef.current = next;
+    setAddition(next);
+  }
+  const recovery = addition?.state === 'unknown' ? addition : null;
+  const confirmedReadFailed = addition?.state === 'confirmed-read-failed';
+  const draft = recovery?.reviewing ? recovery.draft : form;
   const data = query.data;
   const original = form && form.id !== null ? data?.rules.find(rule => rule.id === form.id) ?? null : null;
   const empty = data?.kinds[0]?.kind ?? '';
   const dirty = Boolean(form) && (original ? original.kind !== form!.kind || original.values !== form!.values || original.meaning !== form!.meaning : form!.kind !== empty || form!.values !== '' || form!.meaning !== '');
-  const closing = useDialogClose({ busy, dirty, close: () => setForm(null) });
+  const closing = useDialogClose({ busy, dirty, close: () => {
+    if (lock.current) return;
+    const current = recoveryRef.current;
+    if (current?.state === 'unknown') changeAddition({ ...current, reviewing: false });
+    else setForm(null);
+  } });
   const deleteClosing = useDialogClose({ busy: deleteBusy, dirty: false, close: () => setDeleting(null) });
+  useHistoryGuard('exclusion-rules', () => lock.current ? '剔除规则正在处理，请稍候。'
+    : recoveryRef.current?.state === 'unknown' ? '剔除规则新增结果待核对，请返回规则配置处理。'
+    : recoveryRef.current ? '剔除规则已新增，请返回规则配置重新读取。' : '');
   const readState = readPhase(query, data !== undefined && data.rules.length === 0);
   const placeheld = data === undefined;
+  const writeDisabled = !writable || busy || deleteBusy || addition !== null;
+  const canStartWrite = () => writable && !lock.current && recoveryRef.current === null;
+  function openForm(next: RuleDraft) {
+    if (!canStartWrite()) return;
+    setForm(next);
+    setFormError('');
+  }
+  async function readCurrentRules() {
+    const result = await query.refetch({ throwOnError: true });
+    if (!result.isSuccess) throw new ApiError('规则列表读取未完成。');
+    return result.data;
+  }
   async function save() {
-    if (!form || busy) return;
+    if (!form || !data || !canStartWrite()) return;
     if (!form.values.trim()) { setFormError('命中值不能为空，请填写后保存。'); return; }
-    setBusy(true); setFormError('');
+    const snapshot = form;
+    const adding = snapshot.id === null;
+    const beforeIds = adding ? new Set(data.rules.map(rule => rule.id)) : null;
+    const kindLabel = data.kinds.find(kind => kind.kind === snapshot.kind)?.label ?? snapshot.kind;
+    lock.current = true;
+    setBusy(true); setFormError(''); setError(''); setReceipt('');
     try {
-      const result = await requestJson(form.id === null ? '/api/m14/rules' : `/api/m14/rules/${form.id}`,
-        { method: form.id === null ? 'POST' : 'PUT', ...body({ kind: form.kind, values: form.values.trim(), meaning: form.meaning.trim() }) });
-      setForm(null); setError(''); setReceipt(readMessage(result, '已保存。'));
-      await query.refetch();
+      const result = await requestJson(adding ? '/api/m14/rules' : `/api/m14/rules/${snapshot.id}`,
+        { method: adding ? 'POST' : 'PUT', ...body({ kind: snapshot.kind, values: snapshot.values.trim(), meaning: snapshot.meaning.trim() }) });
+      confirmWrite(record(result) && result.ok === true, '规则保存回执不完整。');
+      setForm(null); setReceipt(readMessage(result, adding ? '已新增剔除规则。' : '已保存。'));
+      if (adding) {
+        try { await readCurrentRules(); }
+        catch { changeAddition({ state: 'confirmed-read-failed' }); }
+      } else await query.refetch();
     } catch (failure) {
-      setFormError(failure instanceof Error ? failure.message : '没能保存，请核对后重试。');
-    } finally { setBusy(false); }
+      if (beforeIds && uncertainWrite(failure)) {
+        changeAddition({ state: 'unknown', draft: snapshot, kindLabel, beforeIds, matches: null, readFailed: false, reviewing: true });
+        setForm(null);
+      } else setFormError(failure instanceof Error ? plain(failure.message) : '没能保存，请核对后重试。');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  async function rereadAddition() {
+    const current = recoveryRef.current;
+    if (!writable || lock.current || !current) return;
+    lock.current = true;
+    setBusy(true);
+    if (current.state === 'unknown') changeAddition({ ...current, matches: null, readFailed: false });
+    try {
+      const latest = await readCurrentRules();
+      changeAddition(current.state === 'unknown'
+        ? { ...current, matches: countNewRuleMatches(current.draft, current.beforeIds, latest.rules), readFailed: false }
+        : null);
+    } catch {
+      if (current.state === 'unknown') changeAddition({ ...current, matches: null, readFailed: true });
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  function finishAddition() {
+    const current = recoveryRef.current;
+    if (!writable || lock.current || current?.state !== 'unknown' || current.matches === null) return;
+    changeAddition(null);
   }
   async function remove() {
-    if (!deleting || deleteBusy) return;
+    if (!deleting || !canStartWrite()) return;
+    lock.current = true;
     setDeleteBusy(true);
     try {
       const result = await requestJson(`/api/m14/rules/${deleting.id}`, { method: 'DELETE' });
@@ -109,39 +185,60 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
     } catch (failure) {
       setDeleting(null); setReceipt(''); setError(failure instanceof Error ? failure.message : '没能删除，请重试。');
     } finally {
-      setDeleteBusy(false);
       await query.refetch();
+      lock.current = false;
+      setDeleteBusy(false);
     }
   }
   return <div className="rules-block">
     <div className="rules-head"><h2>剔除规则{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
       <div className="rules-head-tools">{data && <span className="muted">来源：{data.sourceLabel}</span>}
-        <Button htmlType="submit" className="primary" disabled={!writable || !data || data.kinds.length === 0}
-          onClick={() => { setForm({ id: null, kind: data!.kinds[0]!.kind, values: '', meaning: '' }); setFormError(''); }}>＋ 增加规则</Button></div></div>
+        <Button htmlType="button" className="primary" disabled={writeDisabled || !empty}
+          onClick={() => openForm({ id: null, kind: empty, values: '', meaning: '' })}>＋ 增加规则</Button></div></div>
     <ReadStatusLane phase={readState} announce="正在读取剔除规则…" className="rules-read-status">
-      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="规则更新失败，保留上次结果。" />}
+      {!addition && (readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="规则更新失败，保留上次结果。" />}
+      {recovery && <p className="notice" role="alert"><span className="read-failure-text">新增结果待核对。请先处理本次新增，再更改规则。</span>
+        <Button htmlType="button" disabled={!writable || busy} onClick={() => {
+          const current = recoveryRef.current;
+          if (!lock.current && current?.state === 'unknown') changeAddition({ ...current, reviewing: true });
+        }}>核对新增结果</Button>
+      </p>}
+      {confirmedReadFailed && <p className="notice" role="alert"><span className="read-failure-text">已新增剔除规则。列表更新失败，保留上次结果。</span>
+        <Button htmlType="button" disabled={!writable || busy} onClick={() => void rereadAddition()}>{busy ? '正在读取…' : '重新读取'}</Button>
+      </p>}
     </ReadStatusLane>
     <FirstReadRegion phase={placeheld ? readState === 'error' ? 'error' : 'pending' : 'content'} onSettledChange={settled}
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
     {data && <>
-      <Feedback receipt={receipt} error={error} />
+      <Feedback receipt={confirmedReadFailed ? '' : receipt} error={error} />
       <ReadGrid table="exclusion-rules" className="rules-table" label="剔除规则列表" domLayout="autoHeight" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
         {field:'kindLabel',headerName:'规则类别'},
         {field:'values',headerName:'命中值（多个用 ｜ 分隔）',cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
         {field:'meaning',headerName:'剔除的业务含义',valueFormatter:p=>p.value||'—'},
-        {colId:'actions',headerName:'操作',minWidth:140,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={!writable||busy||deleteBusy} onClick={()=>{setForm({id:rule.id,kind:rule.kind,values:rule.values,meaning:rule.meaning});setFormError('');}}>编辑</Button><Button danger disabled={!writable||busy||deleteBusy} onClick={()=>setDeleting(rule)}>删除</Button></div>},
+        {colId:'actions',headerName:'操作',minWidth:140,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
       ]}/>
       <p className="rules-note muted">{NO_RECOMPUTE}</p>
       <p className="rules-warning">剔除规则中不得配置「收款单位 = 资产处集中采购」：集采不走剔除，而是参与分类。</p>
     </>}</FirstReadRegion>
-    {form && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={form.id === null ? '新增剔除规则' : `编辑剔除规则，${data?.rules.find(rule => rule.id === form.id)?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
-      <p className="rules-note muted">修改只影响后续抓取，已有剔除标记不重算。</p>
-      <label>规则类别 ＊<select value={form.kind} disabled={busy} onChange={event => setForm({ ...form, kind: event.target.value })}>{(data?.kinds ?? []).map(kind => <option key={kind.kind} value={kind.kind}>{kind.label}</option>)}</select></label>
-      <label>命中值 ＊（多个用 ｜ 分隔）<input value={form.values} disabled={busy} placeholder="例：水电｜水费｜电费" onChange={event => setForm({ ...form, values: event.target.value })} /></label>
-      <label>剔除的业务含义<input value={form.meaning} disabled={busy} placeholder="例：期间费用，非材料/机械" onChange={event => setForm({ ...form, meaning: event.target.value })} /></label>
-      {formError && <p className="notice" role="alert">{formError}</p>}
-      <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button>
-        <Button htmlType="submit" className="primary" disabled={busy} onClick={() => void save()}>{busy ? '正在保存…' : form.id === null ? '新增' : '保存修改'}</Button></div>
+    {draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
+      {recovery ? <p className="rules-warning" role="alert">提交结果待核对。请重新读取列表核对本次提交的内容。</p>
+        : <p className="rules-note muted">修改只影响后续抓取，已有剔除标记不重算。</p>}
+      <label>规则类别 ＊<select value={draft.kind} disabled={busy || Boolean(recovery)} onChange={event => { if (form && !lock.current) setForm({ ...form, kind: event.target.value }); }}>{recovery ? <option value={draft.kind}>{recovery.kindLabel}</option> : (data?.kinds ?? []).map(kind => <option key={kind.kind} value={kind.kind}>{kind.label}</option>)}</select></label>
+      <label>命中值 ＊（多个用 ｜ 分隔）<input value={draft.values} readOnly={Boolean(recovery)} disabled={busy} placeholder="例：水电｜水费｜电费" onChange={event => { if (form && !lock.current) setForm({ ...form, values: event.target.value }); }} /></label>
+      <label>剔除的业务含义<input value={draft.meaning} readOnly={Boolean(recovery)} disabled={busy} placeholder="例：期间费用，非材料/机械" onChange={event => { if (form && !lock.current) setForm({ ...form, meaning: event.target.value }); }} /></label>
+      {recovery ? <>
+        {recovery.readFailed && <p className="notice" role="alert">列表读取失败，新增结果仍待核对。请重新读取。</p>}
+        {recovery.matches !== null && <p role="status">{recovery.matches === 0 ? '这次读取未见同内容的新规则，原提交仍可能稍后写入。' : `这次读取发现 ${recovery.matches} 条此前未见的同内容规则，无法确认是否来自本次提交。`}</p>}
+        <div className="dialog-actions">
+          <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>先返回列表</Button>
+          <Button htmlType="button" className={recovery.matches === null ? 'primary' : ''} disabled={!writable || busy} onClick={() => void rereadAddition()}>{busy ? '正在读取…' : '重新读取'}</Button>
+          {recovery.matches !== null && <Button htmlType="button" className="primary" disabled={!writable || busy} onClick={finishAddition}>结束本次新增，不再提交</Button>}
+        </div>
+      </> : <>
+        {formError && <p className="notice" role="alert">{formError}</p>}
+        <div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>
+          <Button htmlType="button" className="primary" disabled={!writable || busy} onClick={() => void save()}>{busy ? '正在保存…' : draft.id === null ? '新增' : '保存修改'}</Button></div>
+      </>}
     </DialogContents></BusinessModal>}
     {deleting && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-delete-title" requestClose={deleteClosing.requestClose}><DialogContents title="删除剔除规则" titleId="rules-delete-title" closing={deleteClosing}>
       <p>确定删除「{deleting.kindLabel}」这条规则？命中值：{splitValues(deleting.values).join('、')}。</p>

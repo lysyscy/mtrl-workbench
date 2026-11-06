@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-484
 
-**Status:** in-progress
+**Status:** done
 
 **Labels:** wayfinder:task
 
@@ -15,7 +15,7 @@
 **Mode:** AFK
 
 - [x] 在连接前拒绝明确来源与有效数据库身份不符；pytest只消费明确选项；实际构建及浏览器门输入参与版本保护；纯反例与相关检查通过，必要独立双轴审查关闭
-- [ ] 正常提交推送并核远端SHA
+- [x] 正常提交推送并核远端SHA
 
 ## Question
 
@@ -38,3 +38,7 @@
 2026-11-06 · Created.
 
 2026-11-06 · 本批实现及验证/独立审查完成，见[实施回执](../../quality-wayfinding-20261106/implementation.md)。29项纯工具通过；四文件相关保护在专用测试库独占schema通过且已清理；Standards/Spec各0实质发现。旧manifest与restart的兼容影响已写指南，正式服务未操作。待保存推送后结项，不提前放行依赖。
+
+2026-11-06 · Resolution — 隔离取证保护：技术结果沿上述回执，源码及证据已保存并正常推送`1ae1543c526e8fd24c974341b0873e13d966bfff`，远端master SHA一致。首次自动审批拒绝后取得用户对此仓master的具体确认再推送，未绕过；真实钩子通过。正式服务未部署，当前副本尚未启动；可放行本地基线取证。
+
+2026-11-06 · done: 1ae1543c已验证审查并正常推送，远端master一致；29纯工具及四文件隔离保护通过且清理完成。详见resolution，未部署

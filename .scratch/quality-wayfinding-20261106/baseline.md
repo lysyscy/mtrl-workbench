@@ -2,7 +2,7 @@
 
 本记录服务[全库覆盖与旧证据](../tails/issues/TAIL-484-全库覆盖与旧证据.md)，质量结论按具名范围读取，不把清单存在、旧测试数量或一次健康检查写成全库达标。主控为 Codex chat `01a1af77-36ae-7cb0-9ae8-65fa971d389b`，最新授权及临时模型档归[地图](../tails/issues/TAIL-483-工程质量达标路线.md)。
 
-## 现场身份（2026-11-06）
+## 现场身份（接手时，2026-11-06）
 
 - Git：主检出 `D:/dev/mtrl-workbench`，`master@6d01f996dd46a86c204aeb2568aad58d82c2034d`；`git worktree list --porcelain`仅一棵。正常 `ls-remote origin refs/heads/master`核同 SHA；远端 `git@github.com:lysyscy/mtrl-workbench.git`。
 - 暂存区初始为空。原有 tracked dirty：油卡handoff、前端设计指南、油卡需求、status、票高水位。高水位482→490及status质量路线入口属于接手effort；status另有无关空行，提交时仅取本effort段。其他dirty及 `.codex-remote-attachments`、`.impeccable`、旧性能审计、临时脚本、DESIGN/PRODUCT、debug.log保持原位，不归本任务提交。

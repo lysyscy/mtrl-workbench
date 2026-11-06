@@ -39,7 +39,10 @@ def test_monthly_formulas_have_caches_and_preview_has_results(tmp_path):
     assert monthly['H5'].value == '=""'
     assert values.worksheets[2]['H5'].value is None
     assert [annual.cell(1, c).value for c in range(3, 5)] == ['2024年7月', '2026年9月']
-    assert annual.max_column == 10 and 'SUM(C2:D2)' in annual['E2'].value
+    assert annual.max_column == 11 and 'SUM(C2:D2)' in annual['E2'].value
+    assert annual['K1'].value == '班组使用-消耗结算'
+    assert 'H6-J6' in annual['K6'].value
+    assert values.worksheets[3]['K6'].value == 0
     assert 'E6-F6' in annual['I6'].value
     assert values.worksheets[3]['I6'].value == 0
     assert annual['C2'].border.left.style and annual['C2'].border.right.style

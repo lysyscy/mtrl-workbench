@@ -101,6 +101,9 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
   const linkedNotices = [...new Set((data?.payments ?? []).filter(p => p.source === 'notice').map(p => p.notice_id!))];
   const currentLinkPage = Math.max(1, Math.min(linkPage, Math.ceil(linkedNotices.length / linkPageSize)));
   const invoiceRows = (kind: 'supplier' | 'trade') => data?.[kind === 'supplier' ? 'supplier_invoices' : 'trade_invoices'] ?? [];
+  // Standalone invoice dialogs share bounded flex; the embedded editor keeps its existing sizing.
+  const invoiceWidth = (width: ReturnType<typeof completeColumnWidth>, max: number, flex: number) => onlyKind === 'supplier' || onlyKind === 'trade'
+    ? { ...width, maxWidth: Math.max(width.minWidth, max * scale), initialFlex: flex } : width;
 
   /** 超额提醒：只看本侧已保存累计与本侧合同额；历史未结汇总不套发票提醒。 */
   function overageLine(kind: 'supplier' | 'trade') {
@@ -143,9 +146,9 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
         {onlyKind === undefined && overageLine(kind)}
         <div className="subtable-detail-scroll">
           <ReadGrid singleLine manualWidths table={'contract-invoices-' + kind} className="subtable-invoice-table" label={labels[kind] + '明细'} domLayout="normal" style={{ height: detailHeight(scale, invoiceRows(kind).length) }} rows={invoiceRows(kind)} rowId={row => String(row.id)} totals={[{ id: -1, kind, date: kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计', amount: kind === 'supplier' ? data.inv_sum : data.trade_inv_sum }]} columns={[
-            { field: 'date', headerName: kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', ...completeColumnWidth([...invoiceRows(kind).map(row => row.date || '日期未填'), kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计'], kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', scale), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? row.date : <div tabIndex={-1} data-subtable={kind} data-row={row.id}>{row.date || '日期未填'}</div> },
-            { field: 'amount', headerName: '金额（元）', ...completeMoneyWidth([...invoiceRows(kind).map(row => money(row.amount)), money(kind === 'supplier' ? data.inv_sum : data.trade_inv_sum)], scale), cellClass: 'money', valueFormatter: p => money(p.value) },
-            { colId: 'actions', headerName: '操作', ...completeColumnWidth(['删除发票'], '操作', scale, 24), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? null : <Button htmlType="button" danger size="small" disabled={unavailable} onClick={() => remove(kind, row)}>删除发票</Button> },
+            { field: 'date', headerName: kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', ...invoiceWidth(completeColumnWidth([...invoiceRows(kind).map(row => row.date || '日期未填'), kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计'], kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', scale), 170, 1), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? row.date : <div tabIndex={-1} data-subtable={kind} data-row={row.id}>{row.date || '日期未填'}</div> },
+            { field: 'amount', headerName: '金额（元）', ...invoiceWidth(completeMoneyWidth([...invoiceRows(kind).map(row => money(row.amount)), money(kind === 'supplier' ? data.inv_sum : data.trade_inv_sum)], scale), 240, 1.5), cellClass: 'money', valueFormatter: p => money(p.value) },
+            { colId: 'actions', headerName: '操作', ...invoiceWidth(completeColumnWidth(['删除发票'], '操作', scale, 24), 160, 1), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? null : <Button htmlType="button" danger size="small" disabled={unavailable} onClick={() => remove(kind, row)}>删除发票</Button> },
           ]}/>
         </div>
         {draftRow(kind)}
@@ -173,7 +176,7 @@ export function ContractSubtableDialog({ row, kind, contracts, workspace, paused
     close();
   } });
   const title = kind === 'payment' ? '付款子表' : kind === 'trade' ? '贸易公司发票子表' : historyDate ? '历史未结金额' : '供应商发票子表';
-  return <BusinessModal open={!paused} centered={false} className="project-dialog contract-subtable-dialog" titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
+  return <BusinessModal open={!paused} centered={false} className={`project-dialog contract-subtable-dialog${kind === 'payment' ? '' : ' contract-invoice-dialog'}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
     <ContractSubtables contractId={row.id} historyDate={historyDate} contracts={contracts} workspace={workspace} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
     <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
   </DialogContents></BusinessModal>;

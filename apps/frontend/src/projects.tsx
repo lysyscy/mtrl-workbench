@@ -7,6 +7,8 @@ import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { BusinessGrid, ReadGrid } from './business-grid';
 import { ProjectDragImage } from './project-drag-image';
+import { readProjectPending, readProjectTrails } from './project-maintenance-reads';
+import type { Pending, Trail } from './project-maintenance-reads';
 import { contentWidth, fixedWidth, fullTextWidth } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,10 +22,6 @@ import { useI8Session } from './i8-session';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type ArchiveProject = Project & { parent_shell_id: number | null; match_keywords: string[]; is_placeholder: boolean };
-type Candidate = { id: number; disp: string; warehouse_name: string; status: string; is_placeholder: boolean };
-type Pending = { full_name: string; warehouse_name?: string; candidates?: Candidate[]; warehouses?: string[]; reason?: string };
-type PendingList = { items: Pending[]; source: { at?: string; target?: string }; dropped_items?: { full_name: string; why_text: string }[] };
-type Trail = { at: string; project: string; field_label: string; before: string; after: string; by: string };
 type Impact = { can_delete: boolean; message: string; groups: { label: string; count: number; rows: Record<string, unknown>[] }[] };
 type Connection = { account: string; i8_user: string; ready: boolean; message: string };
 type DialogState = { kind: 'create' } | { kind: 'delete'; project: ArchiveProject } | { kind: 'promote' | 'archive'; item: Pending } | { kind: 'sync'; source: 'warehouses' | 'common-projects' };
@@ -86,9 +84,9 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null), dragOrder = useRef<number[]|null>(null), gridApi = useRef<GridApi<ArchiveProject> | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
-  const pending = useQuery({ queryKey: ['project-promote-pending'], enabled: !blocked, queryFn: async ({ signal }) => object<PendingList>(await requestJson('/api/m01/promote-pending', { signal }), x => Array.isArray(x.items) && record(x.source)) });
-  const archive = useQuery({ queryKey: ['project-archive-pending'], enabled: !blocked, queryFn: async ({ signal }) => object<PendingList>(await requestJson('/api/m01/archive-pending', { signal }), x => Array.isArray(x.items) && record(x.source)) });
-  const trails = useQuery({ queryKey: ['project-trails'], enabled: !blocked, queryFn: async ({ signal }) => { const value = await requestJson('/api/m01/trails?limit=8', { signal }); if (!Array.isArray(value)) throw new ApiError('修改留痕读取不完整。'); return value as Trail[]; } });
+  const pending = useQuery({ queryKey: ['project-promote-pending'], enabled: !blocked, queryFn: async ({ signal }) => readProjectPending(await requestJson('/api/m01/promote-pending', { signal }), 'promote') });
+  const archive = useQuery({ queryKey: ['project-archive-pending'], enabled: !blocked, queryFn: async ({ signal }) => readProjectPending(await requestJson('/api/m01/archive-pending', { signal }), 'archive') });
+  const trails = useQuery({ queryKey: ['project-trails'], enabled: !blocked, queryFn: async ({ signal }) => readProjectTrails(await requestJson('/api/m01/trails?limit=8', { signal })) });
   const all = projects.data ?? [];
   const ordered = previewOrder ? [...all].sort((a, b) => previewOrder.indexOf(a.id) - previewOrder.indexOf(b.id)) : all;
   const rows = ordered.filter(p => (status === 'all' || p.status === status) && (type === 'all' || p.project_type === type) && [p.disp, p.name_full, p.warehouse_name ?? ''].some(text => text.includes(keyword.trim())));
@@ -184,6 +182,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const gridState=useRef({all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal});
   gridState.current={all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal};
   useEffect(()=>{gridApi.current?.refreshCells({force:true});},[drafts,statusEdit,statusErrors,unavailable,editableDisabled]);
+  useEffect(()=>{gridApi.current?.refreshCells({columns:['actions'],force:true});},[pending.data]);
   const phidWidth=fullTextWidth(all.map(p=>p.phid||'—'),scale).minWidth;
   const columns=useMemo<ColDef<ArchiveProject>[]>(()=>[
     {colId:'sequence',headerName:'序号',...fixedWidth(220,scale),rowDrag:()=>!gridState.current.unavailable,cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,inGroup=state.all.filter(item=>item.status===p.status),at=inGroup.findIndex(item=>item.id===p.id);return <div className="project-order"><OrderInput project={p} disabled={state.unavailable} move={state.move}/><Button aria-label={`上移：${label(p)}`} disabled={state.unavailable||at===0} onClick={()=>void state.move(p.id,'up')}>↑</Button><Button aria-label={`下移：${label(p)}`} disabled={state.unavailable||at===inGroup.length-1} onClick={()=>void state.move(p.id,'down')}>↓</Button></div>;}},

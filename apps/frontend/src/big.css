@@ -52,6 +52,8 @@
   overflow: hidden;
 }
 .big-grid .ag-root-wrapper { border: 0; }
+/* Keep the native overlay bar below the last row and totals, as on the fee report. */
+.big-grid .ag-body-horizontal-scroll.ag-scrollbar-invisible { position: static; }
 .big-grid .ag-header-cell, .big-grid .ag-header-group-cell {
   padding-inline: calc(1px * var(--fscale));
   font-size: calc(12px * var(--fscale));

@@ -278,6 +278,24 @@ def test_projects_export_waits_for_real_publication_after_a_failed_read(server, 
     expect(export).to_be_enabled()
 
 
+def test_bad_project_pending_row_only_fails_its_read_lane(server, browser_page):
+    page, _ = browser_page
+    path = '**/api/m01/promote-pending'
+    page.route(path, lambda route: route.fulfill(json={'items': [None], 'source': {}}))
+    login(page, server)
+    failure = page.get_by_role('alert').filter(has_text='待人工指认')
+    table = page.get_by_role('region', name='项目列表', exact=True)
+    expect(failure).to_be_visible()
+    expect(table).to_be_visible(timeout=30000)
+    table.evaluate('(table) => { window.projectListBeforeRetry = table; }')
+
+    page.unroute(path)
+    failure.get_by_role('button', name='重试读取', exact=True).click()
+    expect(failure).to_have_count(0)
+    expect(table).to_be_visible()
+    assert table.evaluate('(table) => table === window.projectListBeforeRetry')
+
+
 def test_projects_first_read_publishes_the_page_and_keeps_the_list_box(server, browser_page):
     page, _ = browser_page
     login(page, server)

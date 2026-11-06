@@ -5,7 +5,7 @@
 ## 取证身份与方法
 
 - 实际 HEAD：`6d01f996dd46a86c204aeb2568aad58d82c2034d`。`git log -1 -- apps/frontend` 为 `7156a5aef8d45b54e7db8769a87e0f94080873e3`；`git diff --name-only 7156a5ae HEAD -- apps/frontend` 为空。调查时前端源码、测试、依赖无 dirty；主根其他 dirty 与新地图文件由各自任务持有，本调查没有修改。
-- 已加载版本复用 [status](../../docs/status.md:9) 和 [通知书金额发布记录](../notice-amount-deepening-20261106/implementation.md:21) 的 `7156a5ae` 发布回执。主控随后消息确认已核正式前端7156代码相符、提权status为Running及`/app`200，沙箱不可见误差另行区分；这份现场核验由主控持有。本子调查没有请求正式服务、浏览器或当前用户页面。
+- 已加载版本复用 [status](../../docs/status.md) 和 [通知书金额发布记录](../notice-amount-deepening-20261106/implementation.md) 的 `7156a5ae` 发布回执。主控随后消息确认已核正式前端7156代码相符、提权status为Running及`/app`200，沙箱不可见误差另行区分；这份现场核验由主控持有。本子调查没有请求正式服务、浏览器或当前用户页面。
 - 读取项目 AGENTS、CONTRIBUTING、CODING_STANDARDS、workflow、frontend-design、frontend architecture、TAIL-483/484 及固定质量参考。按 writing-for-agents 编写接续材料。没有使用 Hindsight recall/retain；未声称自动注入已提供项目证据。没有读用户凭据或业务原件，没有运行测试/构建/服务/数据库/i8，没有新增脚本、截图、运行产物或工作树。
 - 范围为 `apps/frontend` 自有源码、依赖/构建装配、前端相关测试及已具名旧证据。以下“所有者”是源码职责主人，不推测个人维护者。可达性以 `main.tsx` 注册表与 import/调用链确定；每页保活并不等于后台查询仍启用，根入口向隐藏页传 `blocked || !active`（`main.tsx:110`）。
 - 深度分开：**源码已核**为阅读当前实现的指定链；**旧运行证据**仅证明原版本、原输入及原场景；**静态风险/假设**需最小定向验证；**未深查**有具名缺口。测试存在不计为本轮通过，历史通过数不当覆盖率。
@@ -78,13 +78,13 @@
 |---|---|---|
 | E0 机械性能；Git `642725be3d8fcb157dbeb0b66ed205f2fb758869:.scratch/mechanical-performance/verification.md`，产品 `fbb42d23` | 当前月page、不构造Excel、屏幕/Excel共用投影的职责仍在；原真实副本六代表与7421格对照是历史有效证据。 | 旧1.12、1280×900、1.19MB响应/327–341ms不是当前跨机器预算。后续月份模型/i8核对已变，当前完整回归另按变化选。 |
 | E1 全站性能；同Git `.scratch/site-performance/completion.md`，候选`d5a97eaf`、发布`8e4512ce` | 15路由阶段的保活尺寸修复、库存18287行/747调整 Set 校验、过程轻投影、请求内复用、单通知书范围下推已有历史对照，当前代码有相应机制。 | 当时无油卡路由；当前16路由不能继承“全站通过”。部分探针无效、默认月无数据失败、凭据事件等原限制保持；只取有效样本。 |
-| E2 [加载整改验证](../loading-structure-20261105/verification.md:3)，累计`9b8e0ccd`、发布`b8ee0b24` | 八页首读、保活隐藏不穿透、异步portal owner、字体重载guard有具体失败→修复证据。当前PageSurface/grid-layout/page-error机制未退出。 | 这是几何/发布证据，不是五次冷热性能结果；油卡为空。后续read-region、CSS、grid-presentation已变，不把原每帧尺寸直接套当前。 |
+| E2 [加载整改验证](../loading-structure-20261105/verification.md)，累计`9b8e0ccd`、发布`b8ee0b24` | 八页首读、保活隐藏不穿透、异步portal owner、字体重载guard有具体失败→修复证据。当前PageSurface/grid-layout/page-error机制未退出。 | 这是几何/发布证据，不是五次冷热性能结果；油卡为空。后续read-region、CSS、grid-presentation已变，不把原每帧尺寸直接套当前。 |
 | E3 [会话/加载证据目录](../browser-session-loading-20261103/evidence/TAIL-478-481-acceptance.md)、[日常抓取](../browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)，`90720465/fcc1512a/797dfe36` | 原真实通知书17条浏览器会话抓取、无登录/强踢是具名历史事实；原其他页读取状态检查可定位保护意图。 | 此次只读取status指针、未完整重读这组每份原回执；其后relay恢复源码有变。不能据旧17条宣称当前所有i8来源现场验收或自动恢复全通过。 |
-| E4 [性能审计](../performance-architecture-audit-20261106/audit.md:73)与[整改](../performance-architecture-audit-20261106/implementation.md:22)，`d82f969f→ed1e966a/a5c3b896` | 通知书两格连续输入、关联恢复一次读取、库存无关查询失败隔离及油卡备注边界已吸收；通知书三列textOnly旧五次对照首进1781.1→1506.6ms。A3列宽装配和A4台账明确保持。 | 本地未提交记录，不将其当远端永久已保存材料。当前金额入口及其他首读/CSS后变；1.12、物理屏幕、滚动、长期内存不在该性能结论；油卡备注仅模拟，真实发票0条。 |
-| E5 [通知书金额深化](../notice-amount-deepening-20261106/implementation.md:7)，`7156a5ae` | 当前前端与此版本完全一致。单格只发id/field/value；157 unit、81后端及正式构建历史可复用，各证据层仍分开。 | 原文明确未新GUI/独审；当前金额接口的完整浏览器连续编辑可列最小联通缺口，不重复所有金额组合。 |
-| E6 [审计整改](../audit-remediation-20261105/implementation.md:21)，`67111c60` | flow/debt坏200边界、empty→content自动下限、两页8项代表等有具名依据；当前源码继续该设计。 | 不是全库质量认证；先前五次性能仍缺第二档大表、指定月四组合；后续源改变的几何不能原数复用。 |
-| E7 [三项架构深化](../architecture-deepening-20261106/implementation.md:13)，`17495586` | 集采workspace前端文件至HEAD未改；explicit discard/F5、丢回执同ID恢复、只写一次及7项workspace行为证据可限定复用。油卡原件/用油编排是后端深化，前端契约消费者仍在。 | 未做全站GUI；完整合同编辑器非此次GUI覆盖。后端具体两项吸收由后端分区核，前端报告不重复签事务。 |
-| E8 油卡 [原交付入口](../../docs/status.md:13)与 [阶段交付](../../docs/status.md:61)，`a70ce4e7/a6fdd73a` | 原票453–463/独立审查/合并发布存在；可追到各功能原证据，真实旧台账另有TAIL-474。 | 本次未逐份读完每张油卡票原运行报告；不能以总票done给每个油卡金额/收票/联动路径签“运行已覆盖”。优先列明非空数据代表。 |
+| E4 [性能审计](../performance-architecture-audit-20261106/audit.md)与[整改](../performance-architecture-audit-20261106/implementation.md)，`d82f969f→ed1e966a/a5c3b896` | 通知书两格连续输入、关联恢复一次读取、库存无关查询失败隔离及油卡备注边界已吸收；通知书三列textOnly旧五次对照首进1781.1→1506.6ms。A3列宽装配和A4台账明确保持。 | 本地未提交记录，不将其当远端永久已保存材料。当前金额入口及其他首读/CSS后变；1.12、物理屏幕、滚动、长期内存不在该性能结论；油卡备注仅模拟，真实发票0条。 |
+| E5 [通知书金额深化](../notice-amount-deepening-20261106/implementation.md)，`7156a5ae` | 当前前端与此版本完全一致。单格只发id/field/value；157 unit、81后端及正式构建历史可复用，各证据层仍分开。 | 原文明确未新GUI/独审；当前金额接口的完整浏览器连续编辑可列最小联通缺口，不重复所有金额组合。 |
+| E6 [审计整改](../audit-remediation-20261105/implementation.md)，`67111c60` | flow/debt坏200边界、empty→content自动下限、两页8项代表等有具名依据；当前源码继续该设计。 | 不是全库质量认证；先前五次性能仍缺第二档大表、指定月四组合；后续源改变的几何不能原数复用。 |
+| E7 [三项架构深化](../architecture-deepening-20261106/implementation.md)，`17495586` | 集采workspace前端文件至HEAD未改；explicit discard/F5、丢回执同ID恢复、只写一次及7项workspace行为证据可限定复用。油卡原件/用油编排是后端深化，前端契约消费者仍在。 | 未做全站GUI；完整合同编辑器非此次GUI覆盖。后端具体两项吸收由后端分区核，前端报告不重复签事务。 |
+| E8 油卡 [原交付入口](../../docs/status.md)与 [阶段交付](../../docs/status.md)，`a70ce4e7/a6fdd73a` | 原票453–463/独立审查/合并发布存在；可追到各功能原证据，真实旧台账另有TAIL-474。 | 本次未逐份读完每张油卡票原运行报告；不能以总票done给每个油卡金额/收票/联动路径签“运行已覆盖”。优先列明非空数据代表。 |
 
 ### 此前三项深化及其后的候选
 

@@ -11,7 +11,7 @@
 
 ## 仓库地图
 
-`backend/app`、`backend/tests`、`backend/alembic` 是现有 Python 组件；运行模板与字体在 `backend/app/resources`。`ops` 放部署/服务/备份与提交钩子，`tools` 放仍有用途的开发工具，`skills` 放业务技能。实际依赖以 `backend/pyproject.toml`、`backend/uv.lock` 为准。
+`backend/app`、`backend/tests`、`backend/alembic` 是现有 Python 组件；运行模板在 `backend/app/resources/templates`，网页字体在 `backend/app/web/fonts`。`ops` 放部署/服务/备份与提交钩子，`tools` 放仍有用途的开发工具，`skills` 放业务技能。实际依赖以 `backend/pyproject.toml`、`backend/uv.lock` 为准。
 
 正式 React 前端源码在 `apps/frontend`，源码、测试、依赖声明与 pnpm 锁由组件持有；隔离构建、启动与清理见[预览指南](docs/guides/frontend-preview.md)，正式服务装配见[架构](docs/architecture.md)。本地提交不代表服务已加载。
 

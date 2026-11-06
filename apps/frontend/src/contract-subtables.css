@@ -36,9 +36,6 @@
 .subtable-detail-scroll{--subtable-detail-max:calc(340px*var(--fscale));display:block;overflow:hidden;border:1px solid var(--bd);border-radius:var(--radius-inner);background:var(--sf)}
 .contract-subtable-dialog .subtable-detail-scroll{--subtable-detail-max:clamp(96px,calc(84dvh - 380px*var(--fscale)),calc(340px*var(--fscale)))}
 .subtable-scroll{border:1px solid var(--bd);border-radius:var(--radius-inner)}
-.subtable-invoice-table col:nth-child(1){width:26%}
-.subtable-invoice-table col:nth-child(2){width:36%}
-.subtable-invoice-table col:nth-child(3){width:38%}
 .subtable-payment-table col:nth-child(1){width:21%}
 .subtable-payment-table col:nth-child(2){width:24%}
 .subtable-payment-table col:nth-child(3){width:30%}
@@ -76,10 +73,14 @@
 .contract-material-editor .contract-form-grid{grid-template-columns:minmax(0,1fr)}
 /* The generic .project-dialog width is narrower than this four-column task. */
 .business-modal .ant-modal-body>.contract-subtable-dialog.project-dialog{width:min(calc(1080px*var(--fscale)),calc(100vw - 48px));padding:calc(12px*var(--fscale))}
+.business-modal .ant-modal-body>.contract-subtable-dialog.contract-invoice-dialog{width:min(calc(620px*var(--fscale)),calc(100vw - 48px))}
+/* Reserve the native overlay bar's space so narrow dialogs can scroll the last action fully into view. */
+.contract-invoice-dialog .subtable-invoice-table .ag-body-horizontal-scroll.ag-scrollbar-invisible{position:static}
 .contract-subtable-dialog .dialog-close-heading{margin-bottom:calc(8px*var(--fscale))}
 .contract-subtable-dialog .dialog-close-heading h2{margin:0;line-height:1.5}
 .contract-subtable-dialog .subtable-summary{padding:calc(8px*var(--fscale)) calc(12px*var(--fscale));margin-bottom:calc(8px*var(--fscale))}
 .contract-subtable-dialog .subtable-summary dt{line-height:1.5}
+.contract-invoice-dialog .subtable-section-head h4{min-width:0;overflow-wrap:anywhere}
 .contract-subtable-dialog .subtable-tools{display:flex;align-items:center;gap:calc(8px*var(--fscale));flex-wrap:wrap}
 .contract-subtable-dialog .subtable-payment-table col:nth-child(1){width:18%}
 .contract-subtable-dialog .subtable-payment-table col:nth-child(2){width:20%}
