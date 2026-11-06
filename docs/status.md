@@ -2,7 +2,7 @@
 
 ## 当前运行与活动整改
 
-2026-11-06 10:14按用户明确授权推送并部署：正式前端指向`var/frontend/releases/17495586c2a1`，产品提交`17495586c2a186da3b420bc651d1a1e9fbebd8bd`，已完成标准publish及服务重启。油卡原件接收/回执、集采子表提交恢复和用油接续编排三项深化已加载；金额、原件、稳定提交ID及历史保护保持。健康200、实际索引、44份资源与8000监听归属通过，集采/油卡深链200，回退保留`93508be417e4`。代码已正常推送且远端SHA一致，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42148690779)通过；发布回执归本机受管组`101307-906394-41556/files/reports/deployment.json`，详见[实施与发布记录](../.scratch/architecture-deepening-20261106/implementation.md)。本轮无迁移、真实i8抓取、物理打印或正式业务写入；原有无关未提交内容保留。源码HEAD与运行产物分别记录，不用后续文档提交替代部署身份；下面各节保留当次历史事实。
+2026-11-06 11:58按用户明确授权提交、推送并部署：正式前端指向`var/frontend/releases/7156a5aef8d4`，产品提交`7156a5aef8d45b54e7db8769a87e0f94080873e3`，标准publish及服务重启完成。通知书金额维护已加载：单格只提交记录、字段和值，后端保全非目标字段，沿用原金额校验、统计留痕及未知结果保护。81项定向后端、157项前端unit、typecheck及[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42159570276)通过；健康200、实际索引、44份资源与8000监听归属通过，回退保留`17495586c2a1`。详见[本轮实施与发布](../.scratch/notice-amount-deepening-20261106/implementation.md)，原始回执归本机受管组`115805-673602-32112/files/reports/deployment.json`；前轮三项深化回[原记录](../.scratch/architecture-deepening-20261106/implementation.md)。本轮无迁移、真实i8、打印或正式业务写入，未做新增GUI验收；无关未提交内容保持。源码HEAD与运行产物分别记录，不用后续文档提交替代部署身份；下面各节保留当次历史事实。
 
 当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。2026-11-05 13:34已按用户授权部署并重启，正式加载b8ee0b24，HTTP200、42份资源及监听归属核验通过；原i8配置保持。另发现的大表合同价/空产值重读错误已开TAIL-482并[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
 
