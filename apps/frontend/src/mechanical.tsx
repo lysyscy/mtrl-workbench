@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import App from 'antd/es/app';
 import Input from 'antd/es/input';
@@ -306,14 +307,14 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     {!ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length && (monthRead==='ready'||monthRead==='empty') ? <p className="state" role="status">请选择项目查看报表。</p> : null}
     {!scopeMismatch && tab==='summary' && (state.data ? (warehouses.length > 0 && <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} ym={ym} projects={summaryProjects} detail={detail} internal={internal} data={state.data} warehouses={warehouses} />) : <div className="mechanical-read-body">{readBody}</div>)}
     </FirstReadRegion>
-    {dialog==='projects'&&<MechanicalDialog className="mechanical-project-dialog" title="选择显示项目及顺序" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><>
+    <DialogPresence>{dialog==='projects'&&<MechanicalDialog className="mechanical-project-dialog" title="选择显示项目及顺序" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><>
       <p>按勾选项目显示，顺序可调整；其他项目的数据保留。</p>
       <ProjectSelectionOrder projects={pickerOrder.flatMap(id=>candidates.filter(project=>project.id===id))} selected={pickerSelection} choose={setPickerIds} move={(index,offset)=>{const next=[...pickerOrder];[next[index+offset],next[index]]=[next[index]!,next[index+offset]!];setPickerOrder(next);}} disabled={writing} label="显示项目选择与顺序" />
       {settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={!writable} onClick={()=>void saveSettings({shown_projects:pickerSelection.flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[])},()=>{setIds(pickerSelection);setTemporary('');},'显示项目及顺序已保存。')}>应用项目选择</Button></footer>
-    </>}</MechanicalDialog>}
+    </>}</MechanicalDialog>}</DialogPresence>
 
-    {dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing} paused={blocked||!active}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{saves.update(current=>Object.fromEntries(Object.entries(current).filter(([,d])=>isInternalDraft(d)||d.ym!==ym||d.category!==category||!editingWarehouses.includes(d.warehouse))));saves.clearFeedback();setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}
-    {dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label>{settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void saveSettings({plate_keywords:plateKeywords(keywords)},()=>{},'车牌规则已保存。')}>保存规则</Button></footer></>}</MechanicalDialog>}
+    <DialogPresence>{dialog==='discard'&&<MechanicalDialog className="mechanical-discard-dialog" title="撤销未保存修改" close={()=>setDialog(null)} busy={writing} paused={blocked||!active}><p>撤销当前范围 {dirty} 个项目的未保存修改，恢复最近已保存明细。</p><footer><Button onClick={()=>setDialog(null)}>保留修改</Button><Button danger onClick={()=>{saves.update(current=>Object.fromEntries(Object.entries(current).filter(([,d])=>isInternalDraft(d)||d.ym!==ym||d.category!==category||!editingWarehouses.includes(d.warehouse))));saves.clearFeedback();setDialog(null);}}>确认撤销</Button></footer></MechanicalDialog>}</DialogPresence>
+    <DialogPresence>{dialog==='plate'&&<MechanicalDialog className="mechanical-plate-dialog" title="无需车牌设备关键词" close={()=>setDialog(null)} busy={writing} paused={blocked||!active} dirty={settingsDirty}>{requestClose=><><label>每行一个关键词<Input.TextArea aria-label="无需车牌设备关键词" value={keywords} disabled={writing} onChange={e=>setKeywords(e.target.value)} /></label>{settingsFeedback}<footer><Button disabled={writing} onClick={requestClose}>取消</Button><Button type="primary" disabled={writing||!writable} onClick={()=>void saveSettings({plate_keywords:plateKeywords(keywords)},()=>{},'车牌规则已保存。')}>保存规则</Button></footer></>}</MechanicalDialog>}</DialogPresence>
     {message && !needsRead && <p className="mechanical-feedback" role="status">{message}</p>}
   </section>;
 }

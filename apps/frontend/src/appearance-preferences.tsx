@@ -3,6 +3,8 @@ import type { CSSProperties, KeyboardEvent } from 'react';
 import Button from 'antd/es/button';
 import { record, requestJson } from './api';
 import { useDialogClose } from './dialog-close';
+import { motion, useIsPresent } from 'motion/react';
+import { useWorkspaceReducedMotion, workspaceSpring } from './workspace-motion';
 
 type Palette = { name: string; label: string; description: string; scene: string; vars: Record<string, string> };
 type Scale = { key: string; label: string; css: string };
@@ -30,6 +32,7 @@ function ThemePreview({ palette }: { palette: Palette }) {
 }
 
 export function AppearancePreferences({ close, saved, compact }: { close: () => void; saved: () => Promise<void>; compact: boolean }) {
+  const present = useIsPresent(), reduced = useWorkspaceReducedMotion();
   const [options, setOptions] = useState<Preferences | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -45,8 +48,14 @@ export function AppearancePreferences({ close, saved, compact }: { close: () => 
     void loadPreferences(controller.signal).then(next => { if (!controller.signal.aborted) setOptions(next); }).catch(failure => {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : '外观读取失败，请重试。');
     });
-    return () => { controller.abort(); requestAnimationFrame(() => { if (trigger?.isConnected) trigger.focus(); }); };
+    return () => { controller.abort(); requestAnimationFrame(() => { if (trigger?.isConnected && document.activeElement === document.body && !trigger.closest('[inert],[hidden]') && !document.querySelector('.appearance-panel:not([inert])')) trigger.focus(); }); };
   }, []);
+  useEffect(() => {
+    if (!present) {
+      life.current?.abort();
+      if ((document.activeElement === document.body || panel.current?.contains(document.activeElement)) && !document.querySelector('.appearance-panel:not([inert])')) document.querySelector<HTMLButtonElement>('.account-pill')?.focus({ preventScroll: true });
+    }
+  }, [present]);
   useEffect(() => {
     if (compact && !panel.current?.contains(document.activeElement)) closeButton.current?.focus();
   }, [compact]);
@@ -89,7 +98,8 @@ export function AppearancePreferences({ close, saved, compact }: { close: () => 
 
   }
   const unavailable = Boolean(busy) || needsReadback;
-  return <aside ref={panel} className="appearance-dialog appearance-panel" role="dialog" aria-modal={compact} aria-labelledby="appearance-title" aria-busy={Boolean(busy)} onKeyDown={panelKeys}>
+  return <motion.aside ref={panel} className="appearance-dialog appearance-panel" role="dialog" aria-modal={compact} aria-labelledby="appearance-title" aria-busy={Boolean(busy)} aria-hidden={!present} inert={!present} onKeyDown={panelKeys}
+    initial={{ x: reduced ? 0 : 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reduced ? 0 : 28, opacity: 0 }} transition={reduced ? { duration: 0 } : { ...workspaceSpring, opacity: { duration: .18 } }}>
     <div className="appearance-heading"><div><h2 id="appearance-title">外观与字号</h2><p>点击即保存，仅影响当前账号</p></div><button type="button" ref={closeButton} className="appearance-close" aria-label="收起外观面板" disabled={Boolean(busy)} onClick={closing.requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
     <div className="appearance-body">
       {options ? <><div className="appearance-section-title"><h3>配色主题</h3><span>{options.themes.length} 套完整界面</span></div><div className="appearance-theme-choices" role="radiogroup" aria-label="配色主题">
@@ -99,5 +109,5 @@ export function AppearancePreferences({ close, saved, compact }: { close: () => 
       </div></> : !error && <p role="status">正在读取外观选项…</p>}
     </div>
     <div className="appearance-feedback">{busy ? <p role="status">{busy}</p> : error ? <p role="alert">{error}</p> : <p role="status">{feedback || '选择后立即应用，收起面板可查看完整页面。'}</p>}{!busy && (error || needsReadback) && <Button onClick={() => void reload()}>重新读取</Button>}</div>
-  </aside>;
+  </motion.aside>;
 }

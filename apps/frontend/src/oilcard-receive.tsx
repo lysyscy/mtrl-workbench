@@ -12,6 +12,7 @@ import { contentWidth } from './grid';
 import { randomUUID } from './random-id';
 import { createDeliveryBatch, deliveryLabels, findDeliveryBatch, getDeliveryBatch, getDeliveryBatches, runDeliveryItem } from './oilcard-batch-api';
 import type { DeliveryBatch, DeliveryItem } from './oilcard-batch-api';
+import { useIsPresent } from 'motion/react';
 
 const BatchActions = createContext<{ disabled: boolean; open: (item: DeliveryItem) => void }>({ disabled: true, open: () => {} });
 function InvoiceAction({ data }: ICellRendererParams<DeliveryItem>) {
@@ -22,15 +23,16 @@ export function OilReceiveDialog({ active, disabled, scale, close, onUpdated, on
   active: boolean; disabled: boolean; scale: number; close: () => void; onUpdated: () => Promise<unknown>;
   onOpenInvoice: (item: DeliveryItem) => void; onLock: (value: boolean) => void; onUncertain: (value: boolean) => void;
 }) {
+  const present = useIsPresent();
   const client = useQueryClient(), [links, setLinks] = useState(''), [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false), [unknown, setUnknown] = useState<'create' | 'run' | null>(null), [error, setError] = useState('');
   const requestId = useRef(randomUUID()), request = useRef<AbortController | null>(null), alive = useRef(true), opening = useRef<DeliveryItem | null>(null);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; request.current?.abort(); onLock(false); onUncertain(false); }; }, [onLock, onUncertain]);
+  useEffect(() => { if (!present) return; alive.current = true; return () => { alive.current = false; request.current?.abort(); onLock(false); onUncertain(false); }; }, [present, onLock, onUncertain]);
   useEffect(() => { if (!active || disabled) request.current?.abort(); }, [active, disabled]);
-  useEffect(() => { onLock(busy || Boolean(unknown)); onUncertain(Boolean(unknown)); }, [busy, unknown, onLock, onUncertain]);
-  const recent = useQuery({ queryKey: ['oilcard-delivery-batches'], enabled: active && !disabled, queryFn: ({ signal }) => getDeliveryBatches(signal) });
+  useEffect(() => { if (present) { onLock(busy || Boolean(unknown)); onUncertain(Boolean(unknown)); } }, [present, busy, unknown, onLock, onUncertain]);
+  const recent = useQuery({ queryKey: ['oilcard-delivery-batches'], enabled: present && active && !disabled, queryFn: ({ signal }) => getDeliveryBatches(signal) });
   useEffect(() => { if (!selected && recent.data?.[0]) setSelected(recent.data[0].id); }, [selected, recent.data]);
-  const query = useQuery({ queryKey: ['oilcard-delivery-batch', selected], enabled: active && !disabled && selected > 0, queryFn: ({ signal }) => getDeliveryBatch(selected, signal) });
+  const query = useQuery({ queryKey: ['oilcard-delivery-batch', selected], enabled: present && active && !disabled && selected > 0, queryFn: ({ signal }) => getDeliveryBatch(selected, signal) });
   const current = useRef(query.data); current.current = query.data;
   const baseClosing = useDialogClose({ busy: busy || Boolean(unknown), dirty: Boolean(links.trim()), close: () => { close(); if (opening.current) onOpenInvoice(opening.current); } });
   const closing = { ...baseClosing, resume: () => { opening.current = null; baseClosing.resume(); } };

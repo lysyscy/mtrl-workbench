@@ -50,6 +50,7 @@
 .appearance-feedback p { margin:0;overflow-wrap:anywhere;color:var(--tx2) }
 .appearance-feedback [role=alert] { color:var(--dg-d) }
 .appearance-feedback:has([role=alert]) { background:var(--dg-l) }
+.workspace > .appearance-panel[inert] { position:fixed;inset:0 0 0 auto;z-index:100;pointer-events:none }
 @media(max-width:900px) {
   .workspace > .appearance-panel { position:fixed;z-index:100;inset:0 0 0 auto;width:min(calc(392px * var(--fscale)),100vw);max-width:100vw;flex-basis:auto;box-shadow:var(--shadow-md) }
 }

@@ -5,6 +5,7 @@ import Tag from 'antd/es/tag';
 import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
+import { DialogPresence } from './workspace-motion';
 import { BusinessGrid, ReadGrid } from './business-grid';
 import { ProjectDragImage } from './project-drag-image';
 import { readProjectPending, readProjectTrails } from './project-maintenance-reads';
@@ -239,7 +240,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       {colId:'after',headerName:'改后值',valueGetter:p=>trailValue(p.data!,p.data!.after)}, {field:'by',headerName:'改动人'},
     ]}/></details> : null}
     </FirstReadRegion>
-    {modal && <ProjectDialog state={modal} me={me} blocked={blocked} close={() => setModal(null)} refresh={refresh} announce={text => { void message.success(text); }} />}
+    <DialogPresence>{modal && <ProjectDialog key="project-dialog" state={modal} me={me} blocked={blocked} close={() => setModal(null)} refresh={refresh} announce={text => { void message.success(text); }} />}</DialogPresence>
   </section>;
 }
 function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state: DialogState; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }) {

@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Input from 'antd/es/input';
 import App from 'antd/es/app';
 import Select from 'antd/es/select';
@@ -254,14 +255,14 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
       <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={row => {if(!unavailable)setMaintenance({kind:'ownership',row});}} />
-      {autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={async()=>{await refresh();}} announce={announce} />}
-      {maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} /> : maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={()=>setMaintenance(null)} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}
+      <DialogPresence>{autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
+      <DialogPresence>{maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} /> : maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={()=>setMaintenance(null)} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}</DialogPresence>
     </section>
-    {print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}
-    {flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}
-    {printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}
-    {payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}
-    {fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={async()=>{await refresh('fetch');}} />}
+    <DialogPresence>{print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
+    <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
+    <DialogPresence>{printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}</DialogPresence>
+    <DialogPresence>{payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
+    <DialogPresence>{fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={async()=>{await refresh('fetch');}} />}</DialogPresence>
     <BusinessModal open={exportOpen && active && !blocked} className="project-dialog" titleId="notice-export-title" requestClose={exportClosing.requestClose}><DialogContents titleId="notice-export-title" title="导出付款通知书台账" closing={exportClosing}><p>导出当前筛选的 {shown.length} 条通知书，按表格显示顺序排列。</p>{error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={exportClosing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={unavailable || !shown.length} onClick={() => void exportExcel()}>保存到本地</Button></div></DialogContents></BusinessModal>
   </div></NoticeSelectionContext.Provider></NoticeCells.Provider>;
 }

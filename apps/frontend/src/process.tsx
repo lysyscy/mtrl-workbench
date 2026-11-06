@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
@@ -179,11 +180,11 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
       </ProcessCells.Provider></>}
     </>:<div className="process-read-body">{regionBody}</div>}
     </FirstReadRegion>
-    {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
+    <DialogPresence>{source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title="确认保存机械费" titleId="process-source-title" closing={closing}>
       <p>{name(source.draft.warehouse)}，{source.draft.ym} {mechLabels[mechKeys.indexOf(source.draft.column)]}</p><p>该项目本月已有机械明细。此格将采用手填金额，原明细保留。</p>
       <p>原金额 {source.draft.expected===null?'未录入':show(source.draft.expected)+' 元'} → 新金额 {source.draft.value.trim()?show(source.draft.value)+' 元':'留空'}</p>
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={disabled} onClick={confirmSave}>确认保存</Button></div>
-    </DialogContents></BusinessModal>}
+    </DialogContents></BusinessModal>}</DialogPresence>
   </section>;
 }
 

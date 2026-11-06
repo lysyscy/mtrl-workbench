@@ -62,16 +62,35 @@ html{font-variant-numeric:tabular-nums}
 /* Native editors and appearance cards use the same short color feedback as AntD.
    Never animate geometry, values or table rows. */
 :where(.workspace,.business-modal) :is(input:not([class*="ant-"]):not([type=checkbox]):not([type=radio]):not(.ant-picker input),select:not([class*="ant-"]),textarea:not([class*="ant-"])),.appearance-choice,.appearance-close{transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.ant-btn:hover,.row-button:hover{transform:none!important}}
+/* The provider skips new RC motions. Let an already running presence finish its
+   end event instead of cancelling it; ordinary control feedback stops outright. */
+@media(prefers-reduced-motion:reduce){*:not([class*="-appear"]):not([class*="-enter"]):not([class*="-leave"]),*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.ant-btn:hover,.row-button:hover{transform:none!important}}
 
 
 /* Keep navigation feedback brief and independent of data/operation completion. */
 @media(prefers-reduced-motion:no-preference){
-  .workspace #page-title{animation:workspace-enter var(--motion-fast,130ms) ease-out}
+  details::details-content{interpolate-size:allow-keywords;height:0;overflow:clip;transition:height 280ms cubic-bezier(.16,1,.3,1),content-visibility 280ms allow-discrete}
+  details[open]::details-content{height:auto}
   .inventory-count-feedback{animation:inventory-count-feedback var(--motion-fast,130ms) ease-out}
 }
-@keyframes workspace-enter{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:none}}
 @keyframes inventory-count-feedback{from{color:var(--pri-d)}to{color:inherit}}
+
+.business-modal-leaving,.business-modal-leaving .ant-modal-wrap,.business-modal-leaving .ant-modal-mask,.business-modal-leaving .ant-modal-container{pointer-events:none}
+.business-dialog-motion-enter,.business-dialog-motion-appear{opacity:0;transform:translateY(16px) scale(.96)}
+.business-dialog-motion-enter-active,.business-dialog-motion-appear-active{opacity:1;transform:none;transition:transform 320ms cubic-bezier(.16,1,.3,1),opacity 320ms ease-out}
+.business-dialog-motion-leave{opacity:1;transform:none}
+.business-dialog-motion-leave-active{opacity:0;transform:translateY(10px) scale(.98);transition:transform 180ms cubic-bezier(.4,0,1,1),opacity 180ms ease-in}
+.sidebar nav a{position:relative;isolation:isolate}
+.sidebar nav a.active{background:transparent}
+.navigation-marker{position:absolute;inset:0;z-index:-1;border-radius:var(--radius-input);background:var(--sb-on);pointer-events:none}
+.navigation-label{position:relative}
+.workspace-panels{position:relative}
+/* AntD's transition:all also animates inherited visibility during retained-page
+   switches. Restrict native controls to their feedback properties, not layout. */
+:is(.workspace,.business-modal) :is(.ant-input,.ant-input-affix-wrapper,.ant-select,.ant-picker,.ant-input-number){transition-property:background-color,border-color,box-shadow,color;transition-duration:var(--motion-fast,130ms)}
+/* A retained grid enables/disables hundreds of editors together. Those editors
+   respond immediately; the workspace and portalled controls own visible motion. */
+.page-view .ag-root-wrapper [class*="ant-"]{transition:none}
 
 /* Shared treatment accepted after the notice trial. Keep floating layers distinct. */
 .workspace section,.workspace .notice-selection{border-width:.5px}

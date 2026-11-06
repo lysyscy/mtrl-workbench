@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
 import Input from 'antd/es/input';
@@ -220,18 +221,18 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     {query.data ? <InvoiceCells.Provider value={{ drafts, disabled, archives, projects, change, save: key => saves.save(key) }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'view', label: '查看发票', disabled: disabled || !original }, { key: 'download', label: '下载原件', disabled: disabled || !original }, ...invoiceActions], onClick: ({ key }) => actOnInvoice(key) }}><div><BusinessGrid table="oilcard-invoices" label="油卡发票台账" rows={rows} columns={columns} totals={totals} rowId={row => String(row.id)} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: filterChanged, onRowClicked: e => { if (e.data && !e.node.rowPinned) { setSelected(e.data.id); setOriginalId(0); } }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) { setSelected(e.data.id); setOriginalId(0); } }, rowClassRules: { 'oilcard-selected': p => p.data?.id === selected } }} /></div></Dropdown></div></InvoiceCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
     </FirstReadRegion>
     {row && <div className="oilcard-invoice-detail">{row.reason && <p className="notice">{row.reason}</p>}{row.kind === 'credit' && <p>红冲关联原票：{query.data?.invoices.find(r => r.id === row.related_invoice_id)?.invoice_no || `#${row.related_invoice_id}`}</p>}{row.change_note && <p>{row.void_date ? `作废日期 ${row.void_date}，` : ''}{row.change_note}</p>}{row.originals.length > 1 && <label>原件<Select aria-label="选择发票原件" value={original?.id ?? null} options={row.originals.map((o, i) => ({ value: o.id, label: `${i === 0 ? '主原件' : o.outcome === 'conflict' ? o.resolution ? '已核冲突原件' : '冲突原件待核' : '补档原件'} #${o.id}` }))} onChange={value => setOriginalId(value)} /></label>}{original?.outcome === 'conflict' && <><p className={original.resolution ? '' : 'notice'}>{original.resolution || original.reason}</p>{!original.resolution && <div className="oilcard-toolbar"><Button disabled={structuralDisabled} onClick={() => open('resolve', original.id)}>确认保留原票</Button><Button disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit', original.id)}>采用此原件更正</Button></div>}</>}</div>}
-    {dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
+    <DialogPresence>{dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
       const action = dialog.mode === 'resolve' ? `originals/${dialog.sourceId!}/resolve` as const : dialog.mode === 'edit' ? dialog.row.kind === 'credit' ? 'credit' : 'correct' : 'delete';
       const outcome = await saves.run(async signal => { await changeOilInvoice(dialog.row, action, fields, signal); }, () => '', `发票 ${dialog.row.invoice_no || dialog.row.id}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);
-    }} />}
-    {receiveOpen && <OilReceiveDialog active={active} disabled={receiveDisabled || busy} scale={scale} close={() => setReceiveOpen(false)} onUpdated={reload} onLock={setBatchLocked} onUncertain={setBatchUncertain} onOpenInvoice={item => {
+    }} />}</DialogPresence>
+    <DialogPresence>{receiveOpen && <OilReceiveDialog active={active} disabled={receiveDisabled || busy} scale={scale} close={() => setReceiveOpen(false)} onUpdated={reload} onLock={setBatchLocked} onUncertain={setBatchUncertain} onOpenInvoice={item => {
       void reload().then(() => {
         const actual = current.current?.invoices.find(row => row.id === item.invoice_id);
         if (!actual) throw new ApiError('发票尚未读到，请重新读取核对。');
         setSelected(actual.id); setOriginalId(item.original_id ?? 0);
         if (actual.status === 'pending') setDialog({ mode: 'edit', row: actual, sourceId: null });
       }).catch(failure => setDownloadError(failure instanceof Error ? failure.message : '发票读取失败，请重试。'));
-    }} />}
+    }} />}</DialogPresence>
   </section>;
 }

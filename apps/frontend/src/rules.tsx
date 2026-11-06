@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import { createContext, useContext, useRef, useState } from 'react';
 import type { ColDef } from 'ag-grid-community';
@@ -220,7 +221,7 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
       <p className="rules-note muted">{NO_RECOMPUTE}</p>
       <p className="rules-warning">剔除规则中不得配置「收款单位 = 资产处集中采购」：集采不走剔除，而是参与分类。</p>
     </>}</FirstReadRegion>
-    {draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
+    <DialogPresence>{draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
       {recovery ? <p className="rules-warning" role="alert">提交结果待核对。请重新读取列表核对本次提交的内容。</p>
         : <p className="rules-note muted">修改只影响后续抓取，已有剔除标记不重算。</p>}
       <label>规则类别 ＊<select value={draft.kind} disabled={busy || Boolean(recovery)} onChange={event => { if (form && !lock.current) setForm({ ...form, kind: event.target.value }); }}>{recovery ? <option value={draft.kind}>{recovery.kindLabel}</option> : (data?.kinds ?? []).map(kind => <option key={kind.kind} value={kind.kind}>{kind.label}</option>)}</select></label>
@@ -239,13 +240,13 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
         <div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>
           <Button htmlType="button" className="primary" disabled={!writable || busy} onClick={() => void save()}>{busy ? '正在保存…' : draft.id === null ? '新增' : '保存修改'}</Button></div>
       </>}
-    </DialogContents></BusinessModal>}
-    {deleting && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-delete-title" requestClose={deleteClosing.requestClose}><DialogContents title="删除剔除规则" titleId="rules-delete-title" closing={deleteClosing}>
+    </DialogContents></BusinessModal>}</DialogPresence>
+    <DialogPresence>{deleting && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-delete-title" requestClose={deleteClosing.requestClose}><DialogContents title="删除剔除规则" titleId="rules-delete-title" closing={deleteClosing}>
       <p>确定删除「{deleting.kindLabel}」这条规则？命中值：{splitValues(deleting.values).join('、')}。</p>
       <p className="rules-warning">配置类数据为硬删、不留痕，删除后无法找回。{NO_RECOMPUTE}</p>
       <div className="dialog-actions"><Button htmlType="submit" disabled={deleteBusy} onClick={deleteClosing.requestClose}>取消</Button>
         <Button htmlType="submit" className="danger" disabled={deleteBusy} onClick={() => void remove()}>{deleteBusy ? '正在删除…' : '删除'}</Button></div>
-    </DialogContents></BusinessModal>}
+    </DialogContents></BusinessModal>}</DialogPresence>
   </div>;
 }
 

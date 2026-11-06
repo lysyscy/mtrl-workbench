@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -193,11 +194,11 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
       </FirstReadRegion>
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
-    {transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
+    <DialogPresence>{transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
       const from = archives.accounts.find(account => account.id === values.out_account_id)?.name ?? '转出账户';
       const to = archives.accounts.find(account => account.id === values.in_account_id)?.name ?? '转入账户';
       const outcome = await saves.run(async signal => { await transferOilEntries(values, signal); }, () => '', `${from} 转至 ${to}，${values.amount}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setTransferOpen(false);
-    }} />}
+    }} />}</DialogPresence>
   </section>;
 }

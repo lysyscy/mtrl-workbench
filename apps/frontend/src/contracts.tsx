@@ -1,3 +1,5 @@
+import { DialogPresence } from './workspace-motion';
+import { AnimatePresence } from 'motion/react';
 import Button from 'antd/es/button';
 import App from 'antd/es/app';
 import Checkbox from 'antd/es/checkbox';
@@ -72,8 +74,9 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const announce=(text:string)=>{void message.success({key:'contract-success',content:text,duration:3});};
   const client=useQueryClient(),grid=useRef<GridApi<ContractRow>|null>(null),root=useRef<HTMLDivElement>(null),lock=useRef(false),pendingFocus=useRef(0);
   const [filters,setFilters]=useState(initialFilters),[search,setSearch]=useState(''),[picked,setPicked]=useState<Set<number>>(()=>new Set()),[trade,setTrade]=useState(false);
-  const [editors,setEditors]=useState<Record<string,{row:ContractRow|null;materialOnly:boolean}>>({}),[editorId,setEditorId]=useState<string|null>(null),[tool,setTool]=useState<'fetch'|'party'|null>(null);
-  function openEditor(row:ContractRow|null,materialOnly=Boolean(row)){const key=row?`${row.id}:${materialOnly?'material':'full'}`:'new';setEditors(old=>old[key]?old:{...old,[key]:{row,materialOnly}});setEditorId(key);}
+  const editorSequence=useRef(0);
+  const [editors,setEditors]=useState<Record<string,{row:ContractRow|null;materialOnly:boolean;presenceId:number}>>({}),[editorId,setEditorId]=useState<string|null>(null),[tool,setTool]=useState<'fetch'|'party'|null>(null);
+  function openEditor(row:ContractRow|null,materialOnly=Boolean(row)){const key=row?`${row.id}:${materialOnly?'material':'full'}`:'new',presenceId=++editorSequence.current;setEditors(old=>old[key]?old:{...old,[key]:{row,materialOnly,presenceId}});setEditorId(key);}
   function closeEditor(key:string){setEditors(old=>{const next={...old};delete next[key];return next;});setEditorId(current=>current===key?null:current);}
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[uncertain,setUncertain]=useState(false);
   const [params]=useSearchParams();
@@ -260,10 +263,10 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     </ReadStatusLane>
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
     {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
-    {Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={key} materialOnly={editor.materialOnly} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}
-    {subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}
-    {remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}
-    {tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}
-    {tool==='party'&&<ContractSettings kind={tool} me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}
+    <AnimatePresence initial={false}>{Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={`${key}:${editor.presenceId}`} materialOnly={editor.materialOnly} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}</AnimatePresence>
+    <DialogPresence>{subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}</DialogPresence>
+    <DialogPresence>{remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}</DialogPresence>
+    <DialogPresence>{tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>
+    <DialogPresence>{tool==='party'&&<ContractSettings kind={tool} me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>
   </section>;
 }

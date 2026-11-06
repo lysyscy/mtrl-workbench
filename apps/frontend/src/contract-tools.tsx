@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
@@ -75,7 +76,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
           <Button disabled={action.busy || blocked} onClick={() => setOwnershipOpen(true)}>去指定归属</Button>
         </>}
       </>}
-      {ownershipOpen && <ContractOwnershipPending blocked={blocked || action.busy} close={() => setOwnershipOpen(false)} refresh={refresh} />}
+      <DialogPresence>{ownershipOpen && <ContractOwnershipPending blocked={blocked || action.busy} close={() => setOwnershipOpen(false)} refresh={refresh} />}</DialogPresence>
       <I8FetchRecovery action={action} source="contracts" />
       <I8FetchActions action={action} close={closing.requestClose} onRun={() => void run()} />
     </DialogContents>
@@ -152,5 +153,5 @@ function ContractOwnershipPending({blocked,close,refresh}:{blocked:boolean;close
     <p>补关键词或建小微后，请重新抓取未完成归属的合同；已写入合同不受影响。</p>
     {query.isPending||projects.isPending?<p role="status">正在读取归属待办…</p>:query.isError||projects.isError?<p className="notice" role="alert">{query.error?.message||projects.error?.message}</p>:<div>{query.data?.length?query.data.map((item,i)=><p key={`${item.bill_no}:${i}`}>{item.project_name}，{item.bill_no}，{item.doc_name}<br/>{reasons[item.kind]||'请核对项目归属'}{item.kind==='not_archived'?<Link to="/projects">到项目档案核对</Link>:<Button disabled={blocked} onClick={()=>setEditing({notice_id:0,bill_no:item.bill_no,bill_name:item.doc_name,project_name:item.project_name,project_display:item.project_name} as NoticeRow)}>指定归属</Button>}</p>):<p>没有待指定归属的合同。</p>}</div>}
     {feedback&&<p role="status">{feedback}</p>}<div className="dialog-actions"><Button onClick={closing.requestClose}>关闭</Button><Button disabled={query.isFetching||projects.isFetching} onClick={()=>{void query.refetch();void projects.refetch();}}>重读待办</Button></div>
-  </DialogContents></BusinessModal>{editing&&<NoticeDialog state={{kind:'ownership',row:editing}} projects={(projects.data??[]) as Project[]} blocked={blocked} close={()=>setEditing(null)} refresh={async()=>{await refresh();await query.refetch({throwOnError:true});}} announce={setFeedback}/>}</>;
+  </DialogContents></BusinessModal><DialogPresence>{editing&&<NoticeDialog state={{kind:'ownership',row:editing}} projects={(projects.data??[]) as Project[]} blocked={blocked} close={()=>setEditing(null)} refresh={async()=>{await refresh();await query.refetch({throwOnError:true});}} announce={setFeedback}/>}</DialogPresence></>;
 }

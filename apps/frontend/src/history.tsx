@@ -1,7 +1,9 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useIsPresent } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
@@ -34,8 +36,9 @@ export function useHistoryProtection() {
   return () => busy ? '操作历史正在处理，请稍候。' : uncertain ? '操作历史结果待核实，请先重读核对。' : guardReason(guards);
 }
 export function useHistoryGuard(name: string, reason: () => string) {
-  const guards = useContext(Guards), current = useRef(reason); current.current = reason;
-  useEffect(() => { guards?.set(name, () => current.current()); return () => { guards?.delete(name); }; }, [guards, name]);
+  const guards = useContext(Guards), id = useId(), present = useIsPresent();
+  const current = useRef(reason); current.current = present ? reason : () => '';
+  useEffect(() => { const key = `${name}:${id}`; guards?.set(key, () => current.current()); return () => { guards?.delete(key); }; }, [guards, name, id]);
 }
 export function HistoryScope({ children, workspaceGuard = '' }: { children: ReactNode; workspaceGuard?: string }) {
   const currentWorkspaceGuard = useRef(workspaceGuard); currentWorkspaceGuard.current = workspaceGuard;
@@ -105,13 +108,13 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     onClick={() => void replay(direction)}>{direction === 'undo' ? '撤销' : '重做'}</Button>)}
     {(feedback || history.isError) && <span role="status">{feedback || '操作历史未能读取。'}</span>}
     {(uncertain || history.isError) && <Button disabled={busy || blocked} onClick={() => void reload()}>重读核对</Button>}
-    {confirmation && <BusinessModal open={!blocked} requestClose={closing.requestClose} className="history-confirm-dialog" titleId="history-confirm-title">
+    <DialogPresence>{confirmation && <BusinessModal open={!blocked} requestClose={closing.requestClose} className="history-confirm-dialog" titleId="history-confirm-title">
       <DialogContents title={confirmation.direction === 'undo' ? '确认撤销？' : '确认重做？'} titleId="history-confirm-title" closing={closing}>
         <p>这一步将{confirmation.direction === 'undo' ? '撤销' : '重做'}以下操作：</p>
         <div className="history-operation"><strong>{confirmation.item.label}</strong><span>涉及 {confirmation.item.count} 项变更</span></div>
         {feedback && <p className="notice" role="alert">{feedback}</p>}
         <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={blocked || uncertain} onClick={() => void replay(confirmation.direction, confirmation.item)}>{confirmation.direction === 'undo' ? '确认撤销' : '确认重做'}</Button></div>
       </DialogContents>
-    </BusinessModal>}
+    </BusinessModal>}</DialogPresence>
   </div>;
 }

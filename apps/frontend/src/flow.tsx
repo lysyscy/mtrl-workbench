@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import App from 'antd/es/app';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -138,6 +139,6 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       <ReadStatusLane phase={flowsPhase} announce="正在读取付款流水…" className="flow-read-status flow-list-status">{(flowsPhase==='error'||flowsPhase==='stale')&&<ReadFailure read={flows} retained={flowsPhase==='stale'?'流水更新失败，保留上次结果。':undefined}/>}{projectQuery.isError&&<ReadFailure read={projectQuery} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}</ReadStatusLane>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
       {flowsPlaceheld ? <div className="flow-grid flow-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={flowsPhase==='error'}/></div> : <PreparedGrid presentation={presentation} className="flow-grid" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,defaultColDef:{cellDataType:false,sortable:true,resizable: true,suppressMovable:true,wrapHeaderText:true},getRowId:p=>p.rowPinned?'flow-total':String(p.data.id),onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选没有付款流水。'}} />}
     </section>
-    {revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}
+    <DialogPresence>{revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}</DialogPresence>
   </div>;
 }

@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
@@ -77,7 +78,7 @@ function Monthly({ me, blocked, active }: Props) {
         getRowId:p=>p.data.id,defaultColDef:{resizable: true,sortable:false,suppressMovable:true},
         overlayNoRowsTemplate:'该核算月没有收发结存数据',suppressColumnVirtualisation:true,suppressScrollOnNewData:true}} />
     </>}
-    {fetchMonth !== null && <I8ReportFetch source="settlement" month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={refresh} pending={Boolean(pending.month)} onPending={pending.update}/>}
+    <DialogPresence>{fetchMonth !== null && <I8ReportFetch source="settlement" month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={refresh} pending={Boolean(pending.month)} onPending={pending.update}/>}</DialogPresence>
   </>;
 }
 

@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
@@ -112,7 +113,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     {placeheld ? <div className="inventory-grid inventory-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : <PreparedGrid presentation={presentation} className="inventory-grid" errorClassName="notice" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,
       getRowId:p=>String(p.data.id),defaultColDef:defaultColumn,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
       overlayNoRowsTemplate:'当前筛选条件下没有库存单据',onGridReady:e=>{grid.current=e.api;}}} />}
-    {editRow && <InventoryAdjust key={editRow.id} row={editRow} properties={query.data?.materialProperties??[]} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}
-    {fetchMonth !== null && <InventoryFetch month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={async() => {await reload();}} pending={Boolean(fetchPending)} onPending={updateFetchPending} />}
+    <DialogPresence>{editRow && <InventoryAdjust key={editRow.id} row={editRow} properties={query.data?.materialProperties??[]} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}</DialogPresence>
+    <DialogPresence>{fetchMonth !== null && <InventoryFetch month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={async() => {await reload();}} pending={Boolean(fetchPending)} onPending={updateFetchPending} />}</DialogPresence>
   </section>;
 }

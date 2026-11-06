@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -94,11 +95,11 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
         <p className="muted users-note">停用 = 暂不可登录，可再启用；删除为软删，账号名与已有留痕保留、可恢复。密码与 i8 绑定按账号各存一份。</p>
       </>}
     </div>
-    {dialog?.kind === 'add' && <AddDialog blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}
-    {dialog?.kind === 'password' && <PasswordDialog row={dialog.row} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}
+    <DialogPresence>{dialog?.kind === 'add' && <AddDialog blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}</DialogPresence>
+    <DialogPresence>{dialog?.kind === 'password' && <PasswordDialog row={dialog.row} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}</DialogPresence>
     {dialog?.kind === 'view' && <ViewDialog data={dialog.data} close={() => setDialog(null)} />}
-    {dialog?.kind === 'transfer' && <TransferDialog users={data?.users ?? []} current={current} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}
-    {dialog?.kind === 'delete' && <DeleteDialog row={dialog.row} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}
+    <DialogPresence>{dialog?.kind === 'transfer' && <TransferDialog users={data?.users ?? []} current={current} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}</DialogPresence>
+    <DialogPresence>{dialog?.kind === 'delete' && <DeleteDialog row={dialog.row} blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}</DialogPresence>
   </section>;
 
   async function viewPassword(user: UserRow) {

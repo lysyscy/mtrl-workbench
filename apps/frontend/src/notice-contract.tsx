@@ -4,7 +4,7 @@ import Button from 'antd/es/button';
 import Radio from 'antd/es/radio';
 import { Virtuoso } from 'react-virtuoso';
 import { BusinessModal } from './business-modal';
-import { DiscardConfirmation } from './dialog-close';
+import { DialogHeading, DiscardConfirmation } from './dialog-close';
 import { ReadGrid } from './business-grid';
 import { contentWidth, numberColumnWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
@@ -106,8 +106,8 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     } catch (failure) { setError(`结果仍待核实，请重读核对。${failure instanceof Error ? failure.message : ''}`); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><h2 ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</h2><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
-      <div className="contract-fixed-header"><div className="contract-dialog-heading"><h2 id="contract-dialog-title">供应商与合同关联</h2><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
+  return <BusinessModal open={!blocked} className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
+      <div className="contract-fixed-header"><div className="contract-dialog-heading"><DialogHeading id="contract-dialog-title">供应商与合同关联</DialogHeading><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       <nav className="association-steps" aria-label="关联步骤"><span aria-current={step === 1 ? 'step' : undefined}>1，确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2，选择合同</span><small>确认前不会改变现有关联</small></nav>
       {step === 2 && <div className="contract-notice"><div><strong>{row.bill_name || row.bill_no}</strong><span>{row.project_display}，{row.bill_no}，{data?.supplier || row.jc_supplier || '供应商未录入'}</span></div><div className="contract-notice-amount"><span>通知书审批金额</span><strong>{money(data?.notice_amount ?? row.amount_approved)}<small> 元</small></strong></div></div>}
       </div>

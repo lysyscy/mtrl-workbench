@@ -1,12 +1,15 @@
 import Button from 'antd/es/button';
-import { useId } from 'react';
+import { useContext, useId } from 'react';
+import { BusinessModalTitle } from './business-modal';
 import { useHistoryGuard } from './history';
 import { useEffect, useRef, useState } from 'react';
-import type { MouseEvent, ReactNode, Ref, SyntheticEvent } from 'react';
+import type { ComponentProps, MouseEvent, ReactNode, Ref, SyntheticEvent } from 'react';
+import { useIsPresent } from 'motion/react';
 
 export function useDialogClose({ busy, dirty, close, active = true }: { busy: boolean; dirty: boolean; close: () => void; active?: boolean }) {
   const id = useId();
-  useHistoryGuard(id, () => !active ? '' : busy ? '正在处理操作，请稍候。' : dirty ? '有未保存输入，请先处理。' : '');
+  const present = useIsPresent();
+  useHistoryGuard(id, () => !active || !present ? '' : busy ? '正在处理操作，请稍候。' : dirty ? '有未保存输入，请先处理。' : '');
   const [confirming, setConfirming] = useState(false);
   function requestClose() {
     if (busy) return false;
@@ -29,11 +32,16 @@ export function useDialogClose({ busy, dirty, close, active = true }: { busy: bo
 }
 
 export type DialogCloseState = ReturnType<typeof useDialogClose>;
+export function DialogHeading({ id, ...props }: ComponentProps<'h2'>) {
+  const titleId = useContext(BusinessModalTitle) ?? id;
+  return <h2 {...props} id={titleId} />;
+}
 export function DiscardConfirmation({ titleId, headingRef, closing }: { titleId: string; headingRef: Ref<HTMLHeadingElement>; closing: Pick<DialogCloseState,'busy'|'resume'|'discard'> }) {
-  return <div className="dialog-discard"><h2 ref={headingRef} tabIndex={-1} id={titleId}>放弃未保存的修改？</h2><p>本次输入和选择尚未保存。</p><div className="dialog-actions"><Button htmlType="button" disabled={closing.busy} onClick={closing.resume}>继续编辑</Button><Button htmlType="button" className="primary" disabled={closing.busy} onClick={closing.discard}>放弃并关闭</Button></div></div>;
+  return <div className="dialog-discard"><DialogHeading ref={headingRef} tabIndex={-1} id={titleId}>放弃未保存的修改？</DialogHeading><p>本次输入和选择尚未保存。</p><div className="dialog-actions"><Button htmlType="button" disabled={closing.busy} onClick={closing.resume}>继续编辑</Button><Button htmlType="button" className="primary" disabled={closing.busy} onClick={closing.discard}>放弃并关闭</Button></div></div>;
 }
 
-export function DialogContents({ title, titleId, closing, children }: { title: ReactNode; titleId: string; closing: DialogCloseState; children: ReactNode }) {
+export function DialogContents({ title, titleId: requestedTitleId, closing, children }: { title: ReactNode; titleId: string; closing: DialogCloseState; children: ReactNode }) {
+  const titleId = useContext(BusinessModalTitle) ?? requestedTitleId;
   const decisionTitle = useRef<HTMLHeadingElement>(null), previousFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (closing.confirming) {

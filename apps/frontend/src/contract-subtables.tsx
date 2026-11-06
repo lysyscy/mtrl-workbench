@@ -1,3 +1,4 @@
+import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Pagination from 'antd/es/pagination';
 import Input from 'antd/es/input';
@@ -161,7 +162,7 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
       ]}/></div>{draftRow('payment')}</section>}
       {(!onlyKind || onlyKind === 'payment') && linkedNotices.length > 0 && <div className="subtable-linked-group"><div className="subtable-links"><span>已关联通知书</span>{linkedNotices.slice((currentLinkPage - 1) * linkPageSize, currentLinkPage * linkPageSize).map((id, index) => <NoticeButton key={id} id={id}>通知书 {(currentLinkPage - 1) * linkPageSize + index + 1}</NoticeButton>)}</div>{linkedNotices.length > linkPageSize && <Pagination aria-label="已关联通知书分页" size="small" current={currentLinkPage} pageSize={linkPageSize} total={linkedNotices.length} showSizeChanger={false} onChange={setLinkPage}/>}</div>}
     </> : placeheld && <div className="subtable-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={readState === 'error'}/></div>}
-    {referencing && <ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} workspace={workspace} close={() => setReferencing(false)}/>}
+    <DialogPresence>{referencing && <ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} workspace={workspace} close={() => setReferencing(false)}/>}</DialogPresence>
     {state?.deleting && (!onlyKind || state.deleting.kind === onlyKind) && <div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date || '日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={() => workspace.selectDeletion(contractId, null)}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={() => void save(state.deleting!.kind, true)}>确认删除</Button></div>}
     {state?.feedback && <p role="status">{state.feedback}</p>}{state?.error && <p className="notice" role="alert">{state.error}</p>}
   </div>;

@@ -11,6 +11,7 @@ import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
 import { ProjectSelectionOrder, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { BusinessModal } from './business-modal';
+import { DialogPresence } from './workspace-motion';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useCellSaveQueue } from './use-cell-save';
 import { money } from './notices-api';
@@ -181,7 +182,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
 }} />
     </BigCells.Provider>}
     </FirstReadRegion>
-    {picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}
+    <DialogPresence>{picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}</DialogPresence>
   </>;
 }
 

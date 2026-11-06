@@ -5,6 +5,8 @@ import theme from 'antd/es/theme';
 import zhCN from 'antd/locale/zh_CN';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { MotionConfig } from 'motion/react';
+import { ReducedMotion } from './workspace-motion';
 
 const messageConfig = {maxCount: 1, styles: {list: {top: 'auto', height: 'auto', bottom: 'calc(64px * var(--fscale, 1) + env(safe-area-inset-bottom))'}}};
 
@@ -24,7 +26,7 @@ function appearance() {
     colorBgLayout: read('--bg'), colorFillSecondary: read('--sf2'),
     colorSuccess: read('--ok-d'), colorWarning: read('--wn-d'), colorError: read('--dg-d'), colorInfo: read('--bl-d'),
     boxShadow: read('--shadow-pop'), boxShadowSecondary: read('--shadow-md'),
-    motionDurationFast: read('--motion-fast') || '130ms', motionDurationMid: read('--motion-fast') || '130ms', motionDurationSlow: read('--motion-fast') || '130ms',
+    motionDurationFast: '130ms', motionDurationMid: '240ms', motionDurationSlow: '320ms',
   } };
 }
 
@@ -38,11 +40,11 @@ export function UiProvider({ children, appearanceKey }: { children: ReactNode; a
     return () => media.removeEventListener('change', update);
   }, []);
   // Keep the provider tree stable when the OS motion preference changes mid-edit.
-  return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
+  return <ReducedMotion.Provider value={reducedMotion}><MotionConfig reducedMotion={reducedMotion ? 'always' : 'never'}><MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
     algorithm: value.dark ? [theme.darkAlgorithm, theme.compactAlgorithm] : theme.compactAlgorithm,
     token: value.token, components: {
       Input: { inputFontSizeSM: value.token.fontSizeSM }, DatePicker: { inputFontSizeSM: value.token.fontSizeSM },
       Select: { fontSize: value.token.fontSizeSM }, Button: { fontSizeSM: value.token.fontSizeSM }, Segmented: { fontSize: value.token.fontSizeSM },
       Tag: { borderRadiusSM: 4 }, Checkbox: { borderRadiusSM: 4 } },
-  }}><App component={false} message={messageConfig}>{children}</App></ConfigProvider></MotionProvider>;
+  }}><App component={false} message={messageConfig}>{children}</App></ConfigProvider></MotionProvider></MotionConfig></ReducedMotion.Provider>;
 }

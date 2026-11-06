@@ -1,4 +1,5 @@
 import { BusinessModal } from './business-modal';
+import { DialogPresence } from './workspace-motion';
 import { ReadGrid } from './business-grid';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -145,7 +146,7 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
       restore();
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</Button>
-    {open && createPortal(<BusinessModal open={open && !paused} className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
+    {createPortal(<DialogPresence>{open && <BusinessModal open={open && !paused} className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
       <p>{description}</p>
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}
@@ -166,6 +167,6 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}
       <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>关闭</Button>{singleList ? <Button htmlType="submit" className="primary" disabled={Boolean(reason)||busy||!chosen.length} onClick={()=>void save()}>保存到本地</Button> : confirm ? <><Button htmlType="submit" disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</Button><Button htmlType="submit" className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</Button></> : <Button htmlType="submit" className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</Button>}</div>
-    </DialogContents></BusinessModal>, document.body)}
+    </DialogContents></BusinessModal>}</DialogPresence>, document.body)}
   </>;
 }

@@ -4,7 +4,9 @@
 .oilcard-tabs { gap: 24px; }
 .oilcard-tab { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--tx2); cursor: pointer; font: inherit; font-weight: 500; padding: 12px 0; min-height: var(--control-h); }
 .oilcard-tab:hover { color: var(--pri); }
-.oilcard-tab[aria-selected="true"] { border-bottom-color: var(--pri); color: var(--tx); font-weight: 600; }
+.oilcard-tab{position:relative}
+.oilcard-tab[aria-selected="true"] { color: var(--tx); font-weight: 600; }
+.oilcard-tab-marker{position:absolute;bottom:-2px;inset-inline:0;height:2px;background:var(--pri);pointer-events:none}
 .oilcard-tab:focus-visible { outline: 2px solid var(--pri); outline-offset: 3px; }
 .oilcard-total-export { flex: none; padding-block: 4px; }
 .oilcard-total-export .notice { max-width: 32ch; margin: 8px 0 0; }
