@@ -23,9 +23,8 @@
 .first-read-region:has(>.first-read-measuring){overflow:clip}
 .first-read-measuring{position:absolute;inset-inline:0;top:0;width:100%;visibility:hidden;pointer-events:none}
 
-/* One fixed status lane per region, present in every state. The lane is one control line tall, so
-   an idle, running, failed or retained-result notice all occupy exactly the same height and never
-   move the region's table or the content below it.
+/* Only visible feedback occupies a line. A successful or pending read has no empty box or flex
+   gap; the pending announcement stays available to assistive technology outside normal flow.
 
    A region with two reads (its own and a secondary list) puts both notices side by side in this
    same lane: the message says which read failed and each keeps its own retry button. Long text is
@@ -35,6 +34,7 @@
    --read-status-inset  outer inset of the lane inside the region (default 0)
    --read-status-pad    inset of a notice's content inside its own box (default 10px) */
 .read-status{display:flex;align-items:stretch;gap:calc(6px * var(--fscale));height:calc(var(--control-h));margin:0;padding:0 var(--read-status-inset,0);overflow:hidden;flex:none;min-width:0}
+.read-status:not(:has(>:not(.read-announce))){display:contents}
 .read-status>.notice{flex:1 1 0;min-width:0;margin:0;display:flex;align-items:center;flex-wrap:nowrap;gap:calc(8px * var(--fscale));padding:0 var(--read-status-pad,calc(10px * var(--fscale)));font-size:calc(12px * var(--fscale));line-height:1.4;border-radius:var(--radius-card);overflow:hidden}
 .read-status>.notice>.read-failure-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .read-status>.notice>.ant-btn,.read-status>.ant-btn{flex:none;height:auto;min-height:0;margin:0;padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));line-height:1.4}

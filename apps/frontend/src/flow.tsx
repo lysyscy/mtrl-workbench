@@ -43,8 +43,7 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   return <div className="debt-workspace">
     <section className="debt-overviews" data-read-phase={phase} aria-label="按项目看的欠款汇总"
       aria-busy={phase==='reading'}>
-      {/* One status slot above the cards, present in every state so a failure never adds a row and
-          never sits on top of a heading or a value. It is the region's own line, not a page overlay. */}
+      {/* Visible failures take their own line above the cards, without covering headings or values. */}
       <ReadStatusLane phase={phase} announce="正在读取欠款汇总…" className="debt-overviews-status">
         {(phase==='error'||phase==='stale')&&<ReadFailure read={debt}/>}
       </ReadStatusLane>
@@ -120,8 +119,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     flowSection.current?.scrollIntoView({block:'nearest'});
   }
   const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]!}));
-  // Statistics and flows read independently: each publishes its own state in a fixed lane so a
-  // pending or failed read never holds the other region or pushes the table box around.
+  // Statistics and flows read independently; each keeps its placeholder and local failure feedback.
   const statsPhase=readPhase(stats,(stats.data?.buckets.length??0)===0);
   const flowsPhase=readPhase(flows,rows.length===0);
   const statsPlaceheld=!stats.data;

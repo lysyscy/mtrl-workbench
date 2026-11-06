@@ -11,9 +11,7 @@
 .rules-warning{margin:calc(10px * var(--fscale)) 0 0;padding:calc(10px * var(--fscale)) calc(12px * var(--fscale));border-radius:var(--radius-input);background:var(--wn-l);color:var(--wn-d);line-height:1.5}
 .rules-receipt{margin:0 0 calc(10px * var(--fscale));color:var(--tx2);line-height:1.5}
 .rules-block .notice{margin:0 0 calc(10px * var(--fscale))}
-/* Each block owns one read: its state is reported in a fixed lane under the heading (read-region.css)
-   and the table box keeps its area until the first result arrives. The lane is one control line tall
-   in every state, so a pending or failed read never moves the form and notes below it. */
+/* Each block reserves its table until the first result. Only a failure adds a line under its heading. */
 .rules-read-status{--read-status-pad:0;margin:0 0 calc(10px * var(--fscale))}
 .rules-table.rules-read-reserve{padding:0;min-height:calc(160px * var(--fscale));max-height:none}
 .rules-form{display:flex;align-items:flex-end;flex-wrap:wrap;gap:calc(12px * var(--fscale));margin-top:calc(14px * var(--fscale))}

@@ -7,9 +7,7 @@
 .users-note{margin:calc(8px * var(--fscale)) 0 0;line-height:1.5}
 .users-receipt{margin:0 0 calc(10px * var(--fscale));color:var(--tx2);line-height:1.5}
 .users-block .notice{margin:0 0 calc(10px * var(--fscale))}
-/* The account list is one read region. Its state lives in one fixed lane under the heading, so the
-   heading, tools and notes stay usable while the first read is pending or has failed, and the table
-   box keeps its area. Only the inset and the reserved box padding belong to this page. */
+/* Reserve the account table during its first read. Only a failure adds a line under the heading. */
 .users-read-status{--read-status-pad:0;margin:0 0 calc(10px * var(--fscale))}
 .users-read-reserve{padding:0;min-height:calc(240px * var(--fscale));max-height:none}
 .users-table{max-height:60dvh;border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}

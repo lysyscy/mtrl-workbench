@@ -1,8 +1,8 @@
 """Notices, inventory, payment flow and home report their own read in place.
 
-Each page owns its read lane: a pending or failed read is expressed inside the
-region it belongs to, keeps that region's reserved box, and never stands in for
-a real empty result or a real zero count.
+Each region reports its own read. Pending reads announce status without taking
+up space above the reserved box. A visible failure has a local retry and never
+stands in for a real empty result or a real zero count.
 """
 
 import re
@@ -98,8 +98,9 @@ def test_notice_list_failure_reports_in_place_and_is_not_an_empty_list(server, b
     expect(page.get_by_role('region', name='付款通知书列表', exact=True)).to_have_count(0)
     expect(page.locator('.notice-read-reserve .read-placeholder-quiet')).to_have_count(1)
     after = page.locator('.notice-grid').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
-    assert abs(after['height'] - before['height']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
+    assert after['height'] >= before['height'] - alert['height'] - 1, (before, alert, after)
 
 
 def test_inventory_first_read_failure_is_reported_in_place(server, browser_page):
@@ -124,9 +125,10 @@ def test_inventory_first_read_failure_is_reported_in_place(server, browser_page)
     failure.get_by_role('button', name='重试读取').click()
     expect(page.locator('.inventory-grid')).to_have_attribute('aria-busy', 'false', timeout=30000)
     expect(page.locator('.inventory-read-reserve')).to_have_count(0)
+    expect(failure).to_have_count(0)
     after = page.locator('.inventory-grid').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
-    assert abs(after['height'] - before['height']) < 1, (before, after)
+    assert after['y'] < before['y'], (before, after)
+    assert after['height'] >= before['height'] - 1, (before, after)
 
 
 def test_flow_statistics_and_flows_publish_independently(server, browser_page):

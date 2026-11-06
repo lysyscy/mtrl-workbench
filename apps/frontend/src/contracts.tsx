@@ -245,7 +245,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const subBusy=Object.values(subtables).some(s=>s.busy), subUncertain=Object.values(subtables).some(s=>s.uncertain), subDirty=Object.values(subtables).some(hasSubtableDrafts);
   const exportUnavailable=blocked||!active?'当前页面暂不可操作。':!me?'请先登录。':busy||subBusy?'合同正在保存，请稍候。':uncertain||subUncertain?'合同操作结果待核实，请先重读。':subDirty?'合同子表有未保存输入，请先处理。':query.isPending||query.isFetching||projects.isPending||projects.isFetching?'正在读取合同及项目，请稍候。':query.isError||projects.isError?'合同或项目读取失败，请先重读。':Object.keys(inlineDrafts).length?'请先保存收发登记输入。':Object.keys(editors).length||tool||subtable||remarkEditor?'请先处理并关闭合同窗口。':'';
   function exportIds(){if(!grid.current)throw new Error('合同列表尚未准备好，请稍候。');const ids:number[]=[];grid.current.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});return ids;}
-  // 首读与失败反馈占用恒高槽，表格区以同几何占位，避免结果落位时推移工具栏以外的布局。
+  // 首读以同几何表框占位，只有实际失败反馈占行。
   const readState=readPhase(query);
   const placeheld=readState==='idle'||readState==='reading'||readState==='error';
   const pageState=useRef({blocked,active,editorId});pageState.current={blocked,active,editorId};

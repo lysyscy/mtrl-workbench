@@ -216,7 +216,8 @@ def test_oilcard_reconciliation_failure_keeps_its_box_and_is_not_an_empty_accoun
     expect(overview.locator('.oilcard-read-reserve .read-placeholder-quiet')).to_have_count(1)
     expect(overview.get_by_text('尚无符合条件的用卡账户。')).to_have_count(0)
     expect(overview.get_by_role('heading', name='充值与开票核对', exact=True)).to_be_visible()
-    # Reporting the failure in the lane does not push the table area down.
+    # The alert sits above the placeholder and leaves its full height available.
     after = overview.locator('.oilcard-read-reserve').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
     assert abs(after['height'] - before['height']) < 1, (before, after)

@@ -44,8 +44,6 @@
 .fee-record-name-details summary span{display:block;color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .fee-record-name-details summary:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 
-/* The fee year is one read region keyed by year and project: it reports in a fixed lane under the
-   toolbar (read-region.css), and the annual table keeps its area until the matching range answers.
-   Only the inset and the reserved box padding belong to this page. */
+/* Reserve the annual table until the selected year and project return. Only a failure adds a line. */
 .fees-read-status{--read-status-pad:calc(16px * var(--fscale))}
 .fees-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale));min-height:calc(280px * var(--fscale))}

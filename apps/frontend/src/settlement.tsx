@@ -54,7 +54,7 @@ function Monthly({ me, blocked, active }: Props) {
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
   const presentation = useGridPresentation({table: 'settlement-month', root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
-  // One read region: its state is reported in a fixed lane under the toolbar, and the table box
+  // One read region: visible failures are reported under the toolbar, and the table box
   // keeps its area while the month's rows are unknown. A failure never replaces a result on screen.
   const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
   const placeheld = query.data === undefined;
@@ -114,7 +114,7 @@ function Extract({ me, blocked, active }: Props) {
   const save=saves.save;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
-  // The annual summary is one read region: the lane below the toolbar reports it in every state and
+  // The annual summary is one read region: visible failures appear below the toolbar and
   // the two natural-height tables keep their area until the year's rows are known.
   const readState = readPhase(query, query.data !== undefined && kinds.every(kind => query.data!.annual[kind].rows.length === 0));
   const placeheld = query.data === undefined;

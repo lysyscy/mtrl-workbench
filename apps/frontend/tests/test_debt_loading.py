@@ -12,8 +12,10 @@ def open_debt(page, address):
     expect(page.get_by_role('heading', name='欠款台账', exact=True)).to_be_visible()
 
 
-def ledger_top(page):
-    return page.locator('.ledger-card').bounding_box()['y']
+def gap_below_overviews(page):
+    cards = page.locator('.debt-overviews-grid').bounding_box()
+    ledger = page.locator('.ledger-card').bounding_box()
+    return ledger['y'] - cards['y'] - cards['height']
 
 
 def covered_by_notice(page):
@@ -65,13 +67,13 @@ def test_debt_overviews_report_their_own_read(server, browser_page):
     assert rows + empty > 0, (rows, empty)
 
 
-def test_debt_overviews_failure_does_not_move_the_ledger(server, browser_page):
+def test_debt_overviews_failure_keeps_the_ledger_below_the_cards(server, browser_page):
     page, _ = browser_page
     held = []
     page.route('**/api/m05/debt', lambda route: held.append(route))
     open_debt(page, server)
     expect(page.locator('.ledger-card')).to_be_hidden()
-    before = ledger_top(page)
+    before = gap_below_overviews(page)
     assert len(held) == 1, len(held)
 
     # The real path answers nothing here; this only decides that this read fails.
@@ -88,9 +90,11 @@ def test_debt_overviews_failure_does_not_move_the_ledger(server, browser_page):
     # A failed summary read is not an empty summary, and it is not a running read.
     expect(page.locator('.debt-overviews .muted')).to_have_count(0)
     expect(page.locator('.debt-overviews [role=status]')).to_have_count(0)
-    # The failure reports inside its own region, so the ledger keeps its place.
+    # The alert takes a line above the cards. The ledger still follows the cards
+    # at the same spacing.
     expect(page.locator('.ledger-card')).to_be_visible()
-    assert abs(ledger_top(page) - before) < 1, (before, ledger_top(page))
+    after = gap_below_overviews(page)
+    assert abs(after - before) < 1, (before, after)
     failure.get_by_role('button', name='重试读取').click()
     expect(page.locator('.debt-overviews [role=status]')).to_have_count(1)
     expect(page.locator('.ledger-card')).to_be_visible()
@@ -109,7 +113,7 @@ def test_debt_overviews_keep_their_result_when_the_return_refresh_fails(server, 
     first = page.locator('.debt-overviews .bar-name').first
     before_rows = page.locator('.debt-overviews .bar-name').count()
     before_text = first.inner_text() if before_rows else ''
-    before_top = ledger_top(page)
+    before_gap = gap_below_overviews(page)
 
     page.route(
         '**/api/m05/debt',
@@ -131,8 +135,9 @@ def test_debt_overviews_keep_their_result_when_the_return_refresh_fails(server, 
     assert page.locator('.debt-overviews .bar-name').count() == before_rows
     if before_rows:
         expect(first).to_have_text(before_text)
-    # Reporting the failed refresh adds no layout row above the ledger.
-    assert abs(ledger_top(page) - before_top) < 1, (before_top, ledger_top(page))
+    # The alert above the cards does not separate them from the ledger.
+    after_gap = gap_below_overviews(page)
+    assert abs(after_gap - before_gap) < 1, (before_gap, after_gap)
     # And the kept result stays readable: the notice never prints over a heading or a value.
     assert covered_by_notice(page) == [], covered_by_notice(page)
 

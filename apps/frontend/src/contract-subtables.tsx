@@ -194,7 +194,7 @@ export function ContractSubtables({ contractId, accountId, historyDate, workspac
   }, [state?.focus, query.data, query.isFetching, paused]);
 
   const unavailable = !writable || paused || !state || state.busy || state.uncertain || query.isFetching || query.isError || !query.data;
-  // 明细读取状态与占位在区外恒高呈现：首读、失败和恢复都不塌掉摘要、警示与合计的位置。
+  // 首读保留明细表框；失败反馈按需占行，正常状态不留空行。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
 
