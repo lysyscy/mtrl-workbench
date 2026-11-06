@@ -231,16 +231,15 @@ def test_会话失效判据要认body里的NoSessionInfo():
     assert I8Client._is_session_invalid(resp(200, {"Code": "0", "Msg": "参数错误"})) is False  # noqa: SLF001
 
 
-def test_未审批的不抓且计数不静默(monkeypatch):  # noqa: ANN001
-    """⭐ 用户 2026-09-19 定：未审批不抓 —— 但**丢弃数必须报出来**（禁静默丢数据）。
-
-    实测背景：355 条里有 8 条 `AppStatus=0` ⇒ 落库 347 条。
-    """
-    _patch(monkeypatch, "http://i8/api04")
-    unapproved = {**REC, "BillNo": "CGHT-BAD-1", "AppStatus": 0}
-    ok = {**REC, "BillNo": "CGHT-OK-1", "AppStatus": 1}
-    fake = _FakeClient({"Record": [unapproved, ok]})
-    fetcher = cs.ContractFetcher(fake)                          # type: ignore[arg-type]
-    rows = fetcher.fetch_all()
-    assert [r["contract_no"] for r in rows] == ["CGHT-OK-1"], "未审批的必须丢弃"
-    assert fetcher.last_unapproved == 1, "丢弃数必须计数（回执要报，⛔ 不静默）"
+def test_已审批和未审批均抓取且保留原审批状态(monkeypatch):  # noqa: ANN001
+    """审批状态不再作为台账写入条件，空审批状态也不能漏抓。"""
+    pending = [
+        {**REC, "BillNo": f"CGHT-PENDING-{index}", "AppStatus": status}
+        for index, status in enumerate((0, "0", "", None, "None", "null"))
+    ]
+    approved = {**REC, "BillNo": "CGHT-APPROVED", "AppStatus": 1}
+    records = [*pending, approved]
+    rows, _ = _fetch(monkeypatch, {"Record": records})
+    assert [row["contract_no"] for row in rows] == [rec["BillNo"] for rec in records]
+    assert [row["approve_status"] for row in rows] == [*["未批"] * len(pending), "已批"]
+    assert [row["fields"]["AppStatus"] for row in rows] == [rec["AppStatus"] for rec in records]

@@ -12,7 +12,7 @@
 
 ⚠️ **安全绳**（照 `mod08_inv.fetch_service` / `recovery` 的既有纪律）：
 - 同步那一步**失败绝不拖垮抓取**（合同数据与档案是两件事）⇒ **降级进回执显式说明**，继续用**现有档案**匹配；
-- 回执**逐条说清**：未审批丢弃几条 · 匹配上几条 · 匹配不上哪些项目（**禁静默**）。
+- 已审批、未审批均参与写入；回执说明匹配、忽略与未完成归属的数量和项目。
 
 ⚠️ 与 `mod08` 的一处**刻意不同**：那边是"陌生**仓库** ⇒ 扶正"，走 `recovery`；
 集采**没有仓库**，有的只是项目全名 ⇒ 走 `sync_service`（"同步常用项目 ⇒ 建档"）。
@@ -178,7 +178,7 @@ def run_fetch(
     client_factory = client_factory or (
         lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
     )
-    dropped = material_filled = material_blank = 0
+    material_filled = material_blank = 0
     common_rows, warehouse_rows, sync_failure = [], [], None
     with ExitStack() as batch:
         try:
@@ -189,7 +189,6 @@ def run_fetch(
             try:
                 fetcher = ContractFetcher(client)
                 fetched_rows = fetcher.fetch_in_locked_batch(since=since) if fetch is None else fetch(client)
-                dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
                 with session_scope() as s:
                     rows, ignored_rows = split_ignored(s, fetched_rows)
                     known = R.existing_contract_nos(s, [str(r.get("contract_no") or "") for r in rows]) if fetch is None and rows else set()
@@ -300,7 +299,7 @@ def run_fetch(
             return {
                 "ok": True, "degraded": False,
                 "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）
-                "fetched": len(rows), "dropped_unapproved": dropped,
+                "fetched": len(rows),
                 # ⭐ 材料名的补数情况（⛔ 禁静默：补不上多少条必须让人看见）
                 "material_filled": material_filled, "material_blank": material_blank,
                 # ⭐ `M5-6b`：这一次**新遇到的甲方单位**（已落成"未指定"）—— ⛔ 必须报出来让人去指定，
@@ -320,7 +319,7 @@ def run_fetch(
                 "sync": {k: v for k, v in (sync_result or {}).items() if k != "created"},
                 "run_record_id": getattr(run, "id", None),
                 "message": (
-                    f"抓取 {len(rows)} 条（未审批丢弃 {dropped}）· 匹配上 {len(m['matched'])} 条"
+                    f"抓取 {len(rows)} 条 · 匹配上 {len(m['matched'])} 条"
                     f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
                     f"归属未走完、未写入 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
                     + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")

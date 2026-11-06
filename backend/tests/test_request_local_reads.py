@@ -53,7 +53,7 @@ def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
     closed = []
     client = SimpleNamespace(close=lambda: closed.append(True))
     monkeypatch.setattr(M11, 'session_scope', lambda: nullcontext(None))
-    monkeypatch.setattr(M11, "ContractFetcher", lambda _client: SimpleNamespace(last_unapproved=0))
+    monkeypatch.setattr(M11, "ContractFetcher", lambda _client: SimpleNamespace())
     monkeypatch.setattr(M11.fetch_task, "degrade_to_excel", lambda _exc: {"message": "降级"})
     monkeypatch.setattr(M11.fetch_task, "fetch_record_payload", lambda **kwargs: kwargs)
     monkeypatch.setattr(M11, "record_detail", lambda: {})

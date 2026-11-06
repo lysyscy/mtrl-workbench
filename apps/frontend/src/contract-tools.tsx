@@ -65,7 +65,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
           <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
         </label>
         {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
-        <p>保留人工标记、材料名、账期、付款方式和备注。未完成归属的合同不写入。</p>
+        <p>已审批和未审批合同均写入台账。忽略名单内或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
       </>}
       {result && <>
         <p role="status">{result.message}</p>

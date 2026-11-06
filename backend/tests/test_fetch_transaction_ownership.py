@@ -75,7 +75,7 @@ def test_fetch_releases_connection_and_actor_lock_until_atomic_apply(domain, mon
         rows = [{'contract_no': '450-' + uuid4().hex, 'project_name': full_name,
                  'party_name': '450-party', 'supplier_name': '450-supplier', 'contract_amt': '10.00',
                  'sign_date': '2026-08-01', 'fields': {'PhId': '450', 'BillName': '450'}}]
-        monkeypatch.setattr(fetch, 'ContractFetcher', lambda c: SimpleNamespace(last_unapproved=0,
+        monkeypatch.setattr(fetch, 'ContractFetcher', lambda c: SimpleNamespace(
             fetch_in_locked_batch=lambda **kw: external('list', rows),
             fetch_item_name=lambda phid: external('detail', '材料')))
 

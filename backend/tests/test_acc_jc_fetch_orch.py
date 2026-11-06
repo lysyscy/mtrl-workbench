@@ -142,3 +142,55 @@ def test_未二次确认不写执行记录也不动数据():
             raise AssertionError("没二次确认必须抛 MustReportError")
         assert R.count_contracts(s) == before, "一行都不许动"
         s.rollback()
+
+
+def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rollback_db):
+    """走真实取数映射、编排和数据库写入，防止只在映射层放行。"""
+    from decimal import Decimal
+
+    from app.mod02_i8 import contract_source
+    from app.mod11_jc.models import TAG_OUT
+
+    monkeypatch.setattr(contract_source, 'configured_url', lambda: 'http://i8.test/contracts')
+    monkeypatch.setattr(contract_source, 'configured_detail_url', lambda: 'http://i8.test/detail')
+    records = [
+        {'PhId': f'approval-{status}', 'BillNo': f'__approval_{status}__',
+         'BillDt': '2026-11-06', 'BillName': '审批范围测试合同',
+         'PhidPc_EXName': FULL_NEW, 'PhidSupplyEnt_EXName': '测试供应商',
+         'AppStatus': status, 'CntSumVat': '100.00'}
+        for status in (0, 1)
+    ]
+
+    def post_json(url, **kwargs):
+        if url.endswith('/contracts'):
+            return {'Record': records}
+        return {'Data': {'Grid': {'results': [{'ItemName': '测试材料'}]}}}
+
+    client = SimpleNamespace(post_json=post_json, close=lambda: None)
+    with session_scope() as s:
+        project = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full=FULL_NEW,
+                                         warehouse_name=WH_NEW, phid='approval')
+        s.flush()
+        out = _run_fetch(s, confirmed=True, client_factory=lambda: client,
+                         sync=lambda *args, **kwargs: {})
+        assert out['ok'] is True
+        assert (out['fetched'], out['matched'], out['stats']['inserted']) == (2, 2, 2)
+        pending = R.one_by_no(s, '__approval_0__')
+        approved = R.one_by_no(s, '__approval_1__')
+        assert pending is not None and approved is not None
+        assert pending.project_id == approved.project_id == project.id
+        assert pending.contract_amt == approved.contract_amt == Decimal('100.00')
+        assert pending.material_name == '测试材料'
+        pending_id = pending.id
+        pending.tag, pending.remark = TAG_OUT, '保留人工备注'
+        s.flush()
+
+        records[0].update(AppStatus=1, CntSumVat='125.00')
+        again = _run_fetch(s, confirmed=True, client_factory=lambda: client,
+                           sync=lambda *args, **kwargs: {})
+        assert (again['stats']['inserted'], again['stats']['refreshed']) == (0, 2)
+        s.expire_all()
+        same = R.one_by_no(s, '__approval_0__')
+        assert same.id == pending_id
+        assert same.contract_amt == Decimal('125.00')
+        assert (same.tag, same.remark) == (TAG_OUT, '保留人工备注')
