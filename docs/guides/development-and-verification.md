@@ -6,6 +6,8 @@
 
 backend_verify从仓根调用，--test可重复，测试路径相对backend，--之后支持`-q/-v/-x/-k/-m/--maxfail/--tb/--durations/--disable-warnings`和清空默认参数的`-o addopts=`，不能追加收集路径；仅在已核专用测试库创建独占临时schema，升级后运行明确节点，成功或测试失败均退出自有schema。pytest临时目录由入口在本run/work内独立分配，以独立argv参数传入，正常、非零或异常退出均回收；无需经PYTEST_ADDOPTS手工指定。报告分别记录schema与临时目录清理结果。不启动HTTP预览，不停止现有8065，也不复制/改写正式业务数据。pytest从启动起DATABASE_URL就是测试目标，MTRL_TEST_SOURCE_ENV仅供守卫读取明确来源身份；同库、不同目标和错缓存仍拒绝。默认沿workspace_paths归档日志与JSON报告，含源提交/dirty、测试选择、退出码及清理结果，不记录DSN或凭据。
 
+明确来源文件必须同时声明原库与测试库。父入口在连接、复制或建schema前比较文件声明与有效Settings的两侧数据库身份，并沿用默认检出原库的同库拒绝；环境覆盖指向别的库时先纠正环境，不以子pytest稍后拒绝代替保护。非空`PYTEST_ADDOPTS`或`PYTEST_PLUGINS`会在准备schema前明确拒绝；用上述显式参数选择测试，不静默忽略继承配置。
+
 pytest 在 backend 组件运行；选文件/节点前先看 fixture，保留原始退出码、失败节点和未验边界。`@acc` 在存量业务测试中仅作历史标识，不再生成旧验收JSON或四态报告。
 
 ## 隔离和写入

@@ -82,7 +82,7 @@ def owned_run(path):
     return validate_run(path, root=ROOT, writing=True)
 
 
-def existing_environment(args, run, source, guard):
+def existing_environment(args, run, guard):
     from tools.dev.frontend_preview import migrate
     from tools.dev.frontend_preview_copy import schema_fingerprints, schema_columns
     from sqlalchemy import create_engine, text
@@ -143,7 +143,7 @@ def existing_environment(args, run, source, guard):
         engine.dispose()
 
 
-def application(args, run, env, owner, version, source, guard, browser_notice_check=None):
+def application(args, run, env, owner, version, browser_notice_check=None):
     from app.core import config
     private = ROOT / 'var/state/react-writable-preview' / run.name
     private.mkdir(parents=True, exist_ok=True)
@@ -157,7 +157,7 @@ def application(args, run, env, owner, version, source, guard, browser_notice_ch
     @lru_cache
     def settings():
         values = PreviewSettings(_env_file=(args.source_env, config.ENV_FILE))
-        updates = dict(database_url=guard.test_url, test_database_url=guard.test_url,
+        updates = dict(database_url=env['DATABASE_URL'], test_database_url=env['TEST_DATABASE_URL'],
             session_secret=secret, app_env='dev', allowed_ip_cidrs='127.0.0.1/32,::1/128', cors_allow_origins='',
             frontend_preview_dir=version['build_path'], frontend_app_dir='', artifacts_dir=str(ROOT / 'var/data/react-writable-preview' / run.name),
             logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='', printer_name='')
@@ -205,9 +205,7 @@ def application(args, run, env, owner, version, source, guard, browser_notice_ch
 
 
 def run(args):
-    from app.core.config import Settings
-    from tests.db_guard import TestDatabaseGuard
-    from tools.dev.frontend_preview import isolated_database
+    from tools.dev.frontend_preview import isolated_database, verified_database_source
     run = owned_run(args.run)
     from tools.dev.frontend_preview_browser_check import load_check
     browser_notice_check = load_check(args, run)
@@ -220,14 +218,13 @@ def run(args):
         raise RuntimeError('须明确只读来源配置 --source-env')
     version = read_json(run / 'reports/version.json')
     verify_build(version)
-    source = Settings(_env_file=args.source_env)
-    guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
+    _, guard = verified_database_source(args.source_env)
     if not args.existing and (not args.copy_source or not args.disposable):
         raise RuntimeError('新验证实例须显式 --copy-source --disposable，不能复用用户副本生命周期')
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', args.port))
         if args.existing:
-            env, owner = existing_environment(args, run, source, guard)
+            env, owner = existing_environment(args, run, guard)
             database = nullcontext(env)
         else:
             database = isolated_database(args.source_env, copy_source=True)
@@ -237,7 +234,7 @@ def run(args):
         with database as env:
             from sqlalchemy import create_engine
             schema = env['PGOPTIONS'].split('search_path=', 1)[1]
-            engine = create_engine(guard.test_url, connect_args={'options':env['PGOPTIONS']}, hide_parameters=True)
+            engine = create_engine(env['DATABASE_URL'], connect_args={'options':env['PGOPTIONS']}, hide_parameters=True)
             try:
                 with engine.connect() as connection:
                     revision = connection.exec_driver_sql('SELECT version_num FROM alembic_version').scalar_one()
@@ -254,7 +251,7 @@ def run(args):
             owner.pop('stopped_at', None)
             if browser_notice_check is not None:
                 owner['browser_notice_check'] = browser_notice_check.receipt()
-            app = application(args, run, env, owner, version, source, guard, browser_notice_check)
+            app = application(args, run, env, owner, version, browser_notice_check)
             path = run / 'reports/real_owner.json'
             stop = run / 'reports/stop-request.json'
             if stop.exists():

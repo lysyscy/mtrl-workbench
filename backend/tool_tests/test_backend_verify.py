@@ -5,6 +5,8 @@ import subprocess
 from types import SimpleNamespace
 import pytest
 from tools.dev import backend_verify as runner
+from tools.dev import frontend_preview, frontend_preview_copy, frontend_preview_server
+from app.core.config import Settings
 
 DEV='postgresql+psycopg://source:private@127.0.0.1:1/business'
 TEST='postgresql+psycopg://test:private@127.0.0.1:1/business_test'
@@ -12,8 +14,12 @@ TEST='postgresql+psycopg://test:private@127.0.0.1:1/business_test'
 @pytest.fixture
 def prepared(tmp_path,monkeypatch):
     tmp_path=tmp_path/'带 空格的工作区';tmp_path.mkdir()
-    for key in ('DATABASE_URL','TEST_DATABASE_URL','MTRL_TEST_SOURCE_ENV'):
+    for key in ('DATABASE_URL', 'TEST_DATABASE_URL', 'MTRL_TEST_SOURCE_ENV',
+                'PYTEST_ADDOPTS', 'PYTEST_PLUGINS'):
         monkeypatch.delenv(key,raising=False)
+    for key in ('MTRL_EFFORT', 'MTRL_RUN_ID', 'MTRL_LIFECYCLE_OUTPUT'):
+        monkeypatch.setenv(key, 'fixture')
+    monkeypatch.setitem(Settings.model_config, 'env_file', tmp_path / 'default.env')
     monkeypatch.setattr(runner,'ROOT',tmp_path)
     tests=tmp_path/'backend/tests';tests.mkdir(parents=True);(tests/'test_example.py').write_text('',encoding='utf-8')
     source=tmp_path/'source.env';source.write_text(f'DATABASE_URL={DEV}\nTEST_DATABASE_URL={TEST}\n',encoding='utf-8')
@@ -100,3 +106,74 @@ def test_extra_collection_targets_rejected_before_database(prepared, monkeypatch
 def test_common_pytest_option_values_are_accepted():
     runner.validate_pytest_options(['-q', '-k', 'fee and not slow', '-m', 'not slow',
         '--maxfail', '1', '--tb=short', '-o', 'addopts=', '--durations=5'])
+
+
+@pytest.mark.parametrize('key', ['DATABASE_URL', 'TEST_DATABASE_URL'])
+def test_verify_rejects_conflicting_database_identity(prepared, monkeypatch, key):
+    monkeypatch.setenv(key, 'postgresql+psycopg://other:never-echo@127.0.0.1:1/other_test')
+    monkeypatch.setattr(runner, 'isolated_database', lambda *a, **k: pytest.fail('Database isolation started'))
+    with pytest.raises(runner.IsolationInputError, match='身份不符') as error:
+        runner.verify(prepared, ['tests/test_example.py'])
+    assert 'never-echo' not in str(error.value)
+
+
+def test_verify_rejects_test_database_missing_from_explicit_file(prepared, monkeypatch):
+    prepared.write_text(f'DATABASE_URL={DEV}\n', encoding='utf-8')
+    monkeypatch.setenv('TEST_DATABASE_URL', TEST)
+    monkeypatch.setattr(runner, 'isolated_database', lambda *a, **k: pytest.fail('Database isolation started'))
+    with pytest.raises(runner.IsolationInputError, match='来源文件必须包含'):
+        runner.verify(prepared, ['tests/test_example.py'])
+
+
+def test_verify_keeps_default_source_database_out_of_test_targets(prepared, monkeypatch):
+    default = Settings.model_config['env_file']
+    default.write_text(f'DATABASE_URL={TEST}\n', encoding='utf-8')
+    monkeypatch.setattr(runner, 'isolated_database', lambda *a, **k: pytest.fail('Database isolation started'))
+    with pytest.raises(runner.IsolationInputError, match='不同库名'):
+        runner.verify(prepared, ['tests/test_example.py'])
+
+
+def test_verified_database_source_preserves_credentials_for_matching_identity(prepared, monkeypatch):
+    effective = TEST.replace('test:private', 'test:override')
+    monkeypatch.setenv('TEST_DATABASE_URL', effective)
+    source_url, guard = frontend_preview.verified_database_source(prepared)
+    assert source_url == DEV
+    assert guard.test_url == effective
+
+
+@pytest.mark.parametrize(('key', 'value'), [
+    ('PYTEST_ADDOPTS', '--noconftest tests/test_unselected.py'),
+    ('PYTEST_PLUGINS', 'unexpected_plugin'),
+])
+def test_verify_explains_inherited_pytest_input_without_starting_isolation(prepared, monkeypatch, capsys, key, value):
+    monkeypatch.setenv(key, value)
+    monkeypatch.setattr(runner, 'isolated_database', lambda *a, **k: pytest.fail('Database isolation started'))
+    assert runner.main(['--source-env', str(prepared), '--test', 'tests/test_example.py']) == 1
+    stderr = capsys.readouterr().err
+    assert key in stderr
+    assert value not in stderr
+
+
+@pytest.mark.parametrize('copy_source', [False, True])
+def test_direct_isolation_rejects_conflict_before_database_or_copy(prepared, monkeypatch, copy_source):
+    import sqlalchemy
+
+    monkeypatch.setenv('TEST_DATABASE_URL', 'postgresql+psycopg://other:private@127.0.0.1:1/other_test')
+    monkeypatch.setattr(sqlalchemy, 'create_engine', lambda *a, **k: pytest.fail('Database engine created'))
+    monkeypatch.setattr(frontend_preview_copy, 'source_revision', lambda *a: pytest.fail('Source accessed'))
+    with pytest.raises(runner.IsolationInputError, match='身份不符'):
+        with frontend_preview.isolated_database(prepared, copy_source=copy_source):
+            pytest.fail('Database isolation opened')
+
+
+@pytest.mark.parametrize('existing', [False, True])
+def test_preview_refuses_conflicting_source_before_startup(prepared, monkeypatch, existing):
+    monkeypatch.setenv('DATABASE_URL', 'postgresql+psycopg://other:private@127.0.0.1:1/other')
+    monkeypatch.setattr(frontend_preview_server, 'owned_run', lambda path: path)
+    monkeypatch.setattr(frontend_preview_server, 'read_json', lambda path: {})
+    monkeypatch.setattr(frontend_preview_server, 'verify_build', lambda version: None)
+    monkeypatch.setattr(frontend_preview_server.socket, 'socket', lambda: pytest.fail('Preview startup reached'))
+    args = SimpleNamespace(run=prepared.parent, source_env=prepared, browser_notice_check=None,
+                           existing=existing, copy_source=not existing, disposable=not existing)
+    with pytest.raises(runner.IsolationInputError, match='身份不符'):
+        frontend_preview_server.run(args)

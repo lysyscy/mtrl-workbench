@@ -20,29 +20,59 @@ sys.path.insert(0, str(ROOT / 'backend'))
 sys.path.insert(0, str(ROOT))
 
 
+class IsolationInputError(RuntimeError):
+    """An isolation preflight error with a message safe to display."""
+
+
+def verified_database_source(source_env: Path):
+    """Compare the file's database identities with effective settings before connecting."""
+    from pydantic_settings.sources import DotEnvSettingsSource
+    from app.core.config import Settings
+    from tests.db_guard import TestDatabaseGuard, database_identity
+
+    try:
+        declared = DotEnvSettingsSource(Settings, env_file=source_env)()
+        default = DotEnvSettingsSource(Settings)()
+        effective = Settings(_env_file=source_env)
+    except Exception:
+        raise IsolationInputError('无法读取明确来源的数据库配置') from None
+
+    source_url = declared.get('database_url', '')
+    test_url = declared.get('test_database_url', '')
+    if not source_url or not test_url:
+        raise IsolationInputError('明确来源文件必须包含 DATABASE_URL 和 TEST_DATABASE_URL')
+    try:
+        TestDatabaseGuard.from_sources((source_url, default.get('database_url', '')), test_url)
+        same_source = database_identity(source_url) == database_identity(effective.database_url)
+        same_target = database_identity(test_url) == database_identity(effective.test_database_url)
+    except RuntimeError as error:
+        raise IsolationInputError(str(error)) from None
+    if not same_source or not same_target:
+        raise IsolationInputError('明确来源与有效数据库身份不符，请检查 DATABASE_URL 和 TEST_DATABASE_URL 环境覆盖')
+    return effective.database_url, TestDatabaseGuard(effective.test_database_url)
+
+
 @contextmanager
 def isolated_database(source_env: Path | None = None, *, copy_source: bool = False, test_url: str = "",
                       preview: bool = True, log=None):
-    from app.core.config import Settings
     from tests.db_guard import TestDatabaseGuard, database_identity
     from sqlalchemy import create_engine, text
 
     if test_url:
         if copy_source or database_identity(test_url)[2] != 'mtrl_workbench_test':
             raise RuntimeError('直接测试DSN仅允许mtrl_workbench_test且不复制来源库')
-        source = None
+        source_url = None
         guard = TestDatabaseGuard(test_url)
     else:
         if source_env is None:
             raise RuntimeError('缺少明确测试DSN或已批准来源配置')
-        source = Settings(_env_file=source_env)
-        guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
+        source_url, guard = verified_database_source(source_env)
     if not guard.test_url:
         raise RuntimeError('缺少可确认的专用测试库配置')
     revision = 'head'
     if copy_source:
         from tools.dev.frontend_preview_copy import source_revision
-        revision = source_revision(source.database_url)
+        revision = source_revision(source_url)
     engine = create_engine(guard.test_url)
     schema = ('frontend_rewrite_397_' if preview else 'backend_verify_') + uuid.uuid4().hex
     owned = False
@@ -76,7 +106,7 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
         migrate(env, revision, log=log)
         if copy_source:
             from tools.dev.frontend_preview_copy import clone_from_source, schema_fingerprints, schema_columns
-            clone_from_source(source.database_url, guard.test_url, schema)
+            clone_from_source(source_url, guard.test_url, schema)
             columns = schema_columns(guard.test_url, schema)
             before = schema_fingerprints(guard.test_url, schema, columns=columns)
             migrate(env, 'head', log=log)

@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / 'backend')]
-from tools.dev.frontend_preview import isolated_database
+from tools.dev.frontend_preview import IsolationInputError, isolated_database, verified_database_source
 from tools.audit.workspace_paths import output_dir, close_runs
 
 
@@ -53,14 +53,14 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
         if node.startswith('-') or not path.is_relative_to(backend):
             raise ValueError('测试节点必须位于本项目backend内')
     validate_pytest_options(pytest_options or [])
+    inherited = [name for name in ('PYTEST_ADDOPTS', 'PYTEST_PLUGINS') if os.environ.get(name)]
+    if inherited:
+        names = '、'.join(inherited)
+        raise IsolationInputError(f'隔离验证拒绝继承 {names}，请移除该环境变量并通过命令明确指定测试与选项')
     pytest_args = [*nodes, *(pytest_options or [])]
-    from app.core.config import Settings
-    from tests.db_guard import TestDatabaseGuard, database_identity
+    from tests.db_guard import database_identity
     source_env = source_env.resolve(strict=True)
-    source = Settings(_env_file=source_env)
-    guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
-    if not guard.test_url:
-        raise ValueError('缺少明确的测试库配置')
+    _, guard = verified_database_source(source_env)
     os.environ.setdefault('MTRL_EFFORT', 'backend-verify')
     log_path = output_dir('logs') / 'backend-verify.log'
     report_path = output_dir('reports') / 'backend-verify.json'
@@ -76,6 +76,7 @@ def verify(source_env: Path, nodes: list[str], pytest_options: list[str] | None 
             pytest_temp = Path(temporary).resolve()
             report['pytest_basetemp'] = str(pytest_temp)
             with isolated_database(source_env, preview=False, log=log) as env:
+                report['database'] = database_identity(env['DATABASE_URL'])[2]
                 report['schema'] = env['PGOPTIONS'].split('search_path=', 1)[1]
                 # DATABASE_URL and TEST_DATABASE_URL stay at the test target from
                 # process startup. Only the guard reads source identities separately.
@@ -113,6 +114,9 @@ def main(argv=None):
     tests = args.pytest_args[1:] if args.pytest_args[:1] == ['--'] else args.pytest_args
     try:
         code, report = verify(args.source_env, args.nodes, tests)
+    except IsolationInputError as exc:
+        print(f'后端隔离验证未开始：{exc}', file=sys.stderr)
+        return 1
     except (OSError, ValueError, RuntimeError) as exc:
         print(f'后端隔离验证未开始：{type(exc).__name__}', file=sys.stderr)
         return 1
