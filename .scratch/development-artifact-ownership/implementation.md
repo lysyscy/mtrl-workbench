@@ -19,11 +19,13 @@
 6. 已验证：生产者15项、backend_verify工具24项、路径新旧格式10项、发布操作28项通过。发布操作初次两项失败为旧假实现缺少configuration接口，补齐后28项通过。真实backend_verify执行workspace_paths/preview_runtime，pytest=0、隔离schema与系统TEMP均退出；报告在.artifacts/runs/204153-913712-13120/reports/backend-verify.json。
 7. 每日任务保留原六根，仅增加mtrl-workbench-project。首次启动被自动审批拒绝后先只读核七根无到期/自动封存候选，未绕过保护；提供该证据后同一任务入口于北京时间20:58–20:59成功执行，七项exit=0、LastTaskResult=0、未新增删除。通知机制沿既有已验证入口，本轮未另触发失败通知。
 8. 旧文件分类已完成本轮处置：1个失效脚本和9个旧构建候选，共353文件、24,396,656字节。删除前复核绝对边界、无链接、完整散列、正式/回退指针、成功发布回执及当前引用；执行回执见旧基线证据组reports/legacy-cleanup-{plan,result}.json。
-9. 待完成：精确范围提交推送、实际publish -CheckOnly验证与远端核对；关闭本任务Markdown与证据。正式服务保持现有版本，本轮未重启或操作真实业务数据。
+9. 项目实现提交9c4f4f08d4a4a430ed2618533bade5735f58bca2已推送并核对远端；真实pre-commit语法、字节与凭据文件检查通过。固定运行时增加.gitattributes的LF约束，暂存与工作区字节均匹配setup清单，避免Windows检出转换损坏来源校验。
+10. 真实publish -CheckOnly通过，报告为.artifacts/runs/211113-713600-37196/reports/preflight.json；消费者退出后work已释放，证据closed、operation_result=success，2026-12-06T13:11:22.867200Z到期。正式前端指针仍为040bbdc2b946；本轮未重启或操作真实业务数据。
+11. 实施与验收已完成；本记录完成保存后按task_files核退出，历史提交保留完整回执，ADR与现行指南继续持有规则。旧基线证据组已close，必要证据保留到2026-12-06T13:14:04.144982Z，不将证据结项当作任务Markdown退出。
 
 ## 本轮运行现场
 
-- 旧基线证据组：C:/Users/Administrator/AppData/Local/AgentArtifacts/projects/mtrl-workbench/groups/development-artifact-ownership-20261106/files；仍active，本轮结束再close，清理前不得丢仍有用途的固定检出。
+- 旧基线证据组：C:/Users/Administrator/AppData/Local/AgentArtifacts/projects/mtrl-workbench/groups/development-artifact-ownership-20261106/files；已closed、operation_result=success、无hold，必要日志和回执保留30天。
 - 全套源测试日志：上述logs/my-skills-full-tests.log。
 - 发布用干净固定检出C:/Users/Administrator/AppData/Local/Temp/mtrl-setup-243yux5e已退出：核远端保存、无未提交/未跟踪/忽略内容与消费者后通过git worktree remove移除，Git登记及原目录均不存在。
 - 首次在证据组work/setup-source建检出因Windows长路径失败；Git无登记、原目录不存在，不涉及其他工作树。
