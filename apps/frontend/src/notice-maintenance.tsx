@@ -2,14 +2,13 @@ import { BusinessDate } from './time-picker';
 import { ProjectPicker } from './ledger-controls';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { ApiError, record, requestJson } from './api';
 import type { Project } from './api';
-import { body, categories, currentMonth, money, receipt } from './notices-api';
+import { body, categories, currentMonth, receipt } from './notices-api';
 import type { NoticeRow } from './notices-api';
-import { ContractDialog } from './notice-contract';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
 import { useI8Session } from './i8-session';
@@ -26,28 +25,12 @@ export function DraftField({ draft, field, label, disabled, projects }: { draft:
   const options = field === 'category' ? Object.entries(categories) : field === 'approve_status' ? [['已批','已批'],['未批','未批']] : null;
   return options ? <select aria-label={`草稿${label}`} defaultValue={draft[field]} disabled={disabled} onChange={e => { draft[field] = e.target.value; }}>{options.map(([v,t]) => <option key={v} value={v}>{t}</option>)}</select> : <input autoFocus={!draft.row_id && field === 'bill_no'} aria-label={`草稿${label}`} type="text" inputMode={['amount_approved','stat_settle','stat_paid'].includes(field) ? 'decimal' : undefined} defaultValue={draft[field]} disabled={disabled} onChange={e => { draft[field] = e.target.value; }} />;
 }
-export function StatCell({ row, field, drafts, disabled, save }: { row: NoticeRow; field: 'amount_approved' | 'stat_settle' | 'stat_paid'; drafts: Record<string,string>; disabled: boolean; save: (path: string, payload: unknown) => Promise<boolean> }) {
-  const draftKey = `${row.notice_id}:${field}`;
-  const [value, setValue] = useState(drafts[draftKey] ?? row[field]); const dirty = useRef(draftKey in drafts), saving = useRef(false);
-  useEffect(() => { if (!dirty.current) setValue(row[field]); }, [row[field]]);
-  async function commit() {
-    if (disabled || saving.current || !dirty.current) return;
-    saving.current = true;
-    const accepted = await save(field === 'amount_approved' ? '/api/m03/actions/manual-save' : '/api/m03/actions/stat', field === 'amount_approved' ? {...manualDraft(row),amount_approved:value} : { notice_id: row.notice_id, field, value });
-    if (accepted) {dirty.current = false;delete drafts[draftKey];}
-    saving.current = false;
-  }
-  return <input className={row.edited_fields.includes(field) ? 'notice-edited' : ''} aria-label={`${row.bill_no}${field === 'amount_approved' ? '审批金额' : field === 'stat_settle' ? '统计结算金额' : '统计付款金额'}`} title={`${dirty.current ? '尚未保存，' : ''}${field === 'amount_approved' ? '手动行审批金额；两个统计金额不得超过它' : `上限 = 审批金额 ${money(row.amount_approved)}`}；保存失败保留输入`} inputMode="decimal" value={value} disabled={disabled} onChange={e => { dirty.current = true;drafts[draftKey] = e.target.value; setValue(e.target.value); }} onBlur={() => void commit()} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commit(); } if (e.key === 'Escape') { dirty.current = false;delete drafts[draftKey];setValue(row[field]); } }} />;
-}
-export type NoticeDialogState = { kind: 'delete' | 'link' | 'ownership'; row: NoticeRow };
+export type NoticeDialogState = { kind: 'delete' | 'ownership'; row: NoticeRow } | { kind: 'link'; row: NoticeRow };
 
 function strings(value: unknown): string[] { if (!Array.isArray(value) || !value.every(x => typeof x === 'string')) throw new ApiError('候选读取不完整，请重读。'); return value; }
 function resultObject(value: unknown) { if (!record(value)) throw new ApiError('读取不完整，请重试。'); return value; }
-interface NoticeDialogProps { state: NoticeDialogState; projects: Project[]; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }
-export function NoticeDialog(props: NoticeDialogProps) {
-  return props.state.kind === 'link' ? <ContractDialog row={props.state.row} blocked={props.blocked} close={props.close} refresh={props.refresh} announce={props.announce} /> : <MaintenanceDialog {...props} />;
-}
-function MaintenanceDialog({ state, projects, blocked, close, refresh, announce }: NoticeDialogProps) {
+interface NoticeDialogProps { state: Exclude<NoticeDialogState, {kind:'link'}>; projects: Project[]; blocked: boolean; close: () => void; refresh: () => Promise<unknown>; announce: (message: string) => void }
+export function NoticeDialog({ state, projects, blocked, close, refresh, announce }: NoticeDialogProps) {
   const { row, kind } = state, lock = useRef(false);
   const [newName,setNewName] = useState(''), [forceWarehouse,setForceWarehouse] = useState(false), [warehouse,setWarehouse] = useState<{name:string;found:boolean;degraded:boolean;owners:string[];from_cache:boolean;cached_at:string;message:string}|null>(null);
   const [busy,setBusy] = useState(false), [done,setDone] = useState(false), [error,setError] = useState(''), [value,setValue] = useState(''), [keyword,setKeyword] = useState('');
@@ -104,15 +87,15 @@ function MaintenanceDialog({ state, projects, blocked, close, refresh, announce 
     {query.isPending && <p role="status">正在读取…</p>}{query.isError && <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读候选</Button></p>}
     {kind === 'delete' && data && <><p className="danger">{receipt(data)}</p><dl>{[['项目',data.project_name],['单据日期',data.doc_date],['统计结算金额',data.stat_settle],['统计付款金额',data.stat_paid],['已付金额（流水）',data.amount_paid]].map(([label,number]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{String(number)}</dd></div>)}</dl><ul>{(data.effects as string[]).map(effect => <li key={effect}>{effect.replace(/\*\*/g,'')}</li>)}</ul></>}
     {kind === 'ownership' && data && <><p>{String(data.reason)}。关键词须出现在单据名称里；补完档案后须重新抓取，不改本条既有关系。</p><label>归属小微<select value={value} disabled={busy || done} onChange={e => setValue(e.target.value)}><option value="">请选择</option>{ownership.map(p => <option key={p.key} value={projects.find(project => project.warehouse_name === p.key)?.id ?? ''}>{p.display}{p.archived ? '（归档）' : ''}</option>)}{Boolean(data.shell_id)&&<option value="new">新建具体小微</option>}</select></label>{value==='new'&&<><label>新小微仓库名<input value={newName} disabled={busy||done} onChange={e=>{setNewName(e.target.value);setWarehouse(null);setForceWarehouse(false);}} /></label><p>{warehouseQueryTitle}</p>{browserBlocked&&<p className="notice" role="alert">当前选的是「浏览器已有会话」，但浏览器连接不在。请到「i8 接入」页重新连接，或把取数方式切回「工作台直连」。<strong>本次不会改用登录方式。</strong></p>}<Button htmlType="button" disabled={busy||done||browserBlocked||!newName.trim()} onClick={()=>void checkWarehouse()}>查询 i8 仓库名单</Button>{warehouse&&<div><p>{warehouse.degraded?'未取到名单，不等于名单里没有。':warehouse.found?`名单中有该仓库，所属项目：${warehouse.owners.join('、')}`:'名单中没有该仓库；将来同步可能重复建档。'}</p>{warehouse.from_cache&&<p>使用上次名单：{warehouse.cached_at||'时间未知'}</p>}{warehouse.found&&!warehouse.owners.includes(row.project_name)&&<p className="danger">该仓库所属项目与本条壳全名不一致，请核对。</p>}<p>{warehouse.message.replace(/<[^>]*>/g,'').replace(/\*\*/g,'')}</p>{(!warehouse.found||warehouse.degraded)&&<label className="notice-choice"><input type="checkbox" disabled={busy||done} checked={forceWarehouse} onChange={e=>setForceWarehouse(e.target.checked)} />已了解上述结果，仍按此名建档</label>}</div>}</>}<label>关键词<input value={keyword} disabled={busy || done} onChange={e => setKeyword(e.target.value)} /></label><Link to={`/projects?notice=${row.notice_id}&bill=${encodeURIComponent(row.bill_no)}`}>到项目档案核对 {row.bill_no}</Link></>}
-    {error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{!done && <Button htmlType="submit" className={kind === 'delete' ? 'danger' : 'primary'} disabled={unavailable || (['link','ownership'].includes(kind) && !value) || (kind === 'ownership' && (!keyword||!warehouseReady||value==='new'&&!newName.trim()))}>{kind === 'delete' ? '确认删除' : kind === 'link' ? '确认关联' : kind === 'ownership' ? '确认补充档案' : '保存'}</Button>}</div>
+    {error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{!done && <Button htmlType="submit" className={kind === 'delete' ? 'danger' : 'primary'} disabled={unavailable || (kind === 'ownership' && !value) || (kind === 'ownership' && (!keyword||!warehouseReady||value==='new'&&!newName.trim()))}>{kind === 'delete' ? '确认删除' : '确认补充档案'}</Button>}</div>
   </form></DialogContents></BusinessModal>;
 }
 
-export function OwnershipPending({ blocked, open }: { blocked: boolean; open: (row: NoticeRow) => void }) {
+export function OwnershipPending({ blocked, disabled = blocked, open }: { blocked: boolean; disabled?: boolean; open: (row: NoticeRow) => void }) {
   const query=useQuery({queryKey:['notice-ownership-pending'],enabled:!blocked,refetchOnMount:'always',queryFn:async({signal})=>{
     const r=resultObject(await requestJson('/api/m03/notices/unresolved',{signal}));
     if(!Array.isArray(r.items)||!r.items.every(x=>record(x)&&['bill_no','doc_name','project_name','reason'].every(k=>typeof x[k]==='string')))throw new ApiError('归属待办读取不完整，请重读。');
     return r.items as {bill_no:string;doc_name:string;project_name:string;reason:string}[];
   }});
-  return query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={()=>void query.refetch()}>重读归属待办</Button></p> : query.data?.length ? <details className="notice-ownership" open><summary>待指定归属，{query.data.length} 条（本次未写入）</summary>{query.data.map((r,i)=><p key={`${r.bill_no}:${i}`}>{r.bill_no}，{r.project_name}，{r.doc_name}，{r.reason}<Button htmlType="submit" disabled={blocked} onClick={()=>open({notice_id:0,bill_no:r.bill_no,bill_name:r.doc_name,project_name:r.project_name,project_display:r.project_name} as NoticeRow)}>指定归属</Button></p>)}</details> : null;
+  return query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={()=>void query.refetch()}>重读归属待办</Button></p> : query.data?.length ? <details className="notice-ownership" open><summary>待指定归属，{query.data.length} 条（本次未写入）</summary>{query.data.map((r,i)=><p key={`${r.bill_no}:${i}`}>{r.bill_no}，{r.project_name}，{r.doc_name}，{r.reason}<Button htmlType="submit" disabled={disabled} onClick={()=>open({notice_id:0,bill_no:r.bill_no,bill_name:r.doc_name,project_name:r.project_name,project_display:r.project_name} as NoticeRow)}>指定归属</Button></p>)}</details> : null;
 }

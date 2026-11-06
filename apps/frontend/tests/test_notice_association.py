@@ -59,9 +59,11 @@ def test_real_two_step_association_and_uncertain_hint(server, browser_page, api,
     expect(dialog.get_by_role('button', name='关闭合同关联', exact=True)).to_be_disabled()
     expect(dialog.get_by_role('button', name='记住供应商，稍后关联', exact=True)).to_be_disabled()
     page.unroute('**/api/m03/actions/jc-supplier')
+    recovery_reads=[]
+    page.on('request',lambda request:recovery_reads.append(request.url) if request.method=='GET' and '/api/m03/notice-list?' in request.url else None)
     dialog.get_by_role('button',name='重读核对',exact=True).click()
     expect(dialog).not_to_be_visible()
-    assert len(writes)==1
+    assert len(writes)==1 and len(recovery_reads)==1
     current = next(r for r in get(api, '/api/m03/notice-list',period='')['items'] if r['notice_id']==nid)
     assert not current['has_link'] and current['jc_supplier']==supplier
     trigger.click()

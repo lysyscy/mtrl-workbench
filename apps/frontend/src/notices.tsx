@@ -5,7 +5,7 @@ import Tag from 'antd/es/tag';
 import Checkbox from 'antd/es/checkbox';
 import { EnumTag } from './enum-tag';
 import Button from 'antd/es/button';
-import { useHistoryGuard } from './history';
+import { readHistory, useHistoryGuard } from './history';
 import { BusinessModal } from './business-modal';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -22,7 +22,9 @@ import type { MoneyKey, NoticeRow } from './notices-api';
 import { NoticeFetch } from './notice-fetch';
 import { NoticePaste } from './notice-paste';
 import { AutoLinkDialog } from './notice-auto-link';
-import { DraftField, manualDraft, NoticeDialog, OwnershipPending, StatCell } from './notice-maintenance';
+import { DraftField, manualDraft, NoticeDialog, OwnershipPending } from './notice-maintenance';
+import { NoticeCells, StatCell, useNoticeCellSaves } from './notice-cell-save';
+import { ContractDialog } from './notice-contract';
 import type { Draft, NoticeDialogState } from './notice-maintenance';
 import { NoticePayment, PayAmountCell, paymentValue } from './notice-payment';
 import type { PayOverride } from './notice-payment';
@@ -35,7 +37,7 @@ import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const noticeRowId = (row: NoticeRow) => String(row.notice_id);
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
-interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; setPay: (row: NoticeRow, value: string) => void; moneyDrafts: Record<string,string>; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
+interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
 const defaultColumn: ColDef<NoticeRow> = { cellDataType: false, sortable: true, resizable: true, suppressMovable: true, wrapHeaderText: false };
 
@@ -70,7 +72,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   function paid(ids: number[]) { setPayOverrides(old => Object.fromEntries(Object.entries(old).filter(([id]) => !ids.includes(Number(id))))); setPicked(new Set()); }
   useEffect(() => { const listener=(event:Event)=> { const id=Number((event as CustomEvent<number>).detail);setPayOverrides(old=>Object.fromEntries(Object.entries(old).filter(([key])=>Number(key)!==id))); };window.addEventListener('payment-revoked',listener);return()=>window.removeEventListener('payment-revoked',listener); },[]);
   const [autoIds,setAutoIds] = useState<number[]|null>(null);
-  const draftRef = useRef<Draft | null>(null), moneyDrafts = useRef<Record<string,string>>({}), pendingFocus = useRef(0);
+  const draftRef = useRef<Draft | null>(null), pendingFocus = useRef(0);
   const [draftUncertain, setDraftUncertain] = useState(false), [draftChecked, setDraftChecked] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null), [maintenance, setMaintenance] = useState<NoticeDialogState | null>(null), [focusId,setFocusId] = useState(0);
   useEffect(() => { if (!active) return; const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),period:'全部',paid:''});setSearch('');} }, [params.get('notice'), active]);
@@ -93,22 +95,26 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const selectedPay = selected.filter(r => !r.is_excluded && !r.is_revoked);
   const liveShown = shown.filter(live);
   const summary = useMemo(() => liveShown.length ? [{ notice_id: -1, bill_no: '合计', ...Object.fromEntries(moneyKeys.map(k => [k, total(liveShown, k)])) } as NoticeRow] : [], [shown]);
-  const unavailable = draftUncertain || blocked || !active || !me || busy || query.isPending || query.isError || query.isFetching;
+  const cellSaves = useNoticeCellSaves({ rows: query.data, enabled: active && !blocked && Boolean(me),
+    canWrite: !busy && !draft && !draftUncertain && !query.isPending && !query.isError, read: refresh });
+  const cellDirty = Object.keys(cellSaves.drafts).length > 0;
+  const unavailable = draftUncertain || blocked || !active || !me || busy || cellSaves.busy || cellSaves.uncertain || cellDirty || query.isPending || query.isError || query.isFetching;
   // The list owns one read state: the first read keeps a skeleton in the reserved table box,
   // a failed reread keeps the rows it already published, and only the status lane reports it.
   const readState = readPhase(query, query.data !== undefined && rows.length === 0);
   // Nothing has been published yet, so the table area holds its reserved box with a quiet skeleton.
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
-  useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current || Object.keys(moneyDrafts.current).length ? '付款通知书有未保存输入，请先处理。' : '');
+  useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current ? '付款通知书有未保存输入，请先处理。' : '');
   const batchUnavailable = unavailable || !picked.size || hidden > 0;
   const batchReason = hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
     await client.invalidateQueries({refetchType:'none'});
-    if(me)void client.invalidateQueries({queryKey:['history',`${me.id}:${me.account}`],exact:true});
     await client.cancelQueries({queryKey:['notices'],exact:true});
-    await client.fetchQuery({queryKey:['notices'],staleTime:0,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
+    const data = await client.fetchQuery({queryKey:['notices'],staleTime:0,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
     if(scope==='ownership')await projects.refetch({throwOnError:true});
     if(scope!=='notice')await client.invalidateQueries({queryKey:['notice-ownership-pending'],exact:true},{throwOnError:true});
+    if(me){const queryKey=['history',`${me.id}:${me.account}`];await client.cancelQueries({queryKey,exact:true});await client.fetchQuery({queryKey,staleTime:0,queryFn:async({signal})=>readHistory(await requestJson('/api/history/status',{signal}))});}
+    return data;
   }
   function cancelDraft() { draftRef.current = null; setDraft(null); setDraftUncertain(false); setDraftChecked(false); }
   function begin(row?: NoticeRow) {
@@ -153,11 +159,11 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   function pick(id: number, checked: boolean) { setPicked(old => { const next = new Set(old); if (checked) next.add(id); else next.delete(id); return next; }); }
   function chooseAll(checked: boolean) { setPicked(old => { const next = new Set(old); for (const r of shown.filter(selectable)) { if (checked) next.add(r.notice_id); else next.delete(r.notice_id); } return next; }); }
   const scale = Number(me?.ui_scale_css) || 1;
-  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind,row) => setMaintenance({kind,row}), payOverrides, setPay, moneyDrafts: moneyDrafts.current, draftCell };
+  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind,row) => setMaintenance({kind,row}), payOverrides, setPay, draftCell };
   useEffect(() => {
     const grid = api.current, root = gridRoot.current; if (!active || !grid || !root) return;
     // The header observes selection directly; refreshHeader would rebuild it mid-click.
-    const refresh = () => { if (!grid.isDestroyed()) grid.refreshCells({force: true}); };
+    const refresh = () => { if (!grid.isDestroyed()) grid.refreshCells({columns:['pick','project_display','category_label','jc_supplier','actions','pay_amount'],force: true}); };
     const editor = root.contains(document.activeElement) && document.activeElement?.matches('input:not([type="checkbox"]),select,textarea') ? document.activeElement : null;
     if (!editor) { refresh(); return; }
     // The current action guard remains authoritative while this renderer retains
@@ -165,7 +171,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     const released = () => { requestAnimationFrame(refresh); };
     editor.addEventListener('blur', released, {once: true});
     return () => editor.removeEventListener('blur', released);
-  }, [active, picked, shown, busy, blocked, query.isFetching, draft]);
+  }, [active, picked, shown, unavailable, draft]);
   const moneyWidths=useMemo(()=>Object.fromEntries(moneyKeys.map(key=>{
     const values=[...shown,...summary].map(row=>money(row[key]));
     const editable=key==='pay_amount'||key==='stat_settle'||key==='stat_paid'||key==='amount_approved'&&shown.some(row=>row.is_manual);
@@ -196,7 +202,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(key==='biz_type'||key==='input_by' ? completeColumnWidth(shown.map(row=>row[key]),['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!,scale) : key==='bill_name' ? textWidth(128,280,scale,2) : key==='payee' ? textWidth(112,240,scale,2) : textWidth(180,280,scale,1)),
       ...(key === 'jc_supplier' ? { cellRenderer: (p: ICellRendererParams<NoticeRow>) => { const r=p.data!; if(p.node.rowPinned || (r.category !== 'jc' || r.is_excluded || r.is_revoked) && !r.has_link) return '—'; return <Button data-contract-notice={r.notice_id} className="notice-association-trigger" htmlType="button" aria-label={`${r.bill_no}供应商与合同关联`} disabled={current.current.unavailable} onClick={() => current.current.open('link',r)}><EllipsisText text={r.jc_supplier || '选择供应商与合同'}/><small>{r.has_link ? '已关联合同' : '未关联合同'}</small></Button>; } } : key==='bill_name'||key==='payee' ? {cellRenderer:(p:ICellRendererParams<NoticeRow>)=><EllipsisText text={String(p.value??'')}/>} : {}) })),
     ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], ...contentWidth(moneyWidths[key], Math.max(moneyWidths[key],180), scale), cellClass: 'money', comparator: (a: string, b: string) => cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0,
-      cellRenderer: (p: ICellRendererParams<NoticeRow>) => !p.node.rowPinned && key === 'pay_amount' ? <PayAmountCell row={p.data!} override={current.current.payOverrides[p.data!.notice_id]} change={current.current.setPay} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} /> : !p.node.rowPinned && (key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && p.data!.is_manual) ? <StatCell drafts={current.current.moneyDrafts} row={p.data!} field={key} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} save={(path,payload) => current.current.action(path,payload)} /> : <span>{money(p.data![key])}{!p.node.rowPinned && key === 'amount_paid' && p.data!.is_overpaid && <span className="notice-tag rule">超付</span>}</span> })),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => !p.node.rowPinned && key === 'pay_amount' ? <PayAmountCell row={p.data!} override={current.current.payOverrides[p.data!.notice_id]} change={current.current.setPay} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} /> : !p.node.rowPinned && (key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && p.data!.is_manual) ? <StatCell row={p.data!} field={key} /> : <span>{money(p.data![key])}{!p.node.rowPinned && key === 'amount_paid' && p.data!.is_overpaid && <span className="notice-tag rule">超付</span>}</span> })),
     { field: 'approve_status', headerName: '审批状态', ...completeColumnWidth(shown.map(row=>row.approve_status),'审批状态',scale,12), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已批' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> }, { field: 'pay_status', headerName: '付款状态', ...completeColumnWidth(shown.map(row=>row.pay_status),'付款状态',scale,12), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已付清' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
     { colId: 'actions', headerName: '操作', ...completeColumnWidth(shown.map(row=>[row.has_any_flow?'查看流水':'',cents(row.amount_paid)>0n?'撤销付款':'',row.is_manual?'手动 编辑 删除':''].filter(Boolean).join(' ')), '操作', scale, 64), wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="submit" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="submit" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="submit" className="danger" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
@@ -216,7 +222,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;
     return JSON.stringify([pinned, row.notice_id === -2, id === 'pick' ? '' : id === 'actions' ? [row.has_any_flow,cents(row.amount_paid ?? '0') > 0n,row.is_manual,Boolean(draft)] : [fixedInput ? '' : row[id as keyof NoticeRow],row.is_excluded,row.is_revoked,row.is_manual,row.has_link,row.is_overpaid,row.category]]);
-  },textOnly:draft?[]:['doc_date','bill_no','biz_type','payee','input_by']}), [draft]);
+  },textOnly:draft?[]:['doc_date','bill_no','biz_type','payee','input_by','bill_name','amount_approved','amount_paid']}), [draft]);
   const presentation = useGridPresentation({table: 'notices', root: gridRoot, fontRoot: pageRoot, active: active && !blocked, rows: shown, totals: footer, columns, measurement, rowId: noticeRowId, scale, scope: JSON.stringify([filters,search,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
   useEffect(() => { if (presentation.state === 'ready' && pendingFocus.current) { const node = api.current?.getRowNode(String(pendingFocus.current)); if (node) { api.current?.ensureNodeVisible(node, 'middle'); pendingFocus.current = 0; } } }, [presentation.state,shown]);
   const postSortRows = useMemo(() => (params: PostSortRowsParams<NoticeRow>) => { const top = params.nodes.filter(node => pasteTop.has(node.data!.notice_id)), rest = params.nodes.filter(node => !pasteTop.has(node.data!.notice_id)); params.nodes.splice(0,params.nodes.length,...top,...rest); }, [pasteTop]);
@@ -229,7 +235,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     catch (failure) { setError(failure instanceof Error ? failure.message : '导出失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <NoticeSelectionContext.Provider value={current.current}><div className="notices-page" ref={pageRoot}>
+  return <NoticeCells.Provider value={cellSaves.cells}><NoticeSelectionContext.Provider value={current.current}><div className="notices-page" ref={pageRoot}>
     <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{money(total(selectedPay, 'amount_approved'))}</b> 元</span><span>本次应付 <b>{money(total(selectedPay, 'pay_amount'))}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={() => setPicked(new Set())}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={() => { if (!batchUnavailable) setPayIds([...picked]); }}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
     <section className="notice-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={unavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={unavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
@@ -240,19 +246,22 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setPicked(new Set(ids)); setPasteTop(new Set(ids)); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { setPicked(new Set()); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
       {warning && <p className="notice" role="alert">{warning}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setWarning('')).catch(e => setError(e.message))}>重读核对</Button></p>}{error && <p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
+      {cellSaves.error && <p className="notice" role="alert">{cellSaves.error}<Button disabled={cellSaves.busy} onMouseDown={event=>event.preventDefault()} onClick={()=>{cellSaves.update(()=>({}));if(!cellSaves.uncertain)cellSaves.clearFeedback();}}>取消金额修改</Button></p>}
+      {cellSaves.uncertain && <div className="notice-feedback"><Button disabled={blocked || cellSaves.busy} onClick={() => void cellSaves.reread('')}>重读核对金额</Button><Button disabled={blocked || cellSaves.busy || !cellSaves.verified} onClick={() => cellSaves.confirm()}>已核对，继续编辑</Button></div>}
+      {cellSaves.uncertain && cellSaves.readback.map(item=><p key={item.key} className="notice" role="status">{item.bill}，{item.field}：当前输入 {item.input}，系统 {item.actual}{item.submitted !== null && `，本次提交 ${item.submitted}`}</p>)}
       <ReadStatusLane phase={readState} announce="正在读取付款通知书…" className="notice-read-status">{(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained={readState === 'stale' ? '列表更新失败，保留上次结果。' : undefined} />}{projects.isError && <ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。" />}</ReadStatusLane>
       {placeheld ? <div className="notice-grid notice-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : <PreparedGrid presentation={presentation} className="notice-grid grid-single-line" role="region" aria-label="付款通知书列表" grid={{theme:gridTheme,onRowDataUpdated:e=>e.api.refreshCells({columns:['jc_supplier'],force:true}),rowBuffer:2,alwaysShowVerticalScroll:true,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,getRowId:p=>String(p.data.notice_id),getRowClass:p=>p.data?.notice_id===focusId?'notice-focused':'',defaultColDef:defaultColumn,suppressScrollOnNewData:true,animateRows:false,postSortRows,onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选条件下没有付款通知书，请调整条件或按月抓取。'}} />}
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
-      <OwnershipPending blocked={blocked || !active} open={row => setMaintenance({kind:'ownership',row})} />
-      {autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={refresh} announce={announce} />}
-      {maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id, linking=maintenance.kind === 'link'; setMaintenance(null); if(linking) requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}
+      <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={row => {if(!unavailable)setMaintenance({kind:'ownership',row});}} />
+      {autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={async()=>{await refresh();}} announce={announce} />}
+      {maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} /> : maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={()=>setMaintenance(null)} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}
     </section>
     {print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}
     {flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}
     {printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}
-    {payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={refresh} announce={announce} />}
-    {fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={()=>refresh('fetch')} />}
+    {payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}
+    {fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={async()=>{await refresh('fetch');}} />}
     <BusinessModal open={exportOpen && active && !blocked} className="project-dialog" titleId="notice-export-title" requestClose={exportClosing.requestClose}><DialogContents titleId="notice-export-title" title="导出付款通知书台账" closing={exportClosing}><p>导出当前筛选的 {shown.length} 条通知书，按表格显示顺序排列。</p>{error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={exportClosing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={unavailable || !shown.length} onClick={() => void exportExcel()}>保存到本地</Button></div></DialogContents></BusinessModal>
-  </div></NoticeSelectionContext.Provider>;
+  </div></NoticeSelectionContext.Provider></NoticeCells.Provider>;
 }

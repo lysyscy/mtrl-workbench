@@ -79,3 +79,27 @@ test('cell_save_snapshots_and_unknown_result_lock', async () => {
   queue.dispose();
   console.log('Submission snapshots, rejection, committed/read-failed and lost-reply protection passed');
 });
+
+test('readback retains the submitted operation scope through uncertain recovery', async () => {
+  const reads=[]; let fail=true;
+  const options={enabled:true,write:async()=>{},read:async submitted=>{reads.push(submitted?.field??'full');if(fail)throw new Error('read failed');return{};},acknowledge:()=>undefined,saved:()=>''};
+  const queue=new CellSaveQueue(()=>options);
+  const idle=()=>new Promise(resolve=>{if(!queue.getSnapshot().busy)return resolve();const off=queue.subscribe(()=>{if(!queue.getSnapshot().busy){off();resolve();}});});
+  queue.update(()=>({a:{field:'remark',value:'x',error:''}}));queue.save('a');await idle();
+  assert.equal(queue.getSnapshot().uncertain,true);
+  fail=false;assert.equal(await queue.reread(),true);queue.confirm();
+  assert.equal(await queue.run(async()=>{},()=>''),'saved');
+  assert.deepEqual(reads,['remark','remark','full']);
+  options.write=async()=>{throw new ApiError('rejected',400)};
+  queue.update(()=>({b:{field:'remark',value:'invalid',error:''}}));queue.save('b');await idle();
+  await queue.reread();assert.equal(reads.at(-1),'full');queue.dispose();
+});
+
+test('an older rejection does not poison a newer queued draft of the same cell', async () => {
+  let reject;const pending=new Promise((_,no)=>{reject=no;});const writes=[];
+  const queue=new CellSaveQueue(()=>({enabled:true,read:async()=>({}),write:async draft=>{writes.push(draft.value);if(draft.value==='bad')await pending;},acknowledge:(current,sent)=>current===sent?undefined:current,saved:()=>''}));
+  queue.update(()=>({a:{value:'bad',error:''}}));queue.save('a');
+  queue.update(()=>({a:{value:'12.00',error:''}}));queue.save('a');reject(new ApiError('invalid amount',400));
+  for(let i=0;i<20&&(queue.getSnapshot().busy||writes.length<2);i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(writes,['bad','12.00']);assert.equal(queue.getSnapshot().drafts.a,undefined);assert.equal(queue.getSnapshot().uncertain,false);queue.dispose();
+});

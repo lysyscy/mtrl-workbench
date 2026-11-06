@@ -1,4 +1,5 @@
-import { ApiError, cents, decimal, record } from './api';
+import { ApiError, cents, confirmWrite, decimal, record } from './api';
+import Decimal from 'decimal.js';
 export { body, cents, decimal, money } from './api';
 export interface NoticeRow {
   notice_id: number; doc_date: string; bill_no: string; project_display: string; project_name: string; ownership_id: number | null;
@@ -10,6 +11,27 @@ export interface NoticeRow {
 export const categories: Record<string, string> = { material: '辅材', mechanical: '机械', jc: '集采' };
 export const moneyKeys = ['amount_approved', 'pay_amount', 'amount_paid', 'stat_settle', 'stat_paid'] as const;
 export type MoneyKey = typeof moneyKeys[number];
+export type NoticeAmountField = 'amount_approved' | 'stat_settle' | 'stat_paid';
+export const noticeAmountLabels: Record<NoticeAmountField, string> = { amount_approved: '审批金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
+export function noticeAmountMatches(input: string, actual: string) {
+  try {
+    const value = new Decimal(input.trim().replace(/[,，]/g, ''));
+    return value.isFinite() && value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).equals(actual);
+  } catch { return false; }
+}
+export function confirmNoticeAmount(value: unknown, id: number, field: NoticeAmountField) {
+  const common = record(value) && value.ok === true && typeof value.message === 'string';
+  if (field === 'amount_approved') {
+    confirmWrite(common && value.row_id === String(id), '审批金额保存回执未能核对，请重读，勿重复保存。');
+    return;
+  }
+  const changed = common && typeof value.changed === 'boolean' && (!value.changed || value.notice_id === id && value.field === field && typeof value.before === 'string' && typeof value.after === 'string' && typeof value.label === 'string');
+  confirmWrite(changed, '统计金额保存回执未能核对，请重读，勿重复保存。');
+  if (record(value) && value.changed) {
+    try { cents(String(value.before)); cents(String(value.after)); }
+    catch { confirmWrite(false, '统计金额回执中的金额未能核对，请重读，勿重复保存。'); }
+  }
+}
 export function readNotices(value: unknown): NoticeRow[] {
   if (!record(value) || !Array.isArray(value.items)) throw new ApiError('通知书列表读取不完整，请重试。');
   return value.items.map((row: unknown) => {

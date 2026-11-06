@@ -76,15 +76,20 @@ def test_save_preserves_narrow_manual_columns_on_full_list(server,browser_page,a
     try:
         open_page(page,server,route,title);table=page.locator(grid)
         field=table.locator('.ag-row:not(.ag-row-pinned) [col-id='+column+'] input:not(:disabled)').first
+        if route=='notices':
+            eligible={str(r['notice_id']) for r in api.get('/api/m03/notice-list?period=').json()['items'] if Decimal(r['amount_approved'])>0}
+            fields=table.locator('.ag-row:not(.ag-row-pinned) [col-id='+column+'] input:not(:disabled)')
+            field=next((fields.nth(i) for i in range(fields.count()) if fields.nth(i).evaluate('e=>e.closest(".ag-row").getAttribute("row-id")') in eligible),None)
+            assert field is not None,'真实副本当前窗口缺少审批额为正的保存代表'
         field.scroll_into_view_if_needed();field.click()
         for col,width in widths.items():
             page.wait_for_function('([selector,width])=>Math.abs(document.querySelector(selector).getBoundingClientRect().width-width)<1',arg=[grid+' .ag-header-cell[col-id="'+col+'"]',width*1.12])
         page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
-        old=field.input_value();value=old[:230]+'核验' if column=='remark' else str(Decimal(old.replace(',','') or '0')+Decimal('1.25'))
+        old=field.input_value();value=old[:230]+'核验' if column=='remark' else '0.00' if Decimal(old.replace(',','') or '0') else '0.01'
         page.evaluate('''selector=>{window.saveWidths=[];const g=document.querySelector(selector);const sample=()=>{const h=g.querySelector('.ag-body-horizontal-scroll-viewport');window.saveWidths.push({left:h.scrollLeft,scrollWidth:h.scrollWidth,columns:[...g.querySelectorAll('.ag-header-cell[col-id]')].map(e=>({id:e.getAttribute('col-id'),width:e.getBoundingClientRect().width}))})};window.saveWidthTrace=true;const tick=()=>{if(window.saveWidthTrace){sample();requestAnimationFrame(tick)}};window.saveWidthObserver=new MutationObserver(sample);window.saveWidthObserver.observe(g,{subtree:true,attributes:true,attributeFilter:['style'],childList:true});tick()}''',grid)
         held=[];page.route(endpoint,lambda request:held.append(request))
         with page.expect_request(endpoint):field.fill(value);field.blur()
-        request=held.pop();response=request.fetch();assert response.ok;request.fulfill(response=response)
+        request=held.pop();response=request.fetch();assert response.ok and response.json()['ok'];request.fulfill(response=response)
         page.wait_for_load_state('networkidle')
         page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
         page.evaluate('window.saveWidthTrace=false;window.saveWidthObserver.disconnect()')

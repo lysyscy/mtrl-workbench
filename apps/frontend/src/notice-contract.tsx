@@ -10,7 +10,7 @@ import { contentWidth, numberColumnWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
-import { body, cents, money, receipt, readNotices } from './notices-api';
+import { body, cents, money, receipt } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { SupplierStep } from './notice-supplier-step';
 
@@ -24,7 +24,7 @@ export interface Candidate {
   recommendation: { reasons: Reason[]; invoice_side: string; combination_limited: boolean };
 }
 interface Candidates { current_contract_id: number | null; notice_amount: string; supplier: string; read_only: boolean; rows: Candidate[] }
-interface Props { row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }
+interface Props { row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<NoticeRow[]>; announce: (message: string) => void }
 const contractName = (candidate: Candidate) => candidate.material.trim() || '材料名称未填';
 const hasTradeSide = (candidate: Candidate) => Boolean(candidate.trade_co || candidate.invoices.some(invoice => invoice.kind === 'trade'));
 function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplier' | 'trade' }) {
@@ -98,8 +98,7 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     if (busy || lock.current) return;
     lock.current=true;setBusy(true);
     try {
-      await refresh();
-      const latest=readNotices(await requestJson('/api/m03/notice-list?period='));
+      const latest=await refresh();
       const actual=latest.find(item => item.notice_id === row.notice_id && item.bill_no === row.bill_no);
       if (!actual) throw new Error('未读到本条通知书，请继续核对。');
       announce(`已重读核对：${actual.has_link ? '已关联合同' : '未关联合同'}，${actual.jc_supplier || '供应商未录入'}`);

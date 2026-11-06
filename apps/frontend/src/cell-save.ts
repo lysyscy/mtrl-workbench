@@ -5,7 +5,7 @@ export type SaveOutcome = 'saved' | 'rejected' | 'uncertain' | 'blocked';
 export interface CellSaveOptions<D, R> {
   enabled: boolean;
   canWrite?: boolean;
-  read: () => Promise<R>;
+  read: (submitted?: D) => Promise<R>;
   write: (draft: D, signal: AbortSignal) => Promise<void>;
   acknowledge: (current: D, submitted: D) => D | undefined;
   saved: (submitted: D, result: R) => string;
@@ -28,6 +28,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
   private request = new AbortController();
   private generation = 0;
   private pendingAcknowledge: (() => void) | undefined;
+  private pendingDraft: D | undefined;
   constructor(private options: () => CellSaveOptions<D, R>) {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -69,8 +70,9 @@ export class CellSaveQueue<D extends { error: string }, R> {
         if (present) { const retained = adapter.acknowledge(present, submitted); if (retained) next[key] = retained; else delete next[key]; }
         return next;
       }),
-      message => this.update(current => current[key] ? { ...current, [key]: { ...current[key]!, error: message } } : current),
+      message => this.update(current => current[key] === submitted ? { ...current, [key]: { ...submitted, error: message } } : current),
       adapter.describe?.(submitted) ?? '',
+      submitted,
     );
     if (outcome === 'rejected' && adapter.stopOnRejection) this.pause();
     void this.drain();
@@ -82,19 +84,21 @@ export class CellSaveQueue<D extends { error: string }, R> {
     const outcome = await this.perform(write, saved, undefined, undefined, description); void this.drain(); return outcome;
   };
   private async perform(write: (signal: AbortSignal) => Promise<void>, saved: (result: R) => string,
-    acknowledge?: () => void, rejected?: (message: string) => void, description = ''): Promise<SaveOutcome> {
+    acknowledge?: () => void, rejected?: (message: string) => void, description = '', submitted?: D): Promise<SaveOutcome> {
     if (this.snapshot.busy || !this.allowed()) return 'blocked';
     const adapter = this.options();
+    this.pendingDraft = submitted;
     this.generation++; this.publish({ busy: true, verified: false, error: '', feedback: '' });
     let written = false;
     try {
       await write(this.request.signal); written = true;
       if (!this.alive) return 'blocked';
       this.pendingAcknowledge = acknowledge;
-      const result = await adapter.read();
+      const result = await adapter.read(submitted);
       if (!this.alive) return 'blocked';
       acknowledge?.();
       this.pendingAcknowledge = undefined;
+      this.pendingDraft = undefined;
       this.publish({ feedback: saved(result) });
       return 'saved';
     } catch (failure) {
@@ -105,6 +109,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
         this.publish({ uncertain: true, verified: false, error: `${description}${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。` });
         return 'uncertain';
       }
+      this.pendingDraft = undefined;
       rejected?.(message); this.publish({ error: message });
       return 'rejected';
     } finally { this.publish({ busy: false }); }
@@ -113,7 +118,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
     if (!this.alive || this.snapshot.busy || !this.options().enabled) return false;
     const generation = this.generation;
     try {
-      await this.options().read();
+      await this.options().read(this.pendingDraft);
       if (!this.alive || generation !== this.generation) return false;
       this.publish({ verified: true, error: '', feedback }); return true;
     } catch (failure) {
@@ -124,6 +129,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
   confirm = (feedback = '已确认，请核对保留输入后再保存。') => {
     if (this.snapshot.busy || !this.snapshot.verified || !this.options().enabled) return;
     this.pendingAcknowledge?.(); this.pendingAcknowledge = undefined;
+    this.pendingDraft = undefined;
     this.publish({ uncertain: false, verified: false, error: '', feedback });
   };
   // An external POST (file generation) may have written even after a lost reply.
