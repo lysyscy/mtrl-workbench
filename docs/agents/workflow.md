@@ -22,6 +22,16 @@ React 重写已签收，现行业务和界面约束归 requirements 与 frontend
 
 `.env`、`var`、`.codex-attachments`、原始输入、成品、在用构建、非 Git/忽略资料及他人未提交内容由各自用途决定生命周期。本次处理直接相关且已无用途的产物，包含前序会话遗留；他人修改与在用原件保持受保护，专项清理逐文件核 Git 可恢复性。
 
+### 任务文件退出
+
+采用 My-Skills `709a9001f3c8c1e67fa0e28f45d000d032308a4e` 的独立只读检查；原生命周期登记和固定旧运行保持。收尾范围从现有任务记录取得，不新建清理台账。使用实际安装的脚本，重复`--path`列本任务目录及散置票，先固定已保存的完整提交：
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manager/skills/setup-solo-workflow/scripts/task_files.py --root D:/dev/mtrl-workbench --path .scratch/<effort> --path .scratch/tails/issues/<本任务票>.md --revision <已保存提交>
+```
+
+首查核在场文件、未保存增量和仓内内联Markdown链接/代码字面路径。负责人确认现行知识归位、Git可恢复性及活动消费者后，按授权处置；处置后用同一范围/提交加`--closed`，仍有路径或本地引用时非零。另运行`tools/oneoff/_list_tails.py --all`核余下票的实际依赖。动态路径、外部脚本及历史聊天等消费者不由文本扫描证明，具名保留的材料在原记录说明用途与解除条件。检查不删除、不判业务结项、不按年龄清理、不接每次提交钩子，也不替代运行组/预览/schema/工作树的各自退出核验。
+
 ## 共享记忆
 
 共同记忆政策由宿主已部署指令直接提供；setup 模板只用于布置，不是日常回读入口。本项目固定 bank ID 为 `project-3379fef93fbada35`；子目录和同项目其他工作树沿用此身份，分支相关记录保留来源分支、必要版本及合并/部署状态。无有效内容不建空库。

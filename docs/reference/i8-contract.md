@@ -92,7 +92,7 @@
 ### 验证状态
 
 - **已离线验证**：协议形状、白名单双向校验、按连接隔离、代号、超时预算、HttpOnly Cookie 行为（隔离 Chromium 样机，`apps/browser-extension/tests/browser_smoke.py`）。
-- **真实代表已验**：用户安装固定包并选中i8标签后，工作台原按钮抓取2026-11通知书17条、写入测试副本17条，逐条读回单号/日期/名称/项目/审批金额相等；无模型中转，观察区间无登录、强踢或重定向，副本已清理。见[验收回执](../../.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)。
+- **真实代表已验**：用户安装固定包并选中i8标签后，工作台原按钮抓取2026-11通知书17条、写入测试副本17条，逐条读回单号/日期/名称/项目/审批金额相等；无模型中转，观察区间无登录、强踢或重定向，副本已清理。见[Git中的验收回执](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)。
 - **未验证/未执行**：其它端点的浏览器方式现场业务结果、超大xlsx及其它站点部署。原版本部署记录见 [status](../status.md)，取消菜单限制的本次修改需分别更新工作台服务与已安装扩展，未自动加载。打印/PDF仍走原策略。
 
 ## 一、`API-01` 付款通知书列表

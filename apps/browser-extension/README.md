@@ -85,4 +85,4 @@
 - 二进制报表（xlsx 导出）经 base64 传输，由后端做长度完整性核对；长度对不上即停（不重试，也不设拍脑袋的字节上限）。
 - `externally_connectable` 与 `scripting.executeScript` 已在本机Edge实际安装后通过通知书日常入口验证；其它Edge版本和部署不自动视为通过。
 - 0.1.1 不再依赖账号菜单 DOM；实际登录失效由取数响应判定，不以“已连接”代表 i8 认证成功。
-- 固定包`c44568c2997b03de`已由用户装入真实Edge并点击选定标签；原工作台按钮抓取2026-11通知书17条，测试副本逐条读回一致。完整依据见[真实验收](../../.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)。未修改固定包文件，后续说明更新仅在Git源码中维护。
+- 固定包`c44568c2997b03de`已由用户装入真实Edge并点击选定标签；原工作台按钮抓取2026-11通知书17条，测试副本逐条读回一致。完整依据见[Git中的真实验收](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)。未修改固定包文件，后续说明更新仅在Git源码中维护。

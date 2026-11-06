@@ -174,7 +174,7 @@ def connection_config(device_id: str = Query("", description="本页面标识；
 
 
 # --------------------------------------------------------------- 浏览器会话通道（`TAIL-476`）
-# 设计约束（见 `.scratch/browser-session-loading-20261103/daily-integration.md`）：
+# 设计约束（见 `docs/reference/i8-contract.md` 的浏览器已有会话通道）：
 # - owner 一律取**服务端认证身份** `current_name()`；⛔ 客户端声明的账号不参与授权。
 # - 通道只搬运"后端已经构造好的那一条请求"；⛔ 不接受扩展自行决定 URL/方法/头。
 # - 连接/回帖都走既有中间件（未登录写动作 401、IP 白名单、请求号），**不绕过任何身份门**。
