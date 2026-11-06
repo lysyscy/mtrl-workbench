@@ -80,7 +80,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isPending || query.isError;
   const controlsDisabled = disabled || busy || dirty || query.isFetching;
-  // The month report is one read region: its own state is published in a fixed lane under the
+  // The month report is one read region: visible failures are published under the
   // toolbar, and the table box keeps its area while nothing is known yet. A failure never
   // replaces a result that is already on screen.
   const readState = readPhase(query);

@@ -134,9 +134,7 @@
 .big-project-state{display:flex;align-items:center;flex-wrap:wrap;gap:calc(12px * var(--fscale))}
 .big-selection-source{font-size:calc(12px * var(--fscale));color:var(--tx2)}
 
-/* The month card reports its own read in one fixed lane under the toolbar (read-region.css).
-   The lane is one control line tall in every state, so a pending, failed or retained read never
-   moves the table box below it. Only the horizontal inset belongs to this page. */
+/* The month card keeps its table placeholder. Only a failure adds a line under the toolbar. */
 .big-read-status{--read-status-pad:calc(16px * var(--fscale))}
 .big-month > .big-read-status{margin:calc(8px * var(--fscale)) 0}
 .big-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}

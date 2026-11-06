@@ -69,8 +69,6 @@
 .notice-grid.grid-single-line .notice-revoke-hint{white-space:normal;overflow-wrap:anywhere}
 .notice-grid.grid-single-line .notice-category-select{width:100%;min-width:0}
 
-/* The list reports its own read state in one fixed lane, so the reserved table box never moves. */
-/* The lane geometry lives in read-region.css; this page only sets its own inset, and the reserved
-   table box keeps the same padding the grid had so the first publication cannot move it. */
+/* The list keeps its table placeholder. Only a failure adds a line above it. */
 .notice-read-status{--read-status-pad:calc(13px * var(--fscale))}
 .notice-read-reserve{padding:calc(8px * var(--fscale)) calc(13px * var(--fscale))}

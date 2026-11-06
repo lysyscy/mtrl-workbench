@@ -67,9 +67,7 @@
 .flow-list>.flow-grid{flex:1 0 calc(280px * var(--fscale));min-height:calc(280px * var(--fscale))}
 @media(max-width:1000px){.payment-stat-columns{height:auto}.payment-stat-columns .flow-bars{max-height:calc(180px * var(--fscale))}}
 
-/* Statistics and flows read independently; each reports in its own fixed lane (read-region.css)
-   so the reserved table box and the statistics body keep their size while a read is pending or
-   has failed. This page only contributes its own horizontal inset. */
+/* Statistics and flows read independently. Each uses a visible line only for its own failure. */
 .payment-stats-status,.flow-list-status{--read-status-pad:calc(16px * var(--fscale))}
 .payment-stats>.flow-card-body{display:flex;flex-direction:column}
 /* The reserved boxes (read-region.css `.read-reserve` hides overflow) keep the space their content

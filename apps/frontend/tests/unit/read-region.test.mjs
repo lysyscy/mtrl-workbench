@@ -80,7 +80,7 @@ test('a lane is present in every state and only speaks while it is reading', () 
   const idle = renderToStaticMarkup(ReadStatusLane({ phase: 'idle' }));
   const reading = renderToStaticMarkup(ReadStatusLane({ phase: 'reading', announce: '正在读取付款流水…' }));
   const ready = renderToStaticMarkup(ReadStatusLane({ phase: 'ready' }));
-  // The lane keeps its box in every state, so a state change never adds a line.
+  // Keep the status wrapper in the markup even when it takes no space.
   for (const markup of [idle, reading, ready]) assert.match(markup, /class="read-status"/u);
   assert.match(idle, /data-read-phase="idle"/u);
   assert.match(reading, /data-read-phase="reading"/u);

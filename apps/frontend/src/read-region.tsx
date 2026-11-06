@@ -87,8 +87,8 @@ export function ReadPlaceholder({ rows = 4, quiet = false }: { rows?: number; qu
 }
 
 /**
- * One fixed lane a region reports its read state in. It is present in every state, so a failure,
- * a running read or a retained result never adds a line and never moves the region's table.
+ * A region's read feedback. Only visible notices occupy space; the running announcement is
+ * screen-reader only. Real failures take a normal-flow line so they cannot cover business data.
  *
  * A region with more than one read (its own result plus a secondary list it depends on) passes one
  * `ReadFailure` per read: they sit side by side in this same lane, each with its own retry button.

@@ -1,4 +1,4 @@
-.contracts-page{display:flex;flex-direction:column;gap:calc(16px * var(--fscale));height:100%;min-height:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.contracts-page{display:flex;flex-direction:column;gap:0;height:100%;min-height:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .contract-toolbar,.contract-toolbar>div,.contract-filters,.contract-selection,.contract-selection>div,.contract-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .contract-toolbar{justify-content:space-between;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf);border-radius:var(--radius-card) var(--radius-card) 0 0;box-shadow:var(--shadow)}
 .contract-toolbar h2{margin:0;font-size:calc(14px * var(--fscale));font-weight:600;white-space:nowrap}
@@ -85,7 +85,7 @@
 .contracts-page>.contract-selection>div{display:flex;flex-direction:row;align-items:center;gap:8px}
 .contracts-page>.contract-selection>span{font-size:inherit}
 
-/* 读数状态槽沿用 read-region.css 的恒高几何，本页只给槽内边距；占位框与真表共用同一套外框。 */
+/* 正常读取不留状态空行；失败提示按需占行，占位框与真表共用同一套外框。 */
 .contract-read-status{--read-status-pad:calc(16px * var(--fscale))}
 .contracts-grid.contract-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
 

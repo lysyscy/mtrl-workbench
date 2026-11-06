@@ -1,10 +1,9 @@
 """Reports and maintenance pages report their own read in place.
 
-Each converted page owns one read lane: a pending or failed read is expressed
-inside the region it belongs to, keeps that region's reserved box, never stands
-in for a real empty result or a real zero count, and never replaces a result
-that is already on screen. Controls that need the read stay disabled while it
-is unknown; controls that do not need it stay usable.
+Each region announces a pending read without adding a visible line. A failure
+appears near its reserved box or retained result and offers a retry. Neither
+state stands in for a real empty result or a real zero count. Controls that need
+the read stay disabled while it is unknown. Other controls stay usable.
 """
 from playwright.sync_api import expect
 
@@ -31,12 +30,7 @@ def release_held(held):
         route.continue_()
 
 
-def box_is_quiet(lane):
-    """A lane keeps one control-high line in every state, so nothing below moves."""
-    return lane.bounding_box()
-
-
-def test_big_month_read_keeps_its_lane_and_reserved_table_box(server, browser_page):
+def test_big_month_read_keeps_its_reserved_table_box(server, browser_page):
     page, _ = browser_page
     login(page, server)
     held = hold(page, HELD)
@@ -59,7 +53,7 @@ def test_big_month_read_keeps_its_lane_and_reserved_table_box(server, browser_pa
     expect(month.locator('.big-grid:not(.big-read-reserve)')).to_have_count(0)
     # A control that needs the list stays disabled instead of acting on an unknown.
     expect(month.get_by_role('button', name='选择项目与排序…', exact=True)).to_be_disabled()
-    reading_lane = page.locator('.big-read-status').bounding_box()
+    assert page.locator('.big-read-status').bounding_box() is None
     reading_box = page.locator('.big-read-reserve').bounding_box()
 
     fail_held(held, '大表读取暂时失败')
@@ -72,9 +66,10 @@ def test_big_month_read_keeps_its_lane_and_reserved_table_box(server, browser_pa
     expect(page.locator('.big-read-status [role=status]')).to_have_count(0)
     expect(page.locator('.big-read-reserve .read-placeholder-quiet')).to_have_count(1)
     expect(month.locator('.big-count')).to_have_text('项目数尚未读取')
-    # The fixed slot and the reserved box did not move when the failure arrived.
-    assert abs(box_is_quiet(page.locator('.big-read-status'))['height'] - reading_lane['height']) < 1
-    assert abs(page.locator('.big-read-reserve').bounding_box()['y'] - reading_box['y']) < 1
+    alert = failure.bounding_box()
+    failed_box = page.locator('.big-read-reserve').bounding_box()
+    assert failed_box['y'] >= alert['y'] + alert['height'] - 1, (alert, failed_box)
+    assert abs(failed_box['height'] - reading_box['height']) < 1, (reading_box, failed_box)
 
     failure.get_by_role('button', name='重试读取').click()
     grid = month.locator('.big-grid:not(.big-read-reserve)')
@@ -111,7 +106,8 @@ def test_settlement_month_read_failure_reports_in_place(server, browser_page):
     expect(page.locator('.settlement-page > div:not([hidden]) .settlement-read-status [role=status]')).to_have_count(0)
     expect(page.locator('.settlement-page > div:not([hidden]) .settlement-read-reserve .read-placeholder-quiet')).to_have_count(1)
     after = page.locator('.settlement-page > div:not([hidden]) .settlement-read-reserve').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
     assert abs(after['height'] - before['height']) < 1, (before, after)
 
     failure.get_by_role('button', name='重试读取').click()
@@ -222,7 +218,9 @@ def test_users_list_reports_its_own_read_and_gates_the_actions(server, browser_p
     expect(failure.get_by_role('button', name='重试读取')).to_be_visible()
     expect(page.locator('.users-read-status [role=status]')).to_have_count(0)
     after = page.locator('.users-read-reserve').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
+    assert abs(after['height'] - before['height']) < 1, (before, after)
 
     failure.get_by_role('button', name='重试读取').click()
     expect(page.locator('.users-count')).to_have_count(1, timeout=30000)
@@ -308,7 +306,9 @@ def test_projects_first_read_publishes_the_page_and_keeps_the_list_box(server, b
     expect(failure.get_by_role('button', name='重试读取')).to_be_visible()
     expect(page.locator('.projects-page .result')).to_have_count(0)
     after = page.locator('.project-first-reserve').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
+    assert abs(after['height'] - before['height']) < 1, (before, after)
 
     failure.get_by_role('button', name='重试读取').click()
     expect(page.locator('.projects-page .result')).to_have_count(1, timeout=30000)

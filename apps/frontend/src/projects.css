@@ -3,8 +3,9 @@
 
 /* C-style page group: preserve archive columns and established action positions. */
 .projects-page{--control-h:calc(32px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.project-toolbar{padding:calc(16px * var(--fscale)) calc(16px * var(--fscale)) 0;gap:8px}
-.projects-page .filters{align-items:flex-end;padding:calc(16px * var(--fscale));gap:12px 16px}
+.project-tools{display:flex;align-items:flex-end;flex-wrap:wrap;gap:calc(16px * var(--fscale));padding:calc(16px * var(--fscale))}
+.project-tools .project-toolbar{padding:0;gap:8px;margin-left:auto}
+.projects-page .filters{flex:1 1 calc(640px * var(--fscale));min-width:0;align-items:flex-end;padding:0;gap:12px 16px}
 .projects-page .filters>label{display:flex;flex-direction:column;align-items:stretch;gap:6px;color:var(--tx2);font-size:calc(12px * var(--fscale));width:calc(112px * var(--fscale));min-width:0}
 .projects-page .filters>.search{width:calc(248px * var(--fscale));max-width:360px;flex:1;min-width:min(180px,100%)}
 .projects-page .filters .ant-select{min-width:0;width:100%;height:var(--control-h)}
@@ -46,8 +47,8 @@
 .project-sync-account dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .project-sync-summary{color:var(--tx2);margin:calc(16px * var(--fscale)) 0}
 
-/* Optional task lists precede the archive, so their first result settles before the archive is
-   published. Read errors share its fixed status lane rather than removing temporary lines. */
+/* Optional task lists settle before the archive is published. Only live tasks occupy space;
+   read errors share the archive's feedback lane. */
 .project-read-status{--read-status-pad:0}
 .project-read-reserve{padding:0;min-height:calc(320px * var(--fscale))}
 .project-first-reserve{height:calc(65dvh + 36px * var(--fscale));padding:0 calc(16px * var(--fscale))}
