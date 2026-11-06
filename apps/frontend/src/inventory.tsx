@@ -19,7 +19,7 @@ import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
 import { useReportFetchPending } from './i8-report-fetch';
 import { SettlementExport } from './settlement-export';
-import { useHistoryGuard } from './history';
+import { readHistory, useHistoryGuard } from './history';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
@@ -52,9 +52,10 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const filterCount = Object.values(filters).filter(filterOn).length;
   const scale = Number(me?.ui_scale_css ?? 1), paused = blocked || !active;
   async function reload() {
+    await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['inventory']});
     const data = await client.fetchQuery({queryKey:['inventory'],staleTime:0,queryFn:({signal}) => getInventory(signal)});
-    await client.invalidateQueries({predicate:q => q.queryKey[0] !== 'inventory'},{throwOnError:true});
+    if(me){const queryKey=['history',`${me.id}:${me.account}`];await client.cancelQueries({queryKey,exact:true});await client.fetchQuery({queryKey,staleTime:0,queryFn:async({signal})=>readHistory(await requestJson('/api/history/status',{signal}))});}
     return data;
   }
   const grid = useRef<GridApi<InventoryRow> | null>(null);

@@ -69,7 +69,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const query = useQuery({ queryKey: ['oilcard-invoices'], enabled: active && !blocked, queryFn: ({ signal }) => getOilInvoices(signal) });
   const current = useRef(query.data); current.current = query.data;
   const saves = useCellSaveQueue<Draft, OilInvoices>({
-    enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !locked), read: reload,
+    enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !locked), read: submitted => reload(submitted?.field !== 'remark'),
     write: async (draft, signal) => {
       const row = current.current?.invoices.find(r => r.id === draft.id);
       if (!row || (draft.field === 'remark' ? row.remark : pairKey(row)) !== draft.original) throw new ApiError('发票字段已变化，请重读核对保留输入。', 409);
@@ -79,7 +79,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     acknowledge: (present, submitted) => present.value === submitted.value && present.project_id === submitted.project_id && present.account_id === submitted.account_id ? undefined : { ...present, original: submitted.field === 'remark' ? submitted.value : `${submitted.project_id}:${submitted.account_id}` },
     saved: () => '',
   }, { key: 'oilcard-invoices', label: '油卡发票', pending: preparing || Boolean(dialog) || receiveOpen });
-  async function reload() {
+  async function reload(reconcile = true) {
     await client.invalidateQueries({ refetchType: 'none' });
     await client.cancelQueries({ queryKey: ['oilcard-invoices'], exact: true });
     const data = await client.fetchQuery({ queryKey: ['oilcard-invoices'], staleTime: 0, queryFn: ({ signal }) => getOilInvoices(signal) });
@@ -91,8 +91,8 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
       setResult(received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
     }
-    await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
-    if (me) await client.fetchQuery({ queryKey: ['history', `${me.id}:${me.account}`], staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
+    if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
+    if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
     return data;
   }
   const { drafts, busy, uncertain, verified, error } = saves;

@@ -56,6 +56,24 @@ def test_actual_inventory_adjustment_save_readback_and_revoke(server,browser_pag
     assert not any(a['row_id']==row['id'] for a in restored['adjustments'])
 
 
+def test_inventory_adjustment_does_not_wait_for_unrelated_project_read(server,browser_page,api,disposable):
+    page,_=browser_page;data=get(api,'/api/m08/inventory');row=next(r for r in data['rows'] if not r['adjusted'] and Decimal(str(r['qty']))>0)
+    open_page(page,server,'inventory','库存单据与调整单')
+    page.get_by_role('button',name='库存核算期间',exact=True).click();page.get_by_role('dialog',name='库存核算期间选择',exact=True).get_by_text('全部',exact=True).click();page.keyboard.press('Escape')
+    page.get_by_role('button',name=re.compile('^列筛选')).click();pick_option(page,'筛选列','物料');page.get_by_label('列包含文字',exact=True).fill(row['material'])
+    grid_row(page,'.inventory-grid',row['id']).get_by_role('button',name='办理调整',exact=True).click()
+    dialog=page.get_by_role('dialog');dialog.get_by_label('调整后数量',exact=True).fill(str(Decimal(str(row['qty']))+1));dialog.get_by_label('调整备注',exact=True).fill('隔离核验：保存确认不依赖项目列表重读')
+    projects=[]
+    def fail_projects(route):
+        projects.append(route.request.url);route.abort('failed')
+    page.route('**/api/m01/projects*',fail_projects)
+    dialog.get_by_role('button',name='保存调整单',exact=True).click()
+    expect(dialog.get_by_role('status').filter(has_text='调整单已保存')).to_be_visible()
+    assert not projects,'普通调整不应立即读取其他项目查询'
+    actual=next(a for a in get(api,'/api/m08/inventory')['adjustments'] if a['row_id']==row['id'])
+    assert actual['remark']=='隔离核验：保存确认不依赖项目列表重读'
+
+
 def test_known_inventory_rows_keep_scroll_extent(server,browser_page,api):
     """Known long rows must not change the scrollbar extent as virtual windows mount."""
     page,_=browser_page;data=get(api,'/api/m08/inventory');assert data['rows']
