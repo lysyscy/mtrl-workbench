@@ -2,7 +2,7 @@
 
 ## 当前运行与活动整改
 
-2026-11-06 06:10按用户批准发布并重启：正式前端指向`var/frontend/releases/67111c60b4f8`，产品提交`67111c60b4f8c2614fb5ba7517b5f25f4da21bc4`。审计及TAIL-450整改已加载：三域抓取短事务与严格停止、统计/欠款读契约、默认金额完整显示；原统一抓取入口保持。健康200、实际索引、44份资源和8000监听归属通过，回退保留`7540882ce5ff`。代码已正常推送且远端SHA一致，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42119119708)通过；发布回执归本机受管组`060919-128605-4392/files/reports/deployment.json`，详见[实施与发布记录](../.scratch/audit-remediation-20261105/implementation.md)。本轮无迁移、真实i8抓取或正式业务写入。前轮取消账号菜单限制的扩展0.1.1仍在`var/browser-extension/releases/fce4aa1d82143b81`，由用户自行安装；本轮无需更新扩展。源码HEAD与运行产物分别记录，不用最新源码替代部署身份。后续发布只更新此处现行指向，下面各节保留当次历史事实。
+2026-11-06 10:14按用户明确授权推送并部署：正式前端指向`var/frontend/releases/17495586c2a1`，产品提交`17495586c2a186da3b420bc651d1a1e9fbebd8bd`，已完成标准publish及服务重启。油卡原件接收/回执、集采子表提交恢复和用油接续编排三项深化已加载；金额、原件、稳定提交ID及历史保护保持。健康200、实际索引、44份资源与8000监听归属通过，集采/油卡深链200，回退保留`93508be417e4`。代码已正常推送且远端SHA一致，[CI](https://github.com/lysyscy/mtrl-workbench/actions/runs/42148690779)通过；发布回执归本机受管组`101307-906394-41556/files/reports/deployment.json`，详见[实施与发布记录](../.scratch/architecture-deepening-20261106/implementation.md)。本轮无迁移、真实i8抓取、物理打印或正式业务写入；原有无关未提交内容保留。源码HEAD与运行产物分别记录，不用后续文档提交替代部署身份；下面各节保留当次历史事实。
 
 当前[加载结构与跨页残留整改](../.scratch/loading-structure-20261105/plan.md)已完成实施、双轴审查及[定向验证](../.scratch/loading-structure-20261105/verification.md)：八页首读、规则页残留，以及字体重载保护和异步测量归属等相关审计项。累计基线`9b8e0ccd`，任务分支`codex/loading-structure-20261105`，按贡献指南整合master；采用原生子代理，不用DSH。2026-11-05 13:34已按用户授权部署并重启，正式加载b8ee0b24，HTTP200、42份资源及监听归属核验通过；原i8配置保持。另发现的大表合同价/空产值重读错误已开TAIL-482并[单列](../.scratch/loading-structure-20261105/adjacent-finding.md)，不写成加载整改已修复。
 
