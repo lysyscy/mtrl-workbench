@@ -198,7 +198,7 @@ def test_断开连接时挂起请求立即判停且不重试(store):
     assert pending.status is None       # 没有拿到任何响应 ⇒ 不存在"重发后成功"
 
 
-def test_等不到回音时判超时而不是重发(store):
+def test_排队请求超时后恢复轮询也不会执行旧票(store):
     store.connect(OWNER, DEVICE, BASE)
     pending = store.enqueue(OWNER, DEVICE, method="GET", url=BASE + "/x", headers={}, body=b"")
     started = time.time()
@@ -206,11 +206,29 @@ def test_等不到回音时判超时而不是重发(store):
         store.wait(pending, timeout=0.05)
     assert time.time() - started < 2.0
     assert pending.stopped == "timeout"
+    assert store.take_pending(OWNER, DEVICE, timeout=0.0) is None
 
 
 def test_连接空闲超时后必须重新连接(store, monkeypatch):
     store.connect(OWNER, DEVICE, BASE)
     monkeypatch.setattr(browser_broker, "CONNECTION_IDLE_SECONDS", -1.0)
+    assert store.connection_of(OWNER, DEVICE) is None
+
+
+def test_持续轮询维持连接且停止后可过期(store, monkeypatch):
+    now = 1_000.0
+    monkeypatch.setattr(browser_broker.time, "time", lambda: now)
+    initial = store.connect(OWNER, DEVICE, BASE)
+    for _ in range(13):
+        now += 10.0
+        assert store.take_pending(OWNER, DEVICE, timeout=0.0) is None
+
+    current = store.connection_of(OWNER, DEVICE)
+    assert current is not None
+    assert current.generation == initial.generation
+    now += browser_broker.CONNECTION_IDLE_SECONDS - 1.0
+    assert store.connection_of(OWNER, DEVICE) is not None
+    now += 2.0
     assert store.connection_of(OWNER, DEVICE) is None
 
 
@@ -731,15 +749,23 @@ def test_超时预算按每条请求自己的读超时走(store):
 
 def test_空闲清理不会误杀在途请求(store, monkeypatch):
     """120s 空闲清理只清**真的闲着**的连接：排队中或已在浏览器里跑着都不算空闲。"""
+    now = 1_000.0
+    monkeypatch.setattr(browser_broker.time, "time", lambda: now)
     store.connect(OWNER, DEVICE, BASE)
     pending = store.enqueue(OWNER, DEVICE, method="GET",
                             url=BASE + "/SUP/RichHelp/GetCommonUseList", headers={}, body=b"")
-    monkeypatch.setattr(browser_broker, "CONNECTION_IDLE_SECONDS", -1.0)
 
+    now += browser_broker.CONNECTION_IDLE_SECONDS + 1.0
     assert store.connection_of(OWNER, DEVICE) is not None     # 还在排队 ⇒ 不算空闲
     assert store.take_pending(OWNER, DEVICE, timeout=0.0) is pending
+    now += browser_broker.CONNECTION_IDLE_SECONDS + 1.0
     assert store.connection_of(OWNER, DEVICE) is not None     # 已在执行 ⇒ 仍不算空闲
 
-    store.complete(OWNER, DEVICE, pending.ticket, status=200, headers={}, body=b"{}",
-                   generation=pending.generation)
-    assert store.connection_of(OWNER, DEVICE) is None         # 真的闲下来了才清
+    assert store.complete(OWNER, DEVICE, pending.ticket, status=200, headers={}, body=b"{}",
+                          generation=pending.generation)
+    now += browser_broker.CONNECTION_IDLE_SECONDS - 1.0
+    assert store.connection_of(OWNER, DEVICE) is not None     # 有效回帖更新活动时间
+    assert not store.complete(OWNER, DEVICE, pending.ticket, status=200, headers={}, body=b"{}",
+                              generation=pending.generation)
+    now += 2.0
+    assert store.connection_of(OWNER, DEVICE) is None         # 重复回帖不续期

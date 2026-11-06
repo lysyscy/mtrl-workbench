@@ -40,7 +40,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -66,7 +66,7 @@ RELAY_WAIT_SECONDS = 30.0
 #: 这样页面总能先回来"再问一次"，而发起端不会因为长轮询本身耗光预算。
 PENDING_WAIT_SECONDS = 10.0
 
-#: 连接空闲多久算断（页面关掉/设备睡眠后，别让队列一直挂在那儿）。
+#: 多久没有收到页面的轮询或有效回帖算断（页面关掉或设备睡眠）。
 #: ⚠️ 只清**真的闲着**的连接：有挂起请求在等（在途）时不算空闲，见 `connection_of`。
 CONNECTION_IDLE_SECONDS = 120.0
 
@@ -264,16 +264,7 @@ class BrowserBroker:
                 self._fail_queue(key, "timeout")
                 logger.info("i8 浏览器通道：连接空闲超时，已清理")
                 return None
-            refreshed = ConnectionInfo(
-                owner=info.owner,
-                device=info.device,
-                origin=info.origin,
-                connected_at=info.connected_at,
-                last_seen=time.time(),
-                generation=info.generation,
-            )
-            self._connections[key] = refreshed
-            return refreshed
+            return info
 
     # ------------------------------------------------------------- 请求排队
 
@@ -324,8 +315,10 @@ class BrowserBroker:
             return item
 
         with self._lock:
-            if key not in self._connections:
+            connection = self.connection_of(owner, device)
+            if connection is None:
                 raise BrowserRelayUnavailable("浏览器连接不在，请重新连接后再试。")
+            self._connections[key] = replace(connection, last_seen=time.time())
             queue = self._queues.setdefault(key, deque())
             item = queue.popleft() if queue else None
             if item is not None:
@@ -333,7 +326,8 @@ class BrowserBroker:
         while time.time() < deadline:
             time.sleep(0.05)
             with self._lock:
-                if key not in self._connections:
+                current = self._connections.get(key)
+                if current is None or current.generation != connection.generation:
                     raise BrowserRelayUnavailable("浏览器连接已断开，请重新连接后再试。")
                 queue = self._queues.setdefault(key, deque())
                 if queue:
@@ -381,6 +375,7 @@ class BrowserBroker:
             item.reply_headers = dict(headers)
             item.reply_body = body
             item.reply_declared_length = declared_length
+            self._connections[key] = replace(connection, last_seen=time.time())
             item.done.set()
             return True
 
@@ -394,11 +389,20 @@ class BrowserBroker:
         """
         budget = request.timeout_seconds if timeout is None else timeout
         if not request.done.wait(budget):
+            key = (request.owner, request.device)
             with self._lock:
-                inflight = self._inflight.get((request.owner, request.device))
-                if inflight and inflight.get(request.ticket) is request:
-                    inflight.pop(request.ticket, None)
-            request.stopped = request.stopped or "timeout"
+                if not request.done.is_set():
+                    inflight = self._inflight.get(key)
+                    if inflight and inflight.get(request.ticket) is request:
+                        inflight.pop(request.ticket)
+                    queue = self._queues.get(key)
+                    if queue:
+                        for index, item in enumerate(queue):
+                            if item is request:
+                                del queue[index]
+                                break
+                    request.stopped = "timeout"
+                    request.done.set()
         if request.stopped:
             raise StrictSessionEnded(_REASONS.get(request.stopped, _REASONS["timeout"]))
         return request

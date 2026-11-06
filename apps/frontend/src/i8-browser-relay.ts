@@ -148,6 +148,18 @@ export function setRelayMode(mode: SessionMode, owner?: string | null): void {
   else sessionStorage.removeItem(key);
 }
 
+/** Only the connection preference survives reload; every document still gets a fresh device ID. */
+export function relayConnectionWanted(owner: string): boolean {
+  try {return sessionStorage.getItem(`mtrl.i8.relay.connect.${owner}`) === 'yes';} catch {return false;}
+}
+
+export function setRelayConnectionWanted(owner: string, wanted: boolean): void {
+  try {
+    const key = `mtrl.i8.relay.connect.${owner}`;
+    if (wanted) sessionStorage.setItem(key, 'yes'); else sessionStorage.removeItem(key);
+  } catch { /* The current page can still connect when session storage is unavailable. */ }
+}
+
 /**
  * 身份事件（登录失效/退出登录/换号/卸载）时换掉**本页的连接标识**。
  *
@@ -187,10 +199,10 @@ export function readBrowserRelayState(value: unknown): BrowserRelayState {
     || typeof value.expected_org !== 'string' || typeof value.message !== 'string'
     || typeof value.expected_org_code !== 'string' || typeof value.expected_org_name !== 'string'
     || typeof value.generation !== 'number' || !Number.isInteger(value.generation)) {
-    throw new ApiError('浏览器连接状态读取不完整，请重试；仍失败请联系维护人员。');
+    throw new ApiError('浏览器连接状态读取不完整，请重试；仍失败请联系维护人员。', 0, 'invalid_response');
   }
   if (value.mode !== SESSION_MODE_HTTP && value.mode !== SESSION_MODE_BROWSER) {
-    throw new ApiError('浏览器连接状态读取不完整，请重试；仍失败请联系维护人员。');
+    throw new ApiError('浏览器连接状态读取不完整，请重试；仍失败请联系维护人员。', 0, 'invalid_response');
   }
   return {
     connected: value.connected,
@@ -294,12 +306,12 @@ function sendToExtension(message: unknown): Promise<unknown> {
   const extensionId = relayExtensionId();
   return new Promise((resolve, reject) => {
     if (!runtime || !extensionId) {
-      reject(new ApiError('没有检测到浏览器扩展，请按说明安装后再连接；本次未发出任何 i8 请求。'));
+      reject(new ApiError('没有检测到浏览器扩展，请按说明安装后再连接；本次未发出任何 i8 请求。', 0, 'extension-missing'));
       return;
     }
     runtime.sendMessage(extensionId, message, (response: unknown) => {
       if (runtime.lastError) {
-        reject(new ApiError('浏览器扩展没有应答（可能已停用或未授权）。本次未发出任何 i8 请求。'));
+        reject(new ApiError('浏览器扩展暂未应答，正在等待恢复。', 0, 'extension-unavailable'));
         return;
       }
       resolve(response);
@@ -318,10 +330,10 @@ export async function readBrowserIdentity(send: Send = sendToExtension): Promise
   const value = await send({ type: 'i8-relay:identity', device_id: deviceId() });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';
-    throw new ApiError(message || IDENTITY_HINT);
+    throw new ApiError(message || IDENTITY_HINT, 0, record(value) ? readString(value, 'code') || 'need-tab' : 'malformed');
   }
   const origin = readString(value, 'origin');
-  if (!origin) throw new ApiError(IDENTITY_HINT);
+  if (!origin) throw new ApiError(IDENTITY_HINT, 0, 'malformed');
   return { origin };
 }
 
@@ -332,7 +344,7 @@ export async function readBrowserIdentity(send: Send = sendToExtension): Promise
  */
 export async function bindBrowserIdentity(identity: VisibleIdentity, generation: number, send: Send = sendToExtension): Promise<void> {
   if (!Number.isInteger(generation) || generation <= 0) {
-    throw new ApiError('这次连接没有拿到有效代号，请重新连接。');
+    throw new ApiError('这次连接没有拿到有效代号，请重新连接。', 0, 'invalid_response');
   }
   const value = await send({
     type: 'i8-relay:bind',
@@ -342,7 +354,7 @@ export async function bindBrowserIdentity(identity: VisibleIdentity, generation:
   });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';
-    throw new ApiError(message || '浏览器扩展没能记下这次连接，请重试。');
+    throw new ApiError(message || '浏览器扩展没能记下这次连接，请重试。', 0, record(value) ? readString(value, 'code') || 'bind-failed' : 'malformed');
   }
 }
 
@@ -369,10 +381,10 @@ export interface RelayRunHooks {
  * 通道主循环：**只有页面打开且已连接时**才跑；关页面即停（没有后台常驻）。
  *
  * 停止语义（与后端一一对应，⛔ 一律不回落登录）：
- * - `401`/`403`：身份失效/无权 ⇒ 立刻停（`api.ts` 已按既有语义处理 `401`）。
+ * - `401`/真正`403`：身份失效/无权立即停；临时 identity_unverified 交恢复器等待核验。
  * - `abort`/`keep()===false`：路由切走/账号暂停 ⇒ 立刻停，**并且不再执行已取回的请求**。
  * - 网络中断：**不当身份失效**，退避后重试；连续失败超限才停。
- * - 扩展无应答/回帖失败：停（用户可在「i8 接入」页重连）。
+ * - 缺连接、短暂网络/扩展通信失败：结束本轮，恢复器重建通道，不重放旧票。
  * - 协议形状不对：停（`malformed`），⛔ 不当成"没任务"继续空转。
  *
  * ⭐ 每一次 `await` 之后都**重新核一遍** `aborted()`：中途可能已经断开、切页或换号；
@@ -399,9 +411,22 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
         stopped('idle');
         return;
       }
-      // 后端受控停止（400/409/502）或身份失效（401/403）⇒ 立刻停，不回退登录。
+      if (failure instanceof ApiError && failure.code === 'invalid_response') {
+        stopped('malformed');
+        return;
+      }
+      if (failure instanceof ApiError && failure.code === 'identity_unverified') {
+        stopped('network');
+        return;
+      }
+      // A missing broker registration can be recreated; never replay a fetched ticket.
+      if (failure instanceof ApiError && failure.code === 'i8_browser_relay_unavailable') {
+        stopped('reconnect');
+        return;
+      }
+      // 身份/配置错误仍停止，服务暂不可达按网络中断恢复。
       if (failure instanceof ApiError && failure.status > 0) {
-        stopped('failed');
+        stopped(failure.status >= 500 ? 'network' : 'failed');
         return;
       }
       networkFaults += 1;
@@ -449,14 +474,14 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       // 扩展侧失败也必须回一个「终止」信号，否则后端会一直挂到自己的等待上限。
       // 回帖本身失败 ⇒ 通道已不可用：停止并把失败交出去（⛔ 不吞、不假装已回帖）。
       try {
-        await postReply({ status: 599, headers: {}, body_b64: '', declared_length: 0 }, request);
+        await postReply({ status: 599, headers: {}, body_b64: '', declared_length: 0 }, request, signal);
       } catch (postFailure) {
         stopped('failed');
         throw postFailure instanceof ApiError
           ? postFailure
           : new ApiError('浏览器回帖失败：和工作台的连接断了，本次已停止，请重新连接。');
       }
-      stopped('failed');
+      stopped(failure instanceof ApiError && failure.code === 'extension-unavailable' ? 'network' : 'failed');
       if (failure instanceof ApiError) return;
       throw failure;
     }
@@ -465,7 +490,7 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       stopped('idle');
       return;
     }
-    await postReply(reply, request);
+    await postReply(reply, request, signal);
   }
   stopped('idle');
 }
@@ -474,7 +499,7 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
  * 回帖。失败**不吞**：交给调用方按"通道已不可用"处理（停止并回显），
  * 否则界面会一直显示"已连接、在等活"，而后端早已判停 —— 那是在骗用户。
  */
-async function postReply(reply: RelayReply, request: RelayRequest): Promise<void> {
+async function postReply(reply: RelayReply, request: RelayRequest, signal?: AbortSignal): Promise<void> {
   const body = {
     device_id: deviceId(),
     ticket: request.ticket,
@@ -486,6 +511,7 @@ async function postReply(reply: RelayReply, request: RelayRequest): Promise<void
   };
   await requestJson('/api/m02/browser/complete', {
     method: 'POST',
+    ...(signal ? {signal} : {}),
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
   });

@@ -85,22 +85,43 @@ def choose_browser_mode(page):
     expect(item).to_have_class(re.compile('ant-segmented-item-selected'))
 
 
+def simulated_bridge(page, connects):
+    """Mock only relay-control messages; no business response or external i8 request."""
+    page.add_init_script("""(() => {
+      window.chrome ??= {};
+      Object.defineProperty(window.chrome, 'runtime', {configurable:true, value:{
+        sendMessage(_id, message, reply) {
+          if (message.type === 'i8-relay:identity') reply({ok:true,origin:'https://i8.example.test'});
+          else reply({ok:true,generation:message.generation});
+        }
+      }});
+    })();""")
+
+    def connect(route):
+        connects.append(route.request.post_data_json)
+        route.fulfill(content_type='application/json', body=json.dumps({**CONNECTED_STATE, 'generation': len(connects)}))
+
+    page.route('**/api/m02/browser/connect', connect)
+    page.route('**/api/m02/browser/disconnect*', json_route({**CONNECTED_STATE, 'connected': False, 'mode': 'http'}))
+
+
 def test_relay_stop_wins_over_server_side_connected(server, browser_page):
     """通道自己停了，服务端仍回 connected=true ⇒ 页面必须判为未连接，且不自动恢复。"""
     page, _ = browser_page
+    connects = []
+    simulated_bridge(page, connects)
     completed = []
     page.route('**/api/m02/browser/state*', json_route(CONNECTED_STATE))
     page.route('**/api/m02/browser/pending*', json_route({'request': MALFORMED_REQUEST}))
     page.route('**/api/m02/browser/complete', hold_and_record(completed))
     login(page, server)
     choose_browser_mode(page)
+    page.get_by_role('button', name='连接浏览器会话', exact=True).click()
 
     relay = page.locator('.i8-relay')
     # 以本页实况为准：未连接，并如实说明停了的原因。
     expect(relay.get_by_text('未连接', exact=True)).to_be_visible(timeout=30000)
-    expect(relay.get_by_role('status').filter(has_text='协议对不上')).to_be_visible()
-    # 服务端那条连接还在，页面必须承认这个差异，而不是显示「已连接」。
-    expect(relay.get_by_text(re.compile('工作台那边还留着这条连接记录'))).to_be_visible()
+    expect(relay.get_by_role('status').filter(has_text='协议不一致')).to_be_visible()
     expect(relay.get_by_text('已连接', exact=True)).to_have_count(0)
     page.wait_for_timeout(500)
     assert completed == [], '协议对不上时不应向服务端回帖'
@@ -108,6 +129,30 @@ def test_relay_stop_wins_over_server_side_connected(server, browser_page):
     # 重新进入页面也不会把「已连接」顶回来（服务端仍返回 connected=true）。
     page.reload()
     expect(page.locator('.i8-relay').get_by_text('未连接', exact=True)).to_be_visible(timeout=30000)
+    assert len(connects) == 1, '协议错误不得被刷新后的自动恢复掩盖'
+
+
+def test_reload_recovers_selected_browser_but_explicit_disconnect_stays_off(server, browser_page):
+    page, _ = browser_page
+    connects = []
+    simulated_bridge(page, connects)
+    page.route('**/api/m02/browser/state*', json_route({**CONNECTED_STATE, 'connected': False}))
+    page.route('**/api/m02/browser/pending*', json_route({'request': None}))
+    login(page, server)
+    choose_browser_mode(page)
+    page.get_by_role('button', name='连接浏览器会话', exact=True).click()
+    expect(page.locator('.i8-relay').get_by_text('已连接', exact=True)).to_be_visible()
+    assert len(connects) == 1
+    page.reload()
+    expect(page.locator('.i8-relay').get_by_text('已连接', exact=True)).to_be_visible()
+    assert len(connects) == 2
+    assert connects[0]['device_id'] != connects[1]['device_id'], '刷新恢复仍使用新文档连接'
+    page.get_by_role('button', name='断开', exact=True).click()
+    expect(page.locator('.i8-relay').get_by_text(re.compile('已断开浏览器连接，刷新页面也不会自动重连'))).to_be_visible()
+    with page.expect_response('**/api/m02/browser/state*'):
+        page.reload()
+    expect(page.locator('.i8-relay').get_by_text('未连接', exact=True)).to_be_visible()
+    assert len(connects) == 2
 
 
 def test_browser_mode_survives_session_loss_for_the_same_account(server, browser_page):
