@@ -2,7 +2,7 @@
 
 ## 当前正式运行
 
-2026-11-06 16:46，按用户明确授权发布并重启，正式加载 `b3ba025f373b113002c21fa2674266a4ce21883d`，资源目录 `var/frontend/releases/b3ba025f373b`；健康200、实际索引、44份资源和8000监听归属核验通过。上一回退为 `7156a5aef8d4`。本轮无数据库迁移、正式业务写入、真实i8调用或物理打印。完整当次事实见[已保存的发布回执](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/quality-wayfinding-20261106/implementation.md#用户授权后的正式发布与重启)；后续源码或文档提交不代表再次部署。
+2026-11-07 07:59，按用户明确授权发布动效版本并重启，正式加载 `664ae635eed48ad34627c861fd52102b633b8f3e`，资源目录 `var/frontend/releases/664ae635eed4`；健康200、实际索引、44份公开资源和8000监听归属核验通过。实际上一回退为 `7c4049737012`，发布器保留当前及该回退版本，已清理其登记的旧版本 `040bbdc2b946`。本轮无数据库迁移、正式业务写入、真实i8调用或物理打印。发布回执保留于本机 `.artifacts/runs/075842-760008-44784/reports/deployment.json`；动效对照证据组 `motion-experience-evidence-20261106` 按生命周期保留。本轮可丢弃预览已正常停止，其自建测试schema及临时构建已清理，预览组已结项。后续源码或文档提交不代表再次部署。
 
 ## 油卡旧台账接续
 
