@@ -23,15 +23,14 @@
 
 请求使用用户选中标签里的当前 i8 会话；不再读取或比对菜单中的账号、组织。请求目标仍须与标签实际站点一致。
 
-## 安装（人工、一次性）
+## 安装与更新
+
+`apps/browser-extension/` 是唯一维护和加载目录。更新沿用同一个目录，不再生成独立安装包。
 
 1. 打开 `edge://extensions`（Chrome 是 `chrome://extensions`），打开「开发人员模式」。
-2. 「加载解压缩的扩展」→ 选本目录 `apps/browser-extension/`。
-3. 装好后**不用填任何扩展 ID**：`manifest.json` 里的 `"key"` 固定了打包 ID，工作台认的就是这个固定值
-   `jfkgliolimmpceandogfimjkadplidem`。刷新工作台页面即可，之后都不需要再配置。
-
-   只有当你**换了一份打包方式**（例如把 `key` 去掉重新打包）时，ID 才会变；那时才需要在构建期注入
-   `VITE_I8_RELAY_EXTENSION_ID` 覆盖。
+2. 点「加载解压缩的扩展」，选择本仓的 `apps/browser-extension/`。用扩展详情中的来源路径核对加载目录。
+3. 保留 `manifest.json` 中的 `"key"`，工作台用固定扩展 ID `jfkgliolimmpceandogfimjkadplidem` 连接。
+4. 扩展源码更新后，在扩展页点「重新加载」，再按[使用流程](#使用流程日常)选中 i8 标签并确认工作台会话桥能连接。
 
 ### 工作台地址范围（无需改 manifest）
 
@@ -41,8 +40,7 @@
 - 本仓预览：`http://127.0.0.1:8065/`、`http://localhost:8065/`（`docs/guides/frontend-preview.md` 的预览端口）
 - 局域网正式入口（0.1.2，用户2026-11-06确认）：`http://192.168.5.3:8000/`。其他电脑须在打开工作台和i8的同一浏览器配置中安装新版扩展；连接标识复用工作台的局域网HTTP兼容随机ID实现。
 
-**不要让用户去编辑 `manifest.json`。** 若换到别的地址/端口，那是权限面变更 —— 需要单独确认，由维护人改包，
-不是安装步骤的一部分。本扩展刻意**不申请 `<all_urls>`**。
+新增工作台地址或端口属于权限变更，须单独确认，由维护人更新源码中的发送方检查和 `manifest.json`。本扩展刻意**不申请 `<all_urls>`**。
 
 ### 卸载
 
@@ -87,4 +85,4 @@
 - 二进制报表（xlsx 导出）经 base64 传输，由后端做长度完整性核对；长度对不上即停（不重试，也不设拍脑袋的字节上限）。
 - `externally_connectable` 与 `scripting.executeScript` 已在本机Edge实际安装后通过通知书日常入口验证；其它Edge版本和部署不自动视为通过。
 - 0.1.1 不再依赖账号菜单 DOM；实际登录失效由取数响应判定，不以“已连接”代表 i8 认证成功。
-- 固定包`c44568c2997b03de`已由用户装入真实Edge并点击选定标签；原工作台按钮抓取2026-11通知书17条，测试副本逐条读回一致。完整依据见[Git中的真实验收](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)。未修改固定包文件，后续说明更新仅在Git源码中维护。
+- 历史验收中，用户在真实 Edge 选中 i8 标签后，原工作台按钮抓取了 2026-11 通知书 17 条，测试副本逐条读回一致。[真实验收记录](https://github.com/lysyscy/mtrl-workbench/blob/e79b50fe9bd049ede5fbabdd1152fbddecfed9bb/.scratch/browser-session-loading-20261103/evidence/TAIL-476-daily-live.md)
