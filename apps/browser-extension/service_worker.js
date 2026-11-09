@@ -411,7 +411,7 @@ async function identityStillBound(deviceId, generation, senderKey, entry) {
   const stored = await chrome.storage.session.get(boundKeyOf(deviceId));
   const bound = stored && stored[boundKeyOf(deviceId)];
   if (!bound) {
-    return entry.replaced
+    return entry?.replaced
       ? { ok: false, code: 'binding-lost', message: '浏览器替换了原标签，工作台会自动重新连接。' }
       : { ok: false, message: '这条连接没有登记过身份，请回「i8 接入」页重新连接。' };
   }
@@ -500,6 +500,14 @@ async function execute(message, senderKey) {
   };
 }
 
+async function probeBinding(message, deviceId, senderKey) {
+  const identity = await readIdentity();
+  if (!identity.ok) return identity;
+  const entry = await selectedTab();
+  const bound = await identityStillBound(deviceId, positiveGeneration(message.generation), senderKey, entry);
+  return bound.ok ? identity : bound;
+}
+
 /** 待核身份的键：连接 + **发送页面**，两者都参与。 */
 function pendingKeyOf(deviceId, senderKey) {
   return `${deviceId}\u0000${senderKey}`;
@@ -522,13 +530,14 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       sendResponse({ ok: false, message: '认不出这个工作台页面，本次已停止。请刷新页面后重新连接。' });
       return false;
     }
-    readIdentity().then(
+    const probeOnly = message.probe_only === true;
+    (probeOnly ? probeBinding(message, deviceId, senderKey) : readIdentity()).then(
       result => {
         // 只记住**这个连接的这个页面**刚读到的这一份；工作台确认连接成功后才会经 `bind` 提升为基准。
         // ⛔ 键里带发送页面：另一个本地页面用同一个 `device_id` 读身份，只会写到它自己那格，
         // 顶不掉这里待核对的那一份。
         const key = pendingKeyOf(deviceId, senderKey);
-        if (message.probe_only !== true) {
+        if (!probeOnly) {
           if (result.ok) pendingIdentities.set(key, result);
           else pendingIdentities.delete(key);
         }

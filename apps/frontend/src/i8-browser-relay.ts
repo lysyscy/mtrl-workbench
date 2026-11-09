@@ -328,9 +328,9 @@ const IDENTITY_HINT = '没能读取选中的 i8 标签：请在已登录的 i8 �
  *
  * 带 `device_id`：扩展按连接缓存这份待核身份，另一个工作台页面的预检不会把它换掉。
  */
-export async function readBrowserIdentity(send: Send = sendToExtension, probeOnly = false): Promise<VisibleIdentity> {
+export async function readBrowserIdentity(send: Send = sendToExtension, generation?: number): Promise<VisibleIdentity> {
   const value = await send({
-    type: 'i8-relay:identity', device_id: deviceId(), ...(probeOnly ? {probe_only: true} : {}),
+    type: 'i8-relay:identity', device_id: deviceId(), ...(generation === undefined ? {} : {probe_only: true, generation}),
   });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';

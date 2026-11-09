@@ -171,6 +171,7 @@ test('空闲时识别 i8 标签休眠，恢复后自动绑定且不执行抓取'
   browser(t, message => {
     if (message.type === 'i8-relay:identity') {
       if (message.probe_only || attempts === 1) {
+        if (message.probe_only) assert.equal(message.generation, generation);
         return {ok: false, code: 'tab-paused', message: '标签暂停'};
       }
       return {ok: true, ...identity};
