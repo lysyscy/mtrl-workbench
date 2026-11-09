@@ -40,7 +40,7 @@
 
 - 用户试用run：`.artifacts/active/oilcard-implementation/20261031-user-preview`；owner为`reports/real_owner.json`，登记schema为`frontend_writable_51fcec25f7044cea8202b5afcece03b7`、revision `oil464261031`、`preserve_schema_on_stop=true`。当前身份及操作沿[预览指南](../../../docs/guides/frontend-preview.md)核验。
 - 同run恢复点：`recovery/before-oil464261031.dump`及`recovery/before-ui-redesign-20261031T082819053931Z/`；构建历史位置为`.artifacts/active/oilcard-implementation/20261031-ui-redesign/work/build-04`。用户试用记录、恢复点与原件保留，不重copy-source、seed或丢schema；升级仍走已登记existing流程。
-- 更早原型owner：`.artifacts/active/oilcard-interaction/20261030-dsh/reports/owner.json`。是否仍有恢复用途须由实际消费者核定，本次未清理。
+- 更早的合成交互原型及专属运行资料已于2026-11-09核对后退出；用户试用、正式接续依据和恢复资料仍按上文保留。
 
 如需重读开发演练细节，使用[Git中的463记录](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/oilcard-management/evidence/TAIL-463.md)。日常接续直接从本票及当前需求进入，不要求恢复整个旧effort。
 
