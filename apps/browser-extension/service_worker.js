@@ -40,10 +40,7 @@ const ALLOWED_HEADERS = ['accept', 'content-type', 'x-requested-with', 'accept-l
  * 两侧必须逐条一致；改动一处就要同步改另一处，否则一侧放行、另一侧拒）。
  *
  * ⚠️ 不看方法就当只读：登录、踢人（KillOnlineUser）、任何保存/提交端点**永远不在这里**。
- * ⚠️ `GetCntMList` 是采购合同**列表**口：正式部署的 `I8_CONTRACT_LIST_URL` 实测就是
- *    这一条（POST、无查询参数），所以这里按**字面路径**收进来。扩展读不到部署配置，
- *    若某个部署把它换成了别的地址，浏览器方式只会在本扩展这里当场停下（可诊断），
- *    ⛔ 不会静默改用登录方式。
+ * `GetCntMList` 是采购合同列表。工作台从当前 i8 服务地址派生列表及详情地址。
  * ⚠️ `reportExport/export` 是库存/结存的**二进制报表响应**读取（xlsx 字节原样带回，
  *    由后端核长度与文件头）；它**不是**实际打印动作，打印链路不在本通道里。
  */
@@ -70,6 +67,12 @@ const READONLY_ENDPOINTS = {
 const ALLOWED_METHODS = ['GET', 'POST'];
 
 const TAB_KEY = 'i8RelayTab';
+const TAB_PROBE_TIMEOUT_MS = 2500;
+const TAB_PAUSED = {
+  ok: false,
+  code: 'tab-paused',
+  message: 'i8 标签暂时没有响应，可能正在加载或已被浏览器休眠。工作台会自动恢复连接。',
+};
 
 /**
  * 绑定基准**按连接分键**：`i8RelayBound:<device_id>`。
@@ -190,29 +193,59 @@ function checkEndpoint(method, rawUrl) {
   return '';
 }
 
-async function selectedTab() {
+let tabSelectionUpdate = Promise.resolve();
+
+async function readSelectedTab() {
   const stored = await chrome.storage.session.get(TAB_KEY);
   const entry = stored && stored[TAB_KEY];
   if (!entry || typeof entry.tabId !== 'number' || typeof entry.origin !== 'string') return null;
   return entry;
 }
 
+async function selectedTab() {
+  await tabSelectionUpdate;
+  return readSelectedTab();
+}
+
+function updateTabSelection(change) {
+  tabSelectionUpdate = tabSelectionUpdate.then(change).catch(() => {});
+  return tabSelectionUpdate;
+}
+
 /** 用户点扩展图标 ⇒ 记下**当前标签**（activeTab 由此授予），并回报读到的站点。 */
-chrome.action.onClicked.addListener(async tab => {
+chrome.action.onClicked.addListener(tab => {
   if (!tab || typeof tab.id !== 'number') return;
   const origin = originOf(tab.url || '');
   if (!origin) return;
   // ⚠️ `chrome.storage.session.set` 只有 `set(items)` / `set(items, callback)` 两种签名；
   //    写成 `set(key, value)` 在真浏览器里会抛 "No matching signature" 而**静默失败**
   //    （样机的 vm 替身原先按 (key, value) 实现，把这处错盖住了 —— 真浏览器样机抓到）。
-  await chrome.storage.session.set({ [TAB_KEY]: { tabId: tab.id, origin, selectedAt: Date.now() } });
-  // 换了标签 ⇒ 之前绑定的那些身份不再代表"当前",必须重新连接（所有连接一起失效）。
-  await clearAllBindings();
+  return updateTabSelection(async () => {
+    await chrome.storage.session.set({ [TAB_KEY]: { tabId: tab.id, origin, selectedAt: Date.now() } });
+    await clearAllBindings();
+  });
 });
 
-/** 在选中标签里读取实际站点；不访问 DOM、Cookie 或存储。 */
-function readIdentityInPage() {
+// Chromium may replace the selected tab's ID when discarding it. Follow only the browser's
+// replacement event. The next handshake still requires injection permission and the same origin.
+chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+  return updateTabSelection(async () => {
+    const entry = await readSelectedTab();
+    if (entry?.tabId !== removedTabId) return;
+    await chrome.storage.session.set({ [TAB_KEY]: { ...entry, tabId: addedTabId, replaced: true } });
+    await clearAllBindings();
+  });
+});
+
+/** 等一个页面任务，避免把只能执行注入代码的冻结标签误判为可取数。 */
+async function readIdentityInPage() {
+  await new Promise(resolve => setTimeout(resolve, 0));
   return { ok: true, origin: `${location.protocol}//${location.host}` };
+}
+
+async function tabPaused(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  return tab.frozen || tab.discarded || tab.status === 'loading';
 }
 
 async function readIdentity() {
@@ -224,20 +257,26 @@ async function readIdentity() {
       message: '还没有选中 i8 标签：请开到已登录的 i8 业务页，点一下扩展图标选中它，再回工作台点连接。',
     };
   }
-  let results;
+  let results, timer;
   try {
-    results = await chrome.scripting.executeScript({
-      target: { tabId: entry.tabId },
-      world: 'ISOLATED',
-      func: readIdentityInPage,
-    });
+    if (await tabPaused(entry.tabId)) return TAB_PAUSED;
+    results = await Promise.race([
+      chrome.scripting.executeScript({
+        target: { tabId: entry.tabId },
+        world: 'ISOLATED',
+        func: readIdentityInPage,
+        injectImmediately: true,
+      }),
+      new Promise(resolve => { timer = setTimeout(() => resolve(null), TAB_PROBE_TIMEOUT_MS); }),
+    ]);
   } catch {
     return {
       ok: false,
       code: 'need-tab',
       message: '读不到那个 i8 标签（可能已关闭、已跳到别的站点或权限已失效）。请重新点扩展图标选中标签。',
     };
-  }
+  } finally { clearTimeout(timer); }
+  if (results === null) return TAB_PAUSED;
   const first = Array.isArray(results) ? results[0] : null;
   const value = first && first.result ? first.result : null;
   if (!value || value.ok !== true || !nonEmptyString(value.origin)) {
@@ -245,6 +284,10 @@ async function readIdentity() {
   }
   if (originOf(value.origin) !== entry.origin) {
     return { ok: false, code: 'need-tab', message: '那个标签已经跳到别的站点，请重新选中当前 i8 业务页。' };
+  }
+  const current = await selectedTab();
+  if (current?.tabId !== entry.tabId || current.selectedAt !== entry.selectedAt) {
+    return { ok: false, code: 'binding-lost', message: '选中的 i8 标签已变化，工作台会重新核对并连接。' };
   }
   return {
     ok: true,
@@ -355,7 +398,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
  * 先核代号（本地读，不碰标签），再执行请求。
  * 代号不对时**一个字节都不该发出去**，也不该去读用户的 i8 页面。
  */
-async function identityStillBound(deviceId, generation, senderKey) {
+async function identityStillBound(deviceId, generation, senderKey, entry) {
   if (!deviceId) {
     return { ok: false, message: '这条请求没有连接标识，本次已停止。请回「i8 接入」页重新连接。' };
   }
@@ -368,7 +411,9 @@ async function identityStillBound(deviceId, generation, senderKey) {
   const stored = await chrome.storage.session.get(boundKeyOf(deviceId));
   const bound = stored && stored[boundKeyOf(deviceId)];
   if (!bound) {
-    return { ok: false, message: '这条连接没有登记过身份（可能已断开），本次已停止。请回「i8 接入」页重新连接。' };
+    return entry.replaced
+      ? { ok: false, code: 'binding-lost', message: '浏览器替换了原标签，工作台会自动重新连接。' }
+      : { ok: false, message: '这条连接没有登记过身份，请回「i8 接入」页重新连接。' };
   }
   if (bound.sender !== senderKey) {
     return {
@@ -417,15 +462,17 @@ async function execute(message, senderKey) {
   if (endpointProblem) return { ok: false, message: endpointProblem };
 
   // 先核连接归属与代号；页面中的执行函数再核实际站点。
-  const identity = await identityStillBound(deviceId, generation, senderKey);
+  const identity = await identityStillBound(deviceId, generation, senderKey, entry);
   if (!identity.ok) return { ok: false, message: identity.message, code: identity.code };
 
   let results;
   try {
+    if (await tabPaused(entry.tabId)) return TAB_PAUSED;
     results = await chrome.scripting.executeScript({
       target: { tabId: entry.tabId },
       world: 'ISOLATED',
       func: executeInPage,
+      injectImmediately: true,
       args: [{
         url: request.url,
         method: request.method,
@@ -481,8 +528,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         // ⛔ 键里带发送页面：另一个本地页面用同一个 `device_id` 读身份，只会写到它自己那格，
         // 顶不掉这里待核对的那一份。
         const key = pendingKeyOf(deviceId, senderKey);
-        if (result.ok) pendingIdentities.set(key, result);
-        else pendingIdentities.delete(key);
+        if (message.probe_only !== true) {
+          if (result.ok) pendingIdentities.set(key, result);
+          else pendingIdentities.delete(key);
+        }
         sendResponse(result);
       },
       () => sendResponse({ ok: false, message: '读取身份时出错，本次已停止。' }),
@@ -506,7 +555,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     const key = pendingKeyOf(deviceId, senderKey);
     const pending = pendingIdentities.get(key);
     if (!pending) {
-      sendResponse({ ok: false, message: '还没有读到 i8 的身份，请先点「连接浏览器会话」。' });
+      sendResponse({ ok: false, code: 'binding-lost', message: '扩展暂存的站点已丢失，工作台会重新核对并连接。' });
       return false;
     }
     // 绑定站点必须与扩展刚才实读的站点一致。

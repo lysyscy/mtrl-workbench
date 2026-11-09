@@ -55,6 +55,7 @@ from app.mod02_i8.browser_session import (
     _origin_of,
 )
 from app.mod02_i8.client import I8Client
+from app.mod02_i8.contract_source import DETAIL_PATH as CONTRACT_DETAIL_PATH, LIST_PATH as CONTRACT_LIST_PATH
 from app.mod02_i8.sources import WH_PARAMS
 
 logger = get_logger()
@@ -92,21 +93,11 @@ _READONLY_ENDPOINTS: dict[str, frozenset[str]] = {
         "/PMS/PMM/KcBaseSetting/GetWareHouseList",        # config.I8_PATH_WAREHOUSE_LIST
         "/reportcenter/reportExport/export",              # config.I8_PATH_REPORT_EXPORT（二进制报表读取，≠ 实际打印）
         "/PMS/PCM/Contract/ProjBal/GetCntProjBalList",    # payable_source.PATH
-        "/PMS/PCM/Contract/GetCntMInfoFirst",             # contract_source.DETAIL_PATH
-        "/PMS/PCM/Contract/GetCntMList",                  # contract_source 列表口：正式 .env 的 I8_CONTRACT_LIST_URL 实测值（无查询参数）
+        CONTRACT_DETAIL_PATH,
+        CONTRACT_LIST_PATH,
         "/sup/customServer/getList",                      # workbench_i8.LIST_PATH（小写 sup，原样）
     }),
 }
-
-#: 这些端点由**配置项**给出完整 URL（本仓不硬编码路径）⇒ 只能按配置解析后精确比对。
-#: ⚠️ 这属于"部署方自己的配置"（不是客户端传来的任意地址），所以放进白名单是安全的。
-#:    但**扩展读不到部署配置**，它只认已核实的字面路径
-#:    （`/PMS/PCM/Contract/GetCntMList`）⇒ 若某套部署把合同列表口换了路径，
-#:    浏览器模式会在扩展侧当场停（明确、可诊断），⛔ 不会静默改走登录。
-_CONFIGURED_ENDPOINTS: tuple[tuple[str, str], ...] = (
-    ("POST", "i8_contract_list_url"),   # contract_source.configured_url()
-)
-
 
 def _request_read_timeout(request: httpx.Request) -> float | None:
     """取这条请求**自己的** read 超时预算（秒）；没有就返回 `None`。
@@ -145,24 +136,6 @@ def _normalized_path(url: httpx.URL) -> str:
     return path
 
 
-def _configured_endpoint_paths() -> set[tuple[str, str]]:
-    """把"由配置项给出完整 URL"的端点也算进白名单（路径取自配置，**不猜**）。"""
-    settings = get_settings()
-    out: set[tuple[str, str]] = set()
-    for method, key in _CONFIGURED_ENDPOINTS:
-        raw = str(getattr(settings, key, "") or "").strip()
-        if not raw:
-            continue
-        try:
-            parsed = httpx.URL(raw)
-        except (httpx.InvalidURL, TypeError, ValueError):
-            continue
-        path = _normalized_path(parsed)
-        if path:
-            out.add((method, path))
-    return out
-
-
 def assert_readonly(method: str, url: str) -> None:
     """**后端侧**只读端点校验：不在白名单内 ⇒ 当场停（⛔ 不发出去、不重试、不换通道）。
 
@@ -185,10 +158,7 @@ def assert_readonly(method: str, url: str) -> None:
             "这次请求的地址里带了账号信息，本次已停止（未发出去、未登录）。"
         )
     path = _normalized_path(parsed)
-    # ⚠️ 比的是 (方法, 路径) 二元组：只收路径会把"GET 某路径"错放行成"POST 同路径"。
-    allowed = {(verb, item) for item in _READONLY_ENDPOINTS.get(verb, frozenset())}
-    allowed |= _configured_endpoint_paths()
-    if (verb, path) not in allowed:
+    if path not in _READONLY_ENDPOINTS.get(verb, frozenset()):
         raise StrictTargetMismatch(
             "这次请求不在只读取数白名单里，本次已停止（未发出去、未登录、未改任何数据）。"
         )

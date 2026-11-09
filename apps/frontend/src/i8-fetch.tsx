@@ -97,7 +97,8 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
     }
     return alive.current ? parsed : undefined;
   }
-  return {busy, sent, pending, error, storageError, unavailable, browserBlocked, config, mode: session.mode, run, reset, acknowledge};
+  const browserRecovery = browserBlocked && session.maintaining ? session.notice || '正在自动连接浏览器会话，请稍候。' : '';
+  return {busy, sent, pending, error, storageError, unavailable, browserBlocked, browserRecovery, config, mode: session.mode, run, reset, acknowledge};
 }
 
 export type I8FetchAction = ReturnType<typeof useI8FetchAction>;
@@ -115,7 +116,9 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
     {(!action.sent || alwaysShowMode) && <p className="i8-fetch-mode">{action.mode === SESSION_MODE_BROWSER
       ? '使用浏览器已有会话，不登录、不顶号；会话失效时停止。'
       : '使用工作台直连，可能使该 i8 账号的其他会话下线；失败不会自动重试。'}</p>}
-    {action.browserBlocked && <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>}
+    {action.browserBlocked && (action.browserRecovery
+      ? <p className="notice" role="status">{action.browserRecovery}</p>
+      : <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>)}
     {action.busy && <p role="status">正在抓取，请稍候…</p>}
     {action.error && <p className="notice" role="alert">{action.error}</p>}
     {action.storageError && <p className="notice" role="alert">{action.storageError}</p>}

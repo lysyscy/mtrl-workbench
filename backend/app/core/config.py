@@ -20,7 +20,7 @@ ENV_FILE: Path = PROJECT_ROOT / ".env"
 
 
 # --------- i8 端点路径（**固定常量** —— 会变的只有 `host:port`，见《说明书》§7.8）
-# ⚠️ 四个端点**不得各存一份**：一律由「i8 服务地址」＋ 下列常量推导。
+# 固定接口路径与当前生效的 i8 服务地址组合使用。
 I8_PATH_PRINT_DESIGN = "/reportcenter/printManage/getPrintDesign"
 I8_PATH_PAYMENT_NOTICE = "/FC/FM/PaymentBill/getList"
 I8_PATH_WAREHOUSE_LIST = "/PMS/PMM/KcBaseSetting/GetWareHouseList"
@@ -75,7 +75,7 @@ def i8_base_of(settings) -> str:
 
 
 def i8_endpoint_of(settings, path: str) -> str:
-    """⭐ i8 端点 = **服务地址 ＋ 常量路径**（四个端点**不得各存一份**，§7.8 ①）。
+    """i8 端点 = 当前生效的服务地址 ＋ 固定路径。
 
     ⚠️ 返回值**恒非空**（至少有路径部分）⇒ **判「是否配置」要判 `i8_base_of()`**，别判本函数的返回值。
     """
@@ -113,10 +113,7 @@ class Settings(BaseSettings):
     # i8 登录页前端 JS 里的 SM2 私钥（**公开资产**，非本系统凭据）；留空则用内置默认值
     i8_sm2_private_key: str = ""
 
-    # --- i8 业务接口（API-04 仍保留独立完整 URL；其余端点由 base ＋固定路径推导）---
-    # API-04：采购合同列表（集采抓取）—— ⚠️ 2026-09-19 **实测确认 = POST**（GET 会 500「method 'GET' is not supported」；
-    #   无会话会 401「No SessionInfo found」）⇒ 必须走登录后的 client，⛔ 不能当普通 GET 打。
-    i8_contract_list_url: str = ""
+    # --- i8 打印版式 ---
     # 两类分流（机械类 / 辅材·集采类）的 printId（**取值待确认**，从配置读、不写死）
     i8_print_id_mechanical: str = ""
     i8_print_id_material: str = ""

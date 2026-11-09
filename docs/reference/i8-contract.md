@@ -67,7 +67,7 @@
 | POST | `/reportcenter/reportExport/export` | 库存/结存**二进制报表读取**（xlsx 字节；**不是**实际打印动作） |
 | POST | `/PMS/PCM/Contract/ProjBal/GetCntProjBalList` | 采购合同应付 |
 | POST | `/PMS/PCM/Contract/GetCntMInfoFirst` | 合同详情（补材料名） |
-| POST | `/PMS/PCM/Contract/GetCntMList` | **采购合同列表**（部署配置项 `I8_CONTRACT_LIST_URL` 的实测值，POST、无查询参数） |
+| POST | `/PMS/PCM/Contract/GetCntMList` | 采购合同列表 |
 | POST | `/sup/customServer/getList` | 机械费工作台小列表（小写 `sup`，原样） |
 
 - 白名单**双重校验**（后端 `browser_relay.assert_readonly()` + 扩展 `checkEndpoint()`），每次请求都核，不只看初始化站点。
@@ -86,6 +86,7 @@
 - 每条请求用它**自己的** read 预算（`httpx.Request.extensions['timeout']['read']`：合同列表 200s、详情 60s、其余默认 30s），broker 不用统一常量截断；扩展按 `timeout_ms` 用 `AbortController` 落实预算。
 - 空闲连接清理（120s）只清真正失联的连接：有效轮询及有效回帖更新活动时间，状态查询不续期；排队和在途请求保留原预算。超时票从排队/在途集合移除，恢复后不会迟到执行。
 - 用户2026-11-06要求保持连接：按账号保存显式连接意图，刷新用新文档标识自动绑定扩展当前手选标签；网络、服务重启及临时身份核验失败可恢复通道，主动断开/切回直连停止恢复。配置、真正认证及协议错误明确停止。恢复只重建通道，不重放业务抓取、不重新登录i8。
+- 连接后空闲时每约30秒检查一次选中标签能否运行。检查只在本地读站点并等待一个页面任务。标签加载或休眠、扩展暂时失联或暂存状态丢失时，工作台退避重连。浏览器释放标签并报告替换时，扩展跟踪原标签的新 ID。关闭标签或失去注入权限时需重新选中标签。浏览器可冻结标签，i8 自身控制登录期限。
 - 停止都有固定中文文案，超时归超时（`i8_strict_session_ended` 的"没回音"分支），⛔ 不谎称"会话失效"（那会把用户推向重登、反而顶号）。
 - 严格停止**穿透业务容错**：补档案、补材料名、抓取降级这些 `except Exception` 落点都先抬出 `Strict*`，不让"身份/目标已失效"被吞成"本条留空""降级为手动 Excel"继续跑。
 
@@ -253,6 +254,10 @@
 ### 二、抓取落库的**幂等范围 = 「核算年月 ＋ 仓库」**（不是只按月份）
 
 库存刷新读取既有行时按核算年月与仓库限定；现有 `mod08_inv/repository.py` 还在Python侧核仓库范围，不能在同月跨仓库删除。历史模拟Session未执行SQL过滤的局限及当次行数已迁入项目经验；业务隔离要求、既有实现与测试保护继续保留。陌生仓库尚无档案时，沿项目同步/人工确认入口处理，不自动猜配。
+
+## 采购合同列表与详情
+
+列表 `POST /PMS/PCM/Contract/GetCntMList`，query 带 `model=7`、`floatmenuCondition` 和防缓存时间戳，表单包含组织范围、日期和分页条件。详情 `POST /PMS/PCM/Contract/GetCntMInfoFirst`，query 带 `id` 和 `type=cnt`，用于补取材料名。两条路径均从当前生效的 i8 服务地址派生，设置页优先于 `I8_BASE_URL`。已有 `I8_CONTRACT_LIST_URL` 配置会被忽略。取数实现位于 `mod02_i8/contract_source.py`。
 
 ## 采购合同应付与附件（2026-10-20 Edge CDP只读核实）
 

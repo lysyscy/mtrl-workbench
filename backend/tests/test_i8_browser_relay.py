@@ -461,6 +461,37 @@ def test_连接站点与配置不一致时停止(guards, store):
             open_i8_client(owner=OWNER)
 
 
+@pytest.mark.parametrize(
+    ("path", "fetch", "payload", "expected"),
+    [
+        ("/PMS/PCM/Contract/GetCntMList", lambda source: source.fetch_all()[0]["contract_no"],
+         {"Record": [{"BillNo": "C1"}]}, "C1"),
+        ("/PMS/PCM/Contract/GetCntMInfoFirst", lambda source: source.fetch_item_name("1"),
+         {"Data": {"Grid": {"results": [{"ItemName": "钢材"}]}}}, "钢材"),
+    ],
+)
+def test_集采合同跟随设置页有效站点(monkeypatch, guards, path, fetch, payload, expected):
+    from app.mod02_i8.browser_relay import assert_readonly
+    from app.mod02_i8.browser_session import ReusedBrowserSession
+    from app.mod02_i8.contract_source import ContractFetcher
+
+    monkeypatch.setenv("I8_BASE_URL", "https://old-i8.example.test")
+    monkeypatch.setenv("I8_CONTRACT_LIST_URL", "https://old-i8.example.test/PMS/PCM/Contract/GetCntMList")
+
+    def respond(request):
+        assert request.method == "POST"
+        assert str(request.url.copy_with(query=None)) == BASE + path
+        assert_readonly(request.method, str(request.url))
+        return httpx.Response(200, json=payload)
+
+    client = I8BrowserSessionClient(ReusedBrowserSession(BASE, transport=httpx.MockTransport(respond)))
+    try:
+        assert fetch(ContractFetcher(client)) == expected
+    finally:
+        client.close()
+    assert guards == {"login": 0, "cache": []}
+
+
 def test_作用域退出后回到直连(guards):
     with relay_scope(MODE_BROWSER, DEVICE):
         assert current_scope() == (MODE_BROWSER, DEVICE)

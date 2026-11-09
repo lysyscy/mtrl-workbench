@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from app.core.config import get_settings
+from app.core import app_settings
 from app.core.errors import NotConfiguredError
 from app.mod02_i8 import contract_source as cs
 
@@ -55,14 +55,13 @@ class _FakeClient:
         return self._next()
 
 
-def _patch(monkeypatch, url: str = "http://i8/api04") -> None:  # noqa: ANN001
-    """把接口地址塞进设置（`.env` 里已有一份真值 ⇒ 测试必须显式覆盖，含"空"这种情形）。"""
-    monkeypatch.setenv("I8_CONTRACT_LIST_URL", url)
-    get_settings.cache_clear()
+def _patch(monkeypatch, base: str = "http://i8") -> None:  # noqa: ANN001
+    monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": base})
+    monkeypatch.setattr(cs, "get_settings", lambda: None)
 
 
-def _fetch(monkeypatch, payload=None, *, payloads=None, url="http://i8/api04"):  # noqa: ANN001
-    _patch(monkeypatch, url)
+def _fetch(monkeypatch, payload=None, *, payloads=None):  # noqa: ANN001
+    _patch(monkeypatch)
     fake = _FakeClient(payload, payloads=payloads)
     return cs.ContractFetcher(fake).fetch_all(), fake          # type: ignore[arg-type]
 
@@ -71,7 +70,7 @@ def test_请求形态是POST且query挂在url上(monkeypatch):  # noqa: ANN001
     rows, fake = _fetch(monkeypatch, {"Record": [REC]})
     method, url, params, data, timeout = fake.calls[0]
     assert method == "POST", "API-04 必须是 POST（GET 会被 i8 拒：500）"
-    assert url == "http://i8/api04"
+    assert url == "http://i8/PMS/PCM/Contract/GetCntMList"
     assert params["model"] == cs.CONTRACT_MODEL == "7"
     assert "floatmenuCondition" in params and "_dc" in params
     assert len(rows) == 1

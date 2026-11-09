@@ -400,6 +400,36 @@ def main() -> int:
                     bound,
                 )
 
+                page_c.bring_to_front()
+                discarded = ctx_c.service_workers[0].evaluate("""async () => {
+                    const {i8RelayTab} = await chrome.storage.session.get('i8RelayTab');
+                    const result = await chrome.tabs.discard(i8RelayTab.tabId);
+                    return {tabId: result?.id, discarded: result?.discarded};
+                }""")
+                paused = page_c.evaluate("""message => Promise.race([
+                    window.__relay(message),
+                    new Promise(resolve => setTimeout(() => resolve({code: 'no-reply'}), 3500)),
+                ])""", {"type": "i8-relay:identity", "device_id": device, "probe_only": True})
+                check("浏览器释放后台标签时报告可恢复的暂停",
+                      discarded.get("discarded") and paused.get("code") == "tab-paused", paused)
+                old_ticket = page_message(page_c, {
+                    "type": "i8-relay:execute", "device_id": device,
+                    "request": {"ticket": "t-before-discard", "generation": generation,
+                                "method": "POST", "url": f"{ORIGIN}/FC/FM/PaymentBill/getList"},
+                })
+                check("替换标签后旧票被拒并提示重连", old_ticket.get("code") == "binding-lost", old_ticket)
+                with ctx_c.expect_page() as restored:
+                    ctx_c.service_workers[0].evaluate("(id) => chrome.tabs.update(id, {active: true})", discarded["tabId"])
+                i8 = restored.value
+                i8.wait_for_function("() => document.wasDiscarded && document.readyState === 'complete'", timeout=5000)
+                resumed = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
+                generation += 1
+                rebound = page_message(page_c, {
+                    "type": "i8-relay:bind", "device_id": device,
+                    "generation": generation, "identity": pending,
+                })
+                check("后台标签恢复后可以重新绑定原会话", resumed.get("ok") and rebound.get("ok"), (resumed, rebound))
+
                 # ---------- HttpOnly 会话：本通道复用会话的真实机制 ----------
                 RECEIVED.clear()
                 cookie_reply = page_message(page_c, {
@@ -538,7 +568,7 @@ def main() -> int:
                     check(f"真浏览器里「{name}」被拒且没发出去", blocked.get("ok") is False, blocked)
                 check("被拒的越界请求在服务器上一条记录都没有", RECEIVED == [], RECEIVED)
 
-                # 采购合同列表口（正式部署 `I8_CONTRACT_LIST_URL` 的实测值）在浏览器方式下能走。
+                # 采购合同列表使用同一站点的固定 POST 路径。
                 RECEIVED.clear()
                 contract = page_message(page_c, {
                     "type": "i8-relay:execute",

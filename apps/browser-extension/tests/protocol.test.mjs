@@ -67,6 +67,10 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
 
   const chrome = {
     action: { onClicked: { addListener: fn => { listeners.action = fn; } } },
+    tabs: {
+      get: async () => ({ status: 'complete', frozen: page.frozen }),
+      onReplaced: { addListener() {} },
+    },
     runtime: { onMessageExternal: { addListener: fn => { listeners.external = fn; } } },
     storage: {
       session: {
@@ -143,7 +147,7 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
     },
   };
 
-  const context = vm.createContext({ chrome, URL, Uint8Array, atob, btoa, console });
+  const context = vm.createContext({ chrome, URL, Uint8Array, atob, btoa, console, setTimeout, clearTimeout });
   vm.runInContext(SOURCE, context, { filename: 'service_worker.js' });
 
   const call = (message, sender = workbenchSender) => new Promise(resolve => {
@@ -273,7 +277,7 @@ test('点扩展图标会记下当前标签，并把所有连接的身份基准�
 
   const stale = await page.call({ type: 'i8-relay:bind', device_id: DEVICE, generation: GENERATION });
   assert.equal(stale.ok, false);
-  assert.match(stale.message, /还没有读到 i8 的身份/);
+  assert.equal(stale.code, 'binding-lost');
 });
 
 /* ------------------------------------------------------------------ *
@@ -300,11 +304,24 @@ test('菜单隐藏或不存在也能连接并取数', async () => {
   }
 });
 
+test('标签冻结时暂停探测和取数，恢复后可重新握手', async () => {
+  const page = boot({ fetchImpl: async () => reply() });
+  await page.bind();
+  page.page.frozen = true;
+  const identity = {type: 'i8-relay:identity', device_id: DEVICE, probe_only: true};
+  assert.equal((await page.call(identity)).code, 'tab-paused');
+  assert.equal((await page.call(exec())).code, 'tab-paused');
+  assert.deepEqual(page.executed(), []);
+  page.page.frozen = false;
+  await page.bind({generation: GENERATION + 1});
+  assert.equal((await page.call(exec({generation: GENERATION + 1}))).ok, true);
+});
+
 test('没读到身份就不许 bind，也不许执行（连接必须有可信基准）', async () => {
   const page = boot({ page: { hidden: true } });
   const bound = await page.call({ type: 'i8-relay:bind', device_id: DEVICE, generation: GENERATION });
   assert.equal(bound.ok, false);
-  assert.match(bound.message, /还没有读到 i8 的身份/);
+  assert.equal(bound.code, 'binding-lost');
 
   const executed = await page.call(exec());
   assert.equal(executed.ok, false);
@@ -486,7 +503,7 @@ test('不认识的消息类型明确忽略，不当成执行', async () => {
  * ------------------------------------------------------------------ */
 
 test('采购合同列表口（正式部署实测地址）在浏览器方式下可以走', async () => {
-  // 正式部署的 `I8_CONTRACT_LIST_URL` 实测就是这一条（POST、无查询参数）。
+  // 采购合同列表使用已验证的固定 POST 路径。
   // 过去扩展白名单比后端少这一项，用户只能被劝回直连；现在两侧一致。
   const page = boot({ fetchImpl: async () => reply() });
   await page.bind();

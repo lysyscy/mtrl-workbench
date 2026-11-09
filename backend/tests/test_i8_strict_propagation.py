@@ -35,11 +35,6 @@ BASE = "https://i8.example.test"
 def _isolated_settings(monkeypatch):
     """不读本机 `.env`；只给一个可比较的 i8 站点（详情地址由它推导）。"""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    # ⚠️ 两种口径都要给：产品配置（`app_settings.effective`）走 `_VALUES_LOADER`/`_CACHE`，
-    #    而 `contract_source.configured_detail_url()` 是**直接读 `Settings` 字段**
-    #    （`getattr(get_settings(), "i8_base_url")`）⇒ 还得给环境变量，否则它先抛 `NotConfiguredError`，
-    #    用例就测不到"严格停止能不能穿透"这件事本身。
-    monkeypatch.setenv("I8_BASE_URL", BASE)
     monkeypatch.setattr(app_settings, "_VALUES_LOADER", lambda: {"i8_base_url": BASE})
     monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": BASE})
     get_settings.cache_clear()

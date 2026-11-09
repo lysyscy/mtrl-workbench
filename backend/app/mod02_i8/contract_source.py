@@ -47,7 +47,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from app.core.config import get_settings
+from app.core.config import get_settings, i8_base_of
 from app.core.errors import NotConfiguredError
 from app.core.logging import get_logger
 from app.mod02_i8.client import I8Client, serialize_fetch
@@ -62,6 +62,7 @@ logger = get_logger()
 
 #: `model=7` —— ⚠️ **含义待确认**（疑为"单据类型"）。取值以真机为准，⛔ 别在别处再写一份 `7`。
 CONTRACT_MODEL = "7"
+LIST_PATH = "/PMS/PCM/Contract/GetCntMList"
 
 #: ⭐ 列表页大小上限 —— ⛔ **必须放进 POST body**：实测 2026-09-19，**不传 `limit` 时 i8 只回 10 条**
 #:   （355 条的全量 = `limit=5000&page=0&start=0` 放在 **body** 里；放 URL 上不生效）。
@@ -192,15 +193,16 @@ class ContractFetcher:
         return ""
 
 
-def configured_url() -> str:
-    """`API-04` 的端点（取自 `.env` 的 `I8_CONTRACT_LIST_URL`；⛔ 不硬编码）。
+def _contract_endpoint(path: str) -> str:
+    base = i8_base_of(get_settings())
+    if not base:
+        raise NotConfiguredError("i8 服务地址未配置，请到「设置」页填写")
+    return base + path
 
-    未配置 ⇒ `NotConfiguredError`（**显式报错，绝不静默** —— 与 `API-01` 同口径）。
-    """
-    url = str(getattr(get_settings(), "i8_contract_list_url", "") or "").strip()
-    if not url:
-        raise NotConfiguredError("i8 采购合同取数还没配置 —— 请到「设置」页填写 i8 服务地址")
-    return url
+
+def configured_url() -> str:
+    """采购合同列表地址，跟随工作台当前生效的 i8 服务地址。"""
+    return _contract_endpoint(LIST_PATH)
 
 
 def build_params(*, now_ms: int | None = None) -> dict[str, str]:
@@ -314,17 +316,8 @@ def summary(rows: list[dict]) -> dict[str, Any]:
 
 
 def configured_detail_url() -> str:
-    """**详情接口**的完整地址 —— ⭐ **由 `i8_base_url` 推导**（`DETAIL_PATH`）。
-
-    ⚠️ 列表接口有独立配置项（`I8_CONTRACT_LIST_URL`，是**完整 URL**），详情接口**没有** ——
-       但两者**同源**（同一台 i8、同一个前缀）⇒ 从 base 拼，⛔ 不为它再开一个配置项
-       （多一个配置项 = 多一处能配错的地方，而它没有"换地址"的独立需求）。
-    ⚠️ base 未配置 ⇒ 走 `configured_url()` 的同一句报错口径（**显式报错，绝不静默**）。
-    """
-    base = str(getattr(get_settings(), "i8_base_url", "") or "").strip().rstrip("/")
-    if not base:
-        raise NotConfiguredError("i8 服务地址未配置（见 `i8_base_url`，或到「设置」页填写）")
-    return base + DETAIL_PATH
+    """采购合同详情地址，与列表使用同一套站点配置。"""
+    return _contract_endpoint(DETAIL_PATH)
 
 
 __all__ = [

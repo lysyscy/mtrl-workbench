@@ -24,6 +24,7 @@ export const RELAY_POLL_SECONDS = 10;
  *    页面定时器（包括停止开关）永远不触发 —— 这条被页面侧单测当场抓到。
  */
 const EMPTY_ROUND_MS = 250;
+const TAB_CHECK_MS = 30_000;
 
 /**
  * 扩展 ID。
@@ -327,8 +328,10 @@ const IDENTITY_HINT = '没能读取选中的 i8 标签：请在已登录的 i8 �
  *
  * 带 `device_id`：扩展按连接缓存这份待核身份，另一个工作台页面的预检不会把它换掉。
  */
-export async function readBrowserIdentity(send: Send = sendToExtension): Promise<VisibleIdentity> {
-  const value = await send({ type: 'i8-relay:identity', device_id: deviceId() });
+export async function readBrowserIdentity(send: Send = sendToExtension, probeOnly = false): Promise<VisibleIdentity> {
+  const value = await send({
+    type: 'i8-relay:identity', device_id: deviceId(), ...(probeOnly ? {probe_only: true} : {}),
+  });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';
     throw new ApiError(message || IDENTITY_HINT, 0, record(value) ? readString(value, 'code') || 'need-tab' : 'malformed');
@@ -376,6 +379,13 @@ export interface RelayRunHooks {
   signal?: AbortSignal;
   /** 通道自身停止时回调（用于把状态如实回显到界面）。 */
   onStop?: (reason: string) => void;
+  /** Check whether the selected tab can still run, without sending an i8 request. */
+  checkTab?: () => Promise<void>;
+}
+
+export function isTransientRelayError(error: unknown): boolean {
+  return error instanceof ApiError
+    && ['extension-unavailable', 'tab-paused', 'binding-lost'].includes(error.code ?? '');
 }
 
 /**
@@ -401,6 +411,7 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
   };
   const aborted = (): boolean => Boolean(signal?.aborted) || !keep();
   let networkFaults = 0;
+  let lastTabCheck = Date.now();
   while (!aborted()) {
     let payload: unknown;
     try {
@@ -449,6 +460,11 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
     }
     // 真正的"这一轮没活"：服务端明确给出空请求。只有这一种才继续轮询。
     if (payload.request === undefined || payload.request === null) {
+      if (hooks.checkTab && Date.now() - lastTabCheck >= TAB_CHECK_MS) {
+        await hooks.checkTab();
+        lastTabCheck = Date.now();
+      }
+      if (aborted()) break;
       await new Promise<void>(resolve => setTimeout(resolve, EMPTY_ROUND_MS));
       continue;
     }
@@ -465,7 +481,11 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
     }
     let reply: RelayReply;
     try {
-      reply = readRelayReply(await send({ type: 'i8-relay:execute', device_id: deviceId(), request }));
+      const value = await send({ type: 'i8-relay:execute', device_id: deviceId(), request });
+      if (record(value) && value.ok === false) {
+        throw new ApiError(readString(value, 'message') || '浏览器扩展未能完成取数。', 0, readString(value, 'code') || 'extension-rejected');
+      }
+      reply = readRelayReply(value);
     } catch (failure) {
       if (aborted()) {
         // 已经停了：⛔ 不回帖（后端会按自己的等待上限判停），也不把这次当成"已发生"。
@@ -482,7 +502,7 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
           ? postFailure
           : new ApiError('浏览器回帖失败：和工作台的连接断了，本次已停止，请重新连接。');
       }
-      stopped(failure instanceof ApiError && failure.code === 'extension-unavailable' ? 'network' : 'failed');
+      stopped(isTransientRelayError(failure) ? 'reconnect' : 'failed');
       if (failure instanceof ApiError) return;
       throw failure;
     }
