@@ -80,7 +80,7 @@
 
 ## 本项目实际接入
 
-采用源为lysyscy/My-Skills `2e0e153c0b434da03a2b1363b45945599a76b0c9`。setup负责部署、升级`tools/_vendor/setup_solo_workflow`，来源和字节清单在其deployment.json；共用修改回唯一维护源，项目不独立分叉。开发命令直接使用随仓固定版本，运行时不加载个人技能目录。
+基础规则采用源为lysyscy/My-Skills `2e0e153c0b434da03a2b1363b45945599a76b0c9`。2026-11-09固定运行时更新至 `8fa4fd17db298809bf4fbe1effe42aa769d50d31`，加入下述 Impeccable 适配器。setup负责部署、升级`tools/_vendor/setup_solo_workflow`，来源和字节清单在其deployment.json；共用修改回唯一维护源，项目不独立分叉。开发命令直接使用随仓固定版本，运行时不加载个人技能目录。
 
 新运行默认`.artifacts/runs/<run-id>`，run.json自动保存归属、结果和保留信息；日志、报告、截图按需创建。普通测试、构建和发布入口经workspace_paths自动登记与收尾，不要求另做三步手续。后端pytest中间件使用系统TEMP，报告直接写项目；跨进程候选和预览构建仍放受保护的run/work。读写消费者登记PID及OS创建身份，父进程退出不越过活跃子消费者。
 
@@ -97,3 +97,17 @@
 - 显式指定旧 MTRL_RUN_ID 的固定现场、活动预览及其依赖继续由原负责人持有，不自动迁移在用路径。渲染等需人工验收的输出不能仅凭进程结束结项。
 
 以上是按用途区分的接入结果；保留业务路径不是将其纳入定时删除。
+
+## Impeccable过程产物
+
+生成设计稿、原型或评审快照前，用固定版本适配器声明本次独占的 Impeccable 原生路径。外部命令与独立预览经 `exec` 登记占用，原生工具继续在原位置读取。已有文件、链接和其他活动任务占用会拒绝接管。PRODUCT.md、DESIGN.md、设计侧车、共享配置和 live 恢复状态继续由原主人维护。
+
+从仓根用项目 Python 执行 `tools/_vendor/setup_solo_workflow/impeccable_artifacts.py --project .`，后接相应子命令：
+
+```text
+start --group <任务标识> --owner <负责人> --path .impeccable/mocks/<任务标识>
+exec --group <任务标识> -- <原生命令>
+finish --group <任务标识> --confirmed --days 30
+```
+
+各独立消费者持有登记直到实际退出。用途结束、评审已关闭且消费者均已退出后，负责人用 `finish` 将产物按散列移入受管证据目录并封存。正在验看、用途不明或恢复所需的材料保留保护。收尾中断时重试仅处理仍匹配的余项。通过 `exec --read` 读取已封存证据不延长期限。旧资料沿原负责人及授权处理，调度仅检查已登记的运行。

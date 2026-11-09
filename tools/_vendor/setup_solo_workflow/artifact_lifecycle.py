@@ -270,6 +270,9 @@ def consume(root, name, *, writing=True):
 def seal(record, files, value, now, days=30, deadline=None, result=None):
     if value['state'] != 'active' or value['hold']:
         raise ValueError('close requires active, resolved group')
+    adapter_record = safe(files / 'impeccable.json')
+    if adapter_record.exists() and json.loads(adapter_record.read_text(encoding='utf-8')).get('phase') != 'collected':
+        raise ValueError('Impeccable outputs must finish collection before closure')
     value.update(state='closed', closed_at=now.isoformat(), inventory=data_inventory(files, value))
     value['expires_at'] = None if value['kind'] == 'permanent' else (now + timedelta(days=0 if value['kind'] == 'work' else days)).isoformat()
     if deadline is not None:

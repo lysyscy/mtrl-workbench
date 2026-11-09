@@ -1,8 +1,9 @@
 {
   "version": 1,
   "source": "lysyscy/My-Skills:skills/setup-solo-workflow/scripts",
-  "revision": "2e0e153c0b434da03a2b1363b45945599a76b0c9",
+  "revision": "8fa4fd17db298809bf4fbe1effe42aa769d50d31",
   "files": {
-    "artifact_lifecycle.py": "d4234340bfd45602a6bef5f7cd8b5cd0c7d249cb93c1c1c3058cb933c0485950"
+    "artifact_lifecycle.py": "985e9fda02e4d83eb54e958bcb6668f4196b49c3aabcce2b89b6492b67d6d278",
+    "impeccable_artifacts.py": "7fecf758b6a771bd84e6b90129b33558ad2eb2cc702e28a620baa4bb9bb17aa2"
   }
 }

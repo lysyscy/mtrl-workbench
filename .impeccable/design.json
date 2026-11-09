@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T04:38:04+00:00",
+  "title": "Design System: 材料工作台",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "主操作",
+        "canonical": "var(--pri)",
+        "tonalRamp": [
+          "oklch(from var(--pri, #0053d6) 15% calc(c * 0.25) h)",
+          "oklch(from var(--pri, #0053d6) 25% calc(c * 0.5) h)",
+          "oklch(from var(--pri, #0053d6) 35% calc(c * 0.75) h)",
+          "oklch(from var(--pri, #0053d6) 47% calc(c * 1) h)",
+          "oklch(from var(--pri, #0053d6) 59% calc(c * 1) h)",
+          "oklch(from var(--pri, #0053d6) 71% calc(c * 0.75) h)",
+          "oklch(from var(--pri, #0053d6) 83% calc(c * 0.45) h)",
+          "oklch(from var(--pri, #0053d6) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "主操作悬停",
+        "canonical": "var(--pri-d)",
+        "tonalRamp": [
+          "oklch(from var(--pri-d, #0043ce) 15% calc(c * 0.25) h)",
+          "oklch(from var(--pri-d, #0043ce) 25% calc(c * 0.5) h)",
+          "oklch(from var(--pri-d, #0043ce) 35% calc(c * 0.75) h)",
+          "oklch(from var(--pri-d, #0043ce) 47% calc(c * 1) h)",
+          "oklch(from var(--pri-d, #0043ce) 59% calc(c * 1) h)",
+          "oklch(from var(--pri-d, #0043ce) 71% calc(c * 0.75) h)",
+          "oklch(from var(--pri-d, #0043ce) 83% calc(c * 0.45) h)",
+          "oklch(from var(--pri-d, #0043ce) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "柔和选中底",
+        "canonical": "var(--pri-l)",
+        "tonalRamp": [
+          "oklch(from var(--pri-l, #edf5ff) 15% calc(c * 0.25) h)",
+          "oklch(from var(--pri-l, #edf5ff) 25% calc(c * 0.5) h)",
+          "oklch(from var(--pri-l, #edf5ff) 35% calc(c * 0.75) h)",
+          "oklch(from var(--pri-l, #edf5ff) 47% calc(c * 1) h)",
+          "oklch(from var(--pri-l, #edf5ff) 59% calc(c * 1) h)",
+          "oklch(from var(--pri-l, #edf5ff) 71% calc(c * 0.75) h)",
+          "oklch(from var(--pri-l, #edf5ff) 83% calc(c * 0.45) h)",
+          "oklch(from var(--pri-l, #edf5ff) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "on-primary": {
+        "role": "neutral",
+        "displayName": "主色上文字",
+        "canonical": "var(--on)",
+        "tonalRamp": [
+          "oklch(from var(--on, #ffffff) 15% calc(c * 0.25) h)",
+          "oklch(from var(--on, #ffffff) 25% calc(c * 0.5) h)",
+          "oklch(from var(--on, #ffffff) 35% calc(c * 0.75) h)",
+          "oklch(from var(--on, #ffffff) 47% calc(c * 1) h)",
+          "oklch(from var(--on, #ffffff) 59% calc(c * 1) h)",
+          "oklch(from var(--on, #ffffff) 71% calc(c * 0.75) h)",
+          "oklch(from var(--on, #ffffff) 83% calc(c * 0.45) h)",
+          "oklch(from var(--on, #ffffff) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "页面底",
+        "canonical": "var(--bg)",
+        "tonalRamp": [
+          "oklch(from var(--bg, #f4f4f4) 15% calc(c * 0.25) h)",
+          "oklch(from var(--bg, #f4f4f4) 25% calc(c * 0.5) h)",
+          "oklch(from var(--bg, #f4f4f4) 35% calc(c * 0.75) h)",
+          "oklch(from var(--bg, #f4f4f4) 47% calc(c * 1) h)",
+          "oklch(from var(--bg, #f4f4f4) 59% calc(c * 1) h)",
+          "oklch(from var(--bg, #f4f4f4) 71% calc(c * 0.75) h)",
+          "oklch(from var(--bg, #f4f4f4) 83% calc(c * 0.45) h)",
+          "oklch(from var(--bg, #f4f4f4) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "业务表面",
+        "canonical": "var(--sf)",
+        "tonalRamp": [
+          "oklch(from var(--sf, #ffffff) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sf, #ffffff) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sf, #ffffff) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sf, #ffffff) 47% calc(c * 1) h)",
+          "oklch(from var(--sf, #ffffff) 59% calc(c * 1) h)",
+          "oklch(from var(--sf, #ffffff) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sf, #ffffff) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sf, #ffffff) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "surface-muted": {
+        "role": "neutral",
+        "displayName": "内层分组底",
+        "canonical": "var(--sf2)",
+        "tonalRamp": [
+          "oklch(from var(--sf2, #f4f4f4) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sf2, #f4f4f4) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sf2, #f4f4f4) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sf2, #f4f4f4) 47% calc(c * 1) h)",
+          "oklch(from var(--sf2, #f4f4f4) 59% calc(c * 1) h)",
+          "oklch(from var(--sf2, #f4f4f4) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sf2, #f4f4f4) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sf2, #f4f4f4) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "普通边界",
+        "canonical": "var(--bd)",
+        "tonalRamp": [
+          "oklch(from var(--bd, #d6d6d6) 15% calc(c * 0.25) h)",
+          "oklch(from var(--bd, #d6d6d6) 25% calc(c * 0.5) h)",
+          "oklch(from var(--bd, #d6d6d6) 35% calc(c * 0.75) h)",
+          "oklch(from var(--bd, #d6d6d6) 47% calc(c * 1) h)",
+          "oklch(from var(--bd, #d6d6d6) 59% calc(c * 1) h)",
+          "oklch(from var(--bd, #d6d6d6) 71% calc(c * 0.75) h)",
+          "oklch(from var(--bd, #d6d6d6) 83% calc(c * 0.45) h)",
+          "oklch(from var(--bd, #d6d6d6) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "控件边界",
+        "canonical": "var(--bd3)",
+        "tonalRamp": [
+          "oklch(from var(--bd3, #8d8d8d) 15% calc(c * 0.25) h)",
+          "oklch(from var(--bd3, #8d8d8d) 25% calc(c * 0.5) h)",
+          "oklch(from var(--bd3, #8d8d8d) 35% calc(c * 0.75) h)",
+          "oklch(from var(--bd3, #8d8d8d) 47% calc(c * 1) h)",
+          "oklch(from var(--bd3, #8d8d8d) 59% calc(c * 1) h)",
+          "oklch(from var(--bd3, #8d8d8d) 71% calc(c * 0.75) h)",
+          "oklch(from var(--bd3, #8d8d8d) 83% calc(c * 0.45) h)",
+          "oklch(from var(--bd3, #8d8d8d) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "正文",
+        "canonical": "var(--tx)",
+        "tonalRamp": [
+          "oklch(from var(--tx, #161616) 15% calc(c * 0.25) h)",
+          "oklch(from var(--tx, #161616) 25% calc(c * 0.5) h)",
+          "oklch(from var(--tx, #161616) 35% calc(c * 0.75) h)",
+          "oklch(from var(--tx, #161616) 47% calc(c * 1) h)",
+          "oklch(from var(--tx, #161616) 59% calc(c * 1) h)",
+          "oklch(from var(--tx, #161616) 71% calc(c * 0.75) h)",
+          "oklch(from var(--tx, #161616) 83% calc(c * 0.45) h)",
+          "oklch(from var(--tx, #161616) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "辅助文字",
+        "canonical": "var(--tx2)",
+        "tonalRamp": [
+          "oklch(from var(--tx2, #525252) 15% calc(c * 0.25) h)",
+          "oklch(from var(--tx2, #525252) 25% calc(c * 0.5) h)",
+          "oklch(from var(--tx2, #525252) 35% calc(c * 0.75) h)",
+          "oklch(from var(--tx2, #525252) 47% calc(c * 1) h)",
+          "oklch(from var(--tx2, #525252) 59% calc(c * 1) h)",
+          "oklch(from var(--tx2, #525252) 71% calc(c * 0.75) h)",
+          "oklch(from var(--tx2, #525252) 83% calc(c * 0.45) h)",
+          "oklch(from var(--tx2, #525252) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "成功文字",
+        "canonical": "var(--ok-d)",
+        "tonalRamp": [
+          "oklch(from var(--ok-d, #20734f) 15% calc(c * 0.25) h)",
+          "oklch(from var(--ok-d, #20734f) 25% calc(c * 0.5) h)",
+          "oklch(from var(--ok-d, #20734f) 35% calc(c * 0.75) h)",
+          "oklch(from var(--ok-d, #20734f) 47% calc(c * 1) h)",
+          "oklch(from var(--ok-d, #20734f) 59% calc(c * 1) h)",
+          "oklch(from var(--ok-d, #20734f) 71% calc(c * 0.75) h)",
+          "oklch(from var(--ok-d, #20734f) 83% calc(c * 0.45) h)",
+          "oklch(from var(--ok-d, #20734f) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "待处理文字",
+        "canonical": "var(--wn-d)",
+        "tonalRamp": [
+          "oklch(from var(--wn-d, #865d0f) 15% calc(c * 0.25) h)",
+          "oklch(from var(--wn-d, #865d0f) 25% calc(c * 0.5) h)",
+          "oklch(from var(--wn-d, #865d0f) 35% calc(c * 0.75) h)",
+          "oklch(from var(--wn-d, #865d0f) 47% calc(c * 1) h)",
+          "oklch(from var(--wn-d, #865d0f) 59% calc(c * 1) h)",
+          "oklch(from var(--wn-d, #865d0f) 71% calc(c * 0.75) h)",
+          "oklch(from var(--wn-d, #865d0f) 83% calc(c * 0.45) h)",
+          "oklch(from var(--wn-d, #865d0f) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "warning-soft": {
+        "role": "semantic",
+        "displayName": "待处理柔和底",
+        "canonical": "var(--wn-l)",
+        "tonalRamp": [
+          "oklch(from var(--wn-l, #fdf3e0) 15% calc(c * 0.25) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 25% calc(c * 0.5) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 35% calc(c * 0.75) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 47% calc(c * 1) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 59% calc(c * 1) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 71% calc(c * 0.75) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 83% calc(c * 0.45) h)",
+          "oklch(from var(--wn-l, #fdf3e0) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "危险文字",
+        "canonical": "var(--dg-d)",
+        "tonalRamp": [
+          "oklch(from var(--dg-d, #b72e35) 15% calc(c * 0.25) h)",
+          "oklch(from var(--dg-d, #b72e35) 25% calc(c * 0.5) h)",
+          "oklch(from var(--dg-d, #b72e35) 35% calc(c * 0.75) h)",
+          "oklch(from var(--dg-d, #b72e35) 47% calc(c * 1) h)",
+          "oklch(from var(--dg-d, #b72e35) 59% calc(c * 1) h)",
+          "oklch(from var(--dg-d, #b72e35) 71% calc(c * 0.75) h)",
+          "oklch(from var(--dg-d, #b72e35) 83% calc(c * 0.45) h)",
+          "oklch(from var(--dg-d, #b72e35) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "info": {
+        "role": "semantic",
+        "displayName": "信息文字",
+        "canonical": "var(--bl-d)",
+        "tonalRamp": [
+          "oklch(from var(--bl-d, #245fa6) 15% calc(c * 0.25) h)",
+          "oklch(from var(--bl-d, #245fa6) 25% calc(c * 0.5) h)",
+          "oklch(from var(--bl-d, #245fa6) 35% calc(c * 0.75) h)",
+          "oklch(from var(--bl-d, #245fa6) 47% calc(c * 1) h)",
+          "oklch(from var(--bl-d, #245fa6) 59% calc(c * 1) h)",
+          "oklch(from var(--bl-d, #245fa6) 71% calc(c * 0.75) h)",
+          "oklch(from var(--bl-d, #245fa6) 83% calc(c * 0.45) h)",
+          "oklch(from var(--bl-d, #245fa6) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "侧栏表面",
+        "canonical": "var(--sb)",
+        "tonalRamp": [
+          "oklch(from var(--sb, #ffffff) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sb, #ffffff) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sb, #ffffff) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sb, #ffffff) 47% calc(c * 1) h)",
+          "oklch(from var(--sb, #ffffff) 59% calc(c * 1) h)",
+          "oklch(from var(--sb, #ffffff) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sb, #ffffff) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sb, #ffffff) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "sidebar-text": {
+        "role": "neutral",
+        "displayName": "侧栏文字",
+        "canonical": "var(--sb-tx)",
+        "tonalRamp": [
+          "oklch(from var(--sb-tx, #525252) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sb-tx, #525252) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sb-tx, #525252) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sb-tx, #525252) 47% calc(c * 1) h)",
+          "oklch(from var(--sb-tx, #525252) 59% calc(c * 1) h)",
+          "oklch(from var(--sb-tx, #525252) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sb-tx, #525252) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sb-tx, #525252) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "sidebar-selected": {
+        "role": "primary",
+        "displayName": "侧栏选中底",
+        "canonical": "var(--sb-on)",
+        "tonalRamp": [
+          "oklch(from var(--sb-on, #d0e2ff) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 47% calc(c * 1) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 59% calc(c * 1) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sb-on, #d0e2ff) 95% calc(c * 0.12) h)"
+        ]
+      },
+      "sidebar-selected-text": {
+        "role": "primary",
+        "displayName": "侧栏选中文字",
+        "canonical": "var(--sb-on-hl)",
+        "tonalRamp": [
+          "oklch(from var(--sb-on-hl, #002d9c) 15% calc(c * 0.25) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 25% calc(c * 0.5) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 35% calc(c * 0.75) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 47% calc(c * 1) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 59% calc(c * 1) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 71% calc(c * 0.75) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 83% calc(c * 0.45) h)",
+          "oklch(from var(--sb-on-hl, #002d9c) 95% calc(c * 0.12) h)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "标题",
+        "purpose": "页标题和业务弹窗标题。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "业务数据和普通正文；金额等宽数字。"
+      },
+      "label": {
+        "displayName": "表头与标签",
+        "purpose": "表头、分组及导航分组。"
+      },
+      "control": {
+        "displayName": "控件文字",
+        "purpose": "紧凑按钮及常规日期/选择控件。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-low",
+        "value": "var(--shadow)",
+        "purpose": "既有低层角色；普通容器不默认使用。"
+      },
+      {
+        "name": "popover",
+        "value": "var(--shadow-pop)",
+        "purpose": "菜单、选择和时间面板。"
+      },
+      {
+        "name": "modal",
+        "value": "var(--shadow-md)",
+        "purpose": "业务对话框。"
+      },
+      {
+        "name": "toast",
+        "value": "var(--shadow-toast)",
+        "purpose": "独立动作的短回执。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "color-feedback",
+        "value": "var(--motion-fast, 130ms)",
+        "purpose": "普通颜色与边界反馈；网格内控件即时更新，减少动态效果时关闭。"
+      },
+      {
+        "name": "component-state",
+        "value": "240ms",
+        "purpose": "Ant Design组件状态过渡；取自apps/frontend/src/ui-provider.tsx。"
+      },
+      {
+        "name": "workspace-spring",
+        "value": "type: spring; stiffness: 420; damping: 38; mass: 1",
+        "purpose": "保活页面纵向接续、工作区标签横向接续及导航/标签位置指示；取自apps/frontend/src/workspace-motion.tsx，不是CSS令牌。旧内容退出立即停止交互，保节点和业务上下文。"
+      },
+      {
+        "name": "dialog-enter",
+        "value": "320ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "业务弹窗纵向16px与scale(.96)进入；透明度同为320ms ease-out。Ant Design保关闭与焦点机制，条件挂载由DialogPresence接续；取自apps/frontend/src/ui-theme.css。"
+      },
+      {
+        "name": "dialog-exit",
+        "value": "180ms cubic-bezier(.4,0,1,1)",
+        "purpose": "业务弹窗纵向10px与scale(.98)退出；透明度同为180ms ease-in，退出期不可点击；取自apps/frontend/src/ui-theme.css。"
+      },
+      {
+        "name": "details-expand",
+        "value": "280ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "原生details通过::details-content与interpolate-size展开/收起，不支持时即时开合；取自apps/frontend/src/ui-theme.css。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "关闭空间运动并保退出收尾；运行中切换不重建账号树、弹窗或草稿。普通筛选、刷新和保存不重播整表/逐行入场。完整约束归docs/guides/frontend-design.md的动效与连续操作。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-sidebar",
+        "value": "520px"
+      },
+      {
+        "name": "notice-and-dialog-compact",
+        "value": "740px"
+      },
+      {
+        "name": "workspace-compact",
+        "value": "800px"
+      },
+      {
+        "name": "appearance-overlay",
+        "value": "900px"
+      },
+      {
+        "name": "desktop-sidebar-upper-bound",
+        "value": "2000px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主要操作",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主题实底，承担当前任务的主要动作。",
+      "html": "<button type=\"button\" class=\"ds-button-primary\">导出</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;height:calc(32px * var(--fscale, 1));padding:0 8px;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1));font-weight:400;line-height:1;white-space:nowrap;background:var(--pri, #0053d6);color:var(--on, #ffffff);border:.5px solid var(--pri, #0053d6);border-radius:var(--radius-input, 6px);box-shadow:none;cursor:pointer;transition:background-color var(--motion-fast, 130ms),border-color var(--motion-fast, 130ms),color var(--motion-fast, 130ms)}.ds-button-primary:hover{background:var(--pri-d, #0043ce);border-color:var(--pri-d, #0043ce)}.ds-button-primary:focus-visible{outline:2px solid var(--pri, #0053d6);outline-offset:2px}.ds-button-primary:active{background:var(--pri-d, #0043ce)}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none}}"
+    },
+    {
+      "name": "次要操作",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "表面和边界保留按钮外观。",
+      "html": "<button type=\"button\" class=\"ds-button-secondary\">查看明细</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;height:calc(32px * var(--fscale, 1));padding:0 8px;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1));font-weight:400;line-height:1;white-space:nowrap;background:var(--sf, #ffffff);color:var(--tx, #161616);border:.5px solid var(--bd3, #8d8d8d);border-radius:var(--radius-input, 6px);box-shadow:none;cursor:pointer;transition:background-color var(--motion-fast, 130ms),border-color var(--motion-fast, 130ms),color var(--motion-fast, 130ms)}.ds-button-secondary:hover{background:var(--sf2, #f4f4f4);color:var(--pri-d, #0043ce);border-color:var(--pri, #0053d6)}.ds-button-secondary:focus-visible{outline:2px solid var(--pri, #0053d6);outline-offset:2px}.ds-button-secondary:active{background:var(--pri-l, #edf5ff)}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none}}"
+    },
+    {
+      "name": "危险行内操作",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "危险文字和边界，悬停用柔和危险底。",
+      "html": "<button type=\"button\" class=\"ds-button-danger\">撤销</button>",
+      "css": ".ds-button-danger{display:inline-flex;align-items:center;justify-content:center;height:calc(28px * var(--fscale, 1));padding:0 8px;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1));font-weight:400;line-height:1;white-space:nowrap;background:var(--sf, #ffffff);color:var(--dg-d, #b72e35);border:.5px solid var(--dg-bd, #efbcbc);border-radius:var(--radius-input, 6px);box-shadow:none;cursor:pointer;transition:background-color var(--motion-fast, 130ms),border-color var(--motion-fast, 130ms),color var(--motion-fast, 130ms)}.ds-button-danger:hover{background:var(--dg-l, #fdeaea);border-color:var(--dg-d, #b72e35)}.ds-button-danger:focus-visible{outline:2px solid var(--pri, #0053d6);outline-offset:2px}.ds-button-danger:active{background:var(--dg-l, #fdeaea)}@media(prefers-reduced-motion:reduce){.ds-button-danger{transition:none}}"
+    },
+    {
+      "name": "普通文本输入",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "固定标签与明确输入外观，保正常文本编辑。",
+      "html": "<label class=\"ds-field\">备注<input class=\"ds-field-input\" type=\"text\" value=\"待核对\" /></label>",
+      "css": ".ds-field{display:grid;gap:6px;max-width:280px;color:var(--tx2, #525252);font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1))}.ds-field-input{min-width:0;width:100%;height:calc(32px * var(--fscale, 1));padding:0 8px;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1));color:var(--tx, #161616);background:var(--sf, #ffffff);border:.5px solid var(--bd3, #8d8d8d);border-radius:var(--radius-input, 6px);caret-color:var(--pri, #0053d6);transition:background-color var(--motion-fast, 130ms),border-color var(--motion-fast, 130ms)}.ds-field-input:hover{border-color:var(--pri, #0053d6)}.ds-field-input:focus-visible{outline:2px solid var(--pri, #0053d6);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-field-input{transition:none}}.ds-field-input:disabled{cursor:not-allowed}.ds-field-input[aria-invalid=true]{border-color:var(--dg-d, #b72e35)}"
+    },
+    {
+      "name": "业务侧栏",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "整行悬停与当前路由，名称允许换行。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"业务导航\"><a class=\"ds-nav-item\" href=\"#ds-projects\">项目档案</a><a class=\"ds-nav-item\" href=\"#ds-notices\" aria-current=\"page\">付款通知书</a></nav>",
+      "css": ".ds-nav{width:180px;padding:12px;background:var(--sb, #ffffff);color:var(--sb-tx, #525252);font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(13.5px * var(--fscale, 1))}.ds-nav-item{display:block;padding:calc(10px * var(--fscale, 1));color:inherit;text-decoration:none;overflow-wrap:anywhere;border-radius:var(--radius-input, 6px);transition:background-color var(--motion-fast, 130ms),color var(--motion-fast, 130ms)}.ds-nav-item[aria-current=page]{font-weight:500;background:var(--sb-on, #d0e2ff);color:var(--sb-on-hl, #002d9c)}.ds-nav-item:hover{background:var(--sb-hover, #e8e8e8);color:var(--sb-hd, #161616)}.ds-nav-item:focus-visible{outline:2px solid var(--pri, #0053d6);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none}}.ds-nav-item[aria-current=page]:hover{background:var(--sb-on, #d0e2ff);color:var(--sb-on-hl, #002d9c)}"
+    },
+    {
+      "name": "待处理状态",
+      "kind": "chip",
+      "refersTo": "status-pending",
+      "description": "完整文字说明状态，颜色为辅助线索。",
+      "html": "<span class=\"ds-status-pending\">待处理</span>",
+      "css": ".ds-status-pending{display:inline-block;padding:.1em .5em;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(12px * var(--fscale, 1));line-height:1.5;white-space:nowrap;border:.5px solid var(--status-pending-bd, var(--wn-bd, #ecd49f));border-radius:4px;color:var(--status-pending-fg, var(--wn-d, #865d0f));background:var(--status-pending-bg, var(--wn-l, #fdf3e0))}"
+    },
+    {
+      "name": "业务分组容器",
+      "kind": "card",
+      "refersTo": "container",
+      "description": "表面、轻边界及内部间距分层。",
+      "html": "<section class=\"ds-container\" aria-label=\"核对范围\"><h3 class=\"ds-container-title\">核对范围</h3><p class=\"ds-container-copy\">按项目和期间查看当前结果</p></section>",
+      "css": ".ds-container{max-width:360px;padding:16px;background:var(--sf, #ffffff);color:var(--tx, #161616);border:.5px solid var(--bd, #d6d6d6);border-radius:var(--radius-card, 8px);box-shadow:none;font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(13.5px * var(--fscale, 1))}.ds-container-title{margin:0 0 8px;font-size:inherit;font-weight:600}.ds-container-copy{margin:0;line-height:1.5;color:var(--tx2, #525252)}"
+    },
+    {
+      "name": "业务网格合计外观",
+      "kind": "custom",
+      "refersTo": "grid-summary",
+      "description": "仅展示数字、字重与底色，真实业务表使用AG Grid。",
+      "html": "<div class=\"ds-grid-summary\" aria-label=\"合计外观示例\"><span class=\"ds-grid-summary-label\">合计</span><span class=\"ds-grid-summary-money\">1,234.00</span></div>",
+      "css": ".ds-grid-summary{display:grid;grid-template-columns:minmax(80px,1fr) minmax(120px,1fr);min-height:calc(36px * var(--fscale, 1));align-items:center;background:var(--sf2, #f4f4f4);color:var(--tx, #161616);font-family:var(--fs, MiSans, Microsoft YaHei, PingFang SC, system-ui, sans-serif);font-size:calc(13.5px * var(--fscale, 1));font-weight:600;border-top:1px solid var(--bd, #d6d6d6)}.ds-grid-summary-label,.ds-grid-summary-money{padding:calc(2px * var(--fscale, 1)) calc(4px * var(--fscale, 1))}.ds-grid-summary-money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "材料科专业案台",
+    "overview": "专业、安静、有秩序；支持密集核对，按任务区分密度，关键内容与操作清楚可达。“材料科专业案台”描述熟手处理、核对和修订业务数据的工作环境，不改产品名称。\n\n控件紧凑、清楚、可发现：按钮保按钮外观，可编辑值有明确输入外观，悬停、聚焦、禁用和错误可辨；正常保存反馈安静，需处理的问题贴近对象保留。信息层次帮助使用者识别对象、金额、归属和下一步。",
+    "keyCharacteristics": [
+      "熟手直接操作，业务对象和关键数值清楚可达。",
+      "表格密度随任务安排，编辑与保存期间保持稳定。",
+      "主题角色共用，状态含义不随主题改变。",
+      "普通表面平稳，浮层通过层叠、边界和必要阴影表达前后关系。"
+    ],
+    "rules": [
+      {
+        "name": "The 单一主题来源 Rule",
+        "body": "色值由[主题主人](backend/app/mod03_notice/page.py)维护，[React主题消费](backend/app/mod03_notice/theme_react.py)同时服务整页和主题预览；新组件引用角色，不在业务CSS复制配色表。",
+        "section": "colors"
+      },
+      {
+        "name": "The 语义稳定 Rule",
+        "body": "更换账号主题不改变成功、警告、危险、信息和类别的含义；重要状态同时通过文字、位置或形状表达。",
+        "section": "colors"
+      },
+      {
+        "name": "The 完整数值 Rule",
+        "body": "不借字号、排版或省略改变金额精度、单位和业务口径；自动布局保护完整金额/合计及指定标识，用户主动手调列宽的例外按原规范执行。",
+        "section": "typography"
+      },
+      {
+        "name": "The 平稳表面 Rule",
+        "body": "普通背景、边界和间距负责分组，浮层用层叠、边界及必要阴影区分前后关系，不给每张业务卡片增加独立悬浮层。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** 引用共享主题角色，让控件、表格和账号主题预览一致消费。",
+      "**Do** 按任务安排表格密度与高度，保关键内容、完整数值和主要操作可达。",
+      "**Do** 保清楚的输入外观及按钮外观，反馈贴近需要处理的对象。",
+      "**Do** 在编辑和保存读回期间保草稿、输入位置、滚动和实际列宽稳定。",
+      "**Do** 区分未知、未加载、真实零、失败、部分结果和已经完成。"
+    ],
+    "donts": [
+      "**Don't** 复制业务配色表、让主色换义或只靠颜色表达重要状态。",
+      "**Don't** 为密度缩小文字、自动隐藏必要字段或在自动布局裁断金额。",
+      "**Don't** 把指定页面的单行策略推广到全站，或擅自恢复用户已放开的手调列宽限制。",
+      "**Don't** 为正常逐格保存增加闪动、布局跳变或持续成功提示。",
+      "**Don't** 恢复已退役的自定义业务快捷键、跨格导航或专用键盘焦点模式。"
+    ]
+  }
+}
