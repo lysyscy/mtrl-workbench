@@ -352,6 +352,38 @@ class InvoiceAllocationUpdate(BaseModel):
     allocations: list[InvoiceAllocation] = Field(max_length=100)
 
 
+class ManualInvoiceFields(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    amount: StrictStr
+    invoice_no: StrictStr = Field(default='', max_length=32)
+    date_text: StrictStr = Field(default='', max_length=128)
+    cutoff_ym: StrictStr | None = Field(default=None, max_length=7)
+    remark: StrictStr = ''
+    allocations: list[InvoiceAllocation] = Field(min_length=1, max_length=100)
+
+
+class ManualInvoiceCreate(ManualInvoiceFields):
+    request_id: UUID
+
+
+class ManualInvoiceUpdate(ManualInvoiceFields):
+    version: UUID
+
+
+@router.post('/invoices/manual')
+def create_manual_invoice(req: ManualInvoiceCreate):
+    with session_scope() as session:
+        row = invoice_adjustments.save_manual(session, req.model_dump(mode='json'))
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+@router.put('/invoices/{invoice_id}/manual')
+def update_manual_invoice(invoice_id: int, req: ManualInvoiceUpdate):
+    with session_scope() as session:
+        row = invoice_adjustments.save_manual(session, req.model_dump(mode='json'), key=invoice_id)
+        return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
 class InvoiceCorrection(InvoiceAllocationUpdate):
     invoice_no: StrictStr = Field(max_length=32)
     invoice_date: StrictStr

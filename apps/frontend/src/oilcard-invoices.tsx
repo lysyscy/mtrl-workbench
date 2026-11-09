@@ -17,13 +17,14 @@ import type { ValueFilterModel } from './grid-value-filter-model';
 import { readHistory } from './history';
 import type { OilArchives } from './oilcard-api';
 import { getOilReconciliation } from './oilcard-ledger-api';
-import { changeOilInvoice, getOilInvoices, readOilReceipt, receiveOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
-import type { OilInvoice, OilInvoices } from './oilcard-invoice-api';
+import { changeOilInvoice, getOilInvoices, readOilReceipt, receiveOilInvoice, saveManualOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
+import type { OilInvoice, OilInvoices, OilManualInvoiceFields } from './oilcard-invoice-api';
 import { OilInvoiceDialog } from './oilcard-invoice-dialogs';
 import type { InvoiceAction } from './oilcard-invoice-dialogs';
 import { OilReceiveDialog } from './oilcard-receive';
 import { useCellSaveQueue } from './use-cell-save';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { randomUUID } from './random-id';
 
 type Row = OilInvoice & { project: string; account: string; total?: boolean };
 type Draft = { id: number; field: 'remark' | 'allocation'; original: string; value: string; project_id: number; account_id: number; error: string };
@@ -41,11 +42,13 @@ function AttributionCell({ data: row, node, colDef }: ICellRendererParams<Row>) 
   const field = colDef?.field === 'project' ? 'project_id' : 'account_id', saved = row.allocations[0];
   if (row.allocations.length > 1) return row[field === 'project_id' ? 'project' : 'account'];
   const draft = state.drafts[`allocation:${row.id}`], project = draft?.project_id ?? saved?.project_id ?? 0, account = draft?.account_id ?? saved?.account_id ?? 0;
-  const canAssign = row.status !== 'voided' && row.invoice_no && row.invoice_date && row.amount !== null && (row.kind === 'credit' || cents(row.amount) > 0n);
+  const canAssign = row.status !== 'voided' && (row.manual_request_id || row.invoice_no && row.invoice_date) && row.amount !== null && (row.kind === 'credit' || cents(row.amount) > 0n);
   const options = field === 'project_id' ? state.projects.filter(p => p.project_type !== 'shell').map(p => ({ value: p.id, label: projectLabel(p) })) : state.archives.accounts.filter(a => a.project_id === project || a.id === account).map(a => ({ value: a.id, label: `${a.name}${a.status === 'archived' ? '（归档）' : ''}` }));
   return <Select aria-label={`${field === 'project_id' ? '发票项目' : '发票账户'}：${row.invoice_no || `待核 #${row.id}`}`} value={(field === 'project_id' ? project : account) || null} disabled={state.disabled || !canAssign} placeholder={canAssign ? '请选择' : '先核对票面'} options={options} showSearch={{ optionFilterProp: 'label' }} status={draft?.error ? 'error' : ''} onChange={value => state.change(row, field, String(value))} />;
 }
 const pairKey = (row: OilInvoice) => row.allocations.length === 1 ? `${row.allocations[0]!.project_id}:${row.allocations[0]!.account_id}` : '';
+const dateLabel = (row: OilInvoice) => row.invoice_date || row.manual_date_text;
+const numberLabel = (row: OilInvoice) => row.invoice_no || (row.manual_request_id ? '手工登记' : null);
 
 function sameAttributionValue(a: Row | undefined, b: Row | undefined, field: 'project' | 'account') {
   if (!a || !b) return a === b;
@@ -62,7 +65,10 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const [selected, setSelected] = useState(0), [originalId, setOriginalId] = useState(0), [preparing, setPreparing] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [result, setResult] = useState('');
   const [downloadError, setDownloadError] = useState(''), [downloading, setDownloading] = useState(false);
-  const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | null>(null);
+  const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | { mode: 'manual'; row?: OilInvoice; requestId: string } | null>(null);
+  const [pendingManual, setPendingManual] = useState<{ requestId: string; fields: OilManualInvoiceFields } | null>(null);
+  const manualRequest = useRef<typeof pendingManual>(null);
+  const manualSubmitting = useRef(false);
   const [receiveOpen, setReceiveOpen] = useState(false), [batchLocked, setBatchLocked] = useState(false), [batchUncertain, setBatchUncertain] = useState(false);
   const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true), upload = useRef<{ file: File; digest: string } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
@@ -92,6 +98,14 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
       setResult(received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
     }
+    const manual = manualRequest.current;
+    if (manual) {
+      const actual = data.invoices.find(row => row.manual_request_id === manual.requestId);
+      if (actual) {
+        setSelected(actual.id); setOriginalId(0);
+        setResult('已在发票台账读到本次手工登记。');
+      }
+    }
     if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
     if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
     return data;
@@ -101,7 +115,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   useEffect(() => { onUncertain(uncertain || batchUncertain); }, [uncertain, batchUncertain, onUncertain]);
   const receiveDisabled = blocked || !active || !me || locked || uncertain || preparing || !query.data || query.isError;
   const disabled = receiveDisabled || batchLocked;
-  const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0;
+  const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0 || Boolean(pendingManual);
   const row = query.data?.invoices.find(item => item.id === selected);
   const original = row?.originals.find(o => o.id === originalId) ?? row?.originals[0];
   const rows = useMemo<Row[]>(() => (query.data?.invoices ?? []).map(row => ({ ...row,
@@ -111,7 +125,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const draftRef = useRef(drafts); draftRef.current = drafts;
   const filterOptions = useMemo<Record<string, ValueFilterOptions<Row>>>(() => Object.fromEntries(['invoice_date', 'invoice_no', 'project', 'account', 'amount', 'remark'].map(field => [field, {
     kind: field === 'invoice_date' ? 'date' : field === 'amount' ? 'number' : 'text',
-    value: (row: Row) => row[field as keyof Row] as string | null,
+    value: (row: Row) => field === 'invoice_date' ? dateLabel(row) : field === 'invoice_no' ? numberLabel(row) : row[field as keyof Row] as string | null,
     keepVisible: (row: Row) => Boolean(draftRef.current[`remark:${row.id}`] || draftRef.current[`allocation:${row.id}`]),
     ...(field === 'amount' ? { format: (value: string | number) => money(String(value)) } : {}),
   } as ValueFilterOptions<Row>])), []);
@@ -120,13 +134,13 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   })).reduce((sum, row) => sum + cents(row.amount!), 0n)), [rows, filters, filterOptions]);
   const amountWidth = fullTextWidth([money(query.data?.total_amount ?? '0.00'), ...rows.map(row => row.amount === null ? '' : money(row.amount))], scale).minWidth;
   const columns = useMemo<ColDef<Row>[]>(() => ([
-    { field: 'invoice_date', headerName: '开票日期', ...contentWidth(120, 180, scale), valueFormatter: p => p.node?.rowPinned ? '合计' : p.value || '待核' },
+    { field: 'invoice_date', headerName: '开票日期', ...contentWidth(120, 180, scale), valueGetter: p => p.data ? dateLabel(p.data) : null, valueFormatter: p => p.node?.rowPinned ? '合计' : p.value || (p.data?.manual_request_id ? '' : '待核') },
     // Renderer metadata is part of the native value comparison. A plain field
     // value would leave these cells stale when status changes without new text.
     { field: 'invoice_no', headerName: '发票号', ...contentWidth(210, 280, scale),
-      valueGetter: p => p.data, valueFormatter: p => p.value?.invoice_no || '',
-      equals: (a: Row | undefined, b: Row | undefined) => a?.invoice_no === b?.invoice_no && a?.status === b?.status && a?.kind === b?.kind,
-      cellRenderer: ({ data, node }: ICellRendererParams<Row>) => !data || node.rowPinned ? '' : <span>{data.invoice_no || '票号待核'}{(data.status === 'pending' || data.status === 'voided' || data.kind === 'credit') && <small className="muted">（{data.status === 'pending' ? '待确认' : data.status === 'voided' ? '作废' : '红冲'}）</small>}</span> },
+      valueGetter: p => p.data, valueFormatter: p => p.value ? numberLabel(p.value) || '' : '',
+      equals: (a: Row | undefined, b: Row | undefined) => a?.invoice_no === b?.invoice_no && a?.status === b?.status && a?.kind === b?.kind && a?.manual_request_id === b?.manual_request_id,
+      cellRenderer: ({ data, node }: ICellRendererParams<Row>) => !data || node.rowPinned ? '' : <span>{numberLabel(data) || '票号待核'}{(data.status === 'pending' || data.status === 'voided' || data.kind === 'credit') && <small className="muted">（{data.status === 'pending' ? '待确认' : data.status === 'voided' ? '作废' : '红冲'}）</small>}</span> },
     { field: 'project', headerName: '项目', ...contentWidth(160, 300, scale, 1), valueGetter: p => p.data,
       valueFormatter: p => p.value?.project || '', equals: (a, b) => sameAttributionValue(a, b, 'project'), cellRenderer: AttributionCell },
     { field: 'account', headerName: '用卡账户', ...contentWidth(150, 260, scale, 1), valueGetter: p => p.data,
@@ -135,7 +149,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     { field: 'remark', headerName: '备注', ...contentWidth(160, 360, scale, 1), valueGetter: p => p.data,
       valueFormatter: p => p.value?.remark || '', equals: (a: Row | undefined, b: Row | undefined) => a?.remark === b?.remark && a?.invoice_no === b?.invoice_no, cellRenderer: RemarkCell },
   ] satisfies ColDef<Row>[]).map(column => valueFilterColumn<Row>(column, filterOptions[column.field!]!)), [scale, amountWidth, filterOptions]);
-  const totals = useMemo<Row[]>(() => query.data ? [{ id: -1, invoice_no: null, invoice_date: null, amount: total, card_no: null, status: 'registered', deleted: false, kind: 'normal', related_invoice_id: null, void_date: null, change_note: '', reason: '', remark: '', version: '', allocations: [], originals: [], project: '', account: '', total: true }] : [], [query.data, total]);
+  const totals = useMemo<Row[]>(() => query.data ? [{ id: -1, invoice_no: null, invoice_date: null, amount: total, card_no: null, status: 'registered', deleted: false, kind: 'normal', related_invoice_id: null, void_date: null, change_note: '', reason: '', remark: '', version: '', manual_request_id: null, manual_date_text: null, manual_cutoff_ym: null, allocations: [], originals: [], project: '', account: '', total: true }] : [], [query.data, total]);
   function filterChanged(event: FilterChangedEvent<Row>) {
     setFilters(event.api.getFilterModel() as Record<string, ValueFilterModel>);
     if (!selected) return;
@@ -187,9 +201,44 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     } catch (failure) { if (!controller.signal.aborted && alive.current) setDownloadError(failure instanceof Error ? failure.message : '文件下载失败，请重试。'); }
     finally { if (alive.current) setDownloading(false); }
   }
-  function open(mode: InvoiceAction, sourceId: number | null = null) { if (!row || structuralDisabled) return; saves.clearFeedback(); setResult(''); setDialog({ mode, row, sourceId }); }
+  function open(mode: InvoiceAction, sourceId: number | null = null) {
+    if (!row || structuralDisabled) return;
+    saves.clearFeedback(); setResult('');
+    setDialog(mode === 'edit' && row.manual_request_id && !row.invoice_no
+      ? { mode: 'manual', row, requestId: row.manual_request_id } : { mode, row, sourceId });
+  }
+  async function submitManual(fields: OilManualInvoiceFields, requestId: string, existing?: OilInvoice) {
+    if (manualSubmitting.current) return;
+    manualSubmitting.current = true;
+    try {
+      if (!existing) manualRequest.current = { requestId, fields };
+      const outcome = await saves.run(async signal => {
+        const saved = await saveManualOilInvoice(fields, existing
+          ? { id: existing.id, version: existing.version, request_id: requestId } : { request_id: requestId }, signal);
+        setSelected(saved.id); setOriginalId(0);
+      }, () => '', '手工登记：');
+      if (outcome === 'uncertain' && !existing) setPendingManual({ requestId, fields });
+      else if (!existing && (outcome !== 'blocked' || !pendingManual)) { manualRequest.current = null; setPendingManual(null); }
+      if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);
+    } finally {
+      manualSubmitting.current = false;
+    }
+  }
+  function confirmRead() {
+    saves.confirm();
+    upload.current = null;
+    if (pendingManual && current.current?.invoices.some(row => row.manual_request_id === pendingManual.requestId)) {
+      manualRequest.current = null;
+      setPendingManual(null);
+    }
+    saves.update(ds => Object.fromEntries(Object.entries(ds).flatMap(([key, draft]) => {
+      const actual = current.current?.invoices.find(r => r.id === draft.id);
+      const original = actual ? draft.field === 'remark' ? actual.remark : pairKey(actual) : draft.original;
+      return original === (draft.field === 'remark' ? draft.value : `${draft.project_id}:${draft.account_id}`) ? [] : [[key, { ...draft, original, error: '' }]];
+    })));
+  }
   const invoiceActions = [
-    { key: 'edit', label: '修改发票', disabled: structuralDisabled || !row || row.status === 'voided' },
+    { key: 'edit', label: row?.manual_request_id && !row.invoice_no ? '修改手工登记' : '修改发票', disabled: structuralDisabled || !row || row.status === 'voided' },
     { key: 'delete', label: '删除', danger: true, disabled: structuralDisabled || !row },
   ];
   function actOnInvoice(key: string) {
@@ -206,8 +255,9 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   return <section className="oilcard-ledger-pane" aria-label="发票台账">
     <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div><input ref={input} type="file" accept="application/pdf,.pdf" hidden aria-label="上传发票PDF" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void receive(file); }} />
       <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => { if (!structuralDisabled) { if (key === 'pdf') input.current?.click(); else setReceiveOpen(true); } } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
+      <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setResult(''); setDialog({ mode: 'manual', requestId: randomUUID() }); }}>手动增行</Button>
       </div></div>
-    <div className="oilcard-selection-actions" aria-label="所选发票">{row && <><span>发票 {row.invoice_no || `待核 #${row.id}`}</span>{original && <><Button size="small" href={`/api/m13/invoices/originals/${original.id}`} target="_blank" rel="noopener noreferrer" disabled={disabled}>查看发票</Button><Button size="small" disabled={disabled || busy || downloading} onClick={() => void download(`/api/m13/invoices/originals/${original.id}?download=true`)}>下载原件</Button></>}<Button size="small" disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit')}>修改发票</Button><Button size="small" danger disabled={structuralDisabled} onClick={() => open('delete')}>删除</Button></>}</div>
+    <div className="oilcard-selection-actions" aria-label="所选发票">{row && <><span>{row.manual_request_id && !row.invoice_no ? `手工登记 #${row.id}` : `发票 ${row.invoice_no || `待核 #${row.id}`}`}</span>{original && <><Button size="small" href={`/api/m13/invoices/originals/${original.id}`} target="_blank" rel="noopener noreferrer" disabled={disabled}>查看发票</Button><Button size="small" disabled={disabled || busy || downloading} onClick={() => void download(`/api/m13/invoices/originals/${original.id}?download=true`)}>下载原件</Button></>}<Button size="small" disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit')}>{invoiceActions[0]!.label}</Button><Button size="small" danger disabled={structuralDisabled} onClick={() => open('delete')}>删除</Button></>}</div>
     <ReadStatusLane phase={readState} announce="正在读取发票台账…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     </ReadStatusLane>
@@ -215,13 +265,15 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {result && <p className="oilcard-pending-hint" role="status">{result}</p>}
     {downloadError && <p className="notice" role="alert">{downloadError}</p>}
-    {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '请先重读核对刚才的发票保存结果。' : '已读取当前发票，请核对保留输入。'}<Button disabled={!verified || blocked || busy} onClick={() => { saves.confirm(); upload.current = null; saves.update(ds => Object.fromEntries(Object.entries(ds).flatMap(([key, draft]) => { const actual = current.current?.invoices.find(r => r.id === draft.id); const original = actual ? draft.field === 'remark' ? actual.remark : pairKey(actual) : draft.original; return original === (draft.field === 'remark' ? draft.value : `${draft.project_id}:${draft.account_id}`) ? [] : [[key, { ...draft, original, error: '' }]]; }))); }}>已核对，保留输入继续</Button></p>}
+    {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '请先重读核对刚才的发票保存结果。' : '已读取当前发票，请核对保留输入。'}<Button disabled={!verified || blocked || busy} onClick={confirmRead}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>发票 #{d.id}：{d.error}<Button disabled={disabled || busy} onClick={() => saves.save(key, true)}>重试保存</Button><Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>放弃本次输入</Button></p>)}
     <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
     {query.data ? <InvoiceCells.Provider value={{ drafts, disabled, archives, projects, change, save: key => saves.save(key) }}><div onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'view', label: '查看发票', disabled: disabled || !original }, { key: 'download', label: '下载原件', disabled: disabled || !original }, ...invoiceActions], onClick: ({ key }) => actOnInvoice(key) }}><div><BusinessGrid table="oilcard-invoices" label="油卡发票台账" rows={rows} columns={columns} totals={totals} rowId={row => String(row.id)} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: filterChanged, onRowClicked: e => { if (e.data && !e.node.rowPinned) { setSelected(e.data.id); setOriginalId(0); } }, onCellContextMenu: e => { if (e.data && !e.node.rowPinned) { setSelected(e.data.id); setOriginalId(0); } }, rowClassRules: { 'oilcard-selected': p => p.data?.id === selected } }} /></div></Dropdown></div></InvoiceCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
     </FirstReadRegion>
     {row && <div className="oilcard-invoice-detail">{row.reason && <p className="notice">{row.reason}</p>}{row.kind === 'credit' && <p>红冲关联原票：{query.data?.invoices.find(r => r.id === row.related_invoice_id)?.invoice_no || `#${row.related_invoice_id}`}</p>}{row.change_note && <p>{row.void_date ? `作废日期 ${row.void_date}，` : ''}{row.change_note}</p>}{row.originals.length > 1 && <label>原件<Select aria-label="选择发票原件" value={original?.id ?? null} options={row.originals.map((o, i) => ({ value: o.id, label: `${i === 0 ? '主原件' : o.outcome === 'conflict' ? o.resolution ? '已核冲突原件' : '冲突原件待核' : '补档原件'} #${o.id}` }))} onChange={value => setOriginalId(value)} /></label>}{original?.outcome === 'conflict' && <><p className={original.resolution ? '' : 'notice'}>{original.resolution || original.reason}</p>{!original.resolution && <div className="oilcard-toolbar"><Button disabled={structuralDisabled} onClick={() => open('resolve', original.id)}>确认保留原票</Button><Button disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit', original.id)}>采用此原件更正</Button></div>}</>}</div>}
-    <DialogPresence>{dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
+    {row?.manual_cutoff_ym && <p className="oilcard-pending-hint">历史截至月 {row.manual_cutoff_ym}</p>}
+    {pendingManual && !uncertain && <p className="notice" role="alert">本次手工登记尚未读到，可按原请求重试。<Button disabled={disabled || busy} onClick={() => void submitManual(pendingManual.fields, pendingManual.requestId)}>重试原登记</Button></p>}
+    <DialogPresence>{dialog?.mode === 'manual' ? <OilInvoiceDialog key={dialog.requestId} mode="manual" row={dialog.row} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={fields => submitManual(fields, dialog.requestId, dialog.row)} /> : dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
       const action = dialog.mode === 'resolve' ? `originals/${dialog.sourceId!}/resolve` as const : dialog.mode === 'edit' ? dialog.row.kind === 'credit' ? 'credit' : 'correct' : 'delete';
       const outcome = await saves.run(async signal => { await changeOilInvoice(dialog.row, action, fields, signal); }, () => '', `发票 ${dialog.row.invoice_no || dialog.row.id}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);

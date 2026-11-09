@@ -9,8 +9,8 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
-from .ledger import _amount, _attribution
-from .invoices import number_owner, require_editable
+from .ledger import _amount, _attribution, _date
+from .invoices import _allocations, number_owner, require_editable
 from .models import OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
@@ -26,7 +26,7 @@ def validate_credits(session):
                 raise MustReportError('原票金额或关联未能核对，请先核对发票。')
             continue
         original = rows.get(row.related_invoice_id)
-        if row.amount is None or row.amount >= ZERO or original is None or original.status != 'registered' or original.kind != 'normal':
+        if row.amount is None or row.amount >= ZERO or original is None or original.status != 'registered' or original.kind != 'normal' or not original.invoice_no:
             raise MustReportError('红票须关联有效原票，金额填负数。')
         credited.setdefault(original.id, []).append(-row.amount)
     for key, amounts in credited.items():
@@ -114,6 +114,54 @@ def _review(session, row, original_id, decision, note):
     row.review_json = json.dumps(reviews, ensure_ascii=False, sort_keys=True)
 
 
+def save_manual(session, values, *, key=None, note=''):
+    """Register confirmed money without requiring a ticket; a later ticket can identify the same row."""
+    _lock(session)
+    date_text = values['date_text']
+    issued = _date(date_text.strip())
+    if not issued and re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', date_text.strip()):
+        raise MustReportError('请核对开票日期。无实际日期时可留空或保留原标记。')
+    cutoff = values.get('cutoff_ym') or None
+    if cutoff and (issued or not re.fullmatch(r'[0-9]{4}-(0[1-9]|1[0-2])', cutoff) or cutoff.startswith('0000-')):
+        raise MustReportError('仅无实际开票日期的记录可填写截至月，请使用 YYYY-MM。')
+    number = (values.get('invoice_no') or '').strip() or None
+    if number and (not issued or not re.fullmatch(r'(?:[0-9]{8}|[0-9]{20})', number)):
+        raise MustReportError('填写票号时，请同时提供真实开票日期和完整的8位或20位发票号码。')
+    amount = _amount(values['amount'])
+    if amount <= ZERO or not values['allocations']:
+        raise MustReportError('请填写正数金额，并确认至少一个用卡账户。')
+    fields = {'invoice_no': number, 'invoice_date': issued, 'manual_date_text': date_text,
+        'manual_cutoff_ym': cutoff, 'amount': amount, 'remark': values['remark']}
+    if key is None:
+        request_id = values['request_id']
+        existing = session.scalar(select(OilInvoice).where(OilInvoice.manual_request_id == request_id))
+        if existing is not None:
+            actual = {a.account_id: (a.project_id, a.amount) for a in _allocations(session, existing.id)}
+            expected = {a['account_id']: (a['project_id'], _amount(a['amount'])) for a in values['allocations']}
+            if (existing.deleted or existing.status != 'registered' or len(expected) != len(values['allocations'])
+                    or actual != expected or any(getattr(existing, field) != value for field, value in fields.items())):
+                raise DataConflictError('这次手工登记已有记录或已经更正，请重读核对，勿重复登记。')
+            return existing
+        row = OilInvoice(manual_request_id=request_id, change_note=note)
+        session.add(row)
+        session.flush()
+    else:
+        row = _get(session, OilInvoice, key)
+        _check_version(row, values['version'])
+        require_editable(row)
+        if not row.manual_request_id or row.invoice_no or row.status != 'registered':
+            raise MustReportError('请在发票表中选择仍未补票号的手工登记。')
+    if number:
+        _alias(session, row, number)
+    for field, value in fields.items():
+        setattr(row, field, value)
+    _replace_allocations(session, row, values['allocations'])
+    _touch(row)
+    session.flush()
+    validate_credits(session)
+    return row
+
+
 def correct(session, key, values, *, credit=False):
     _lock(session)
     row = _get(session, OilInvoice, key)
@@ -121,6 +169,8 @@ def correct(session, key, values, *, credit=False):
     require_editable(row)
     if row.status == 'voided':
         raise MustReportError('这张票已登记作废，请先通过操作历史核对并撤销作废。')
+    if row.manual_request_id and not row.invoice_no:
+        raise MustReportError('请通过修改手工登记补填真实票号。')
     if not values['note'].strip():
         raise MustReportError('请填写更正或红冲说明。')
     previous_parent = row.related_invoice_id
@@ -129,7 +179,7 @@ def correct(session, key, values, *, credit=False):
     parent_id = values.get('related_invoice_id') if credit else row.related_invoice_id
     if kind == 'credit':
         parent = _get(session, OilInvoice, parent_id) if parent_id else None
-        if parent is None or parent.id == row.id or parent.deleted or parent.kind != 'normal' or parent.status != 'registered':
+        if parent is None or parent.id == row.id or parent.deleted or parent.kind != 'normal' or parent.status != 'registered' or not parent.invoice_no:
             raise MustReportError('红票请选择另一张已登记且未作废的普通原票。')
     _alias(session, row, facts['invoice_no'])
     for field, value in facts.items():
@@ -152,7 +202,8 @@ def allocate(session, key, values):
     require_editable(row)
     if row.status == 'voided':
         raise MustReportError('作废票保留原分配，请先核对作废记录。')
-    if not row.invoice_no or not row.invoice_date or row.amount is None or row.kind == 'normal' and row.amount <= ZERO:
+    if (not row.manual_request_id and (not row.invoice_no or not row.invoice_date)
+            or row.amount is None or row.kind == 'normal' and row.amount <= ZERO):
         raise MustReportError('请先更正完整票面信息；负数红票使用“登记红冲”。')
     if not values['allocations']:
         raise MustReportError('请填写完整分配，至少选择一个用卡账户。')
@@ -178,7 +229,7 @@ def void(session, key, values):
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
     require_editable(row)
-    if row.kind != 'normal' or row.status != 'registered':
+    if row.kind != 'normal' or row.status != 'registered' or not row.invoice_no:
         raise MustReportError('请选择有效的普通原票登记作废；录错请使用更正。')
     if session.scalar(select(OilInvoice.id).where(OilInvoice.related_invoice_id == row.id,
             OilInvoice.status == 'registered', OilInvoice.deleted.is_(False)).limit(1)):

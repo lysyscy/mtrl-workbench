@@ -22,6 +22,39 @@ def remove(client, row):
     return client.post(f"/api/m13/invoices/{row['id']}/delete", json={'version': row['version']})
 
 
+def test_manual_invoice_idempotent_create_undo_and_add_ticket_on_same_row(scene):
+    client, (project, _) = scene
+    account = setup_account(client, project)
+    fields = {'date_text': '原始数据', 'cutoff_ym': '2025-12', 'amount': '3000',
+        'allocations': [allocation(account, '3000')]}
+    payload = {**fields, 'request_id': str(uuid4())}
+    response = client.post('/api/m13/invoices/manual', json=payload)
+    assert response.status_code == 200, response.text
+    assert response.headers['X-Operation-History'] == 'recorded'
+    saved = response.json()['item']
+    assert saved['manual_request_id'] == payload['request_id'] and saved['invoice_no'] is None and saved['originals'] == []
+    assert client.post('/api/m13/invoices/manual', json=payload).json() == response.json()
+    assert client.post('/api/m13/invoices/manual', json={**payload, 'remark': '变化'}).status_code == 409
+    operation = client.get('/api/history/status').json()['undo']
+    replay(client, 'undo', operation)
+    assert invoices(client)['total_amount'] == '0.00'
+    replay(client, 'redo', operation)
+    current = invoices(client)['invoices'][0]
+    correction = {**fields, 'version': current['version'], 'invoice_no': '20261031000000000001',
+        'date_text': '2026-10-31', 'cutoff_ym': None}
+    response = client.put(f"/api/m13/invoices/{current['id']}/manual", json=correction)
+    assert response.status_code == 200, response.text
+    corrected = response.json()['item']
+    assert corrected['id'] == saved['id'] and corrected['invoice_date'] == '2026-10-31'
+    received = receive(client, invoice_pdf())['item']
+    assert received['id'] == saved['id'] and len(received['originals']) == 1
+    assert invoices(client)['total_amount'] == '3000.00'
+    assert client.get('/api/m13/reconciliation').json()['invoiced_amount'] == '3000.00'
+    assert remove(client, received).status_code == 200
+    assert invoices(client)['total_amount'] == '0.00'
+    assert client.post('/api/m13/invoices/manual', json=payload).status_code == 409
+
+
 def test_card_archive_preserves_existing_pairs_money_and_undo_but_blocks_new_candidates(scene):
     client, (project, _) = scene
     primary = create(client, 'cards', kind='primary')
@@ -141,7 +174,7 @@ def test_delete_credit_requires_order_restores_net_and_keeps_parent_conflict_gua
 
 
 def legacy_history(operation_id):
-    """Represent immutable snapshots recorded before the two additive columns existed."""
+    """Represent immutable snapshots recorded before the additive columns existed."""
     with session_scope() as session:
         operation = session.get(history.OperationHistory, operation_id)
         changes = deepcopy(operation.changes)
@@ -150,6 +183,9 @@ def legacy_history(operation_id):
                     *((parent['table'], parent['data']) for parent in change.get('parents', []))]:
                 if values is not None and table in ('oil_card', 'oil_invoice'):
                     values.pop('status' if table == 'oil_card' else 'deleted')
+                    if table == 'oil_invoice':
+                        for field in ('manual_request_id', 'manual_date_text', 'manual_cutoff_ym'):
+                            assert values.pop(field) is None
         operation.changes = changes
 
 
@@ -180,6 +216,7 @@ def test_pre_column_history_and_parent_guards_replay_without_rewriting_snapshots
         for change in changes:
             if change['table'] == 'oil_invoice':
                 assert 'deleted' not in change['after']
+                assert not {'manual_request_id', 'manual_date_text', 'manual_cutoff_ym'} & change['after'].keys()
             for parent in change['parents']:
                 if parent['table'] == 'oil_card':
                     assert 'status' not in parent['data']

@@ -210,7 +210,8 @@ def total_export_snapshot(session):
     reconciliation['opening_amount'] = str(sum_money(row['opening_amount'] for row in reconciliation['rows']))
     invoice_snapshot = invoices.export_snapshot(session)
     allocation_rows = [{**attribution(allocation), 'invoice_id': invoice['id'],
-        'invoice_no': invoice['invoice_no'], 'invoice_date': invoice['invoice_date'],
+        'invoice_no': invoice['invoice_no'], 'invoice_date': invoice['invoice_date'] or invoice['manual_date_text'],
+        'manual_request_id': invoice['manual_request_id'],
         'status': invoice['status'], 'kind': invoice['kind'],
         'registered_amount': allocation['amount'] if invoice['status'] == 'registered' else str(ZERO)}
         for invoice in invoice_snapshot['rows'] for allocation in invoice['allocations']]

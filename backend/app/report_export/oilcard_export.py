@@ -13,7 +13,7 @@ COLUMNS = (('记录编号', 'id'), ('日期', 'date_text'), ('类型', 'kind_lab
 INVOICE_COLUMNS = (('记录编号', 'id'), ('开票日期', 'invoice_date'), ('发票号', 'invoice_no'),
     ('项目', 'project'), ('用卡账户', 'account'), ('价税合计', 'amount'), ('已登记金额', 'registered_amount'),
     ('备注', 'remark'), ('待核事项', 'issues'), ('票据关系', 'kind_label'),
-    ('关联原票编号', 'related_invoice_id'), ('更正或后续依据', 'change_note'))
+    ('关联原票编号', 'related_invoice_id'), ('更正或后续依据', 'change_note'), ('历史截至月', 'manual_cutoff_ym'))
 STATUS_LABELS = {'registered': '已登记', 'pending': '待确认', 'voided': '作废'}
 
 
@@ -65,9 +65,10 @@ def _recharges(workbook, snapshot):
 def _invoice_rows(snapshot):
     for row in snapshot['rows']:
         issues = [row['reason'], *(o['reason'] for o in row['originals'] if o['outcome'] == 'conflict' and not o['resolution'])]
-        yield {**row, 'registered_amount': row['amount'] if row['status'] == 'registered' else ZERO,
+        yield {**row, 'invoice_date': row['invoice_date'] or row.get('manual_date_text'),
+            'registered_amount': row['amount'] if row['status'] == 'registered' else ZERO,
             'issues': '；'.join(x for x in issues if x), 'status_label': STATUS_LABELS[row['status']],
-            'kind_label': '作废' if row['status'] == 'voided' else '红冲' if row['kind'] == 'credit' else '普通发票',
+            'kind_label': '作废' if row['status'] == 'voided' else '红冲' if row['kind'] == 'credit' else '手工登记' if row.get('manual_request_id') else '普通发票',
             'original_count': len(row['originals'])}
 
 
@@ -76,7 +77,7 @@ def _invoices(workbook, snapshot, *, total=False):
         ('作废日期', 'void_date'), ('原件份数', 'original_count')) if total else ())
     _sheet(workbook, '发票台账', columns, _invoice_rows(snapshot), money=('amount', 'registered_amount'),
         totals={'registered_amount': snapshot['total_amount']},
-        widths=(12, 16, 28, 28, 24, 18, 18, 40, 60, 16, 16, 40) + ((30, 12, 16, 12) if total else ()))
+        widths=(12, 16, 28, 28, 24, 18, 18, 40, 60, 16, 16, 40, 14) + ((30, 12, 16, 12) if total else ()))
 
 
 def build(snapshot):
@@ -106,7 +107,7 @@ def build_total(snapshot):
     _recharges(workbook, snapshot['ledger'])
     _invoices(workbook, snapshot['invoices'], total=True)
     allocations = [{**row, 'status_label': STATUS_LABELS[row['status']],
-        'kind_label': '红冲' if row['kind'] == 'credit' else '普通发票'} for row in snapshot['allocations']]
+        'kind_label': '红冲' if row['kind'] == 'credit' else '手工登记' if row.get('manual_request_id') else '普通发票'} for row in snapshot['allocations']]
     _sheet(workbook, '发票分配', (('分配编号', 'id'), ('发票记录编号', 'invoice_id'), ('发票号', 'invoice_no'),
         ('开票日期', 'invoice_date'), ('状态', 'status_label'), ('票据关系', 'kind_label'),
         ('项目编号', 'project_id'), ('核算项目', 'project'), ('账户编号', 'account_id'), ('用卡账户', 'account'),

@@ -49,7 +49,8 @@ def invoice_data(session, row):
     if row.status == 'registered' and (row.amount is None or not allocations or sum_money(a.amount for a in allocations) != row.amount):
         raise MustReportError('发票分配合计未能核对，请核对票面和分配后再继续。')
     originals = list(session.scalars(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == row.id).order_by(OilInvoiceOriginal.id)))
-    return {**{key: getattr(row, key) for key in ('id', 'invoice_no', 'card_no', 'status', 'deleted', 'reason', 'remark', 'version', 'kind', 'related_invoice_id', 'change_note')},
+    return {**{key: getattr(row, key) for key in ('id', 'invoice_no', 'card_no', 'status', 'deleted', 'reason', 'remark', 'version', 'kind',
+        'related_invoice_id', 'change_note', 'manual_request_id', 'manual_date_text', 'manual_cutoff_ym')},
         'void_date': row.void_date.isoformat() if row.void_date else None,
         'invoice_date': row.invoice_date.isoformat() if row.invoice_date else None,
         'amount': str(row.amount) if row.amount is not None else None,

@@ -57,6 +57,47 @@ def test_all_real_candidates_stay_pending_and_never_invent_facts(enrolled):
     assert stage(manifest) == staged
 
 
+def test_confirmed_manual_invoice_and_boundary_transfer_keep_original_facts(scene):
+    client, (project_id, _) = scene
+    account = create(client, 'accounts', name='保留账户', project_id=project_id)
+    assignment = {'account_id': account['id'], 'project_id': project_id, 'card_id': None}
+    source_id = 'synthetic-474-manual'
+    manifest = {'source_id': source_id, 'rows': [
+        {'key': 'legacy-invoice', 'kind': 'invoice', 'raw': {'amount': '23.45', 'original_date_text': '原始数据'}},
+        {'key': 'legacy-transfer', 'kind': 'transfer', 'raw': {'amount': '70', 'original_date_text': ''}},
+    ]}
+    decisions = [
+        {'key': 'legacy-invoice', 'manual': True, 'cutoff_ym': '2025-12', 'note': '已核开票金额',
+         'allocations': [{**assignment, 'amount': '23.45'}]},
+        {'key': 'legacy-transfer', 'closed_side': 'out', 'closed_counterparty': '已结项目',
+         'note': '核对原表', 'treatment': '只接续在建侧', 'cutoff_ym': '2025-12',
+         **{'in_' + key: value for key, value in assignment.items()}},
+    ]
+    stage(manifest)
+    with pytest.raises(MustReportError, match='截至月'):
+        confirm(source_id, [{**decisions[0], 'cutoff_ym': None}])
+    result = confirm(source_id, decisions)
+    assert confirm(source_id, decisions) == stage(manifest) == result
+    data = client.get('/api/m13/invoices').json()
+    invoice = data['invoices'][0]
+    assert invoice['invoice_no'] is invoice['invoice_date'] is None and not invoice['originals']
+    assert (invoice['manual_date_text'], invoice['manual_cutoff_ym']) == ('原始数据', '2025-12')
+    assert data['total_amount'] == '23.45'
+    totals = client.get('/api/m13/reconciliation').json()
+    assert (totals['rows'][0]['opening_amount'], totals['invoiced_amount'], totals['difference_amount']) == ('70.00', '23.45', '46.55')
+    assert client.get('/api/m13/ledger').json()['entries'] == []
+    workbook = openpyxl.load_workbook(BytesIO(client.get('/api/m13/export').content))
+    header, exported, *_ = workbook['发票台账'].values
+    exported = dict(zip(header, exported))
+    assert (exported['开票日期'], exported['发票号'], exported['历史截至月'], exported['票据关系']) == ('原始数据', None, '2025-12', '手工登记')
+    workbook.close()
+    edited = client.put(f"/api/m13/invoices/{invoice['id']}/remark",
+        json={'version': invoice['version'], 'remark': '人工修订'})
+    assert edited.status_code == 200
+    with pytest.raises(DataConflictError, match='保留人工结果'):
+        confirm(source_id, decisions)
+
+
 def test_confirmed_drill_repeated_source_pdf_allocation_reports_and_real_exports(enrolled, tmp_path, monkeypatch):
     client, source_id, manifest, decisions, content, ids, _ = enrolled
     first = confirm(source_id, decisions)

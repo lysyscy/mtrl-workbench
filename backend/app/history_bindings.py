@@ -39,8 +39,8 @@ def configure():
     oil_entry = Rule(OilEntry, frozenset({'kind', 'account_id', 'project_id', 'card_id', 'date_text',
         'entry_date', 'amount', 'remark', 'version', 'updated_by'}), True)
     oil_invoice = Rule(OilInvoice, frozenset({'invoice_no', 'invoice_date', 'amount', 'card_no', 'status', 'reason', 'remark', 'version', 'updated_by',
-        'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date', 'deleted'}),
-        introduced_defaults=(('deleted', False),))
+        'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date', 'deleted', 'manual_date_text', 'manual_cutoff_ym'}), True,
+        introduced_defaults=(('deleted', False), ('manual_request_id', None), ('manual_date_text', None), ('manual_cutoff_ym', None)))
     oil_allocation = Rule(OilInvoiceAllocation, frozenset({'account_id', 'project_id', 'card_id', 'amount'}), True)
     oil_number = Rule(OilInvoiceNumber, frozenset(), True)
     oil_fee_custom = Rule(OilFeeCustom, frozenset({'amount', 'remark', 'version', 'updated_by'}), True)
@@ -80,6 +80,8 @@ def configure():
         ('PUT', r'/api/m13/linkage/\d+/\d{4}-\d{2}/fee', '维护特殊费用用油自定义额', [oil_fee_custom]),
         ('PUT', r'/api/m13/linkage/\d+/\d{4}-\d{2}/big', '维护大表用油额外值', [oil_big_custom]),
         ('PUT', r'/api/m13/invoices/\d+/remark', '修改油卡发票备注', [oil_invoice, oil_allocation]),
+        ('POST', '/api/m13/invoices/manual', '手工登记油卡开票金额', [oil_invoice, oil_allocation, oil_number]),
+        ('PUT', r'/api/m13/invoices/\d+/manual', '修改油卡开票手工登记', [oil_invoice, oil_allocation, oil_number]),
         ('PUT', r'/api/m13/invoices/\d+/correct', '更正油卡发票票面', [oil_invoice, oil_allocation, oil_number]),
         ('PUT', r'/api/m13/invoices/\d+/allocations', '更正油卡发票整体分配', [oil_invoice, oil_allocation]),
         ('PUT', r'/api/m13/invoices/\d+/originals/\d+/resolve', '核对油卡发票原件', [oil_invoice]),

@@ -2,7 +2,7 @@ import { ApiError, body, cents, confirmWrite, record, requestJson } from './api'
 
 export interface OilInvoiceOriginal { id: number; sha256: string; invoice_id: number; byte_size: number; outcome: 'received' | 'duplicate' | 'conflict'; reason: string; recognized: { invoice_no: string | null; invoice_date: string | null; amount: string | null; card_no: string | null }; resolution: string | null }
 export interface OilInvoiceAllocation { id: number; account_id: number; project_id: number; card_id: number | null; amount: string }
-export interface OilInvoice { id: number; invoice_no: string | null; invoice_date: string | null; card_no: string | null; amount: string | null; status: 'pending' | 'registered' | 'voided'; deleted: boolean; kind: 'normal' | 'credit'; related_invoice_id: number | null; void_date: string | null; change_note: string; reason: string; remark: string; version: string; allocations: OilInvoiceAllocation[]; originals: OilInvoiceOriginal[] }
+export interface OilInvoice { id: number; invoice_no: string | null; invoice_date: string | null; card_no: string | null; amount: string | null; status: 'pending' | 'registered' | 'voided'; deleted: boolean; kind: 'normal' | 'credit'; related_invoice_id: number | null; void_date: string | null; change_note: string; reason: string; remark: string; version: string; manual_request_id: string | null; manual_date_text: string | null; manual_cutoff_ym: string | null; allocations: OilInvoiceAllocation[]; originals: OilInvoiceOriginal[] }
 export interface OilInvoices { invoices: OilInvoice[]; total_amount: string }
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const amount = (v: unknown): v is string => typeof v === 'string' && /^-?\d+\.\d{2}$/.test(v);
@@ -16,7 +16,11 @@ export function readOilInvoice(v: unknown): OilInvoice {
   if (!record(v) || typeof v.deleted !== 'boolean') throw new ApiError('发票删除状态未能核对，请重读。');
   if (!record(v) || !id(v.id) || !uuid(v.version) || !nullableText(v.invoice_no) || !nullableText(v.card_no) || !(v.invoice_date === null || typeof v.invoice_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.invoice_date)) || !(v.amount === null || amount(v.amount)) || !['pending', 'registered', 'voided'].includes(String(v.status)) || !['normal', 'credit'].includes(String(v.kind)) || !(v.related_invoice_id === null || id(v.related_invoice_id)) || !nullableText(v.void_date) || typeof v.change_note !== 'string' || typeof v.reason !== 'string' || typeof v.remark !== 'string' || !Array.isArray(v.allocations) || !v.allocations.every(a => record(a) && id(a.id) && id(a.project_id) && id(a.account_id) && (a.card_id === null || id(a.card_id)) && amount(a.amount)) || !Array.isArray(v.originals)) throw new ApiError('发票台账读取不完整，请重读核对。');
   const originals = v.originals.map(readOilOriginal), row = v as unknown as OilInvoice;
-  if (originals.some(o => o.invoice_id !== row.id) || new Set(originals.map(o => o.id)).size !== originals.length || new Set(row.allocations.map(a => a.account_id)).size !== row.allocations.length || row.status === 'registered' && (!row.invoice_no || !row.invoice_date || row.amount === null || !row.allocations.length || row.allocations.reduce((n, a) => n + cents(a.amount), 0n) !== cents(row.amount) || row.kind === 'normal' && (cents(row.amount) <= 0n || row.related_invoice_id !== null) || row.kind === 'credit' && (cents(row.amount) >= 0n || row.related_invoice_id === null))) throw new ApiError('发票与分配未能完整核对，请重读。');
+  const manualWithoutTicket = uuid(row.manual_request_id) && row.invoice_no === null && row.kind === 'normal';
+  if (row.manual_request_id === null ? row.manual_date_text !== null || row.manual_cutoff_ym !== null :
+    !uuid(row.manual_request_id) || typeof row.manual_date_text !== 'string' || !(row.manual_cutoff_ym === null || /^\d{4}-(0[1-9]|1[0-2])$/.test(row.manual_cutoff_ym)) ||
+    manualWithoutTicket && (row.status !== 'registered' || originals.length > 0 || row.manual_cutoff_ym !== null && row.invoice_date !== null)) throw new ApiError('手工登记的日期或身份未能核对，请重读。');
+  if (originals.some(o => o.invoice_id !== row.id) || new Set(originals.map(o => o.id)).size !== originals.length || new Set(row.allocations.map(a => a.account_id)).size !== row.allocations.length || row.status === 'registered' && (!manualWithoutTicket && (!row.invoice_no || !row.invoice_date) || row.amount === null || !row.allocations.length || row.allocations.reduce((n, a) => n + cents(a.amount), 0n) !== cents(row.amount) || row.kind === 'normal' && (cents(row.amount) <= 0n || row.related_invoice_id !== null) || row.kind === 'credit' && (cents(row.amount) >= 0n || row.related_invoice_id === null))) throw new ApiError('发票与分配未能完整核对，请重读。');
   return { ...row, originals };
 }
 export function readOilInvoices(v: unknown): OilInvoices {
@@ -25,7 +29,7 @@ export function readOilInvoices(v: unknown): OilInvoices {
   if (invoices.some(row => row.deleted)) throw new ApiError('发票台账包含已删除记录，请重读核对。');
   for (const row of invoices.filter(r => r.status === 'registered' && r.kind === 'credit')) {
     const parent = invoices.find(r => r.id === row.related_invoice_id);
-    if (!parent || parent.status !== 'registered' || parent.kind !== 'normal' || cents(row.amount!) >= 0n) throw new ApiError('红票与原票未能核对，请重读。');
+    if (!parent || parent.status !== 'registered' || parent.kind !== 'normal' || !parent.invoice_no || cents(row.amount!) >= 0n) throw new ApiError('红票与原票未能核对，请重读。');
   }
   for (const parent of invoices.filter(r => r.status === 'registered' && r.kind === 'normal')) if (invoices.filter(r => r.status === 'registered' && r.related_invoice_id === parent.id).reduce((n, r) => n - cents(r.amount!), 0n) > cents(parent.amount!)) throw new ApiError('累计红冲与原票金额未能核对，请重读。');
   if (new Set(invoices.map(r => r.id)).size !== invoices.length || invoices.filter(r => r.status === 'registered').reduce((n, r) => n + cents(r.amount!), 0n) !== cents(v.total_amount)) throw new ApiError('发票台账合计未能核对，请重读。');
@@ -58,6 +62,25 @@ export type OilAllocationFields = Pick<OilInvoiceAllocation, 'project_id' | 'acc
 export interface OilInvoiceCorrection { invoice_no: string; invoice_date: string; amount: string; card_no: string | null; allocations: OilAllocationFields[]; note: string; review_original_id: number | null; related_invoice_id?: number }
 function checkParts(saved: OilInvoice, parts: OilAllocationFields[]) {
   return saved.allocations.length === parts.length && parts.every(p => saved.allocations.some(a => a.project_id === p.project_id && a.account_id === p.account_id && cents(a.amount) === cents(p.amount)));
+}
+export interface OilManualInvoiceFields {
+  invoice_no: string; date_text: string; cutoff_ym: string | null; amount: string; remark: string; allocations: OilAllocationFields[];
+}
+export async function saveManualOilInvoice(fields: OilManualInvoiceFields, identity: { request_id: string } | { id: number; version: string; request_id: string }, signal: AbortSignal) {
+  const updating = 'id' in identity;
+  const path = updating ? '/api/m13/invoices/' + identity.id + '/manual' : '/api/m13/invoices/manual';
+  const result = await requestJson(path, { method: updating ? 'PUT' : 'POST', signal,
+    ...body({ ...fields, ...(updating ? { version: identity.version } : { request_id: identity.request_id }) }) });
+  confirmWrite(record(result) && result.ok === true, '手工登记回执待核实，请重读核对。');
+  const saved = readOilInvoice((result as Record<string, unknown>).item);
+  const dateText = fields.date_text.trim();
+  confirmWrite(saved.status === 'registered' && !saved.deleted && saved.manual_request_id === identity.request_id &&
+    (!updating || saved.id === identity.id) && saved.invoice_no === (fields.invoice_no || null) &&
+    saved.invoice_date === (/^\d{4}-\d{2}-\d{2}$/.test(dateText) ? dateText : null) &&
+    saved.manual_date_text === fields.date_text && saved.manual_cutoff_ym === fields.cutoff_ym &&
+    saved.remark === fields.remark && cents(saved.amount!) === cents(fields.amount) &&
+    checkParts(saved, fields.allocations), '手工登记回执与输入不一致，请重读核对。');
+  return saved;
 }
 export async function changeOilInvoice(row: OilInvoice, action: 'correct' | 'allocations' | 'credit' | 'delete' | `originals/${number}/resolve`, fields: Record<string, unknown>, signal: AbortSignal) {
   const result = await requestJson(`/api/m13/invoices/${row.id}/${action}`, { method: action === 'credit' || action === 'delete' ? 'POST' : 'PUT', signal, ...body({ ...fields, version: row.version }) });

@@ -6,6 +6,16 @@ import { uncertainWrite } from '../../src/api.ts';
 const digest = 'a'.repeat(64);
 const original = { id: 1, invoice_id: 1, sha256: digest, byte_size: 10, outcome: 'received', reason: '', resolution: null, recognized: { invoice_no: null, invoice_date: null, amount: null, card_no: null } };
 const invoice = { id: 1, invoice_no: '20261031000000000001', invoice_date: '2026-10-31', card_no: '1000111400012345678', amount: '3000.00', status: 'registered', deleted: false, kind: 'normal', related_invoice_id: null, change_note: '', void_date: null, reason: '', remark: '', version: '00000000-0000-4000-8000-000000000001', allocations: [{ id: 1, project_id: 1, account_id: 2, card_id: 3, amount: '3000.00' }], originals: [original] };
+Object.assign(invoice, { manual_request_id: null, manual_date_text: null, manual_cutoff_ym: null });
+
+test('无票号手工行必须保留独立身份，按已登记金额读取', () => {
+  const manual = { ...invoice, invoice_no: null, invoice_date: null, originals: [],
+    manual_request_id: '00000000-0000-4000-8000-000000000002', manual_date_text: '原始数据', manual_cutoff_ym: '2025-12' };
+  assert.equal(readOilInvoices({ invoices: [manual], total_amount: '3000.00' }).total_amount, '3000.00');
+  for (const invalid of [{ ...manual, manual_request_id: null }, { ...manual, invoice_date: '2025-12-01' }, { ...manual, originals: [original] }]) {
+    assert.throws(() => readOilInvoices({ invoices: [invalid], total_amount: '3000.00' }));
+  }
+});
 
 test('已登记票据与待确认票据分开核对，合计只取已确认金额', () => {
   const pending = { ...invoice, id: 2, status: 'pending', allocations: [], originals: [{ ...original, id: 2, invoice_id: 2, sha256: 'b'.repeat(64) }] };

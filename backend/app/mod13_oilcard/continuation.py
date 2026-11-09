@@ -97,8 +97,9 @@ def _verify_confirmations(session, confirmations):
         for target in result['targets']:
             expected = target['snapshot']
             if target['kind'] == 'invoice':
-                # Existing confirmation receipts predate the additive local-delete flag.
-                expected = {'deleted': 'False', **expected}
+                # Older confirmation receipts predate these additive invoice columns.
+                expected = {'deleted': 'False', 'manual_request_id': None, 'manual_date_text': None,
+                    'manual_cutoff_ym': None, **expected}
             if _snapshot(session, target['kind'], target['id']) != expected:
                 raise DataConflictError(f'来源行 {key} 的已接续目标已更正或不存在；保留人工结果，请核对，不能重跑覆盖。')
 
@@ -153,7 +154,19 @@ def _apply(session, source_id, item, decision, contents):
             raise MustReportError('原转账的业务性质须明确核对，不能从备注猜配。')
         amount = ledger._amount(raw['amount'])
         if amount <= 0:
-            raise MustReportError('接续转账须核对为正数，双边各自保留归属。')
+            raise MustReportError('接续转账须核对为正数。')
+        if 'closed_side' in decision:
+            closed = decision['closed_side']
+            counterparty = decision.get('closed_counterparty', '').strip()
+            if closed not in ('out', 'in') or not counterparty or any(k.startswith(closed + '_') for k in decision):
+                raise MustReportError('跨已结项目接续须明确原对方及转账方向，只填写在建一侧账户。')
+            kept = 'in_' if closed == 'out' else 'out_'
+            row = ledger.stage_opening(session, **_assignment(session, decision, kept),
+                source_key=request, source_note=f"{note}（原转{'出' if closed == 'out' else '入'}方 {counterparty}）",
+                amount=str(amount if closed == 'out' else -amount),
+                original_date_text=raw.get('explicit_date') or raw.get('original_date_text', ''),
+                cutoff_ym=decision.get('cutoff_ym'), confirmed=True, remark=raw.get('remark', ''))
+            return [('opening', row.id)]
         if decision['out_account_id'] == decision['in_account_id']:
             raise MustReportError('接续转账须明确两个不同用卡账户。')
         for side in ('out_', 'in_'):
@@ -171,6 +184,20 @@ def _apply(session, source_id, item, decision, contents):
             targets.append(('opening', row.id))
         return targets
     if kind == 'invoice':
+        if decision.get('manual') is True:
+            if decision.get('invoice_no') or decision.get('existing_invoice_id'):
+                raise MustReportError('已有真实票号或已登记发票时，请使用正常票号核对路径。')
+            date_text = raw.get('explicit_date') or raw.get('original_date_text', '')
+            cutoff = decision.get('cutoff_ym')
+            if not raw.get('explicit_date') and (not cutoff or ledger._date(date_text.strip())):
+                raise MustReportError('无实际开票日期的旧开票金额须明确截至月，并保留原日期标记。')
+            allocations = decision.get('allocations', [])
+            for allocation in allocations:
+                _assignment(session, allocation)
+            row = invoice_adjustments.save_manual(session, {'request_id': request, 'amount': raw['amount'],
+                'date_text': date_text, 'cutoff_ym': cutoff, 'remark': raw.get('remark', ''),
+                'allocations': allocations}, note=note)
+            return [('invoice', row.id)]
         facts = invoice_adjustments._facts({'invoice_no': decision.get('invoice_no', ''),
             'invoice_date': decision.get('invoice_date'), 'card_no': decision.get('card_no'), 'amount': raw['amount']}, 'normal')
         if raw.get('explicit_date') and facts['invoice_date'].isoformat() != raw['explicit_date']:
@@ -186,7 +213,7 @@ def _apply(session, source_id, item, decision, contents):
             if owner is not None:
                 raise DataConflictError('票号已存在，请明确关联已有发票及其版本，不能再次登记。')
             if not decision.get('allocations'):
-                raise MustReportError('历史开票须完整确认分配，缺票号或日期的原行继续留待核。')
+                raise MustReportError('历史开票须完整确认分配。')
             for allocation in decision['allocations']:
                 _assignment(session, allocation)
             row = OilInvoice(updated_by=current_operator())
