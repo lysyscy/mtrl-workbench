@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, text
 from snapshot import configure, validate
 
 configure(Path(__file__).resolve().parents[3])
-from audit import compare, read_plan
+from audit import compare, load_method_history, read_plan
 from annotate import META, RULE, INFO_RULE, annotate, instructions
 from projects import context
 from methods import load_approved
@@ -29,7 +29,7 @@ def inputs(tmp_path):
     ws.title = '材机付款计划明细'
     ws.append(['测试甲项目付款计划'])
     ws.append(['单据号', '该流程金额', '本月预付款金额', '收款单位', '付款方式'])
-    for row in [('A', 100, 10, '单位甲', '电汇'), ('B', 100, 90, '单位乙', '承兑'),
+    for row in [('A', 100, 10, '单位甲', '电汇'), ('B', 100, 90, '单位乙', '银承'),
                 ('C', 100, 10, '单位丙', '供应链'), ('C', 100, 20, '单位丙', '供应链'),
                 ('', 100, 5, '缺号', '现汇'), ('D', None, 5, '缺金额', '现汇'),
                 ('E', 100, 5, '待定', '现金'), ('X', 100, 5, '未知', '现汇')]:
@@ -61,8 +61,78 @@ def test_original_read_audit_and_method_candidates(inputs, tmp_path):
         '完全匹配', '超过未付', '重复上报', '重复上报', '无单据号', '输入待核对', '完全匹配', '单据号查不到']
     assert [c['bill_no'] for c in preview['changes']] == ['A', 'E']
     assert preview['changes'][0]['new'] == '现汇'
+    assert plan['rows'][1]['pay_method_raw'] == '银承'
+    assert plan['rows'][1]['pay_method'] == '承兑'
     assert not plan['source_warnings']
     assert source.read_bytes() == before
+
+
+def test_flow_amount_difference_does_not_mark_workbook(inputs):
+    source, snapshot = inputs
+    wb = load_workbook(source)
+    ws = wb['材机付款计划明细']
+    ws['B3'] = 99
+    ws['B11'] = 699
+    wb.save(source)
+    wb.close()
+
+    plan = read_plan(source, '2026-10')
+    preview = compare(plan, snapshot)
+    notes, targets, _ = instructions(plan)
+    assert plan['rows'][0]['audit_result'] == '金额不符'
+    assert 3 not in notes and 'B3' not in targets
+    assert '系统未付80' in notes[4] and 'C4' in targets
+    assert [c['bill_no'] for c in preview['changes']] == ['E']
+
+
+def test_blank_methods_use_only_matching_effective_history_and_keep_source_blank(inputs, tmp_path, monkeypatch):
+    source, snapshot = inputs
+    wb = load_workbook(source)
+    wb.active['E3'] = None
+    wb.active['E4'] = '未知'
+    wb.active['E5'] = '=1+1'
+    wb.active['E6'] = None
+    wb.save(source)
+    wb.close()
+    plan = read_plan(source, '2026-10')
+
+    def flow(method, day, project=1, payee=' 单位甲 ', status='effective'):
+        return dict(status=status, payee=payee, pay_method=method, pay_date=day, project_id=project)
+
+    rows = [flow('电汇', '2026-08-10'), flow('现汇', '2026-09-10'),
+            flow('银承', '2026-08-09', project=2),
+            flow('其他', '2026-09-30', status='revoked'),
+            flow('供应链', '2026-09-29', payee='单位甲分公司')]
+    calls = []
+    def fetch(path, **kwargs):
+        calls.append(path)
+        return dict(year_month='', status='effective', paginated=False, rows=rows)
+
+    monkeypatch.setattr('remote.call', fetch)
+    assert load_method_history(plan, offline=True)[0] == '离线复核未查付款流水'
+    assert not calls
+    preview = compare(plan, snapshot, method_history=load_method_history(plan))
+    assert calls == ['/api/m05/flows?year_month=&status=effective']
+    assert all(change['source_row'] != 3 for change in preview['changes'])
+    annotate(plan, tmp_path / 'backups')
+    wb = load_workbook(source)
+    try:
+        sheet = wb.active
+        assert sheet['E3'].value is None
+        assert sheet['M3'].value == '付款方式待确认，历史候选：本项目现汇（2026-09-10）；其他项目承兑（2026-08-09）'
+        assert '方式“未知”待确认' in sheet['M4'].value
+        assert '历史候选' not in sheet['M5'].value and sheet['E5'].value == '=1+1'
+        assert '未查到同收款单位有明确方式的有效流水' in sheet['M6'].value
+    finally:
+        wb.close()
+
+    def unavailable(*args, **kwargs):
+        raise ValueError('offline')
+
+    monkeypatch.setattr('remote.call', unavailable)
+    plan = read_plan(source, '2026-10')
+    compare(plan, snapshot, method_history=load_method_history(plan))
+    assert instructions(plan)[0][3] == '付款方式待确认，付款流水查询失败'
 
 
 def test_in_place_notes_preserve_business_cells_clear_resolved_and_keep_manual(inputs, tmp_path):

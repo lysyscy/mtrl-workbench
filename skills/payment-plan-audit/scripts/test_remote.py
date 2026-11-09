@@ -162,7 +162,8 @@ def test_distributable_excludes_development_data_and_runs_unpacked(tmp_path, mon
     with ZipFile(package) as archive:
         expected = {'payment-plan-audit/'+name for name in (
             'SKILL.md', 'references/maintenance.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
-            'scripts/annotate.py', 'scripts/audit.py', 'scripts/methods.py',
+            'scripts/annotate.py', 'scripts/append_plan.py', 'scripts/audit.py', 'scripts/expense_dates.py',
+            'scripts/merge.py', 'scripts/methods.py',
             'scripts/projects.py', 'scripts/remote.py', 'scripts/snapshot.py')}
         assert set(archive.namelist()) == expected
         assert all(archive.read(name) == (source/Path(name).relative_to('payment-plan-audit')).read_bytes()
@@ -173,6 +174,8 @@ def test_distributable_excludes_development_data_and_runs_unpacked(tmp_path, mon
     program = """
 import sys
 sys.path.insert(0, sys.argv[1])
+from append_plan import append_plan
+from merge import merge
 from snapshot import configure
 configure()
 from app.core.money import to_money

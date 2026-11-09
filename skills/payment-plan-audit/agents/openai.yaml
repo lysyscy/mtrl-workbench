@@ -1,5 +1,5 @@
 interface:
-  display_name: "付款计划核对"
+  display_name: "付款计划助手"
 
 policy:
   allow_implicit_invocation: false

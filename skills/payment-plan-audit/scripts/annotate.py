@@ -55,6 +55,23 @@ def write(cell, content):
     add(add(cell, 'is'), 't', {'xml:space': 'preserve'}, content)
 
 
+def method_note(row):
+    if row['pay_method_raw']:
+        return f"方式“{row['pay_method_raw']}”待确认"
+    candidates = row.get('method_candidates', [])
+    if candidates:
+        groups = defaultdict(list)
+        for candidate in candidates:
+            groups[candidate['scope']].append(f"{candidate['method']}（{candidate['last_paid_on']}）")
+        evidence = '；'.join(f"{scope}{'、'.join(groups[scope])}"
+                            for scope in ('本项目', '其他项目', '项目未核定') if groups[scope])
+        return f'付款方式待确认，历史候选：{evidence}'
+    status = row.get('method_history_status')
+    if status == '已查询':
+        status = '未查到同收款单位有明确方式的有效流水'
+    return f'付款方式待确认，{status}' if status and status != '未查询' else '方式“空”待确认'
+
+
 def instructions(plan):
     notes, targets, paid_targets = defaultdict(list), set(), set()
     def amount(n):
@@ -92,8 +109,6 @@ def instructions(plan):
         elif result == '超过未付':
             unpaid = Decimal(n['approved'])-Decimal(n['paid'])
             issue(f"计划{amount(r['planned_amount'])}，系统未付{amount(unpaid)}，超{amount(Decimal(r['planned_amount'])-unpaid)}元", 'planned_amount')
-        elif result == '金额不符':
-            issue(f"流程{amount(r['flow_amount'])}，系统审批{amount(n['approved'])}元", 'flow_amount')
         for problem in r['input_issues']:
             if '流程金额' in problem:
                 issue(f"缺流程金额，系统审批{amount(n['approved'])}元" if n else '流程金额缺失或无效', 'flow_amount')
@@ -102,7 +117,7 @@ def instructions(plan):
             elif '合同付款方式' in problem:
                 issue(problem, 'pay_method')
             elif '付款方式' in problem:
-                issue(f"方式“{r['pay_method_raw'] or '空'}”待确认", 'pay_method')
+                issue(method_note(r), 'pay_method')
             elif '项目未唯一' in problem:
                 issue('项目归属待核：系统为'+r['system_owner'], 'project')
             elif '项目未识别' in problem:

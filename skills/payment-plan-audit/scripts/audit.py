@@ -9,6 +9,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
+from unicodedata import normalize
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
@@ -33,7 +34,7 @@ ALIASES = {
 }
 FIELD_OF = {norm(label): key for key, labels in ALIASES.items() for label in labels}
 METHODS = {'现汇': '现汇', '承兑': '承兑', '供应链': '供应链', '其他': '其他',
-           '银行承兑': '承兑', '电汇': '现汇', '现金': '现汇'}
+           '银行承兑': '承兑', '银承': '承兑', '电汇': '现汇', '现金': '现汇'}
 
 
 def text(value):
@@ -174,7 +175,67 @@ def read_plan(source, month, sheet_name=None):
             raise ValueError('核对期间原文件发生变化，请重新核对')
 
 
-def compare(plan, snapshot, project_map=None, confirmed_method_rows=()):
+def payee_key(value):
+    return ' '.join(normalize('NFKC', text(value)).split()).casefold()
+
+
+def needs_method_history(row):
+    cell = row['cells'].get('pay_method')
+    return bool(cell and not row['pay_method_raw'] and cell not in row['formulas'])
+
+
+def load_method_history(plan, *, offline=False, server=None, session_file=None):
+    from remote import call
+
+    if not any(needs_method_history(row) and row['payee'] for row in plan['rows']):
+        return '未查询', []
+    if offline:
+        return '离线复核未查付款流水', []
+    try:
+        response = call('/api/m05/flows?year_month=&status=effective',
+                        server=server, session_file=session_file)
+        if (not isinstance(response, dict) or response.get('year_month') != ''
+                or response.get('status') != 'effective' or response.get('paginated') is not False
+                or not isinstance(response.get('rows'), list)):
+            raise ValueError('付款流水返回范围不完整')
+        required = {'status', 'payee', 'pay_method', 'pay_date', 'project_id'}
+        if any(not isinstance(flow, dict) or not required <= flow.keys() for flow in response['rows']):
+            raise ValueError('付款流水返回字段不完整')
+    except (ValueError, OSError):
+        return '付款流水查询失败', []
+    return '已查询', response['rows']
+
+
+def method_history_index(flows):
+    index = defaultdict(list)
+    for flow in flows:
+        if flow['status'] != 'effective':
+            continue
+        payee = payee_key(flow['payee'])
+        method = METHODS.get(text(flow['pay_method']))
+        try:
+            paid_on = date.fromisoformat(flow['pay_date'])
+        except (TypeError, ValueError):
+            continue
+        if payee and method:
+            index[payee].append((flow['project_id'], method, paid_on.isoformat()))
+    return index
+
+
+def method_candidates(history, project_id):
+    latest = {}
+    for paid_project, method, paid_on in history:
+        if project_id is None or paid_project is None:
+            scope = '项目未核定'
+        else:
+            scope = '本项目' if paid_project == project_id else '其他项目'
+        key = (scope, method)
+        latest[key] = max(paid_on, latest.get(key, ''))
+    return [{'scope': scope, 'method': method, 'last_paid_on': paid_on}
+            for (scope, method), paid_on in sorted(latest.items(), key=lambda item: item[1], reverse=True)]
+
+
+def compare(plan, snapshot, project_map=None, confirmed_method_rows=(), *, method_history=None):
     from app.mod04_plan.domain import NoticeAmounts, ProjectBrief, audit_rows, match_project
     from app.core.money import to_money
     validate(snapshot)
@@ -192,6 +253,8 @@ def compare(plan, snapshot, project_map=None, confirmed_method_rows=()):
     confirmed = set(confirmed_method_rows)
     if not confirmed <= {r['row'] for r in plan['rows']}:
         raise ValueError('确认例外的行号不在本次明细中，请核对原表行号')
+    history_status, flows = method_history or ('未查询', [])
+    history = method_history_index(flows)
     changes = []
     for row, result in zip(plan['rows'], results):
         hits = by_doc.get(row['doc_no'], [])
@@ -200,6 +263,9 @@ def compare(plan, snapshot, project_map=None, confirmed_method_rows=()):
         expected_id = choice['project_id'] if choice is not None else match.project_id
         row['project_match'] = next((p.disp or p.warehouse_name for p in projects if p.id == expected_id), '待确认')
         row['project_match_reason'] = choice['reason'] if choice else '现有规则匹配'
+        if needs_method_history(row):
+            row['method_history_status'] = history_status if row['payee'] else '缺收款单位，无法查付款流水'
+            row['method_candidates'] = method_candidates(history.get(payee_key(row['payee']), ()), expected_id)
         row['audit_result'] = result
         if len(hits) > 1:
             row['input_issues'].append('系统单据号不唯一，未选择其中一条')
@@ -313,7 +379,9 @@ def main():
         return
     plan['snapshot_origin'] = '离线复核，沿用旧快照' if args.snapshot else '本次系统接口只读快照'
     mapping = json.loads(Path(args.project_map).read_text(encoding='utf-8')) if args.project_map else None
-    preview = compare(plan, snapshot, mapping, args.confirm_method_row)
+    history = load_method_history(plan, offline=bool(args.snapshot), server=args.server,
+                                  session_file=args.session_file)
+    preview = compare(plan, snapshot, mapping, args.confirm_method_row, method_history=history)
     plan['input_source_sha256'] = plan['source_sha256']
     backups = (Path(args.repo)/'var/backups/payment-plan-audit' if args.repo
                else Path.home()/'.mtrl-workbench/backups/payment-plan-audit')
