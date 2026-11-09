@@ -66,14 +66,7 @@ export async function maintainBrowserRelay(signal: AbortSignal, update: (value: 
     let reason = 'idle';
     let failureMessage = '';
     try {
-      await deps.run({
-        signal,
-        onStop: value => {reason = value;},
-        checkTab: async () => {
-          const identity = await deps.read(undefined, state.generation);
-          if (identity.origin !== state.origin) throw new ApiError('i8 标签站点已变化，请核对后重新连接。', 0, 'site-changed');
-        },
-      });
+      await deps.run({signal, onStop: value => {reason = value;}});
     } catch (failure) {
       if (signal.aborted) return;
       reason = recoverable(failure) ? 'network' : 'failed';

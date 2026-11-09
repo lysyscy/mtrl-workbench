@@ -406,11 +406,7 @@ def main() -> int:
                     const result = await chrome.tabs.discard(i8RelayTab.tabId);
                     return {tabId: result?.id, discarded: result?.discarded};
                 }""")
-                probe = {"type": "i8-relay:identity", "device_id": device, "probe_only": True, "generation": generation}
-                paused = page_c.evaluate("""message => Promise.race([
-                    window.__relay(message),
-                    new Promise(resolve => setTimeout(() => resolve({code: 'no-reply'}), 3500)),
-                ])""", probe)
+                paused = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
                 check("浏览器释放后台标签时报告可恢复的暂停",
                       discarded.get("discarded") and paused.get("code") == "tab-paused", paused)
                 old_ticket = page_message(page_c, {
@@ -423,8 +419,6 @@ def main() -> int:
                     ctx_c.service_workers[0].evaluate("(id) => chrome.tabs.update(id, {active: true})", discarded["tabId"])
                 i8 = restored.value
                 i8.wait_for_function("() => document.wasDiscarded && document.readyState === 'complete'", timeout=5000)
-                probe_after = page_message(page_c, probe)
-                check("后台标签恢复后探测仍能发现旧绑定失效", probe_after.get("code") == "binding-lost", probe_after)
                 resumed = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
                 generation += 1
                 rebound = page_message(page_c, {

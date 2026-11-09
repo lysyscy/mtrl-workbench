@@ -92,7 +92,7 @@ test('连接意图随当前账号跨刷新保留，设备号仅存在于当前�
   assert.equal(stored.size, 0);
 });
 
-for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-paused']) {
+for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-paused', 'binding-lost']) {
   test(`新页面读站点、连接、绑定后取票，${failure} 恢复时旧业务票只执行一次`, async t => {
     const controller = new AbortController();
     const steps = [];
@@ -113,7 +113,7 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
       if (failure === 'extension-unavailable') {
         globalThis.chrome.runtime.lastError = { message: 'extension unavailable' };
       }
-      if (failure === 'tab-paused') return { ok: false, code: 'tab-paused' };
+      if (['tab-paused', 'binding-lost'].includes(failure)) return { ok: false, code: failure };
       return { status: 200, headers: {}, body_b64: '', declared_length: 0 };
     }, async (path, init) => {
       const endpoint = path.split('?')[0];
@@ -137,7 +137,7 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
           delete globalThis.chrome.runtime.lastError;
           const reply = JSON.parse(init.body);
           assert.equal(reply.ticket, ticket.ticket);
-          assert.equal(reply.status, ['extension-unavailable', 'tab-paused'].includes(failure) ? 599 : 200);
+          assert.equal(reply.status, ['extension-unavailable', 'tab-paused', 'binding-lost'].includes(failure) ? 599 : 200);
           if (failure === 'network') throw new TypeError('fetch failed');
           return Response.json({ accepted: true });
         }
@@ -161,36 +161,31 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
   });
 }
 
-test('空闲时识别 i8 标签休眠，恢复后自动绑定且不执行抓取', async t => {
+test('空闲时只向工作台等取数票，不周期访问 i8 标签', async t => {
   const controller = new AbortController();
   const phases = [];
+  const messages = [];
   let now = 0;
-  let generation = 0;
-  let attempts = 0;
   t.mock.method(Date, 'now', () => now);
   browser(t, message => {
-    if (message.type === 'i8-relay:identity') {
-      if (message.probe_only || attempts === 1) {
-        if (message.probe_only) assert.equal(message.generation, generation);
-        return {ok: false, code: 'tab-paused', message: '标签暂停'};
-      }
-      return {ok: true, ...identity};
-    }
+    messages.push(message.type);
+    if (message.type === 'i8-relay:identity') return {ok: true, ...identity};
     assert.equal(message.type, 'i8-relay:bind');
     return {ok: true};
   }, async path => {
-    if (path === '/api/m02/browser/connect') return Response.json({...state, generation: ++generation});
+    if (path === '/api/m02/browser/connect') return Response.json(state);
     assert.equal(path.split('?')[0], '/api/m02/browser/pending');
-    if (generation === 2) controller.abort();
-    now += 30_000;
+    now += 60_000;
+    if (now === 120_000) controller.abort();
     return Response.json({request: null});
   });
 
   await maintainBrowserRelay(controller.signal, ({phase}) => phases.push(phase), {
     ...browserDeps,
-    wait: async () => {attempts += 1;},
+    wait: never,
   });
-  assert.deepEqual(phases, ['connecting', 'connected', 'retrying', 'connecting', 'retrying', 'connecting', 'connected']);
+  assert.deepEqual(phases, ['connecting', 'connected']);
+  assert.deepEqual(messages, ['i8-relay:identity', 'i8-relay:bind']);
 });
 
 test('连接接口返回畸形状态时停止，不绑定、不轮询、不重试', async t => {

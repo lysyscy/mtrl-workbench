@@ -308,7 +308,7 @@ test('标签冻结时暂停探测和取数，恢复后可重新握手', async ()
   const page = boot({ fetchImpl: async () => reply() });
   await page.bind();
   page.page.frozen = true;
-  const identity = {type: 'i8-relay:identity', device_id: DEVICE, probe_only: true};
+  const identity = {type: 'i8-relay:identity', device_id: DEVICE};
   assert.equal((await page.call(identity)).code, 'tab-paused');
   assert.equal((await page.call(exec())).code, 'tab-paused');
   assert.deepEqual(page.executed(), []);
