@@ -12,15 +12,16 @@ import { readHistory } from './history';
 import { PageActivity } from './page-activity';
 import { randomUUID } from './random-id';
 import { useCellSaveQueue } from './use-cell-save';
-import { getOilArchives, getOilAssignments, saveOilAccount, saveOilCard } from './oilcard-api';
-import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard } from './oilcard-api';
+import { deleteOilArchive, getOilArchives, getOilAssignments, oilArchiveOrder, saveOilAccount, saveOilArchiveOrder, saveOilCard } from './oilcard-api';
+import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard, OilOrderKind } from './oilcard-api';
+import { OilDeleteDialog } from './oilcard-delete-dialog';
 import { OilLedgerSheet } from './oilcard-ledger';
 import { OilReconciliationSheet } from './oilcard-reconciliation';
 import { OilLinkageSheet } from './oilcard-linkage';
 import { OilTotalExport } from './oilcard-export';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { motion } from 'motion/react';
-import { WorkspacePanel, workspaceSpring } from './workspace-motion';
+import { DialogPresence, WorkspacePanel, workspaceSpring } from './workspace-motion';
 
 type ArchiveKind = 'card' | 'account';
 type Field = 'card_no' | 'kind' | 'parent_card_id' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
@@ -35,6 +36,12 @@ interface Cells {
   change: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field, value: string) => void;
   save: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field) => void;
   showHistory: (row: OilAccount) => void;
+  structuralDisabled: boolean;
+  remove: (kind: ArchiveKind, row: OilCard | OilAccount) => void;
+  addSecondary: (row: OilCard) => void;
+  collapsed: Set<number>;
+  toggleGroup: (id: number) => void;
+  visibleParents: Set<number>;
 }
 const ArchiveCells = createContext<Cells | null>(null);
 function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row: OilCard | OilAccount; field: Field }) {
@@ -63,8 +70,28 @@ const accountFields = (row: OilAccount): AccountFields => ({ name: row.name, pro
 
 function AccountActions({ row }: { row: OilAccount }) {
   const state = useContext(ArchiveCells)!, current = state.accounts.find(item => item.id === row.id);
-  if (!current) return null;
-  return <Button size="small" disabled={state.busy} aria-label={`查看${current.name}的用卡记录`} onClick={() => state.showHistory(current)}>用卡记录</Button>;
+  return <div className="oilcard-row-actions">
+    {current && <Button size="small" disabled={state.busy} aria-label={`查看${current.name}的用卡记录`} onClick={() => state.showHistory(current)}>用卡记录</Button>}
+    <Button size="small" danger disabled={row.id ? state.structuralDisabled : state.disabled || state.busy}
+      onMouseDown={event => { if (!row.id) event.preventDefault(); }} onClick={() => state.remove('account', row)}>删除</Button>
+  </div>;
+}
+
+function CardNumber({ row }: { row: OilCard }) {
+  const { collapsed, toggleGroup, visibleParents } = useContext(ArchiveCells)!;
+  const closed = collapsed.has(row.id);
+  return <div className={row.kind === 'primary' ? 'oilcard-primary' : 'oilcard-child-card'}>
+    {row.kind === 'primary' && visibleParents.has(row.id) && <Button size="small" aria-label={`${closed ? '展开' : '收起'} ${cardLabel(row)}`} aria-expanded={!closed} onClick={() => toggleGroup(row.id)}>{closed ? '展开' : '收起'}</Button>}
+    <ArchiveEditor kind="card" row={row} field="card_no" />
+  </div>;
+}
+
+function CardActions({ row }: { row: OilCard }) {
+  const state = useContext(ArchiveCells)!;
+  return <div className="oilcard-row-actions">
+    {row.kind === 'primary' && row.status === 'active' && <Button size="small" disabled={state.structuralDisabled} onClick={() => state.addSecondary(row)}>新增副卡</Button>}
+    <Button size="small" danger disabled={state.structuralDisabled} onClick={() => state.remove('card', row)}>删除</Button>
+  </div>;
 }
 
 export function OilCardPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
@@ -76,6 +103,8 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const [linkageVisited, setLinkageVisited] = useState(false), [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
   const [pending, setPending] = useState<PendingAccount | null>(null), pendingRef = useRef(pending); pendingRef.current = pending;
   const [historyAccount, setHistoryAccount] = useState(0);
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+  const [deletion, setDeletion] = useState<{ kind: ArchiveKind; row: OilCard | OilAccount } | null>(null);
   const query = useQuery({ queryKey: ['oilcard-archives'], enabled: active && !blocked, queryFn: ({ signal }) => getOilArchives(signal) });
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: active && !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const assignments = useQuery({ queryKey: ['oilcard-assignments', historyAccount], enabled: active && !blocked && historyAccount > 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
@@ -141,10 +170,35 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     if (row.id === 0) { if (pendingRef.current) void createAccount(pendingRef.current); }
     else saves.save(keyOf(kind, row.id, field));
   }
-  async function addCard() {
+  async function addCard(parent?: OilCard) {
     if (structuralDisabled) return;
     const request_id = randomUUID();
-    await saves.run(async signal => { await saveOilCard({ card_no: null, kind: 'secondary', parent_card_id: null, status: 'active', remark: '' }, { request_id }, signal); }, () => '', '新增实体油卡：');
+    const result = await saves.run(async signal => { await saveOilCard({ card_no: null, kind: parent ? 'secondary' : 'primary', parent_card_id: parent?.id ?? null, status: 'active', remark: '' }, { request_id }, signal); }, () => '', parent ? '新增副卡：' : '新增主卡：');
+    if (result === 'saved') {
+      if (cardStatus === 'archived') setCardStatus('active');
+      if (parent) setCollapsed(old => { const next = new Set(old); next.delete(parent.id); return next; });
+    }
+  }
+  function remove(kind: ArchiveKind, row: OilCard | OilAccount) {
+    if (!row.id) { setPending(null); pendingRef.current = null; }
+    else if (!structuralDisabled) { saves.clearFeedback(); setDeletion({ kind, row }); }
+  }
+  async function submitDelete() {
+    if (!deletion || structuralDisabled) return;
+    const { kind, row } = deletion;
+    const result = await saves.run(signal => deleteOilArchive(kind, row, signal),
+      refreshed => (kind === 'card' ? refreshed.cards : refreshed.accounts).some(item => item.id === row.id) ? '档案仍在，请重读核对。' : '', '删除油卡档案：');
+    if (result === 'saved' || result === 'uncertain') setDeletion(null);
+  }
+  function reorder(kind: OilOrderKind, from: number, to: number, parentId: number | null = null) {
+    const archives = currentData.current;
+    if (structuralDisabled || !archives || from === to) return;
+    const previous = oilArchiveOrder(archives, kind, parentId), fromIndex = previous.indexOf(from), toIndex = previous.indexOf(to);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const order = previous.filter(id => id !== from);
+    order.splice(toIndex, 0, from);
+    void saves.run(signal => saveOilArchiveOrder(kind, parentId, previous, order, signal),
+      refreshed => JSON.stringify(oilArchiveOrder(refreshed, kind, parentId)) === JSON.stringify(order) ? '' : '显示顺序已变化，请重读核对。', '保存显示顺序：');
   }
   function addAccount() {
     if (structuralDisabled) return;
@@ -153,24 +207,40 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   }
   const accounts = useMemo(() => [...(data?.accounts ?? []).filter(a => status === 'all' || a.status === status), ...(pending && !data?.accounts.some(a => a.request_id === pending.request_id) ? [pending] : [])], [data, status, pending]);
   const cards = useMemo(() => data?.cards ?? [], [data]);
-  const visibleCards = useMemo(() => cards.filter(card => cardStatus === 'all' || card.status === cardStatus), [cards, cardStatus]);
+  const { visibleCards, visibleParents } = useMemo(() => {
+    const included = cards.filter(card => cardStatus === 'all' || card.status === cardStatus);
+    const children = new Map<number | null, OilCard[]>();
+    for (const card of included) if (card.kind === 'secondary') {
+      const group = children.get(card.parent_card_id) ?? [];
+      group.push(card);
+      children.set(card.parent_card_id, group);
+    }
+    return {
+      visibleCards: [...cards.filter(card => card.kind === 'primary' && (included.includes(card) || children.has(card.id)))
+        .flatMap(card => [card, ...(collapsed.has(card.id) ? [] : children.get(card.id) ?? [])]), ...children.get(null) ?? []],
+      visibleParents: new Set([...children.keys()].filter((id): id is number => id !== null)),
+    };
+  }, [cards, cardStatus, collapsed]);
   const cardNumberWidth = fullTextWidth(cards.map(c => c.card_no || '卡号待补 #000'), scale).minWidth;
   const cardColumns = useMemo<ColDef<OilCard>[]>(() => [
-    { field: 'card_no', headerName: '完整卡号', ...contentWidth(Math.max(180, cardNumberWidth / scale), 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="card_no" /> },
+    { field: 'card_no', headerName: '完整卡号', rowDrag: true, ...contentWidth(Math.max(240, cardNumberWidth / scale + 100), 380, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardNumber row={row} /> },
     { field: 'kind', headerName: '主卡/副卡', ...contentWidth(100, 130, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="kind" /> },
     { field: 'parent_card_id', headerName: '所属主卡', ...contentWidth(150, 250, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="parent_card_id" /> },
     { field: 'status', headerName: '状态', ...contentWidth(90, 120, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="status" /> },
     { field: 'remark', headerName: '备注', ...contentWidth(130, 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="remark" /> },
+    { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(150, 180, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardActions row={row} /> },
   ], [scale, cardNumberWidth]);
   const accountColumns = useMemo<ColDef<OilAccount>[]>(() => [
-    { field: 'name', headerName: '账户名称', pinned: 'left', ...contentWidth(130, 220, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="name" /> },
+    { field: 'name', headerName: '账户名称', pinned: 'left', rowDrag: p => Boolean(p.data?.id), ...contentWidth(150, 240, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="name" /> },
     { field: 'project_id', headerName: '项目', ...contentWidth(130, 240, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="project_id" /> },
     { field: 'card_id', headerName: '关联卡片', ...contentWidth(190, 260, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="card_id" /> },
     { field: 'status', headerName: '状态', ...contentWidth(90, 120, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="status" /> },
     { field: 'remark', headerName: '备注', ...contentWidth(130, 280, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <ArchiveEditor kind="account" row={row} field="remark" /> },
-    { colId: 'actions', headerName: '记录', pinned: 'right', ...contentWidth(90, 110, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row?.id ? <AccountActions row={row} /> : null },
+    { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(150, 180, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilAccount>) => row && <AccountActions row={row} /> },
   ], [scale]);
-  const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, showHistory: row => setHistoryAccount(row.id) };
+  const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, showHistory: row => setHistoryAccount(row.id),
+    structuralDisabled, remove, addSecondary: row => void addCard(row), collapsed, visibleParents,
+    toggleGroup: id => setCollapsed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; }) };
   // 档案读失败时页签条与工具栏仍在，占位只替代内容区，避免未读被当成空档案。
   const readState = readPhase(query);
   const projectsWait = projects.isPending && !projects.data;
@@ -191,19 +261,31 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     <ArchiveCells.Provider value={state}>
       <div className="workspace-panels">
       {(tab === 'ledger' || tab === 'linkage') && (!data || projectsWait) && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}
-      <WorkspacePanel id="oilcard-panel-overview" labelledBy="oilcard-tab-overview" active={tab === 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} dependencyPhase={dependencyPhase} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} /></PageActivity.Provider></WorkspacePanel>
+      <WorkspacePanel id="oilcard-panel-overview" labelledBy="oilcard-tab-overview" active={tab === 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} dependencyPhase={dependencyPhase} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} sortDisabled={structuralDisabled} movePrimary={(from, to) => reorder('primary', from, to)} /></PageActivity.Provider></WorkspacePanel>
       {ledgerVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-ledger" labelledBy="oilcard-tab-ledger" active={tab === 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></WorkspacePanel>}
-      {linkageVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
+      {linkageVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} accounts={data.accounts} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
       <WorkspacePanel id="oilcard-panel-archives" labelledBy="oilcard-tab-archives" active={tab === 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
-        <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button>{pending && <Button disabled={blocked || busy || uncertain} onClick={() => { setPending(null); pendingRef.current = null; }}>取消新增</Button>}</div></div>
+        <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button></div></div>
         <FirstReadRegion phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
-        {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="autoHeight" grid={{ rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount) } }} />}</FirstReadRegion></section>
-        <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增油卡</Button></div></div>
+        {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="autoHeight" grid={{ suppressRowDrag: structuralDisabled, onRowDragEnd: e => { const from = e.node.data, to = e.overNode?.data; if (from?.id && to?.id) reorder('account', from.id, to.id); }, rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount) } }} />}</FirstReadRegion></section>
+        <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增主卡</Button></div></div>
         <FirstReadRegion phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
-        {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" />}</FirstReadRegion></section></div>
+        {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" grid={{
+          suppressRowDrag: structuralDisabled, rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' },
+          onRowDragEnd: e => {
+            const from = e.node.data, to = e.overNode?.data;
+            if (!from || !to) return;
+            if (from.kind === 'primary') { const target = to.kind === 'primary' ? to.id : to.parent_card_id; if (target) reorder('primary', from.id, target); }
+            else if (to.kind === 'secondary' && to.parent_card_id === from.parent_card_id) reorder('secondary', from.id, to.id, from.parent_card_id);
+          },
+        }} />}</FirstReadRegion></section></div>
       </PageActivity.Provider></WorkspacePanel>
       </div>
     </ArchiveCells.Provider>
+    <DialogPresence>{deletion && <OilDeleteDialog title={deletion.kind === 'card' ? '删除实体油卡' : '删除用卡账户'} busy={busy} disabled={structuralDisabled} error={error} close={() => setDeletion(null)} submit={() => void submitDelete()}>
+      <p>{'name' in deletion.row ? deletion.row.name : cardLabel(deletion.row)}</p>
+      <p>仅可删除未被业务使用的档案。主卡须先处理所属副卡。</p>
+    </OilDeleteDialog>}</DialogPresence>
     {historyAccount > 0 && tab === 'archives' && <section className="oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
       {assignments.isPending ? <p role="status">正在读取关联历史…</p> : assignments.isError ? <p role="alert" className="notice">{assignments.error.message}<Button disabled={blocked} onClick={() => void assignments.refetch()}>重读关联历史</Button></p> : <ReadGrid table="oilcard-assignments" label="账户关联历史" rows={assignments.data ?? []} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" columns={[
         { field: 'changed_at', headerName: '关联时间' },

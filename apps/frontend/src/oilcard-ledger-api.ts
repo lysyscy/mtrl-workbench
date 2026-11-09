@@ -8,6 +8,7 @@ export interface OilEntry {
 export const oilEntryKindLabels: Record<OilEntry['kind'], string> = { recharge: '充值', adjustment: '调整', refund: '退款', transfer_out: '转出', transfer_in: '转入' };
 export const isOilTransfer = (row: OilEntry) => row.kind === 'transfer_out' || row.kind === 'transfer_in';
 export interface OilLedger { entries: OilEntry[]; total_amount: string }
+export interface OilOpening { id: number; project_id: number; account_id: number; date_text: string; cutoff_ym: string; amount: string; remark: string; source_note: string }
 export interface OilReconciliationRow { account_id: number; project_id: number; card_id: number | null; primary_card_id: number | null; current: boolean; recharge_amount: string; opening_amount: string; total_amount: string; invoiced_amount: string; difference_amount: string }
 export interface OilReconciliation { rows: OilReconciliationRow[]; total_amount: string; invoiced_amount: string; difference_amount: string }
 export type EntryFields = Pick<OilEntry, 'kind' | 'project_id' | 'account_id' | 'date_text' | 'amount' | 'remark'>;
@@ -49,7 +50,25 @@ export function readOilReconciliation(v: unknown): OilReconciliation {
   return { rows, total_amount: v.total_amount, invoiced_amount: v.invoiced_amount, difference_amount: v.difference_amount };
 }
 export async function getOilLedger(signal?: AbortSignal) { return readOilLedger(await requestJson('/api/m13/ledger', signal ? { signal } : {})); }
+export async function getOilOpenings(signal: AbortSignal) {
+  const data = await requestJson('/api/m13/ledger/openings', { signal });
+  if (!record(data) || !Array.isArray(data.rows) || !moneyText(data.total_amount) || !data.rows.every(row => record(row) && id(row.id) &&
+    id(row.project_id) && id(row.account_id) && typeof row.date_text === 'string' && typeof row.cutoff_ym === 'string' &&
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(row.cutoff_ym) && moneyText(row.amount) && typeof row.remark === 'string' && typeof row.source_note === 'string')) {
+    throw new ApiError('已确认期初读取不完整，请重读核对。');
+  }
+  const rows = data.rows as OilOpening[];
+  if (new Set(rows.map(row => row.id)).size !== rows.length || rows.reduce((sum, row) => sum + cents(row.amount), 0n) !== cents(data.total_amount)) {
+    throw new ApiError('已确认期初合计未能核对，请重读。');
+  }
+  return { rows, total_amount: data.total_amount };
+}
 export async function getOilReconciliation(signal?: AbortSignal) { return readOilReconciliation(await requestJson('/api/m13/reconciliation', signal ? { signal } : {})); }
+export async function deleteOilEntry(row: OilEntry, expectedIds: number[], signal: AbortSignal) {
+  const result = await requestJson(`/api/m13/ledger/entries/${row.id}/delete`, { method: 'POST', signal, ...body({ version: row.version }) });
+  confirmWrite(record(result) && result.ok === true && Array.isArray(result.ids) && result.ids.length === expectedIds.length &&
+    new Set(result.ids).size === expectedIds.length && result.ids.every(id => expectedIds.includes(id)), '删除回执待核实，请重读，勿重复提交。');
+}
 export async function saveOilEntry(fields: EntryFields, target: { id: number; version: string } | { request_id: string }, signal: AbortSignal) {
   const result = await requestJson(`/api/m13/ledger/entries${'id' in target ? `/${target.id}` : ''}`, { method: 'id' in target ? 'PUT' : 'POST', signal, ...body({ ...fields, ...('id' in target ? { version: target.version } : target) }) });
   confirmWrite(record(result) && result.ok === true, '充值保存回执待核实，请重读，勿重复提交。');

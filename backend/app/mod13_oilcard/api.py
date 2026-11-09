@@ -57,6 +57,19 @@ class AccountUpdate(AccountFields):
     version: UUID
 
 
+class VersionedDelete(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+
+
+class ArchiveOrder(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['account', 'primary', 'secondary']
+    parent_id: int | None = Field(default=None, gt=0)
+    previous: list[int] = Field(min_length=2)
+    order: list[int] = Field(min_length=2)
+
+
 def _write(action, serializer):
     try:
         with session_scope() as session:
@@ -72,6 +85,29 @@ def _write(action, serializer):
 def archives():
     with session_scope() as session:
         return service.archives(session)
+
+
+@router.put('/archives/order')
+def reorder_archives(req: ArchiveOrder):
+    if req.kind != 'secondary' and req.parent_id is not None:
+        raise DataConflictError('请核对拖动范围。')
+    with session_scope() as session:
+        order = service.reorder_archives(session, req.kind, req.parent_id, req.previous, req.order)
+        return {'ok': True, 'order': order}
+
+
+@router.post('/cards/{card_id}/delete')
+def delete_card(card_id: int, req: VersionedDelete):
+    with session_scope() as session:
+        service.delete_card(session, card_id, str(req.version))
+        return {'ok': True, 'id': card_id}
+
+
+@router.post('/accounts/{account_id}/delete')
+def delete_account(account_id: int, req: VersionedDelete):
+    with session_scope() as session:
+        service.delete_account(session, account_id, str(req.version))
+        return {'ok': True, 'id': account_id}
 
 
 @router.get('/accounts/{account_id}/assignments')
@@ -156,6 +192,12 @@ class RefundCreate(BaseModel):
 def read_ledger():
     with session_scope() as session:
         return ledger.entries(session)
+
+
+@router.get('/ledger/openings')
+def read_openings():
+    with session_scope() as session:
+        return ledger.confirmed_openings(session)
 
 
 @router.get('/reconciliation')
@@ -246,6 +288,12 @@ def create_entry(req: EntryCreate):
 def update_entry(entry_id: int, req: EntryUpdate):
     return _write(lambda session: ledger.save_entry(session, req.model_dump(mode='json', exclude={'version'}),
         key=entry_id, version=str(req.version)), ledger.entry_data)
+
+
+@router.post('/ledger/entries/{entry_id}/delete')
+def delete_entry(entry_id: int, req: VersionedDelete):
+    with session_scope() as session:
+        return {'ok': True, 'ids': ledger.delete_entry(session, entry_id, str(req.version))}
 
 
 class AttributionCorrection(BaseModel):
@@ -407,13 +455,8 @@ class InvoiceVoid(InvoiceResolution):
     date: StrictStr
 
 
-class InvoiceDelete(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    version: UUID
-
-
 @router.post('/invoices/{invoice_id}/delete')
-def delete_invoice(invoice_id: int, req: InvoiceDelete):
+def delete_invoice(invoice_id: int, req: VersionedDelete):
     with session_scope() as session:
         row = invoice_adjustments.delete(session, invoice_id, req.model_dump(mode='json'))
         return {'ok': True, 'item': invoices.invoice_data(session, row)}

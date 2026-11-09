@@ -116,6 +116,24 @@ def test_global_history_replays_both_and_stale_or_other_actor_conflicts_never_to
     assert pair(client, out['transfer_id']) == current
 
 
+def test_delete_from_incoming_side_removes_both_and_undo_restores_pair(scene):
+    client, (project, other) = scene
+    source, target, _ = setup(client, project, other)
+    values = payload(source, target, date_text='2026-11-01')
+    out, incoming = transfer(client, values)
+    deleted = client.post(f"/api/m13/ledger/entries/{incoming['id']}/delete", json={'version': incoming['version']})
+    assert deleted.json() == {'ok': True, 'ids': [out['id'], incoming['id']]}
+    assert not ledger(client)['entries']
+    assert all(row['recharge_amount'] == '0.00' for row in summary(client)['rows'])
+    assert client.post('/api/m13/ledger/transfers', json=values).status_code == 400
+    operation = client.get('/api/history/status').json()['undo']
+    assert operation['count'] == 2
+    assert client.post('/api/history/undo', json={'operation_id': operation['id']}).json()['ok']
+    assert pair(client, out['transfer_id']) == [out, incoming]
+    assert client.post('/api/history/redo', json={'operation_id': operation['id']}).json()['ok']
+    assert not ledger(client)['entries']
+
+
 def test_invalid_sides_fixed_types_and_database_failure_leave_no_partial_transfer(scene):
     client, (project, other) = scene
     source, target, _ = setup(client, project, other)

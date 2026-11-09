@@ -3,14 +3,17 @@ from hashlib import sha256
 import json
 from uuid import UUID, uuid4, uuid5
 
-from sqlalchemy import select, text
+from sqlalchemy import cast, func, or_, select, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import aliased
 
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from app.core.references import project_references as collect_references
 from app.mod01_projects import service as projects
-from .models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance, OilInvoiceAllocation, OilFeeCustom, OilBigCustom
+from .models import (OilAccount, OilAccountAssignment, OilCard, OilEntry, OilOpeningBalance,
+    OilInvoice, OilInvoiceAllocation, OilInvoiceOriginal, OilFeeCustom, OilBigCustom)
 
 
 def _lock(session):
@@ -30,19 +33,48 @@ def _check_version(row, version):
         raise DataConflictError('这条档案已被修改，请重读核对后再保存。')
 
 
+def _active_parent(card):
+    if card.status == 'archived':
+        raise MustReportError('请先启用上级油卡，或改挂在用卡片。')
+
+
+def _reject_children(children, label):
+    if children:
+        raise MustReportError(f'请先归档或改挂在用{label}：' + '、'.join(children))
+
+
+def validate_archive_hierarchy(session):
+    """Historical replay restores snapshots without calling save_*."""
+    parent = aliased(OilCard)
+    cards = list(session.scalars(select(OilCard).join(parent, OilCard.parent_card_id == parent.id)
+        .where(OilCard.status == 'active', parent.status == 'archived')))
+    _reject_children([c.card_no or f'#{c.id}' for c in cards], '副卡')
+    accounts = list(session.scalars(select(OilAccount.name).join(OilCard, OilAccount.card_id == OilCard.id)
+        .where(OilAccount.status == 'active', OilCard.status == 'archived')))
+    _reject_children(accounts, '账户')
+
+
 def _card_fields(session, values, row=None):
     card_no = values.get('card_no')
     if card_no is not None:
         card_no = card_no.strip() or None
     kind, parent_id = values['kind'], values['parent_card_id']
+    status = values.get('status', row.status if row is not None else 'active')
     if kind == 'primary' and parent_id is not None:
         raise MustReportError('主卡不能再选择所属主卡。')
     if parent_id is not None:
         parent = _get(session, OilCard, parent_id)
         if parent.kind != 'primary' or row is not None and parent.id == row.id:
             raise MustReportError('所属主卡请选择另一张主卡。')
-        if parent.status == 'archived' and (row is None or row.parent_card_id != parent_id):
-            raise MustReportError('这张主卡已归档，请选择在用主卡；已有关系可保留。')
+        if status == 'active' or row is None or row.parent_card_id != parent_id:
+            _active_parent(parent)
+    if row is not None and status == 'archived':
+        if row.kind == 'primary':
+            children = session.scalars(select(OilCard).where(OilCard.parent_card_id == row.id, OilCard.status == 'active'))
+            _reject_children([child.card_no or f'#{child.id}' for child in children], '副卡')
+        else:
+            children = session.scalars(select(OilAccount.name).where(OilAccount.card_id == row.id, OilAccount.status == 'active'))
+            _reject_children(list(children), '账户')
     if row is not None and row.kind != kind:
         if session.scalar(select(OilCard.id).where(OilCard.parent_card_id == row.id).limit(1)):
             raise MustReportError('这张主卡仍有关联副卡，请先核对所属主卡。')
@@ -56,7 +88,7 @@ def _card_fields(session, values, row=None):
         if duplicate is not None and (row is None or duplicate != row.id):
             raise MustReportError('完整卡号已建档，请选择已有卡片；尾号相同的不同卡可分别建档。')
     return {'card_no': card_no, 'kind': kind, 'parent_card_id': parent_id,
-        'status': values.get('status', row.status if row is not None else 'active'), 'remark': values['remark']}
+        'status': status, 'remark': values['remark']}
 
 
 def _account_fields(session, values, row=None):
@@ -70,8 +102,10 @@ def _account_fields(session, values, row=None):
         card = _get(session, OilCard, values['card_id'])
         if card.kind != 'secondary':
             raise MustReportError('用卡账户请选择副卡；主卡只维护管理信息。')
-        if card.status == 'archived' and (row is None or row.card_id != card.id):
-            raise MustReportError('这张副卡已归档，请选择在用副卡；已有账户关联可保留。')
+        if values['status'] == 'active' or row is None or row.card_id != card.id:
+            _active_parent(card)
+        if values['status'] == 'active' and card.parent_card_id is not None:
+            _active_parent(_get(session, OilCard, card.parent_card_id))
     return {key: name if key == 'name' else values[key] for key in ('name', 'project_id', 'card_id', 'status', 'remark')}
 
 
@@ -80,13 +114,20 @@ def _assign(session, row):
         card_id=row.card_id, changed_by=current_operator()))
 
 
+def _last_card_order(session, fields):
+    last = session.scalar(select(func.max(OilCard.display_order)).where(
+        OilCard.kind == fields['kind'], OilCard.parent_card_id == fields['parent_card_id']))
+    return (last or 0) + 1
+
+
 def save_card(session, values, *, key=None, version=''):
     _lock(session)
     if key is None:
         existing = session.scalar(select(OilCard).where(OilCard.request_id == values['request_id']))
         if existing is not None:
             return existing
-        row = OilCard(request_id=values['request_id'], **_card_fields(session, values))
+        fields = _card_fields(session, values)
+        row = OilCard(request_id=values['request_id'], display_order=_last_card_order(session, fields), **fields)
         session.add(row)
     else:
         row = _get(session, OilCard, key)
@@ -94,6 +135,8 @@ def save_card(session, values, *, key=None, version=''):
         fields = _card_fields(session, values, row)
         if all(getattr(row, k) == v for k, v in fields.items()):
             return row
+        if (row.kind, row.parent_card_id) != (fields['kind'], fields['parent_card_id']):
+            row.display_order = _last_card_order(session, fields)
         for field, value in fields.items():
             setattr(row, field, value)
     row.version, row.updated_by = str(uuid4()), current_operator()
@@ -107,7 +150,8 @@ def save_account(session, values, *, key=None, version=''):
         existing = session.scalar(select(OilAccount).where(OilAccount.request_id == values['request_id']))
         if existing is not None:
             return existing
-        row = OilAccount(request_id=values['request_id'], **_account_fields(session, values))
+        last = session.scalar(select(func.max(OilAccount.display_order)))
+        row = OilAccount(request_id=values['request_id'], display_order=(last or 0) + 1, **_account_fields(session, values))
         session.add(row)
         changed = True
     else:
@@ -146,8 +190,9 @@ def replace_card(session, account_id, values):
         card = _get(session, OilCard, values['card_id'])
     if card.kind != 'secondary' or card.id == row.card_id:
         raise MustReportError('换卡请选择另一张副卡；卡号录错请更正原卡号。')
-    if card.status == 'archived':
-        raise MustReportError('这张副卡已归档，换卡请选择在用副卡。')
+    _active_parent(card)
+    if row.status == 'active' and card.parent_card_id is not None:
+        _active_parent(_get(session, OilCard, card.parent_card_id))
     event = OilAccountAssignment(account_id=row.id, project_id=row.project_id, previous_card_id=row.card_id,
         card_id=card.id, change_kind='replacement', request_id=values['request_id'],
         request_fingerprint=fingerprint, changed_by=current_operator())
@@ -166,8 +211,64 @@ def account_data(row):
 
 
 def archives(session):
-    return {'cards': [card_data(row) for row in session.scalars(select(OilCard).order_by(OilCard.id))],
-            'accounts': [account_data(row) for row in session.scalars(select(OilAccount).order_by(OilAccount.id))]}
+    return {'cards': [card_data(row) for row in session.scalars(select(OilCard).order_by(OilCard.display_order, OilCard.id))],
+            'accounts': [account_data(row) for row in session.scalars(select(OilAccount).order_by(OilAccount.display_order, OilAccount.id))]}
+
+
+def reorder_archives(session, kind, parent_id, previous, order):
+    _lock(session)
+    model = OilAccount if kind == 'account' else OilCard
+    query = select(model).order_by(model.display_order, model.id)
+    if kind != 'account':
+        query = query.where(OilCard.kind == kind, OilCard.parent_card_id == parent_id)
+    rows = list(session.scalars(query))
+    current = [row.id for row in rows]
+    if sorted(order) != sorted(previous):
+        raise MustReportError('排序只能移动同一组内的档案。')
+    if current == order:
+        return current
+    if current != previous:
+        raise DataConflictError('档案或顺序已变化，请重读后再拖动。')
+    by_id = {row.id: row for row in rows}
+    for position, key in enumerate(order):
+        by_id[key].display_order = position
+    return order
+
+
+def _referenced(session, field, key):
+    return any(session.scalar(select(model.id).where(getattr(model, field) == key).limit(1)) is not None
+        for model in (OilEntry, OilOpeningBalance, OilInvoiceAllocation))
+
+
+def delete_account(session, key, version):
+    _lock(session)
+    row = _get(session, OilAccount, key)
+    _check_version(row, version)
+    history = list(session.scalars(select(OilAccountAssignment).where(OilAccountAssignment.account_id == key)))
+    if _referenced(session, 'account_id', key) or len(history) > 1 or any(event.change_kind != 'assignment' for event in history):
+        raise MustReportError('该账户有账务或用卡记录，请归档。')
+    for event in history:
+        session.delete(event)
+    session.flush()
+    session.delete(row)
+
+
+def delete_card(session, key, version):
+    _lock(session)
+    row = _get(session, OilCard, key)
+    _check_version(row, version)
+    if session.scalar(select(OilCard.id).where(OilCard.parent_card_id == key).limit(1)) is not None:
+        raise MustReportError('请先逐张处理所属副卡。')
+    related = session.scalar(select(OilAccount.id).where(OilAccount.card_id == key).limit(1))
+    history = session.scalar(select(OilAccountAssignment.id).where(or_(
+        OilAccountAssignment.card_id == key, OilAccountAssignment.previous_card_id == key)).limit(1))
+    if related is not None or history is not None or _referenced(session, 'card_id', key):
+        raise MustReportError('该卡有账务或关联记录，请归档。')
+    if row.card_no and (session.scalar(select(OilInvoice.id).where(OilInvoice.card_no == row.card_no).limit(1))
+            or session.scalar(select(OilInvoiceOriginal.id).where(
+                cast(OilInvoiceOriginal.recognized_json, JSONB)['card_no'].astext == row.card_no).limit(1))):
+        raise MustReportError('该卡号已有开票记录，请归档。')
+    session.delete(row)
 
 
 def assignments(session, account_id):

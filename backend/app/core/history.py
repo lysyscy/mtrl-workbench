@@ -1,5 +1,6 @@
 """按账号保存可逆事务；业务模型和允许恢复的字段由装配层登记。"""
 from contextvars import ContextVar
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -33,6 +34,7 @@ class Rule:
     create_delete: bool = False
     retired_fields: frozenset[str] = frozenset()
     introduced_defaults: tuple[tuple[str, object], ...] = ()
+    replay_guard: tuple[Callable, Callable] | None = None
 
 
 @dataclass
@@ -289,6 +291,10 @@ def replay(session, actor, direction, expected_id):
     prepared = []
     recorded_changes = json.loads(json.dumps(operation.changes))
     changes = json.loads(json.dumps(recorded_changes))
+    tables = sorted({change['table'] for change in changes})
+    guards = dict.fromkeys(_rules[table].replay_guard for table in tables if table in _rules and _rules[table].replay_guard)
+    for lock in dict.fromkeys(lock for lock, _ in guards):
+        lock(session)
     # Compatibility is local to replay. Stored business snapshots remain as recorded.
     for change in changes:
         rule = _rules.get(change['table'])
@@ -372,6 +378,8 @@ def replay(session, actor, direction, expected_id):
                     if wanted[field] != current[field]:
                         setattr(obj, field, values[field])
         session.flush()
+    for _, validate in guards:
+        validate(session)
     operation.state = 'undone' if direction == 'undo' else 'applied'
     restored = {}
     for rule, change in prepared:

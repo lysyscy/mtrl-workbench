@@ -186,7 +186,7 @@ def test_oilcard_successful_archive_remains_readable_when_projects_fail(server, 
     archives = page.locator('#oilcard-panel-archives')
     expect(archives.locator('.oilcard-read-reserve')).to_have_count(0, timeout=30000)
     expect(archives.get_by_role('button', name='新增账户', exact=True)).to_be_disabled()
-    expect(archives.get_by_role('button', name='新增油卡', exact=True)).to_be_disabled()
+    expect(archives.get_by_role('button', name='新增主卡', exact=True)).to_be_disabled()
 
 
 def test_oilcard_reconciliation_failure_keeps_its_box_and_is_not_an_empty_account_list(server, browser_page):

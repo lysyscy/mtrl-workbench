@@ -17,11 +17,13 @@ import { readHistory } from './history';
 import { randomUUID } from './random-id';
 import { OilDateText as DateText } from './oilcard-date';
 import { OilTransferDialog } from './oilcard-transfer';
+import { OilDeleteDialog } from './oilcard-delete-dialog';
+import { OilOpeningHistory } from './oilcard-openings';
 import { OilInvoiceSheet } from './oilcard-invoices';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { useCellSaveQueue } from './use-cell-save';
 import type { OilArchives } from './oilcard-api';
-import { getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
+import { deleteOilEntry, getOilLedger, getOilReconciliation, isOilTransfer, oilEntryKindLabels, saveOilEntry, transferOilEntries } from './oilcard-ledger-api';
 import type { EntryFields, OilEntry, OilLedger } from './oilcard-ledger-api';
 import { editOilEntry, entryFields as fieldsOf, rebaseOilEntryDraft, sameEntryFields as sameFields } from './oilcard-ledger-edits';
 import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
@@ -29,7 +31,7 @@ import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
 type Field = keyof EntryFields;
 type TableRow = OilEntry & { total?: boolean };
 const labels: Record<Field, string> = { date_text: '日期', kind: '类型', project_id: '项目', account_id: '用卡账户', amount: '金额', remark: '备注' };
-interface Cells { drafts: Record<string, Draft>; entries: OilEntry[]; archives: OilArchives; projects: Project[]; disabled: boolean; busy: boolean; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
+interface Cells { drafts: Record<string, Draft>; entries: OilEntry[]; archives: OilArchives; projects: Project[]; disabled: boolean; busy: boolean; structuralDisabled: boolean; remove: (row: OilEntry) => void; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
 const LedgerCells = createContext<Cells | null>(null);
 
 function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
@@ -47,7 +49,7 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
   if (field === 'date_text') return <DateText label={label} value={current.date_text} disabled={disabled} change={(value, commit) => { change(value); if (commit) save(); }} save={save} />;
   let options: { value: string; label: string }[] | undefined;
   if (field === 'kind') {
-    if (isOilTransfer(current)) return <span title={`同笔转账：${current.transfer_id}`}>{oilEntryKindLabels[current.kind]}</span>;
+    if (isOilTransfer(current)) return <Select aria-label={label} value={current.kind} disabled options={[{ value: current.kind, label: oilEntryKindLabels[current.kind] }]} />;
     if (current.kind === 'refund') return <span title={`关联原充值 #${current.related_entry_id}`}>退款</span>;
     options = [{ value: 'recharge', label: '充值' }, { value: 'adjustment', label: '调整' }];
   }
@@ -64,6 +66,12 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
     onFocus={() => setFocused(true)} onChange={e => change(e.target.value)} onBlur={() => { setFocused(false); save(); }} onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />;
 }
 
+function EntryActions({ data: row, node }: ICellRendererParams<TableRow>) {
+  const state = useContext(LedgerCells)!;
+  return row && !node.rowPinned && <Button size="small" danger disabled={row.id ? state.structuralDisabled : state.disabled || state.busy}
+    onMouseDown={e => e.preventDefault()} onClick={() => state.remove(row)}>删除</Button>;
+}
+
 export function OilLedgerSheet({ me, archives, projects, active, blocked, scale, archiveLocked, onWriteLock, onUncertain }: {
   me: Identity | null; archives: OilArchives; projects: Project[]; active: boolean; blocked: boolean; scale: number; archiveLocked: boolean;
   onWriteLock: (locked: boolean) => void;
@@ -71,6 +79,8 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
 }) {
   const client = useQueryClient();
   const [transferOpen, setTransferOpen] = useState(false);
+  const [deletion, setDeletion] = useState<{ row: OilEntry; entries: OilEntry[] } | null>(null);
+  const newDraft = useRef<string | null>(null);
   const [invoiceLocked, setInvoiceLocked] = useState(false), [invoiceUncertain, setInvoiceUncertain] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({});
   const query = useQuery({ queryKey: ['oilcard-ledger'], enabled: active && !blocked, queryFn: ({ signal }) => getOilLedger(signal) });
@@ -151,8 +161,26 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   function add() {
     if (structuralDisabled) return;
     const request_id = randomUUID();
+    newDraft.current = request_id;
     const draft: Draft = { id: 0, request_id, version: '', kind: 'recharge', project_id: 0, account_id: 0, card_id: null, date_text: '', entry_date: null, amount: '', remark: '', related_entry_id: null, transfer_id: null, original: null, error: '' };
     saves.update(ds => { const next = { ...ds, [request_id]: draft }; draftRef.current = next; return next; });
+  }
+  function remove(row: OilEntry) {
+    if (!row.id) {
+      saves.update(ds => { const next = { ...ds }; delete next[row.request_id]; draftRef.current = next; return next; });
+      return;
+    }
+    if (structuralDisabled) return;
+    const entries = row.transfer_id ? current.current?.entries.filter(item => item.transfer_id === row.transfer_id) ?? [] : [row];
+    saves.clearFeedback();
+    setDeletion({ row, entries });
+  }
+  async function submitDelete() {
+    if (!deletion || structuralDisabled) return;
+    const ids = deletion.entries.map(row => row.id);
+    const result = await saves.run(signal => deleteOilEntry(deletion.row, ids, signal), refreshed =>
+      refreshed.entries.some(row => ids.includes(row.id)) ? '记录仍在台账，请重读核对。' : '', deletion.row.transfer_id ? '删除整笔转账：' : '删除充值台账记录：');
+    if (result === 'saved' || result === 'uncertain') setDeletion(null);
   }
   function confirm() {
     if (!verified) return;
@@ -168,13 +196,16 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   }, { positive: 0n, negative: 0n });
   const amountWidth = fullTextWidth([money(decimal(bounds.positive)), money(decimal(bounds.negative)), ...(query.data?.entries ?? []).map(row => money(row.amount))], scale).minWidth;
   const columns = useMemo<ColDef<TableRow>[]>(() => ([
-    { field: 'date_text', headerName: '日期', ...contentWidth(190, 240, scale), cellRenderer: EntryCell },
+    { field: 'date_text', headerName: '日期', sortable: true, initialSort: 'asc',
+      comparator: (_, __, a, b) => (a.data?.entry_date ?? '').localeCompare(b.data?.entry_date ?? ''),
+      ...contentWidth(190, 240, scale), cellRenderer: EntryCell },
     { field: 'kind', headerName: '类型', ...contentWidth(100, 130, scale), cellRenderer: EntryCell },
     { field: 'project_id', headerName: '项目', ...contentWidth(180, 320, scale, 1), cellRenderer: EntryCell },
     { field: 'account_id', headerName: '用卡账户', ...contentWidth(160, 300, scale, 1), cellRenderer: EntryCell },
     { field: 'amount', headerName: '金额', cellClass: 'money', ...contentWidth(Math.max(130, amountWidth / scale), 200, scale), cellRenderer: EntryCell },
     { field: 'remark', headerName: '备注', ...contentWidth(160, 360, scale, 1), cellRenderer: EntryCell },
-  ] satisfies ColDef<TableRow>[]).map(column => valueFilterColumn<TableRow>(column, filterOptions[column.field as Field])), [scale, amountWidth, filterOptions]);
+    { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(76, 100, scale), cellRenderer: EntryActions },
+  ] satisfies ColDef<TableRow>[]).map(column => 'field' in column ? valueFilterColumn<TableRow>(column, filterOptions[column.field]) : column), [scale, amountWidth, filterOptions]);
   const totals = useMemo<TableRow[]>(() => query.data ? [{ id: -1, request_id: 'total', version: '', kind: 'adjustment', project_id: 0, account_id: 0, card_id: null, date_text: '合计', entry_date: null, amount: filteredAmount, remark: '', related_entry_id: null, transfer_id: null, total: true }] : [], [query.data, filteredAmount]);
   // 台账首读与失败只在表区原位呈现：工具栏和草稿错误行保持可见，未读不被当成空台账。
   const readState = readPhase(query);
@@ -183,15 +214,21 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '核对刚才的充值登记后再继续。' : '已读取当前记录，请核对保留的输入。'}<Button disabled={!verified || blocked || busy} onClick={confirm}>已核对，保留输入继续</Button></p>}
     <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
-      <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button>
-      {Object.values(drafts).some(draft => !draft.id) && <Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = Object.fromEntries(Object.entries(ds).filter(([, draft]) => draft.id)); draftRef.current = next; return next; })}>取消新增</Button>}</div></div>
-      <div className="oilcard-selection-actions" aria-hidden="true" />
+      <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button></div></div>
+      <OilOpeningHistory archives={archives} projects={projects} enabled={active && !blocked} scale={scale} />
       <ReadStatusLane phase={readState} announce="正在读取充值台账…">
         {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
       </ReadStatusLane>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
       <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
-      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" style={{ height: '62dvh', minHeight: '300px' }} grid={{ enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>) }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
+      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" style={{ height: '62dvh', minHeight: '300px' }} grid={{
+        enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>),
+        postSortRows: ({ nodes }) => { const draft = nodes.findIndex(node => node.data?.id === 0); if (draft >= 0) nodes.push(...nodes.splice(draft, 1)); },
+        onRowDataUpdated: ({ api }) => {
+          const node = newDraft.current ? api.getRowNode(newDraft.current) : undefined;
+          if (node?.rowIndex !== null && node?.rowIndex !== undefined) { newDraft.current = null; api.ensureIndexVisible(node.rowIndex, 'bottom'); }
+        },
+      }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
       </FirstReadRegion>
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     <DialogPresence>{transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {
@@ -200,5 +237,12 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       const outcome = await saves.run(async signal => { await transferOilEntries(values, signal); }, () => '', `${from} 转至 ${to}，${values.amount}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setTransferOpen(false);
     }} />}</DialogPresence>
+    <DialogPresence>{deletion && <OilDeleteDialog title={deletion.row.transfer_id ? '删除整笔转账' : '删除台账记录'} busy={busy} disabled={structuralDisabled} error={error} close={() => setDeletion(null)} submit={() => void submitDelete()}>
+      {deletion.entries.map(row => {
+        const project = projects.find(item => item.id === row.project_id), account = archives.accounts.find(item => item.id === row.account_id);
+        return <p key={row.id}>{oilEntryKindLabels[row.kind]} · {project ? projectLabel(project) : `项目 #${row.project_id}`} / {account?.name ?? `账户 #${row.account_id}`} · {money(row.amount)}{row.date_text && ` · ${row.date_text}`}</p>;
+      })}
+      <p>{deletion.row.transfer_id ? '转出与转入会同时移除。' : '该记录将从台账和累计金额中移除。'}可通过操作历史撤销。</p>
+    </OilDeleteDialog>}</DialogPresence>
   </section>;
 }

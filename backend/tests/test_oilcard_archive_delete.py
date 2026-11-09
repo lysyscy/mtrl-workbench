@@ -55,7 +55,7 @@ def test_manual_invoice_idempotent_create_undo_and_add_ticket_on_same_row(scene)
     assert client.post('/api/m13/invoices/manual', json=payload).status_code == 409
 
 
-def test_card_archive_preserves_existing_pairs_money_and_undo_but_blocks_new_candidates(scene):
+def test_archive_hierarchy_preserves_money_and_requires_children_first(scene):
     client, (project, _) = scene
     primary = create(client, 'cards', kind='primary')
     card = create(client, 'cards', card_no=CARD, parent_card_id=primary['id'])
@@ -63,6 +63,11 @@ def test_card_archive_preserves_existing_pairs_money_and_undo_but_blocks_new_can
     other = create(client, 'accounts', name='另一个账户', project_id=project)
     saved_entry = entry(client, account, '100')
     received = receive(client, invoice_pdf())['item']
+    for parent, child_name in ((primary, CARD), (card, account['name'])):
+        fields = {key: value for key, value in parent.items() if key not in ('id', 'request_id')}
+        blocked = client.put(f"/api/m13/cards/{parent['id']}", json={**fields, 'status': 'archived'})
+        assert blocked.status_code == 400 and child_name in blocked.json()['message']
+    account = edit(client, 'accounts', account, status='archived')
     archived = edit(client, 'cards', card, status='archived')
     operation = client.get('/api/history/status').json()['undo']
     replay(client, 'undo', operation)
@@ -89,8 +94,11 @@ def test_card_archive_preserves_existing_pairs_money_and_undo_but_blocks_new_can
     rows = list(workbook['实体油卡'].values)
     assert len(rows) == 3 and rows[0][-2:] == ('状态', '备注')
     assert [row[-2] for row in rows[1:]] == ['归档', '归档']
-    assert next(c for c in read(client)['accounts'] if c['id'] == account['id'])['status'] == 'active'
+    assert next(c for c in read(client)['accounts'] if c['id'] == account['id'])['status'] == 'archived'
     current = next(c for c in read(client)['cards'] if c['id'] == card['id'])
+    fields = {key: value for key, value in current.items() if key not in ('id', 'request_id')}
+    assert client.put(f"/api/m13/cards/{card['id']}", json={**fields, 'status': 'active'}).status_code == 400
+    edit(client, 'cards', primary, status='active')
     assert edit(client, 'cards', current, status='active')['status'] == 'active'
     assert received['allocations'][0]['card_id'] == card['id']
 
@@ -238,3 +246,64 @@ def test_pre_column_history_rejects_actual_nondefault_archive_or_deletion(scene,
         else:
             session.get(OilInvoice, row['id']).deleted = True
     assert client.post('/api/history/undo', json={'operation_id': operation['id']}).status_code == 409
+
+
+def test_shared_archive_order_is_read_back_and_rejects_stale_groups(scene):
+    client, (project, _) = scene
+    first, second = [create(client, 'cards', kind='primary') for _ in range(2)]
+    child_a, child_b = [create(client, 'cards', parent_card_id=first['id']) for _ in range(2)]
+    separate = create(client, 'cards', parent_card_id=second['id'])
+    account_a, account_b = [create(client, 'accounts', project_id=project, name=name, status=status)
+        for name, status in [('在用', 'active'), ('已归档', 'archived')]]
+    for kind, parent, rows in [('primary', None, (first, second)), ('secondary', first['id'], (child_a, child_b)),
+            ('account', None, (account_a, account_b))]:
+        previous = [row['id'] for row in rows]
+        payload = {'kind': kind, 'parent_id': parent, 'previous': previous, 'order': previous[::-1]}
+        response = client.put('/api/m13/archives/order', json=payload)
+        assert response.json() == {'ok': True, 'order': previous[::-1]}
+        assert response.headers['X-Operation-History'] == 'recorded'
+        client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_other_actor__'))
+        result = read(client)['accounts' if kind == 'account' else 'cards']
+        assert [row['id'] for row in result if row['id'] in previous] == previous[::-1]
+        client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_actor__'))
+    ids = [child_a['id'], separate['id']]
+    assert client.put('/api/m13/archives/order', json={'kind': 'secondary', 'parent_id': first['id'],
+        'previous': ids, 'order': ids[::-1]}).status_code == 409
+
+
+def test_archive_delete_preserves_references_and_allows_undo_for_unused_account(scene):
+    client, (project, _) = scene
+    primary = create(client, 'cards', kind='primary')
+    card = create(client, 'cards', card_no=CARD, parent_card_id=primary['id'])
+    account = create(client, 'accounts', project_id=project, name='仅建档', card_id=card['id'])
+
+    def delete(table, row):
+        return client.post(f"/api/m13/{table}/{row['id']}/delete", json={'version': row['version']})
+
+    assert delete('cards', primary).status_code == 400
+    assert delete('cards', card).status_code == 400
+    assert delete('accounts', account).status_code == 200
+    operation = client.get('/api/history/status').json()['undo']
+    assert read(client)['accounts'] == []
+    replay(client, 'undo', operation)
+    assert read(client)['accounts'] == [account]
+    assert client.get(f"/api/m13/accounts/{account['id']}/assignments").json()[0]['card_id'] == card['id']
+    entry(client, account, '100')
+    assert delete('accounts', account).status_code == 400
+    unused = create(client, 'cards', card_no='0000000000001234')
+    assert delete('cards', unused).status_code == 200
+
+
+def test_redo_archive_rechecks_children_created_by_another_user(scene):
+    client, _ = scene
+    primary = create(client, 'cards', kind='primary')
+    edit(client, 'cards', primary, status='archived')
+    operation = client.get('/api/history/status').json()['undo']
+    replay(client, 'undo', operation)
+    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_other_actor__'))
+    child = create(client, 'cards', parent_card_id=primary['id'])
+    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_actor__'))
+    before = read(client)
+    response = client.post('/api/history/redo', json={'operation_id': operation['id']})
+    assert response.status_code == 409 and f"#{child['id']}" in response.json()['message']
+    assert read(client) == before

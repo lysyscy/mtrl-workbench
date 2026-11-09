@@ -14,14 +14,16 @@ import type { OilAccount, OilArchives, OilCard } from './oilcard-api';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type Row = { key: string; group: string; kind: 'primary' | 'account' | 'total'; title: string; account?: OilAccount; card?: OilCard; primary?: OilCard; allocation?: OilReconciliationRow; amount: string | null; invoiced?: string; difference?: string };
-export function OilReconciliationSheet({ archives, dependencyPhase, projects, active, blocked, scale, remark }: {
+export function OilReconciliationSheet({ archives, dependencyPhase, projects, active, blocked, scale, remark, sortDisabled, movePrimary }: {
   archives: OilArchives | undefined; dependencyPhase: 'pending' | 'content' | 'error'; projects: Project[]; active: boolean; blocked: boolean; scale: number;
   remark: (kind: 'card' | 'account', row: OilCard | OilAccount) => ReactNode;
+  sortDisabled: boolean; movePrimary: (from: number, to: number) => void;
 }) {
   const query = useQuery({ queryKey: ['oilcard-reconciliation'], enabled: active && !blocked, queryFn: ({ signal }) => getOilReconciliation(signal) });
   const [status, setStatus] = useState('active'), [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const rows = useMemo<Row[]>(() => {
     const cards = new Map((archives?.cards ?? []).map(card => [card.id, card])), accounts = new Map((archives?.accounts ?? []).map(account => [account.id, account]));
+    const accountOrder = new Map((archives?.accounts ?? []).map((account, index) => [account.id, index]));
     const groups = new Map<string, { primary?: OilCard; children: Row[] }>();
     for (const card of (archives?.cards ?? []).filter(card => card.kind === 'primary')) groups.set(String(card.id), { primary: card, children: [] });
     for (const allocation of query.data?.rows ?? []) {
@@ -32,7 +34,8 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
         title: projects.find(p => p.id === allocation.project_id) ? projectLabel(projects.find(p => p.id === allocation.project_id)!) : `项目 #${allocation.project_id}`, amount: allocation.total_amount, invoiced: allocation.invoiced_amount, difference: allocation.difference_amount });
     }
     return [...groups].flatMap(([group, value]) => [{ key: `primary:${group}`, group, kind: 'primary' as const,
-      title: value.primary ? `主卡 ${value.primary.card_no || `卡号待补 #${value.primary.id}`}` : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) }, ...(collapsed.has(group) ? [] : value.children)]);
+      title: value.primary ? '主卡' : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) },
+      ...(collapsed.has(group) ? [] : value.children.sort((a, b) => accountOrder.get(a.account!.id)! - accountOrder.get(b.account!.id)!))]);
   }, [archives, projects, query.data, status, collapsed]);
   // 折叠只改变显示，金额范围仍取本状态下所有账户归属。
   const amount = useMemo(() => decimal((query.data?.rows ?? []).filter(r => status === 'all' || (archives?.accounts ?? []).find(a => a.id === r.account_id)?.status === status).reduce((sum, r) => sum + cents(r.total_amount), 0n)), [query.data, archives, status]);
@@ -42,9 +45,12 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
   }, [query.data, archives, status]);
   const amountWidth = fullTextWidth([money(amount), ...rows.map(row => row.amount === null ? '' : money(row.amount))], scale).minWidth;
   const columns = useMemo<ColDef<Row>[]>(() => [
-    { colId: 'project', headerName: '项目', ...contentWidth(200, 420, scale, 1), valueGetter: p => p.data?.title ?? '', cellRenderer: ({ data }: ICellRendererParams<Row>) => !data ? null : data.kind === 'primary' ? <div className="oilcard-primary"><Button size="small" aria-label={`${collapsed.has(data.group) ? '展开' : '收起'} ${data.title}`} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(data.group)) next.delete(data.group); else next.add(data.group); return next; })}>{collapsed.has(data.group) ? '展开' : '收起'}</Button><strong>{data.title}</strong></div> : data.title },
+    { colId: 'project', headerName: '项目', rowDrag: p => Boolean(p.data?.primary), ...contentWidth(200, 420, scale, 1), valueGetter: p => p.data?.title ?? '', cellRenderer: ({ data }: ICellRendererParams<Row>) => !data ? null : data.kind === 'primary' ? <div className="oilcard-primary"><Button size="small" aria-expanded={!collapsed.has(data.group)} aria-label={`${collapsed.has(data.group) ? '展开' : '收起'} ${data.primary?.card_no || data.title}`} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(data.group)) next.delete(data.group); else next.add(data.group); return next; })}>{collapsed.has(data.group) ? '展开' : '收起'}</Button><strong>{data.title}</strong></div> : data.title },
     { colId: 'account', headerName: '用卡账户', ...contentWidth(160, 320, scale, 1), valueGetter: p => p.data?.account?.name ?? '', cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.account && <span>{data.account.name}{data.allocation?.current === false && <small className="muted">（历史关联）</small>}</span> },
-    { colId: 'card', headerName: '副卡', ...contentWidth(200, 350, scale, 1), valueGetter: p => p.data?.kind === 'account' ? p.data.card?.card_no || (p.data.card ? `卡号待补 #${p.data.card.id}` : '未关联卡片') : '' },
+    { colId: 'card', headerName: '卡号', ...contentWidth(200, 350, scale, 1), valueGetter: ({ data }) => {
+      const card = data?.primary ?? data?.card;
+      return card ? card.card_no || `卡号待补 #${card.id}` : data?.kind === 'account' ? '未关联卡片' : '';
+    } },
     { field: 'amount', headerName: '充值累计', cellClass: 'money', ...contentWidth(Math.max(130, amountWidth / scale), 240, scale), valueFormatter: p => p.value === null || p.value === undefined ? '' : money(p.value) },
     { field: 'invoiced', headerName: '开票累计', cellClass: 'money', ...contentWidth(Math.max(130, fullTextWidth([money(sums.invoiced), ...rows.map(r => money(r.invoiced || '0.00'))], scale).minWidth / scale), 240, scale), valueFormatter: p => p.value === undefined ? '' : money(p.value) },
     { field: 'difference', headerName: '差额', cellClass: 'money', ...contentWidth(Math.max(130, fullTextWidth([money(sums.difference), ...rows.map(r => money(r.difference || '0.00'))], scale).minWidth / scale), 240, scale), valueFormatter: p => p.value === undefined ? '' : money(p.value) },
@@ -60,7 +66,13 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked} onClick={() => void query.refetch()}>重读账户累计</Button></p>}
     </ReadStatusLane>
     <FirstReadRegion phase={phase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={phase === 'error'} /></div>}>
-    {query.data && dependencyPhase === 'content' ? (rows.length ? <BusinessGrid table="oilcard-reconciliation" rows={rows} columns={columns} totals={totals} rowId={row => row.key} scale={scale} label="账户充值累计" domLayout="autoHeight" grid={{ rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' } }} /> : <p className="state">尚无符合条件的用卡账户。可在“账户与油卡”中建档。</p>) : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={phase === 'error'} /></div>}
+    {query.data && dependencyPhase === 'content' ? (rows.length ? <BusinessGrid table="oilcard-reconciliation" rows={rows} columns={columns} totals={totals} rowId={row => row.key} scale={scale} label="账户充值累计" domLayout="autoHeight" grid={{
+      suppressRowDrag: sortDisabled, rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' },
+      onRowDragEnd: e => {
+        const from = e.node.data?.primary?.id, target = e.overNode?.data?.group;
+        if (from && target && target !== 'unassigned') movePrimary(from, Number(target));
+      },
+    }} /> : <p className="state">尚无符合条件的用卡账户。可在“账户与油卡”中建档。</p>) : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={phase === 'error'} /></div>}
     </FirstReadRegion>
   </section>;
 }

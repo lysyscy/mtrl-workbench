@@ -5,6 +5,7 @@ import re
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.orm import aliased
 
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
@@ -53,7 +54,7 @@ def _fields(session, values, row=None):
     if kind == 'refund' and amount >= ZERO:
         raise MustReportError('退款记录显示冲减金额，请填写负数。')
     if row is not None and row.kind == 'recharge' and kind != row.kind and session.scalar(
-            select(OilEntry.id).where(OilEntry.related_entry_id == row.id).limit(1)):
+            select(OilEntry.id).where(OilEntry.related_entry_id == row.id, OilEntry.deleted.is_(False)).limit(1)):
         raise MustReportError('这笔充值已有退款关联，不能改为其他类型。')
     return {**_attribution(session, values, row), 'kind': kind, 'amount': amount,
             'date_text': values['date_text'], 'entry_date': _date(values['date_text']), 'remark': values['remark']}
@@ -64,6 +65,7 @@ def save_entry(session, values, *, key=None, version=''):
     if key is None:
         existing = session.scalar(select(OilEntry).where(OilEntry.request_id == values['request_id']))
         if existing is not None:
+            _require_live(existing)
             fields = _fields(session, values, existing)
             if any(getattr(existing, k) != v for k, v in fields.items()):
                 raise DataConflictError('这次充值请求已登记且内容不同，请重读核对，勿重复入账。')
@@ -72,6 +74,8 @@ def save_entry(session, values, *, key=None, version=''):
         session.add(row)
     else:
         current = session.get(OilEntry, key, populate_existing=True)
+        if current is not None:
+            _require_live(current)
         if current is not None and current.transfer_id is not None:
             from .transfers import update_entry
             return update_entry(session, current, values, version=version)
@@ -91,10 +95,12 @@ def refund(session, values):
     _lock(session)
     existing = session.scalar(select(OilEntry).where(OilEntry.request_id == values['request_id']))
     if existing is not None:
+        _require_live(existing)
         if existing.kind != 'refund' or existing.related_entry_id != values['original_id'] or existing.amount != -_amount(values['amount']) or existing.date_text != values['date_text'] or existing.remark != values['remark']:
             raise DataConflictError('这次退款请求已登记且内容不同，请重读核对，勿重复办理。')
         return existing
     original = _get(session, OilEntry, values['original_id'])
+    _require_live(original)
     if original.kind != 'recharge':
         raise MustReportError('请选择原充值记录办理实际退款。')
     amount = _amount(values['amount'])
@@ -118,6 +124,7 @@ def correct_attribution(session, key, values):
     current = session.get(OilEntry, key, populate_existing=True)
     if current is None:
         raise MustReportError('这条账务已不存在，请重读核对。')
+    _require_live(current)
     historical = (current.account_id, current.project_id) == (account.id, project.id) or session.scalar(select(
         OilAccountAssignment.id).where(OilAccountAssignment.account_id == account.id,
         OilAccountAssignment.project_id == project.id).limit(1))
@@ -147,6 +154,39 @@ def correct_attribution(session, key, values):
     return row
 
 
+def _require_live(row):
+    if row.deleted:
+        raise MustReportError('这条账务已删除，请重读核对。')
+
+
+def validate_live_refunds(session):
+    original = aliased(OilEntry)
+    invalid = session.scalar(select(OilEntry.id).join(original, OilEntry.related_entry_id == original.id)
+        .where(OilEntry.kind == 'refund', OilEntry.deleted.is_(False),
+            (original.deleted.is_(True)) | (original.kind != 'recharge')).limit(1))
+    if invalid is not None:
+        raise DataConflictError('原充值存在有效退款，当前无法撤销或重做，请先核对退款。')
+
+
+def delete_entry(session, key, version):
+    _lock(session)
+    row = _get(session, OilEntry, key)
+    _check_version(row, version)
+    _require_live(row)
+    if session.scalar(select(OilEntry.id).where(
+            OilEntry.related_entry_id == key, OilEntry.deleted.is_(False)).limit(1)):
+        raise MustReportError('这笔充值已有退款，请先处理退款。')
+    rows = (row,)
+    if row.transfer_id:
+        from .transfers import _pair
+        rows = _pair(session, row.transfer_id)
+    new_version = str(uuid4())
+    for item in rows:
+        item.deleted, item.version, item.updated_by = True, new_version, current_operator()
+    session.flush()
+    return [item.id for item in rows]
+
+
 def entry_data(row):
     return {**{key: getattr(row, key) for key in ('id', 'request_id', 'kind', 'account_id', 'project_id',
         'card_id', 'date_text', 'remark', 'related_entry_id', 'transfer_id', 'version')}, 'amount': str(row.amount),
@@ -154,7 +194,7 @@ def entry_data(row):
 
 
 def _saved_rows(session):
-    rows = list(session.scalars(select(OilEntry).order_by(OilEntry.id)))
+    rows = list(session.scalars(select(OilEntry).where(OilEntry.deleted.is_(False)).order_by(OilEntry.id)))
     from .transfers import validate_transfers
     validate_transfers(rows)
     return rows
@@ -163,6 +203,15 @@ def _saved_rows(session):
 def entries(session):
     rows = _saved_rows(session)
     return {'entries': [entry_data(row) for row in rows], 'total_amount': str(sum_money(row.amount for row in rows))}
+
+
+def confirmed_openings(session):
+    rows = list(session.scalars(select(OilOpeningBalance).where(OilOpeningBalance.confirmed.is_(True))
+        .order_by(OilOpeningBalance.cutoff_ym, OilOpeningBalance.id)))
+    return {'rows': [{'id': row.id, 'project_id': row.project_id, 'account_id': row.account_id,
+        'date_text': row.original_date_text, 'cutoff_ym': row.cutoff_ym, 'amount': str(row.amount),
+        'remark': row.remark, 'source_note': row.source_note} for row in rows],
+        'total_amount': str(sum_money(row.amount for row in rows))}
 
 
 def export_snapshot(session):

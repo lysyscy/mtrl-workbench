@@ -8,6 +8,8 @@ from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, We
 from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
 from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilFeeCustom, OilBigCustom
+from app.mod13_oilcard.ledger import validate_live_refunds
+from app.mod13_oilcard.service import _lock as lock_oilcard, validate_archive_hierarchy
 
 
 def configure():
@@ -32,12 +34,15 @@ def configure():
         'contract_amt', 'trade_co', 'trade_contract_amt', 'tag', 'arch', 'arch_no',
         'ret_date', 'remark', 'payment_term', 'payment_method',
     }))
-    oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'status', 'parent_card_id', 'remark', 'version', 'updated_by'}), True,
-        introduced_defaults=(('status', 'active'),))
-    oil_account = Rule(OilAccount, frozenset({'name', 'project_id', 'card_id', 'status', 'remark', 'version', 'updated_by'}), True)
+    archive_guard = (lock_oilcard, validate_archive_hierarchy)
+    oil_card = Rule(OilCard, frozenset({'card_no', 'kind', 'status', 'parent_card_id', 'remark', 'version', 'updated_by', 'display_order'}), True,
+        introduced_defaults=(('status', 'active'), ('display_order', 0)), replay_guard=archive_guard)
+    oil_account = Rule(OilAccount, frozenset({'name', 'project_id', 'card_id', 'status', 'remark', 'version', 'updated_by', 'display_order'}), True,
+        introduced_defaults=(('display_order', 0),), replay_guard=archive_guard)
     oil_assignment = Rule(OilAccountAssignment, frozenset(), True)
     oil_entry = Rule(OilEntry, frozenset({'kind', 'account_id', 'project_id', 'card_id', 'date_text',
-        'entry_date', 'amount', 'remark', 'version', 'updated_by'}), True)
+        'entry_date', 'amount', 'remark', 'version', 'updated_by', 'deleted'}), True,
+        introduced_defaults=(('deleted', False),), replay_guard=(lock_oilcard, validate_live_refunds))
     oil_invoice = Rule(OilInvoice, frozenset({'invoice_no', 'invoice_date', 'amount', 'card_no', 'status', 'reason', 'remark', 'version', 'updated_by',
         'kind', 'related_invoice_id', 'review_json', 'change_note', 'void_date', 'deleted', 'manual_date_text', 'manual_cutoff_ym'}), True,
         introduced_defaults=(('deleted', False), ('manual_request_id', None), ('manual_date_text', None), ('manual_cutoff_ym', None)))
@@ -71,9 +76,13 @@ def configure():
         ('PUT', r'/api/m13/cards/\d+', '维护实体油卡', [oil_card]),
         ('POST', '/api/m13/accounts', '建立用卡账户', [oil_account, oil_assignment]),
         ('PUT', r'/api/m13/accounts/\d+', '维护用卡账户', [oil_account, oil_assignment]),
+        ('PUT', '/api/m13/archives/order', '调整油卡档案顺序', [oil_card, oil_account]),
+        ('POST', r'/api/m13/cards/\d+/delete', '删除实体油卡', [oil_card]),
+        ('POST', r'/api/m13/accounts/\d+/delete', '删除用卡账户', [oil_account, oil_assignment]),
         ('POST', r'/api/m13/accounts/\d+/replace-card', '用卡账户换卡', [oil_card, oil_account, oil_assignment]),
         ('POST', '/api/m13/ledger/entries', '登记油卡充值或调整', [oil_entry]),
         ('PUT', r'/api/m13/ledger/entries/\d+', '更正油卡账务', [oil_entry]),
+        ('POST', r'/api/m13/ledger/entries/\d+/delete', '删除油卡账务', [oil_entry]),
         ('PUT', r'/api/m13/ledger/entries/\d+/attribution', '更正油卡历史关联', [oil_entry]),
         ('POST', '/api/m13/ledger/refunds', '登记油卡充值退款', [oil_entry]),
         ('POST', '/api/m13/ledger/transfers', '登记油卡转账', [oil_entry]),

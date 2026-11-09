@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ColDef, ColGroupDef, GridApi } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
@@ -35,20 +35,29 @@ function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number,si
 // Small business views use the same native definitions and lifecycle as page grids.
 // Each caller chooses its native layout; this component supplies no table schema.
 export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, scope = table, scale: suppliedScale,
-  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement }: BusinessGridProps<T>) {
+  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement, initialScroll }: BusinessGridProps<T> & { initialScroll?: 'bottom' }) {
   const root = useRef<HTMLDivElement>(null);
+  const api = useRef<GridApi<T> | null>(null), initialScrollApplied = useRef(false);
   const active=useContext(PageActivity);
   const scale = suppliedScale ?? (Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1);
   const totalRows = useMemo(() => totals ?? [], [totals]);
   const definitions = useMemo(() => businessColumns(columns,scale,singleLine), [columns, scale,singleLine]);
   const presentation = useGridPresentation({table, root, active, rows, totals: totalRows, columns: definitions,
     rowId, scale, scope, identity: scope, context,...(measurement===undefined?{}:{measurement}),...(rowMinimum===undefined?{}:{rowMinimum})});
+  useLayoutEffect(() => {
+    if (initialScroll !== 'bottom' || initialScrollApplied.current || !active || !presentation.visible || presentation.state !== 'ready' || !rows.length) return;
+    const last = (api.current?.getDisplayedRowCount() ?? 0) - 1;
+    if (last >= 0) {
+      api.current?.ensureIndexVisible(last, 'bottom');
+      initialScrollApplied.current = true;
+    }
+  }, [active, initialScroll, presentation.state, presentation.visible, rows.length]);
   return <div className={`business-grid-view ${className}`}>
     <PreparedGrid presentation={presentation} className={'business-grid '+gridClassName+(singleLine?' grid-single-line':'')} style={style} role="region" aria-label={label}
       grid={{theme: businessTheme, domLayout, groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight, getRowId: p => rowId(p.data),
         suppressColumnVirtualisation: true, suppressCellFocus: true,suppressScrollOnNewData:true,animateRows:false,
         defaultColDef: {sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true},
-        ...grid}} />
+        ...grid, onGridReady: event => { api.current = event.api; grid.onGridReady?.(event); }}} />
   </div>;
 }
 

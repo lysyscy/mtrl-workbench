@@ -3,6 +3,7 @@ import { ApiError, body, confirmWrite, record, requestJson } from './api';
 export interface OilCard { id: number; request_id: string; card_no: string | null; kind: 'primary' | 'secondary'; parent_card_id: number | null; status: 'active' | 'archived'; remark: string; version: string }
 export interface OilAccount { id: number; request_id: string; name: string; project_id: number; card_id: number | null; status: 'active' | 'archived'; remark: string; version: string }
 export interface OilArchives { cards: OilCard[]; accounts: OilAccount[] }
+export type OilOrderKind = 'account' | 'primary' | 'secondary';
 export interface OilAssignment { id: number; account_id: number; project_id: number; card_id: number | null; previous_card_id: number | null; change_kind: 'assignment' | 'replacement'; request_id: string | null; changed_by: string; changed_at: string }
 export type CardFields = Omit<OilCard, 'id' | 'request_id' | 'version'>;
 export type AccountFields = Omit<OilAccount, 'id' | 'request_id' | 'version'>;
@@ -28,6 +29,17 @@ export function readOilArchives(value: unknown): OilArchives {
   return { cards, accounts };
 }
 export async function getOilArchives(signal?: AbortSignal) { return readOilArchives(await requestJson('/api/m13/archives', signal ? { signal } : {})); }
+export function oilArchiveOrder(archives: OilArchives, kind: OilOrderKind, parentId: number | null) {
+  return kind === 'account' ? archives.accounts.map(row => row.id) : archives.cards.filter(row => row.kind === kind && row.parent_card_id === parentId).map(row => row.id);
+}
+export async function saveOilArchiveOrder(kind: OilOrderKind, parentId: number | null, previous: number[], order: number[], signal: AbortSignal) {
+  const data = await requestJson('/api/m13/archives/order', { method: 'PUT', signal, ...body({ kind, parent_id: parentId, previous, order }) });
+  confirmWrite(record(data) && data.ok === true && JSON.stringify(data.order) === JSON.stringify(order), '排序回执不完整，请重读核对。');
+}
+export async function deleteOilArchive(kind: 'card' | 'account', row: OilCard | OilAccount, signal: AbortSignal) {
+  const data = await requestJson(`/api/m13/${kind === 'card' ? 'cards' : 'accounts'}/${row.id}/delete`, { method: 'POST', signal, ...body({ version: row.version }) });
+  confirmWrite(record(data) && data.ok === true && data.id === row.id, '删除回执不完整，请重读核对。');
+}
 export async function saveOilCard(fields: CardFields, target: { id: number; version: string } | { request_id: string }, signal: AbortSignal) {
   const data = await requestJson(`/api/m13/cards${'id' in target ? `/${target.id}` : ''}`, { method: 'id' in target ? 'PUT' : 'POST', signal, ...body({ ...fields, ...('id' in target ? { version: target.version } : target) }) });
   confirmWrite(record(data) && data.ok === true, '保存回执不完整，请重读核对，勿重复提交。');

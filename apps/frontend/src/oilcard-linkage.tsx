@@ -1,5 +1,6 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
+import Select from 'antd/es/select';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ColGroupDef, ICellRendererParams } from 'ag-grid-community';
@@ -13,6 +14,7 @@ import { TimePicker } from './time-picker';
 import { useCellSaveQueue } from './use-cell-save';
 import { enableOilBigLinkage, enableOilFeeLinkage, getOilLinkage, saveOilBigCustom, saveOilFeeCustom } from './oilcard-linkage-api';
 import type { OilFeeMonth, OilLinkage } from './oilcard-linkage-api';
+import type { OilAccount } from './oilcard-api';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type Field = 'custom_amount' | 'remark' | 'big_amount' | 'big_remark';
@@ -47,11 +49,12 @@ function LinkageState({ data: row, colDef }: ICellRendererParams<OilFeeMonth>) {
   return value.can_enable ? <Button size="small" disabled={state.structuralDisabled} onClick={() => state.enable(row, big)}>{big ? '启用大表联动' : '启用用油联动'}</Button> : <span className="muted">{big && !row.enabled ? '先核对特殊费用' : '待接续核对'}</span>;
 }
 
-export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLocked, onWriteLock, onUncertain }: {
-  me: Identity | null; projects: Project[]; active: boolean; blocked: boolean; scale: number; otherLocked: boolean;
+export function OilLinkageSheet({ me, projects, accounts, active, blocked, scale, otherLocked, onWriteLock, onUncertain }: {
+  me: Identity | null; projects: Project[]; accounts: OilAccount[]; active: boolean; blocked: boolean; scale: number; otherLocked: boolean;
   onWriteLock: (value: boolean) => void; onUncertain: (value: boolean) => void;
 }) {
   const [ym, setYm] = useState(reportMonth), client = useQueryClient(), queryKey = ['oilcard-linkage', ym];
+  const [status, setStatus] = useState('active');
   const query = useQuery({ queryKey, enabled: active && !blocked, queryFn: ({ signal }) => getOilLinkage(ym, signal) });
   const current = useRef(query.data); current.current = query.data;
   const saves = useCellSaveQueue<Draft, OilLinkage>({ enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !otherLocked),
@@ -79,6 +82,12 @@ export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLoc
   useEffect(() => { onUncertain(uncertain); }, [uncertain, onUncertain]);
   const disabled = blocked || !active || !me || uncertain || otherLocked || !query.data || query.isError;
   const rows = useMemo(() => query.data?.rows ?? [], [query.data]);
+  const visibleRows = useMemo(() => {
+    if (status === 'all') return rows;
+    const withAccount = new Set(accounts.map(account => account.project_id));
+    const inUse = new Set(accounts.filter(account => account.status === 'active').map(account => account.project_id));
+    return rows.filter(row => status === 'active' ? inUse.has(row.project_id) : withAccount.has(row.project_id) && !inUse.has(row.project_id));
+  }, [accounts, rows, status]);
   const columns = useMemo<(ColDef<OilFeeMonth> | ColGroupDef<OilFeeMonth>)[]>(() => [
     { colId: 'project', headerName: '项目', pinned: 'left', valueGetter: p => { const project = projects.find(project => project.id === p.data?.project_id); return project ? projectLabel(project) : `项目 #${p.data?.project_id}`; }, ...contentWidth(180, 340, scale, 1) },
     { headerName: '当月特殊费用', marryChildren: true, children: [
@@ -100,8 +109,9 @@ export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLoc
   // 切核算月即换查询身份：旧月的金额不留在屏上，占位替代原表而不冒充"无项目"。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
-  return <section aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label></div>
-    {rows.some(row => !row.enabled) && <p className="muted">待接续项目仅显示当月充值供核对，原特殊费用和导出仍取旧记录；核对旧用油总额后启用联动。</p>}
+  return <section aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label>
+    <label>账户状态<Select aria-label="用油联动账户状态" value={status} onChange={setStatus} disabled={blocked || busy || dirty || uncertain} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
+    {visibleRows.some(row => !row.enabled) && <p className="muted">待接续项目仅显示当月充值供核对，原特殊费用和导出仍取旧记录；核对旧用油总额后启用联动。</p>}
     {error && <p role="alert" className="notice">{error}<Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {uncertain && <p role="alert" className="notice">核对刚才的用油自定义额后再继续。<Button disabled={blocked || busy || !verified} onClick={() => saves.confirm()}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p key={key} className="oilcard-draft-error">{draft.ym} {labels[draft.field]}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>还原该字段</Button></p>)}
@@ -112,6 +122,6 @@ export function OilLinkageSheet({ me, projects, active, blocked, scale, otherLoc
     {query.data ? <LinkageCells.Provider value={{ rows, projects, drafts, disabled, structuralDisabled: disabled || busy || dirty || query.isFetching, save: saves.save,
       enable: (row, big) => { void saves.run(signal => (big ? enableOilBigLinkage : enableOilFeeLinkage)(row.project_id, signal), () => '', big ? '启用大表联动：' : '启用用油联动：'); },
       change: (row, field, value) => { if (disabled) return; const key = keyOf(row, field); saves.update((previous, writing) => { const next = { ...previous }, original = previous[key]?.original ?? valueOf(row, field); if (value === original && !writing) delete next[key]; else next[key] = { projectId: row.project_id, ym: row.ym, field, original, value, error: '' }; return next; }); } }}>
-      {!rows.length ? <p className="state">尚无正式项目，请先维护项目档案。</p> : <BusinessGrid table="oilcard-linkage" label="用油联动项目月表" rows={rows} columns={columns} rowId={row => String(row.project_id)} scale={scale} domLayout="autoHeight" />}
+      {!visibleRows.length ? <p className="state">没有符合当前账户状态的项目。</p> : <BusinessGrid table="oilcard-linkage" label="用油联动项目月表" rows={visibleRows} columns={columns} rowId={row => String(row.project_id)} scale={scale} domLayout="autoHeight" />}
     </LinkageCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}</FirstReadRegion></section>;
 }

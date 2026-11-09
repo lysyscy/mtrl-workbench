@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.core import session as SESS
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.mod13_oilcard.ledger import stage_opening
@@ -153,7 +154,34 @@ def test_only_confirmed_openings_enter_full_history_once_without_made_up_dates(s
             stage_opening(session, **{**source, 'source_key': 'bad-cutoff', 'cutoff_ym': None})
     entry(client, account, '50', date_text='2026-01-01')
     assert ledger(client)['total_amount'] == '50.00'
+    openings = client.get('/api/m13/ledger/openings').json()
+    assert openings['total_amount'] == '1000.00'
+    assert openings['rows'] == [{'id': first.id, 'project_id': project, 'account_id': account['id'], 'amount': '1000.00',
+        'date_text': '原始数据', 'cutoff_ym': '2025-12', 'remark': '', 'source_note': '合成期初核对依据'}]
     for _ in range(2):
         result = summary(client)
         assert result['total_amount'] == '1050.00'
         assert result['rows'][0]['opening_amount'] == '1000.00'
+
+
+def test_delete_recharge_preserves_identity_and_redo_checks_new_refunds(scene):
+    client, (project, _) = scene
+    account = create(client, 'accounts', project_id=project, name='核对删除')
+    payload = {'request_id': str(uuid4()), 'project_id': project, 'account_id': account['id'], 'amount': '100', 'date_text': '2026-11-01'}
+    row = client.post('/api/m13/ledger/entries', json=payload).json()['item']
+    path = f"/api/m13/ledger/entries/{row['id']}/delete"
+    response = client.post(path, json={'version': row['version']})
+    assert response.json() == {'ok': True, 'ids': [row['id']]}
+    assert response.headers['X-Operation-History'] == 'recorded'
+    assert ledger(client)['entries'] == [] and summary(client)['total_amount'] == '0.00'
+    assert client.post('/api/m13/ledger/entries', json=payload).status_code == 400
+    operation = client.get('/api/history/status').json()['undo']
+    assert client.post('/api/history/undo', json={'operation_id': operation['id']}).json()['ok']
+    assert ledger(client)['entries'] == [row]
+    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_other_actor__'))
+    refund = {'request_id': str(uuid4()), 'original_id': row['id'], 'amount': '10'}
+    assert client.post('/api/m13/ledger/refunds', json=refund).status_code == 200
+    assert client.post(path, json={'version': row['version']}).status_code == 400
+    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_actor__'))
+    assert client.post('/api/history/redo', json={'operation_id': operation['id']}).status_code == 409
+    assert summary(client)['total_amount'] == '90.00'

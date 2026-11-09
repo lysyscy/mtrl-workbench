@@ -27,7 +27,7 @@ def fee_facts(session, *, project_id, end_ym):
     _, end = month_bounds(end_ym)
     amounts = {}
     for row in session.scalars(select(OilEntry).where(OilEntry.project_id == project_id,
-            OilEntry.entry_date <= end).order_by(OilEntry.id)):
+            OilEntry.entry_date <= end, OilEntry.deleted.is_(False)).order_by(OilEntry.id)):
         ym = row.entry_date.strftime('%Y-%m')
         amounts.setdefault(ym, []).append(row.amount)
     customs = {row.ym: row for row in session.scalars(select(OilFeeCustom).where(
@@ -48,7 +48,7 @@ def fee_custom_data(row):
 def fee_month(session, *, project_id, ym):
     start, end = month_bounds(ym)
     recharge = sum_money(session.scalars(select(OilEntry.amount).where(OilEntry.project_id == project_id,
-        OilEntry.entry_date >= start, OilEntry.entry_date <= end)))
+        OilEntry.entry_date >= start, OilEntry.entry_date <= end, OilEntry.deleted.is_(False))))
     row = session.scalar(select(OilFeeCustom).where(OilFeeCustom.project_id == project_id, OilFeeCustom.ym == ym))
     from app.mod09_fee import service as fees
     state = fees.oil_linkage_status(session, project_id=project_id)
@@ -86,7 +86,7 @@ def save_fee_custom(session, *, project_id, ym, amount, remark, version):
 def _big_parts(session, *, project_id, ym):
     _, end = month_bounds(ym)
     recharge = sum_money(session.scalars(select(OilEntry.amount).where(
-        OilEntry.project_id == project_id, OilEntry.entry_date <= end)))
+        OilEntry.project_id == project_id, OilEntry.entry_date <= end, OilEntry.deleted.is_(False))))
     opening = sum_money(session.scalars(select(OilOpeningBalance.amount).where(
         OilOpeningBalance.project_id == project_id, OilOpeningBalance.confirmed.is_(True),
         OilOpeningBalance.cutoff_ym <= ym)))

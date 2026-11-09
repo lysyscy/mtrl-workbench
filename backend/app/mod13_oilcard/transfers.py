@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
-from .ledger import _amount, _attribution, _date
+from .ledger import _amount, _attribution, _date, _require_live
 from .models import OilEntry
 from .service import _check_version, _lock
 
@@ -19,7 +19,8 @@ def validate_pair(rows):
     if (not outgoing.transfer_id or outgoing.transfer_id != incoming.transfer_id or
             outgoing.version != incoming.version or outgoing.account_id == incoming.account_id or
             outgoing.date_text != incoming.date_text or outgoing.entry_date != incoming.entry_date or
-            outgoing.amount >= ZERO or incoming.amount <= ZERO or sum_money(row.amount for row in rows) != ZERO):
+            outgoing.deleted != incoming.deleted or outgoing.amount >= ZERO or incoming.amount <= ZERO
+            or sum_money(row.amount for row in rows) != ZERO):
         raise MustReportError('转账两端的金额、日期或关联不一致，请先核对。')
     return outgoing, incoming
 
@@ -48,6 +49,7 @@ def create(session, values):
         raise MustReportError('转账请填写大于0的金额，系统会分别记转出和转入。')
     if existing:
         outgoing, incoming = validate_pair(existing)
+        _require_live(outgoing)
         matches = (outgoing.project_id == values['out_project_id'] and outgoing.account_id == values['out_account_id'] and
             incoming.project_id == values['in_project_id'] and incoming.account_id == values['in_account_id'] and
             incoming.amount == amount and outgoing.date_text == values['date_text'] and

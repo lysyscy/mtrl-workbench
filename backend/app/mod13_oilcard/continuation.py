@@ -100,6 +100,8 @@ def _verify_confirmations(session, confirmations):
                 # Older confirmation receipts predate these additive invoice columns.
                 expected = {'deleted': 'False', 'manual_request_id': None, 'manual_date_text': None,
                     'manual_cutoff_ym': None, **expected}
+            if target['kind'] == 'entry':
+                expected = {'deleted': 'False', **expected}
             if _snapshot(session, target['kind'], target['id']) != expected:
                 raise DataConflictError(f'来源行 {key} 的已接续目标已更正或不存在；保留人工结果，请核对，不能重跑覆盖。')
 

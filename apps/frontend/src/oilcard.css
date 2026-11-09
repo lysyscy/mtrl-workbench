@@ -16,10 +16,9 @@
 .oilcard-archive-panes { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .oilcard-archive-section { min-width: 0; }
 .oilcard-archive-section > .oilcard-toolbar { margin-bottom: 12px; }
-.oilcard-selection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: var(--tx2); }
-.oilcard-ledger-panes:has(.oilcard-selection-actions > *) .oilcard-selection-actions { min-height: calc(44px * var(--fscale, 1)); padding: 4px 0 8px; }
-.oilcard-selection-actions > span { min-width: 0; overflow-wrap: anywhere; }
-.oilcard-selection-actions .ant-btn { flex: none; }
+.oilcard-row-actions, .oilcard-opening-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.oilcard-openings { margin-block: 6px 8px; }
+.oilcard-opening-summary strong { font-variant-numeric: tabular-nums; }
 .oilcard-toolbar label { display: flex; align-items: center; gap: 8px; }
 .oilcard-toolbar label > .ant-select { min-width: calc(100px * var(--fscale, 1)); }
 .oilcard-cell { width: 100%; padding-block: 2px; }
@@ -33,6 +32,7 @@
 .oilcard-assignment-history > .oilcard-toolbar { margin-bottom: 8px; }
 .oilcard-primary { display: flex; align-items: center; gap: 8px; }
 .oilcard-primary-row { background: var(--sf2); }
+.oilcard-child-card { width: 100%; padding-inline-start: 16px; border-inline-start: 2px solid var(--bd); }
 .oilcard-ledger-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .oilcard-ledger-pane { min-width: 0; }
 .oilcard-ledger-pane > .oilcard-toolbar { margin-bottom: 8px; align-items: flex-start; }
