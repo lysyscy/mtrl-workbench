@@ -7,7 +7,7 @@ import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { DialogPresence } from './workspace-motion';
 import { BusinessGrid, ReadGrid } from './business-grid';
-import { ProjectDragImage } from './project-drag-image';
+import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { readProjectPending, readProjectTrails } from './project-maintenance-reads';
 import type { Pending, Trail } from './project-maintenance-reads';
 import { contentWidth, fixedWidth, fullTextWidth } from './grid';
@@ -81,22 +81,29 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [modal, setModal] = useState<DialogState | null>(null), [feedback, setFeedback] = useState(''), [busy, setBusy] = useState(false);
   const [statusEdit, setStatusEdit] = useState<{ id: number; value: Project['status'] } | null>(null), [statusErrors, setStatusErrors] = useState<Record<number,string>>({});
   const [drafts, setDrafts] = useState<Record<string, ProjectDraft>>({});
-  const [inlineSaving, setInlineSaving] = useState(0), [dragged, setDragged] = useState<number | null>(null), [previewOrder, setPreviewOrder] = useState<number[] | null>(null);
-  const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null), dragOrder = useRef<number[]|null>(null), gridApi = useRef<GridApi<ArchiveProject> | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(0);
+  const lock = useRef(false), mounted = useRef(true), gridApi = useRef<GridApi<ArchiveProject> | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
   const pending = useQuery({ queryKey: ['project-promote-pending'], enabled: !blocked, queryFn: async ({ signal }) => readProjectPending(await requestJson('/api/m01/promote-pending', { signal }), 'promote') });
   const archive = useQuery({ queryKey: ['project-archive-pending'], enabled: !blocked, queryFn: async ({ signal }) => readProjectPending(await requestJson('/api/m01/archive-pending', { signal }), 'archive') });
   const trails = useQuery({ queryKey: ['project-trails'], enabled: !blocked, queryFn: async ({ signal }) => readProjectTrails(await requestJson('/api/m01/trails?limit=8', { signal })) });
   const all = projects.data ?? [];
-  const ordered = previewOrder ? [...all].sort((a, b) => previewOrder.indexOf(a.id) - previewOrder.indexOf(b.id)) : all;
+  const editableDisabled = blocked || !me || busy || projects.isError || projects.isPending;
+  const unavailable = editableDisabled || inlineSaving > 0;
+  const drag = useGridRowDrag<ArchiveProject>({
+    disabled: unavailable,
+    sourceId: p => p.id,
+    targetId: (source, target) => source.status === target.status ? target.id : null,
+    orderFor: () => all.map(p => p.id),
+    save: (source, _, order) => move(source.id, order.indexOf(source.id) + 1),
+  });
+  const ordered = rowsInOrder(all, drag.preview?.order, p => p.id);
   const rows = ordered.filter(p => (status === 'all' || p.status === status) && (type === 'all' || p.project_type === type) && [p.disp, p.name_full, p.warehouse_name ?? ''].some(text => text.includes(keyword.trim())));
   const cellValue = (p: ArchiveProject, key: string) => key === 'project_type' ? typeNames[p.project_type] : key === 'status' ? (p.status === 'active' ? '在建' : '归档') : key === 'parent' ? all.find(item => item.id === p.parent_shell_id)?.name_full ?? '' : key === 'keywords' ? p.match_keywords.join('、') : String(p[key as keyof ArchiveProject] ?? '');
   if (sort) rows.sort((a, b) => Number(a.status === 'archived') - Number(b.status === 'archived') || cellValue(a, sort.key).localeCompare(cellValue(b, sort.key), 'zh', { numeric: true }) * (sort.descending ? -1 : 1));
   useEffect(()=>{if(!sort&&gridApi.current&&!gridApi.current.isDestroyed())gridApi.current.applyColumnState({defaultState:{sort:null}});},[sort]);
   useHistoryGuard('projects', () => busy || lock.current || inlineSaving > 0 ? '项目档案正在保存，请稍候。' : Object.values(drafts).some(draft => draft.uncertain) ? '项目保存结果待核实，请先重读核对。' : Object.keys(drafts).length ? '请先保存或取消项目格内的修改。' : '');
-  const editableDisabled = blocked || !me || busy || projects.isError || projects.isPending;
-  const unavailable = editableDisabled || inlineSaving > 0;
   async function refresh() {
     await Promise.all([client.invalidateQueries({ queryKey: ['projects'] }), client.invalidateQueries({ queryKey: ['project-archive'] }), client.invalidateQueries({ queryKey: ['project-promote-pending'] }), client.invalidateQueries({ queryKey: ['project-archive-pending'] }), client.invalidateQueries({ queryKey: ['project-trails'] }), client.invalidateQueries({ queryKey: ['i8-records'] }), client.invalidateQueries({ queryKey: ['history'] })]);
   }
@@ -145,7 +152,6 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     } finally { if (mounted.current) setInlineSaving(count => count - 1); }
   }
   const fieldInput = (project: ArchiveProject, field: EditableField) => <ProjectField project={project} field={field} disabled={editableDisabled} readDisabled={blocked || !me || busy} draft={drafts[fieldKey(project.id, field)]} changeDraft={draft => changeDraft(project.id, field, draft)} save={saveField} reread={rereadField} />;
-  function endDrag() { dragging.current = null; dragOrder.current=null; setDragged(null); setPreviewOrder(null); }
   async function changeStatus(project: ArchiveProject, value: Project['status']) {
     if (unavailable || lock.current || value === project.status) return;
     lock.current = true; setBusy(true); setStatusEdit({ id: project.id, value });
@@ -226,7 +232,14 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       if (!query.data?.items.length) return null;
       return <div className="project-pending" key={index}><h2>{label}</h2><p className="project-source">{query.data.source.target}，{query.data.source.at}</p>{query.data.items.map((item, i) => <div className="project-task" key={`${item.full_name}:${item.warehouse_name ?? i}`}><span>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</span><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: index === 0 ? 'promote' : 'archive', item })}>{index === 0 ? '选择档案扶正' : '选择仓库建档'}</Button></div>)}</div>;
     })}
-    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result">共 {rows.length} 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" style={{height:'65dvh'}} grid={{onGridReady:e=>{gridApi.current=e.api;},dragAndDropImageComponent:ProjectDragImage,isRowValidDropPosition:p=>({allowed:!unavailable&&p.source.data?.status===p.overNode?.data?.status,highlight:true}),animateRows:dragged!==null&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches,postSortRows:e=>{e.nodes.sort((a,b)=>Number(a.data?.status==='archived')-Number(b.data?.status==='archived'));},onSortChanged:e=>{const column=e.api.getColumnState().find(c=>c.sort);setSort(column?{key:column.colId,descending:column.sort==='desc'}:null);},onRowDragEnter:e=>{if(unavailable)return;dragging.current=e.node.data?.id??null;setDragged(dragging.current);dragOrder.current=all.map(p=>p.id);setPreviewOrder(dragOrder.current);},onRowDragMove:e=>{const source=all.find(p=>p.id===dragging.current),target=e.overNode?.data;if(unavailable||!source||!target||source.status!==target.status||source.id===target.id)return;const ids=all.map(p=>p.id),from=ids.indexOf(source.id),to=ids.indexOf(target.id);ids.splice(from,1);ids.splice(to,0,source.id);dragOrder.current=ids;setPreviewOrder(ids);},onRowDragEnd:e=>{const id=dragging.current,source=all.find(p=>p.id===id);if(id&&source&&e.overNode?.data?.status===source.status&&!unavailable){const position=(dragOrder.current??all.map(p=>p.id)).indexOf(id)+1;dragging.current=null;setDragged(null);void move(id,position).finally(()=>setPreviewOrder(null));}else endDrag();},onRowDragCancel:endDrag,onRowDragLeave:endDrag,getRowClass:p=>(p.data?.is_placeholder?'project-placeholder ':'')+(p.data?.id===dragged?'project-dragging':''),rowDragText:p=>p.rowNode?.data?label(p.rowNode.data):'项目'}} />}</>}
+    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result">共 {rows.length} 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" style={{height:'65dvh'}} grid={{...drag.grid,
+      onGridReady: e => { gridApi.current = e.api; },
+      postSortRows: e => { e.nodes.sort((a, b) => Number(a.data?.status === 'archived') - Number(b.data?.status === 'archived')); },
+      onSortChanged: e => { const column = e.api.getColumnState().find(c => c.sort); setSort(column ? { key: column.colId, descending: column.sort === 'desc' } : null); },
+      getRowClass: p => p.data?.is_placeholder ? 'project-placeholder' : '',
+      rowClassRules: { 'grid-row-dragging': p => p.node.id === drag.rowId },
+      rowDragText: p => p.rowNode?.data ? label(p.rowNode.data) : '项目',
+    }} />}</>}
     </FirstReadRegion>
     <FirstReadRegion phase={trails.data === undefined ? trailsRead === 'error' ? 'error' : 'pending' : 'content'} canPublish={listSettled}
       style={{visibility: listSettled ? undefined : 'hidden'}}

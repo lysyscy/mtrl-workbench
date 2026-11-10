@@ -85,6 +85,7 @@ html{font-variant-numeric:tabular-nums}
 .navigation-marker{position:absolute;inset:0;z-index:-1;border-radius:var(--radius-input);background:var(--sb-on);pointer-events:none}
 .navigation-label{position:relative}
 .workspace-panels{position:relative}
+.business-grid .grid-row-dragging .ag-cell,.grid-row-drag-image .ag-cell{background:var(--pri-l);box-shadow:inset 0 1px var(--pri-bd),inset 0 -1px var(--pri-bd)}
 /* AntD's transition:all also animates inherited visibility during retained-page
    switches. Restrict native controls to their feedback properties, not layout. */
 :is(.workspace,.business-modal) :is(.ant-input,.ant-input-affix-wrapper,.ant-select,.ant-picker,.ant-input-number){transition-property:background-color,border-color,box-shadow,color;transition-duration:var(--motion-fast,130ms)}

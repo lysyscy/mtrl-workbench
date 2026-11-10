@@ -198,7 +198,7 @@ def _apply(session, source_id, item, decision, contents):
                 _assignment(session, allocation)
             row = invoice_adjustments.save_manual(session, {'request_id': request, 'amount': raw['amount'],
                 'date_text': date_text, 'cutoff_ym': cutoff, 'remark': raw.get('remark', ''),
-                'allocations': allocations}, note=note)
+                'allocations': allocations})
             return [('invoice', row.id)]
         facts = invoice_adjustments._facts({'invoice_no': decision.get('invoice_no', ''),
             'invoice_date': decision.get('invoice_date'), 'card_no': decision.get('card_no'), 'amount': raw['amount']}, 'normal')
@@ -220,7 +220,8 @@ def _apply(session, source_id, item, decision, contents):
                 _assignment(session, allocation)
             row = OilInvoice(updated_by=current_operator())
             session.add(row); session.flush()
-            invoice_adjustments.correct(session, row.id, {**decision, 'amount': raw['amount'], 'version': row.version})
+            invoice_adjustments.correct(session, row.id, {**decision, 'amount': raw['amount'], 'version': row.version},
+                initial_continuation=True)
         return [('invoice', row.id)]
     if kind == 'pdf':
         received = invoices.attach_original(session, content=contents.get(key), digest=raw['sha256'],

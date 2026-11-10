@@ -38,7 +38,6 @@
 .project-table .project-field .ant-input[aria-invalid=true]{border-color:var(--dg-bd);background:var(--dg-l)}
 .project-cell-state{display:block;font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .project-cell-error{margin:4px 0;color:var(--dg-d);font-size:calc(12px * var(--fscale));line-height:1.5;white-space:normal}
-.project-table .project-dragging .ag-cell{background:var(--pri-l);box-shadow:inset 0 1px var(--pri-bd),inset 0 -1px var(--pri-bd)}
 .project-order button[draggable=true]:active{cursor:grabbing}
 .project-sync-dialog{width:min(92vw,calc(440px * var(--fscale)));padding:calc(24px * var(--fscale))}
 .project-sync-account{margin:calc(20px * var(--fscale)) 0;display:grid;gap:calc(12px * var(--fscale));padding:calc(16px * var(--fscale));background:var(--sf2);border-radius:var(--radius-input)}

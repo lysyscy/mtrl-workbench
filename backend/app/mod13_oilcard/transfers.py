@@ -63,12 +63,18 @@ def create(session, values):
     # 先稳定取得两个账户，再插入两端；任一端无效均不产生账务。
     for side in sorted(('out', 'in'), key=lambda side: values[f'{side}_account_id']):
         assignments[side] = _attribution(session, {'account_id': values[f'{side}_account_id'], 'project_id': values[f'{side}_project_id']})
+    remarks = {side: values[f'{side}_remark'] for side in ('out', 'in')}
+    return _create_pair(session, transfer_id, amount, values['date_text'], assignments, remarks)
+
+
+def _create_pair(session, transfer_id, amount, date_text, assignments, remarks):
+    """Insert both legs with one identity and version; callers hold the oilcard lock."""
     version = str(uuid4())
     rows = []
     for side, kind, signed in (('out', 'transfer_out', -amount), ('in', 'transfer_in', amount)):
         row = OilEntry(request_id=str(uuid5(UUID(transfer_id), kind)), transfer_id=transfer_id,
-            kind=kind, amount=signed, date_text=values['date_text'], entry_date=_date(values['date_text']),
-            remark=values[f'{side}_remark'], version=version, updated_by=current_operator(), **assignments[side])
+            kind=kind, amount=signed, date_text=date_text, entry_date=_date(date_text),
+            remark=remarks[side], version=version, updated_by=current_operator(), **assignments[side])
         session.add(row); rows.append(row)
     session.flush()
     return validate_pair(rows)

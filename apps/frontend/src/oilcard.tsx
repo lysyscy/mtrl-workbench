@@ -12,6 +12,7 @@ import { readHistory } from './history';
 import { PageActivity } from './page-activity';
 import { randomUUID } from './random-id';
 import { useCellSaveQueue } from './use-cell-save';
+import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { deleteOilArchive, getOilArchives, getOilAssignments, oilArchiveOrder, saveOilAccount, saveOilArchiveOrder, saveOilCard } from './oilcard-api';
 import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard, OilOrderKind } from './oilcard-api';
 import { OilDeleteDialog } from './oilcard-delete-dialog';
@@ -96,8 +97,8 @@ function CardActions({ row }: { row: OilCard }) {
 
 export function OilCardPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
   const client = useQueryClient();
-  const [tab, setTab] = useState<'overview' | 'ledger' | 'linkage' | 'archives'>('overview'), [status, setStatus] = useState('all');
-  const [cardStatus, setCardStatus] = useState('all');
+  const [tab, setTab] = useState<'overview' | 'ledger' | 'linkage' | 'archives'>('overview'), [status, setStatus] = useState('active');
+  const [cardStatus, setCardStatus] = useState('active');
   const [ledgerVisited, setLedgerVisited] = useState(false), [ledgerLocked, setLedgerLocked] = useState(false);
   const [ledgerUncertain, setLedgerUncertain] = useState(false);
   const [linkageVisited, setLinkageVisited] = useState(false), [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
@@ -190,14 +191,9 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       refreshed => (kind === 'card' ? refreshed.cards : refreshed.accounts).some(item => item.id === row.id) ? '档案仍在，请重读核对。' : '', '删除油卡档案：');
     if (result === 'saved' || result === 'uncertain') setDeletion(null);
   }
-  function reorder(kind: OilOrderKind, from: number, to: number, parentId: number | null = null) {
-    const archives = currentData.current;
-    if (structuralDisabled || !archives || from === to) return;
-    const previous = oilArchiveOrder(archives, kind, parentId), fromIndex = previous.indexOf(from), toIndex = previous.indexOf(to);
-    if (fromIndex < 0 || toIndex < 0) return;
-    const order = previous.filter(id => id !== from);
-    order.splice(toIndex, 0, from);
-    void saves.run(signal => saveOilArchiveOrder(kind, parentId, previous, order, signal),
+  async function reorder(kind: OilOrderKind, parentId: number | null, previous: number[], order: number[]) {
+    if (structuralDisabled) return;
+    await saves.run(signal => saveOilArchiveOrder(kind, parentId, previous, order, signal),
       refreshed => JSON.stringify(oilArchiveOrder(refreshed, kind, parentId)) === JSON.stringify(order) ? '' : '显示顺序已变化，请重读核对。', '保存显示顺序：');
   }
   function addAccount() {
@@ -205,7 +201,26 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     const row: OilAccount = { id: 0, request_id: randomUUID(), version: '', name: '', project_id: 0, card_id: null, status: 'active', remark: '' };
     pendingRef.current = row; setPending(row);
   }
-  const accounts = useMemo(() => [...(data?.accounts ?? []).filter(a => status === 'all' || a.status === status), ...(pending && !data?.accounts.some(a => a.request_id === pending.request_id) ? [pending] : [])], [data, status, pending]);
+  const accountDrag = useGridRowDrag<OilAccount>({
+    disabled: structuralDisabled || tab !== 'archives',
+    sourceId: row => row.id || null, targetId: (_, row) => row.id || null,
+    orderFor: () => currentData.current ? oilArchiveOrder(currentData.current, 'account', null) : [],
+    save: (_, previous, order) => reorder('account', null, previous, order),
+  });
+  const cardDrag = useGridRowDrag<OilCard>({
+    disabled: structuralDisabled || tab !== 'archives',
+    sourceId: row => row.id,
+    targetId: (from, to) => from.kind === 'primary' ? to.kind === 'primary' ? to.id : to.parent_card_id
+      : to.kind === 'secondary' && to.parent_card_id === from.parent_card_id ? to.id : null,
+    orderFor: row => currentData.current ? oilArchiveOrder(currentData.current, row.kind, row.parent_card_id) : [],
+    save: (row, previous, order) => reorder(row.kind, row.parent_card_id, previous, order),
+  });
+  const accountPreview = accountDrag.preview?.order, cardPreview = cardDrag.preview;
+  const accounts = useMemo(() => {
+    const saved = data?.accounts ?? [];
+    return [...rowsInOrder(saved, accountPreview, row => row.id).filter(a => status === 'all' || a.status === status),
+      ...(pending && !saved.some(a => a.request_id === pending.request_id) ? [pending] : [])];
+  }, [data, status, pending, accountPreview]);
   const cards = useMemo(() => data?.cards ?? [], [data]);
   const { visibleCards, visibleParents } = useMemo(() => {
     const included = cards.filter(card => cardStatus === 'all' || card.status === cardStatus);
@@ -215,12 +230,17 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       group.push(card);
       children.set(card.parent_card_id, group);
     }
+    if (cardPreview?.source.kind === 'secondary') {
+      const parent = cardPreview.source.parent_card_id;
+      children.set(parent, rowsInOrder(children.get(parent) ?? [], cardPreview.order, row => row.id));
+    }
+    const parents = cards.filter(card => card.kind === 'primary' && (included.includes(card) || children.has(card.id)));
     return {
-      visibleCards: [...cards.filter(card => card.kind === 'primary' && (included.includes(card) || children.has(card.id)))
+      visibleCards: [...rowsInOrder(parents, cardPreview?.source.kind === 'primary' ? cardPreview.order : undefined, row => row.id)
         .flatMap(card => [card, ...(collapsed.has(card.id) ? [] : children.get(card.id) ?? [])]), ...children.get(null) ?? []],
       visibleParents: new Set([...children.keys()].filter((id): id is number => id !== null)),
     };
-  }, [cards, cardStatus, collapsed]);
+  }, [cards, cardStatus, collapsed, cardPreview]);
   const cardNumberWidth = fullTextWidth(cards.map(c => c.card_no || '卡号待补 #000'), scale).minWidth;
   const cardColumns = useMemo<ColDef<OilCard>[]>(() => [
     { field: 'card_no', headerName: '完整卡号', rowDrag: true, ...contentWidth(Math.max(240, cardNumberWidth / scale + 100), 380, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardNumber row={row} /> },
@@ -247,7 +267,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const dependencyPhase = data && (projects.data || projects.isError) ? 'content' : !data && query.isError ? 'error' : 'pending';
   const renderRemark = useCallback((kind: ArchiveKind, row: OilCard | OilAccount) => <ArchiveEditor kind={kind} row={row} field="remark" />, []);
   function chooseTab(value: typeof tab) { if (value === 'ledger') setLedgerVisited(true); if (value === 'linkage') setLinkageVisited(true); setTab(value); }
-  return <section className="oilcard-page" aria-label="油卡管理">
+  return <section className={`oilcard-page${tab === 'ledger' || tab === 'archives' ? ' oilcard-page-bounded' : ''}`} aria-label="油卡管理">
     <div data-page-chrome className="oilcard-workspace-bar"><div className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'archives', label: '账户与油卡' }] as const).map(item => <button type="button" className="oilcard-tab" key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} onClick={() => chooseTab(item.value)}>{item.label}{tab === item.value && <motion.span className="oilcard-tab-marker" aria-hidden="true" layoutId="oilcard-workspace-tab" transition={workspaceSpring} />}</button>)}</div><OilTotalExport disabled={disabled || busy || ledgerLocked || linkageLocked} active={active && !blocked} /></div>
     {!me && <p className="state">登录后可维护油卡档案。</p>}
     {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值或收票结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对保存结果</Button></p>}
@@ -261,23 +281,19 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     <ArchiveCells.Provider value={state}>
       <div className="workspace-panels">
       {(tab === 'ledger' || tab === 'linkage') && (!data || projectsWait) && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}
-      <WorkspacePanel id="oilcard-panel-overview" labelledBy="oilcard-tab-overview" active={tab === 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} dependencyPhase={dependencyPhase} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} sortDisabled={structuralDisabled} movePrimary={(from, to) => reorder('primary', from, to)} /></PageActivity.Provider></WorkspacePanel>
+      <WorkspacePanel id="oilcard-panel-overview" labelledBy="oilcard-tab-overview" active={tab === 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} dependencyPhase={dependencyPhase} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} sortDisabled={structuralDisabled} movePrimary={(previous, order) => reorder('primary', null, previous, order)} /></PageActivity.Provider></WorkspacePanel>
       {ledgerVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-ledger" labelledBy="oilcard-tab-ledger" active={tab === 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></WorkspacePanel>}
       {linkageVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} accounts={data.accounts} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
       <WorkspacePanel id="oilcard-panel-archives" labelledBy="oilcard-tab-archives" active={tab === 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
         <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button></div></div>
-        <FirstReadRegion phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
-        {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="autoHeight" grid={{ suppressRowDrag: structuralDisabled, onRowDragEnd: e => { const from = e.node.data, to = e.overNode?.data; if (from?.id && to?.id) reorder('account', from.id, to.id); }, rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount) } }} />}</FirstReadRegion></section>
+        <FirstReadRegion className="oilcard-grid-slot" phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
+        {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="normal" grid={{ ...accountDrag.grid,
+          rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount), 'grid-row-dragging': p => p.node.id === accountDrag.rowId },
+        }} />}</FirstReadRegion></section>
         <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增主卡</Button></div></div>
-        <FirstReadRegion phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
-        {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" grid={{
-          suppressRowDrag: structuralDisabled, rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' },
-          onRowDragEnd: e => {
-            const from = e.node.data, to = e.overNode?.data;
-            if (!from || !to) return;
-            if (from.kind === 'primary') { const target = to.kind === 'primary' ? to.id : to.parent_card_id; if (target) reorder('primary', from.id, target); }
-            else if (to.kind === 'secondary' && to.parent_card_id === from.parent_card_id) reorder('secondary', from.id, to.id, from.parent_card_id);
-          },
+        <FirstReadRegion className="oilcard-grid-slot" phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
+        {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="normal" grid={{ ...cardDrag.grid,
+          rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary', 'grid-row-dragging': p => p.node.id === cardDrag.rowId },
         }} />}</FirstReadRegion></section></div>
       </PageActivity.Provider></WorkspacePanel>
       </div>

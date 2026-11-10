@@ -1,5 +1,6 @@
 """接续真实服务：来源保真、隔离明确确认、重跑保护、补档不重记及成品导出。"""
 from copy import deepcopy
+from datetime import date
 from io import BytesIO
 import json
 from uuid import uuid4
@@ -11,7 +12,8 @@ from sqlalchemy import select
 from app.core.db import session_scope
 from app.core.errors import DataConflictError, MustReportError
 from app.mod13_oilcard import continuation, invoices, ledger, reporting
-from app.mod13_oilcard.models import OilContinuationSource, OilEntry, OilInvoice
+from app.mod13_oilcard.models import OilContinuationSource, OilEntry, OilInvoice, OilOpeningBalance
+from app.mod13_oilcard.opening_conversion import convert_confirmed_openings
 from tests.test_oilcard_archives import scene, create  # noqa: F401
 from tools.oneoff.oilcard_continuation import synthetic_manifest, build_manifest
 
@@ -82,6 +84,7 @@ def test_confirmed_manual_invoice_and_boundary_transfer_keep_original_facts(scen
     invoice = data['invoices'][0]
     assert invoice['invoice_no'] is invoice['invoice_date'] is None and not invoice['originals']
     assert (invoice['manual_date_text'], invoice['manual_cutoff_ym']) == ('原始数据', '2025-12')
+    assert invoice['change_note'] == ''
     assert data['total_amount'] == '23.45'
     totals = client.get('/api/m13/reconciliation').json()
     assert (totals['rows'][0]['opening_amount'], totals['invoiced_amount'], totals['difference_amount']) == ('70.00', '23.45', '46.55')
@@ -96,6 +99,84 @@ def test_confirmed_manual_invoice_and_boundary_transfer_keep_original_facts(scen
     assert edited.status_code == 200
     with pytest.raises(DataConflictError, match='保留人工结果'):
         confirm(source_id, decisions)
+
+
+def test_older_continuation_invoice_note_stays_in_audit_and_later_business_note_is_visible(enrolled):
+    client, source_id, _, decisions, _, _, _ = enrolled
+    decision = next(d for d in decisions if d['key'] == 'invoice')
+    invoice_id = target(confirm(source_id, [decision]), 'invoice')
+    with session_scope() as session:
+        row = session.get(OilInvoice, invoice_id)
+        row.change_note = decision['note']
+        source = session.get(OilContinuationSource, source_id)
+        saved = json.loads(source.confirmations_json)
+        saved['invoice']['targets'][0]['snapshot']['change_note'] = decision['note']
+        source.confirmations_json = json.dumps(saved)
+    assert client.get('/api/m13/invoices').json()['invoices'][0]['change_note'] == ''
+    with session_scope() as session:
+        row = session.get(OilInvoice, invoice_id)
+        assert row.change_note == decision['note']
+        row.change_note = '更正票面归属'
+    assert client.get('/api/m13/invoices').json()['invoices'][0]['change_note'] == '更正票面归属'
+
+
+def test_dated_opening_conversion_keeps_balances_links_and_original_scope(scene):
+    client, (first, second) = scene
+    historical_card = create(client, 'cards', card_no='1230000000000099')
+    first_account = create(client, 'accounts', name='甲账户', project_id=first, card_id=historical_card['id'])
+    second_account = create(client, 'accounts', name='乙账户', project_id=second)
+    a = {'account_id': first_account['id'], 'project_id': first, 'card_id': historical_card['id']}
+    b = {'account_id': second_account['id'], 'project_id': second, 'card_id': None}
+    source_id = 'isolated-opening-conversion'
+    manifest = {'source_id': source_id, 'rows': [
+        {'key': 'recharge', 'kind': 'recharge', 'raw': {'amount': '500', 'original_date_text': '原始数据', 'remark': '原备注'}},
+        {'key': 'transfer', 'kind': 'transfer', 'raw': {'amount': '20'}},
+        {'key': 'boundary', 'kind': 'transfer', 'raw': {'amount': '70'}},
+    ]}
+    in_side = {f'in_{key}': value for key, value in b.items()}
+    out_side = {f'out_{key}': value for key, value in a.items()}
+    decisions = [
+        {'key': 'recharge', **a, 'entry_kind': 'recharge', 'cutoff_ym': '2025-12', 'note': '核定充值'},
+        {'key': 'transfer', **in_side, **out_side, 'treatment': '原双边', 'cutoff_ym': '2025-12', 'note': '核定转账'},
+        {'key': 'boundary', **in_side, 'closed_side': 'out', 'closed_counterparty': '已结项目甲',
+            'treatment': '保留转入侧', 'cutoff_ym': '2025-12', 'note': '核定跨范围转账'},
+    ]
+    staged = stage(manifest)
+    confirm(source_id, decisions)
+    args = dict(source_id=source_id, fingerprint=staged['fingerprint'], booking_date=date(2025, 9, 1),
+        expected_count=4, expected_amount='570')
+    with session_scope() as session:
+        # A wrong reviewed net amount fails before any write.
+        with pytest.raises(DataConflictError, match='净额'):
+            convert_confirmed_openings(session, **{**args, 'expected_amount': '571'})
+        assert ledger.entries(session)['entries'] == []
+        assert ledger.confirmed_openings(session)['total_amount'] == '570.00'
+        assert reporting.fee_month(session, project_id=first, ym='2025-09')['recharge_amount'] == '0.00'
+        before = ledger.reconciliation(session)
+    with session_scope() as session:
+        result = convert_confirmed_openings(session, **args)
+        assert result == {'count': 4, 'amount': '570.00', 'booking_date': '2025-09-01', 'already_converted': False}
+    with session_scope() as session:
+        assert convert_confirmed_openings(session, **args)['already_converted']
+        assert continuation.confirm_source(session, source_id, decisions)['confirmed_count'] == 3
+        rows = ledger.entries(session)['entries']
+        assert [(r['kind'], r['amount']) for r in rows] == [
+            ('adjustment', '70.00'), ('recharge', '500.00'), ('transfer_out', '-20.00'), ('transfer_in', '20.00')]
+        assert all(r['entry_date'] == '2025-09-01' for r in rows)
+        assert rows[1]['card_id'] == historical_card['id'] and '原始数据；原备注' in rows[1]['remark']
+        assert rows[2]['transfer_id'] == rows[3]['transfer_id'] is not None
+        assert '已结项目甲' in rows[0]['remark']
+        assert list(session.scalars(select(OilOpeningBalance))) == []
+        assert ledger.confirmed_openings(session)['total_amount'] == '0.00'
+        after = ledger.reconciliation(session)
+        assert [(r['account_id'], r['total_amount'], r['difference_amount']) for r in after['rows']] == [
+            (r['account_id'], r['total_amount'], r['difference_amount']) for r in before['rows']]
+        assert reporting.fee_month(session, project_id=first, ym='2025-09')['recharge_amount'] == '480.00'
+        assert reporting.fee_month(session, project_id=second, ym='2025-09')['recharge_amount'] == '90.00'
+        assert reporting.big_month(session, project_id=first, ym='2025-09')['recharge_amount'] == '480.00'
+        saved = json.loads(session.get(OilContinuationSource, source_id).confirmations_json)
+        assert saved['boundary']['opening_conversion']['previous_targets'][0]['snapshot']['cutoff_ym'] == '2025-12'
+    assert client.get('/api/m13/ledger').json()['total_amount'] == '570.00'
 
 
 def test_confirmed_drill_repeated_source_pdf_allocation_reports_and_real_exports(enrolled, tmp_path, monkeypatch):

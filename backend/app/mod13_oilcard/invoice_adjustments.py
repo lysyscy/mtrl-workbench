@@ -114,7 +114,7 @@ def _review(session, row, original_id, decision, note):
     row.review_json = json.dumps(reviews, ensure_ascii=False, sort_keys=True)
 
 
-def save_manual(session, values, *, key=None, note=''):
+def save_manual(session, values, *, key=None):
     """Register confirmed money without requiring a ticket; a later ticket can identify the same row."""
     _lock(session)
     date_text = values['date_text']
@@ -142,7 +142,7 @@ def save_manual(session, values, *, key=None, note=''):
                     or actual != expected or any(getattr(existing, field) != value for field, value in fields.items())):
                 raise DataConflictError('这次手工登记已有记录或已经更正，请重读核对，勿重复登记。')
             return existing
-        row = OilInvoice(manual_request_id=request_id, change_note=note)
+        row = OilInvoice(manual_request_id=request_id)
         session.add(row)
         session.flush()
     else:
@@ -162,7 +162,7 @@ def save_manual(session, values, *, key=None, note=''):
     return row
 
 
-def correct(session, key, values, *, credit=False):
+def correct(session, key, values, *, credit=False, initial_continuation=False):
     _lock(session)
     row = _get(session, OilInvoice, key)
     _check_version(row, values['version'])
@@ -184,7 +184,9 @@ def correct(session, key, values, *, credit=False):
     _alias(session, row, facts['invoice_no'])
     for field, value in facts.items():
         setattr(row, field, value)
-    row.kind, row.related_invoice_id, row.change_note = kind, parent_id, values['note'].strip()
+    row.kind, row.related_invoice_id = kind, parent_id
+    if not initial_continuation:
+        row.change_note = values['note'].strip()
     _replace_allocations(session, row, values['allocations'])
     if values.get('review_original_id'):
         _review(session, row, values['review_original_id'], 'corrected', values['note'])

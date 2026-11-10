@@ -11,21 +11,32 @@ import { contentWidth, fullTextWidth } from './grid';
 import { getOilReconciliation } from './oilcard-ledger-api';
 import type { OilReconciliationRow } from './oilcard-ledger-api';
 import type { OilAccount, OilArchives, OilCard } from './oilcard-api';
+import { oilArchiveOrder } from './oilcard-api';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 
 type Row = { key: string; group: string; kind: 'primary' | 'account' | 'total'; title: string; account?: OilAccount; card?: OilCard; primary?: OilCard; allocation?: OilReconciliationRow; amount: string | null; invoiced?: string; difference?: string };
 export function OilReconciliationSheet({ archives, dependencyPhase, projects, active, blocked, scale, remark, sortDisabled, movePrimary }: {
   archives: OilArchives | undefined; dependencyPhase: 'pending' | 'content' | 'error'; projects: Project[]; active: boolean; blocked: boolean; scale: number;
   remark: (kind: 'card' | 'account', row: OilCard | OilAccount) => ReactNode;
-  sortDisabled: boolean; movePrimary: (from: number, to: number) => void;
+  sortDisabled: boolean; movePrimary: (previous: number[], order: number[]) => Promise<unknown>;
 }) {
   const query = useQuery({ queryKey: ['oilcard-reconciliation'], enabled: active && !blocked, queryFn: ({ signal }) => getOilReconciliation(signal) });
   const [status, setStatus] = useState('active'), [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const drag = useGridRowDrag<Row>({
+    disabled: sortDisabled || !active,
+    sourceId: row => row.primary?.id ?? null,
+    targetId: (_, row) => row.group === 'unassigned' ? null : Number(row.group),
+    orderFor: () => archives ? oilArchiveOrder(archives, 'primary', null) : [],
+    save: (_, previous, order) => movePrimary(previous, order),
+  });
+  const previewOrder = drag.preview?.order;
   const rows = useMemo<Row[]>(() => {
     const cards = new Map((archives?.cards ?? []).map(card => [card.id, card])), accounts = new Map((archives?.accounts ?? []).map(account => [account.id, account]));
     const accountOrder = new Map((archives?.accounts ?? []).map((account, index) => [account.id, index]));
     const groups = new Map<string, { primary?: OilCard; children: Row[] }>();
-    for (const card of (archives?.cards ?? []).filter(card => card.kind === 'primary')) groups.set(String(card.id), { primary: card, children: [] });
+    const primaries = (archives?.cards ?? []).filter(card => card.kind === 'primary');
+    for (const card of rowsInOrder(primaries, previewOrder, row => row.id)) groups.set(String(card.id), { primary: card, children: [] });
     for (const allocation of query.data?.rows ?? []) {
       const account = accounts.get(allocation.account_id); if (!account || status !== 'all' && account.status !== status) continue;
       const card = allocation.card_id ? cards.get(allocation.card_id) : undefined, group = String(allocation.primary_card_id ?? 'unassigned');
@@ -36,7 +47,7 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
     return [...groups].flatMap(([group, value]) => [{ key: `primary:${group}`, group, kind: 'primary' as const,
       title: value.primary ? '主卡' : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) },
       ...(collapsed.has(group) ? [] : value.children.sort((a, b) => accountOrder.get(a.account!.id)! - accountOrder.get(b.account!.id)!))]);
-  }, [archives, projects, query.data, status, collapsed]);
+  }, [archives, projects, query.data, status, collapsed, previewOrder]);
   // 折叠只改变显示，金额范围仍取本状态下所有账户归属。
   const amount = useMemo(() => decimal((query.data?.rows ?? []).filter(r => status === 'all' || (archives?.accounts ?? []).find(a => a.id === r.account_id)?.status === status).reduce((sum, r) => sum + cents(r.total_amount), 0n)), [query.data, archives, status]);
   const sums = useMemo(() => {
@@ -67,11 +78,7 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
     </ReadStatusLane>
     <FirstReadRegion phase={phase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={phase === 'error'} /></div>}>
     {query.data && dependencyPhase === 'content' ? (rows.length ? <BusinessGrid table="oilcard-reconciliation" rows={rows} columns={columns} totals={totals} rowId={row => row.key} scale={scale} label="账户充值累计" domLayout="autoHeight" grid={{
-      suppressRowDrag: sortDisabled, rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary' },
-      onRowDragEnd: e => {
-        const from = e.node.data?.primary?.id, target = e.overNode?.data?.group;
-        if (from && target && target !== 'unassigned') movePrimary(from, Number(target));
-      },
+      ...drag.grid, rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary', 'grid-row-dragging': p => p.node.id === drag.rowId },
     }} /> : <p className="state">尚无符合条件的用卡账户。可在“账户与油卡”中建档。</p>) : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={5} quiet={phase === 'error'} /></div>}
     </FirstReadRegion>
   </section>;

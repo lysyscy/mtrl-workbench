@@ -213,22 +213,23 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   return <section className="oilcard-ledger-sheet" aria-label="充值与发票">
     {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '核对刚才的充值登记后再继续。' : '已读取当前记录，请核对保留的输入。'}<Button disabled={!verified || blocked || busy} onClick={confirm}>已核对，保留输入继续</Button></p>}
-    <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
+    <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div className="oilcard-ledger-chrome"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button></div></div>
       <OilOpeningHistory archives={archives} projects={projects} enabled={active && !blocked} scale={scale} />
       <ReadStatusLane phase={readState} announce="正在读取充值台账…">
         {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
       </ReadStatusLane>
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
-      <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
-      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" style={{ height: '62dvh', minHeight: '300px' }} grid={{
-        enableFilterHandlers: true, popupParent: document.body, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>),
+      </div>
+      <FirstReadRegion className="oilcard-grid-slot" phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
+      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
+        enableFilterHandlers: true, popupParent: document.body, alwaysShowHorizontalScroll: true, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>),
         postSortRows: ({ nodes }) => { const draft = nodes.findIndex(node => node.data?.id === 0); if (draft >= 0) nodes.push(...nodes.splice(draft, 1)); },
         onRowDataUpdated: ({ api }) => {
           const node = newDraft.current ? api.getRowNode(newDraft.current) : undefined;
           if (node?.rowIndex !== null && node?.rowIndex !== undefined) { newDraft.current = null; api.ensureIndexVisible(node.rowIndex, 'bottom'); }
         },
-      }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true" style={{ height: '62dvh', minHeight: '300px' }}><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
+      }} /></LedgerCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
       </FirstReadRegion>
     </section><OilInvoiceSheet me={me} archives={archives} projects={projects} active={active} blocked={blocked} scale={scale} locked={busy || uncertain || archiveLocked} onWriteLock={setInvoiceLocked} onUncertain={setInvoiceUncertain} /></div>
     <DialogPresence>{transferOpen && <OilTransferDialog archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setTransferOpen(false)} submit={async values => {

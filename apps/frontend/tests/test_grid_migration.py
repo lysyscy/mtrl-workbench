@@ -122,8 +122,8 @@ def test_project_native_drag_uses_complete_business_order(server, browser_page, 
     page.mouse.move(a['x']+a['width']/2, a['y']+a['height']/2)
     page.mouse.down()
     page.mouse.move(b['x']+30, b['y']+b['height']/3, steps=15)
-    expect(page.locator('.project-drag-image')).to_be_visible()
-    assert page.locator('.project-drag-image .ag-cell').count()>=8
+    expect(page.locator('.grid-row-drag-image')).to_be_visible()
+    assert page.locator('.grid-row-drag-image .ag-cell').count()>=8
     with page.expect_response(lambda r: r.url.endswith(f'/api/m01/projects/{items[2]["id"]}/ord') and r.request.method=='PUT') as response:
         page.mouse.up()
     assert response.value.ok
@@ -137,7 +137,7 @@ def test_project_native_drag_uses_complete_business_order(server, browser_page, 
     a,b=source.bounding_box(),archived.bounding_box()
     page.mouse.move(a['x']+a['width']/2,a['y']+a['height']/2);page.mouse.down()
     page.mouse.move(b['x']+30,b['y']+b['height']/2,steps=15);page.mouse.up()
-    expect(page.locator('.project-drag-image')).not_to_be_visible()
+    expect(page.locator('.grid-row-drag-image')).not_to_be_visible()
     assert calls==[], '跨在建/归档分区不能发出调序写入'
     expect(page.get_by_label('项目搜索', exact=True)).to_have_value(token+'可见')
     grid.locator('.ag-header-cell[col-id=project_type] .ag-header-cell-label').click()

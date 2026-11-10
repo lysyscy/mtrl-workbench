@@ -13,7 +13,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import sum_money
 from app.mod01_projects import service as projects
-from .models import OilAccount, OilCard, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
+from .models import OilAccount, OilCard, OilContinuationSource, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
 
@@ -44,13 +44,30 @@ def number_owner(session, number):
     return next(iter(ids)) if ids else None
 
 
-def invoice_data(session, row):
+def _continuation_invoice_notes(session):
+    """Recognize older audit notes by their recorded invoice and original value."""
+    notes = set()
+    for raw in session.scalars(select(OilContinuationSource.confirmations_json)):
+        for result in json.loads(raw).values():
+            note = result['decision'].get('note', '').strip()
+            if note:
+                notes.update((target['id'], note) for target in result['targets']
+                    if target['kind'] == 'invoice' and target['snapshot'].get('change_note') == note)
+    return notes
+
+
+def invoice_data(session, row, *, continuation_notes=None):
     allocations = _allocations(session, row.id)
     if row.status == 'registered' and (row.amount is None or not allocations or sum_money(a.amount for a in allocations) != row.amount):
         raise MustReportError('发票分配合计未能核对，请核对票面和分配后再继续。')
     originals = list(session.scalars(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == row.id).order_by(OilInvoiceOriginal.id)))
+    change_note = row.change_note
+    if change_note and row.kind == 'normal' and row.status != 'voided':
+        notes = _continuation_invoice_notes(session) if continuation_notes is None else continuation_notes
+        if (row.id, change_note) in notes:
+            change_note = ''
     return {**{key: getattr(row, key) for key in ('id', 'invoice_no', 'card_no', 'status', 'deleted', 'reason', 'remark', 'version', 'kind',
-        'related_invoice_id', 'change_note', 'manual_request_id', 'manual_date_text', 'manual_cutoff_ym')},
+        'related_invoice_id', 'manual_request_id', 'manual_date_text', 'manual_cutoff_ym')}, 'change_note': change_note,
         'void_date': row.void_date.isoformat() if row.void_date else None,
         'invoice_date': row.invoice_date.isoformat() if row.invoice_date else None,
         'amount': str(row.amount) if row.amount is not None else None,
@@ -190,7 +207,9 @@ def receipt_outcome(session, source, *, repeated=False):
 def invoices(session):
     from .invoice_adjustments import validate_credits
     validate_credits(session)
-    rows = [invoice_data(session, row) for row in session.scalars(select(OilInvoice).where(OilInvoice.deleted.is_(False)).order_by(OilInvoice.id))]
+    notes = _continuation_invoice_notes(session)
+    rows = [invoice_data(session, row, continuation_notes=notes) for row in session.scalars(
+        select(OilInvoice).where(OilInvoice.deleted.is_(False)).order_by(OilInvoice.id))]
     return {'invoices': rows, 'total_amount': str(sum_money(a['amount'] for row in rows if row['status'] == 'registered' for a in row['allocations']))}
 
 

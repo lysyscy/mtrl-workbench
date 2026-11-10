@@ -23,6 +23,9 @@ export function OilOpeningHistory({ archives, projects, enabled, scale }: {
     { field: 'remark', headerName: '备注' },
     { field: 'source_note', headerName: '来源说明' },
   ], [archives, projects]);
+  // During a staged release, existing confirmed amounts remain visible until
+  // the separately authorized conversion has put them into the ledger.
+  if (query.data?.rows.length === 0 && !query.isError) return null;
   return <div className="oilcard-openings" aria-label="已确认充值期初">
     <div className="oilcard-opening-summary">
       <span>已确认充值期初{query.data && <> <strong>{money(query.data.total_amount)}</strong> · {query.data.rows.length} 笔</>}</span>
