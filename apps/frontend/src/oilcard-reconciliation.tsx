@@ -44,9 +44,11 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
       groups.get(group)!.children.push({ key: `account:${account.id}:${allocation.project_id}:${allocation.card_id}`, group, kind: 'account', account, ...(card ? { card } : {}), allocation,
         title: projects.find(p => p.id === allocation.project_id) ? projectLabel(projects.find(p => p.id === allocation.project_id)!) : `项目 #${allocation.project_id}`, amount: allocation.total_amount, invoiced: allocation.invoiced_amount, difference: allocation.difference_amount });
     }
-    return [...groups].flatMap(([group, value]) => [{ key: `primary:${group}`, group, kind: 'primary' as const,
-      title: value.primary ? '主卡' : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) },
-      ...(collapsed.has(group) ? [] : value.children.sort((a, b) => accountOrder.get(a.account!.id)! - accountOrder.get(b.account!.id)!))]);
+    return [...groups]
+      .filter(([, value]) => value.children.length > 0)
+      .flatMap(([group, value]) => [{ key: `primary:${group}`, group, kind: 'primary' as const,
+        title: value.primary ? '主卡' : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) },
+        ...(collapsed.has(group) ? [] : value.children.sort((a, b) => accountOrder.get(a.account!.id)! - accountOrder.get(b.account!.id)!))]);
   }, [archives, projects, query.data, status, collapsed, previewOrder]);
   // 折叠只改变显示，金额范围仍取本状态下所有账户归属。
   const amount = useMemo(() => decimal((query.data?.rows ?? []).filter(r => status === 'all' || (archives?.accounts ?? []).find(a => a.id === r.account_id)?.status === status).reduce((sum, r) => sum + cents(r.total_amount), 0n)), [query.data, archives, status]);
