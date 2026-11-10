@@ -21,7 +21,7 @@ dependencies = [
     "playwright",
     "loguru",
     "pywin32",
-    "pypdf==6.21.4",
+    "pypdf==7.0.0",
 ]
 
 [dependency-groups]
