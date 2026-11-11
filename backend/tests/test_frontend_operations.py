@@ -1,6 +1,8 @@
 """Publication failures use private files and an isolated service boundary, never SCM."""
+from contextlib import nullcontext, redirect_stdout
 from pathlib import Path
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -8,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ops import frontend_release as release
@@ -120,6 +123,65 @@ class ReleaseTests(unittest.TestCase):
         return release.apply_release(self.root, self.service, self.service.get, self.report,
                                      candidate=self.candidate if candidate else None, wait=.01)
 
+    def status_document(self, commit):
+        path = self.root / 'docs/status.md'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f'# 当前活动工作\n\n## 当前正式运行\n\n发布正式前端资源 `{commit}`。\n'
+                        '\n## 历史\n\n旧发布正式前端资源 `ffffffff`。\n', encoding='utf-8')
+        return path
+
+    def release_main(self, *, admin, action='publish', corrupt_evidence=False, fail_evidence=False):
+        run = self.report.parent.parent
+        service = self.service
+
+        class Client:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def get(self, route): return service.get(route)
+
+        def elevated(_):
+            report = self.apply(candidate=action == 'publish')
+            if corrupt_evidence:
+                release.write_json(run / 'reports/status-document-check.json',
+                                   {'state': 'matched', 'product_commit': 'c' * 40,
+                                    'release_finished_at': report['finished_at']})
+            else:
+                release.record_status_document_check(self.root, run, report)
+            return 0
+
+        write_json = release.write_json
+        def write(path, value):
+            if fail_evidence and Path(path).name == 'status-document-check.json':
+                raise OSError('isolated evidence failure')
+            return write_json(path, value)
+
+        output = io.StringIO()
+        argv = ['frontend_release.py', action, '--run', str(run)]
+        if action == 'publish': argv += ['--candidate', str(self.candidate)]
+        shell = SimpleNamespace(IsUserAnAdmin=lambda: int(admin))
+        with patch.object(release, 'ROOT', self.root), patch.object(release, 'WindowsService', return_value=service), \
+             patch.object(release, 'attach_run'), patch.object(release, 'close_runs'), \
+             patch.object(release, 'require_committed_product'), \
+             patch.object(release, 'product_sources', return_value=None if action == 'publish' else {'fixture': 'stable'}), \
+             patch.object(release, 'git', return_value='b' * 40), patch.object(release, 'release_lock', return_value=nullcontext()), \
+             patch.object(release.httpx, 'Client', return_value=Client()), patch.object(release, 'elevate', side_effect=elevated), \
+             patch.object(release, 'write_json', side_effect=write), \
+             patch.object(release.ctypes, 'windll', SimpleNamespace(shell32=shell), create=True), \
+             patch.dict(os.environ, {'MTRL_EFFORT': 'isolated-status-check'}), patch.object(sys, 'argv', argv), \
+             redirect_stdout(output):
+            code = release.main()
+        return code, json.loads(output.getvalue())
+
+    def check_status_main(self, commit):
+        output = io.StringIO()
+        argv = ['frontend_release.py', 'check-status', '--product-commit', commit]
+        with patch.object(release, 'ROOT', self.root), patch.object(sys, 'argv', argv), \
+             patch.object(release, 'WindowsService', side_effect=AssertionError('service must not be touched')), \
+             patch.object(release, 'output_dir', side_effect=AssertionError('no run must be created')), \
+             redirect_stdout(output):
+            code = release.main()
+        return code, json.loads(output.getvalue())
+
     def test_publish_checks_actual_resources_and_keeps_previous_release(self):
         result = self.apply()
         target = (self.root / 'var/frontend/releases' / ('b' * 12)).resolve()
@@ -130,6 +192,83 @@ class ReleaseTests(unittest.TestCase):
         actual = (self.root / '.env').read_bytes()
         self.assertEqual(release.POINTER.sub(b'FRONTEND_APP_DIR=', actual), release.POINTER.sub(b'FRONTEND_APP_DIR=', self.original))
         self.assertEqual(release.FrontendPointer.value(actual), target.as_posix())
+
+    def test_published_version_requires_document_update_then_read_only_recheck(self):
+        status = self.status_document('a' * 8)
+        original = status.read_bytes()
+        code, result = self.release_main(admin=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['product_commit'], 'b' * 40)
+        self.assertEqual(result['status_document']['state'], 'needs_update')
+        self.assertTrue(result['status_document']['evidence_saved'])
+        self.assertIn('更新并保存', result['status_document']['action'])
+        self.assertEqual(status.read_bytes(), original)
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+        self.assertEqual(self.service.state, 'Running')
+        self.assertEqual(self.check_status_main('b' * 40)[0], 2)
+        status.write_text(original.decode('utf-8').replace('a' * 8, 'b' * 8), encoding='utf-8')
+        code, checked = self.check_status_main('b' * 40)
+        self.assertEqual(code, 0)
+        self.assertEqual(checked['state'], 'matched')
+
+    def test_elevated_parent_receives_unverified_status_without_rolling_back(self):
+        code, result = self.release_main(admin=False)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['status_document']['state'], 'unverified')
+        self.assertTrue(result['status_document']['evidence_saved'])
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+        self.assertEqual(self.service.state, 'Running')
+
+    def test_elevated_parent_rejects_another_releases_status_evidence(self):
+        self.status_document('b' * 8)
+        code, result = self.release_main(admin=False, corrupt_evidence=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['status_document']['state'], 'unverified')
+        self.assertFalse(result['status_document']['evidence_saved'])
+        self.assertEqual(self.service.state, 'Running')
+
+    def test_elevated_parent_rejects_contradictory_status_evidence(self):
+        report = self.apply()
+        run = self.report.parent.parent
+        release.write_json(run / 'reports/status-document-check.json',
+                           {'state': 'matched', 'product_commit': 'b' * 40, 'recorded_commit': 'a' * 8,
+                            'release_finished_at': report['finished_at']})
+        result = release.read_status_document_check(run, report)
+        self.assertEqual(result['state'], 'unverified')
+        self.assertFalse(result['evidence_saved'])
+        self.assertEqual(self.service.state, 'Running')
+
+    def test_status_evidence_failure_does_not_undo_successful_release(self):
+        self.status_document('a' * 8)
+        code, result = self.release_main(admin=True, fail_evidence=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['status_document']['state'], 'needs_update')
+        self.assertFalse(result['status_document']['evidence_saved'])
+        self.assertIn('未保存', result['status_document']['evidence_warning'])
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+        self.assertEqual(runtime.read_json(self.report)['status'], 'loaded')
+
+    def test_restart_checks_loaded_frontend_not_newer_git_head(self):
+        self.status_document('a' * 8)
+        code, result = self.release_main(admin=True, action='restart')
+        self.assertEqual(code, 0)
+        self.assertEqual(result['status'], 'loaded')
+        self.assertEqual(result['product_commit'], 'a' * 40)
+        self.assertEqual(result['status_document']['state'], 'matched')
+        self.assertEqual(self.service.calls, ['stop', 'start'])
+
+    def test_ambiguous_current_versions_are_not_reported_as_matched(self):
+        status = self.status_document('b' * 8)
+        text = status.read_text(encoding='utf-8').replace(
+            '\n## 历史', '\n另有正式前端资源 `aaaaaaaa`。\n\n## 历史')
+        status.write_text(text, encoding='utf-8')
+        code, result = self.check_status_main('b' * 40)
+        self.assertEqual(code, 2)
+        self.assertEqual(result['state'], 'unverified')
 
     def test_restart_keeps_exact_configuration(self):
         self.assertEqual(self.apply(candidate=False)['status'], 'loaded')

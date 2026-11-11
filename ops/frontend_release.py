@@ -69,6 +69,72 @@ def no_links(path, root):
     return resolved
 
 
+def check_status_document(root, product_commit):
+    """Compare a verified frontend commit with the current-status section only."""
+    action = '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾'
+    if not isinstance(product_commit, str) or not re.fullmatch('[0-9a-f]{40}', product_commit):
+        return {'state': 'unverified', 'reason': '未取得已验证的正式前端版本', 'action': action}
+    try:
+        path = no_links(Path(root) / 'docs/status.md', root)
+        text = path.read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeError, ValueError):
+        return {'state': 'unverified', 'reason': '状态文档无法安全读取', 'action': action}
+    headings = list(re.finditer(r'(?m)^##[ \t]+当前正式运行[ \t]*$', text))
+    if len(headings) != 1:
+        return {'state': 'unverified', 'reason': '当前正式运行段落不唯一或缺失', 'action': action}
+    section = text[headings[0].end():]
+    next_heading = re.search(r'(?m)^##[ \t]+', section)
+    if next_heading:
+        section = section[:next_heading.start()]
+    versions = re.findall(r'正式前端资源[ \t]+`([0-9a-f]{8,40})`', section, flags=re.IGNORECASE)
+    if len(versions) != 1:
+        return {'state': 'unverified', 'reason': '正式前端资源版本不唯一或缺失', 'action': action}
+    recorded = versions[0].lower()
+    if product_commit.startswith(recorded):
+        return {'state': 'matched', 'recorded_commit': recorded}
+    return {'state': 'needs_update', 'recorded_commit': recorded, 'action': action}
+
+
+def record_status_document_check(root, run, report):
+    """Save the post-release check without changing the verified release result."""
+    try:
+        result = check_status_document(root, report.get('product_commit'))
+    except Exception:
+        result = {'state': 'unverified', 'reason': '状态文档核对异常',
+                  'action': '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾'}
+    evidence = {**result, 'product_commit': report.get('product_commit'),
+                'release_finished_at': report.get('finished_at'),
+                'checked_at': datetime.now(timezone.utc).isoformat()}
+    try:
+        write_json(Path(run) / 'reports/status-document-check.json', evidence)
+        return {**evidence, 'evidence_saved': True}
+    except Exception:
+        return {**evidence, 'evidence_saved': False, 'evidence_warning': '状态文档核对回执未保存'}
+
+
+def read_status_document_check(run, report):
+    """Recover the elevated child's check only when it belongs to this release."""
+    try:
+        evidence = read_json(Path(run) / 'reports/status-document-check.json')
+        if (not isinstance(evidence, dict) or evidence.get('state') not in {'matched', 'needs_update', 'unverified'}
+                or evidence.get('product_commit') != report.get('product_commit')
+                or not report.get('finished_at') or evidence.get('release_finished_at') != report['finished_at']):
+            raise ValueError('状态文档核对回执不属于本次发布')
+        state, recorded, product_commit = evidence['state'], evidence.get('recorded_commit'), report.get('product_commit')
+        if state != 'unverified':
+            if (not isinstance(recorded, str) or not re.fullmatch('[0-9a-f]{8,40}', recorded)
+                    or not isinstance(product_commit, str) or not re.fullmatch('[0-9a-f]{40}', product_commit)
+                    or (state == 'matched') != product_commit.startswith(recorded)):
+                raise ValueError('状态文档核对回执内容矛盾')
+        if state != 'matched' and not evidence.get('action'):
+            raise ValueError('状态文档核对回执缺少后续操作')
+        return {**evidence, 'evidence_saved': True}
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return {'state': 'unverified', 'reason': '未能确认本次发布的状态文档核对回执',
+                'action': '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾',
+                'evidence_saved': False}
+
+
 def validate_release(directory):
     directory = Path(directory).resolve(strict=True)
     manifest = read_json(directory / 'release-manifest.json')
@@ -457,7 +523,8 @@ def outcome(code, run, **details):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['publish', 'restart'])
+    parser.add_argument('action', choices=['publish', 'restart', 'check-status'])
+    parser.add_argument('--product-commit', help='check-status使用本次已核发布回执的完整提交')
     parser.add_argument('--service-name', default='mtrl-workbench-server')
     parser.add_argument('--wait-sec', type=int, default=20)
     parser.add_argument('--check-only', action='store_true')
@@ -465,6 +532,14 @@ def main():
     parser.add_argument('--candidate', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--elevated', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.action == 'check-status':
+        if not args.product_commit or not re.fullmatch('[0-9a-f]{40}', args.product_commit):
+            parser.error('check-status须提供已核发布回执中的40位前端提交')
+        result = check_status_document(ROOT, args.product_commit)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result['state'] == 'matched' else 2
+    if args.product_commit:
+        parser.error('--product-commit仅用于check-status')
     if not 1 <= args.wait_sec <= 120:
         parser.error('等待秒数须在1至120之间')
     os.environ.setdefault('MTRL_EFFORT', 'frontend-release')
@@ -501,11 +576,15 @@ def main():
             code = elevate(command)
             if code == 0:
                 report = read_json(run / 'reports/deployment.json')
-                return outcome(0, run, status=report['status'], product_commit=report['product_commit'])
+                status_document = read_status_document_check(run, report)
+                return outcome(0, run, status=report['status'], product_commit=report['product_commit'],
+                               status_document=status_document)
             return outcome(code, run, status='failed')
         with release_lock(ROOT), httpx.Client(base_url='http://127.0.0.1:8000', timeout=3) as client:
             report = apply_release(ROOT, host, client.get, run / 'reports/deployment.json', candidate=candidate, wait=args.wait_sec)
-        return outcome(0, run, status=report['status'], product_commit=report['product_commit'])
+            status_document = record_status_document_check(ROOT, run, report)
+        return outcome(0, run, status=report['status'], product_commit=report['product_commit'],
+                       status_document=status_document)
     except Exception as exc:
         reason = str(exc) if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__
         write_json(run / 'reports/failure.json', {'status': 'failed', 'reason': reason})
