@@ -21,7 +21,7 @@ import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-wid
 import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
-import { contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
+import { contractApprovalStatuses, contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
 import type { ContractRow } from './contracts-api';
 import { cents, money, receipt, searchKey } from './notices-api';
 import { ContractEditor, archiveNoHint, nextContractArchiveNo } from './contract-dialog';
@@ -44,7 +44,8 @@ function ContractSelectionHeader(){
   const current=useContext(ContractSelectionContext);
   return <Checkbox aria-label="选择当前合同" checked={current.shown.length>0&&current.shown.every(row=>current.picked.has(row.id))} onChange={e=>current.chooseAll(e.target.checked)}/>;
 }
-const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:''});
+const approvalOptions = ['', ...contractApprovalStatuses, '无状态'].map(value => ({ value, label: value || '全部' }));
+const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:'',approval:''});
 type InlineKey='remark'|'arch_no'|'ret_date'|'payment_term'|'payment_method';
 type InlineControl={disabled:boolean;methods:string[];drafts:Record<string,string>;change:(id:number,key:InlineKey,value:string)=>void;save:(row:ContractRow,key:InlineKey|'arch',value:string)=>Promise<boolean>;remark:(row:ContractRow,value:string)=>void;next:(row:ContractRow)=>string;advance:(row:ContractRow)=>Promise<void>};
 // 只对完整合法的日期立即保存，半截输入仍留在草稿里。
@@ -90,7 +91,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
   const projectRows=useMemo(()=>projects.data??[],[projects.data]);
   const needle=searchKey(search);
-  const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||row.arch===filters.arch)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
+  const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||row.arch===filters.arch)&&(!filters.approval||(row.approve_status??'无状态')===filters.approval)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
     projectRows.find(p=>p.warehouse_name===row.project_key)?.disp??'',
     ...(query.data?.columns??[]).filter(column=>column.key!=='ops').flatMap(column=>{
       const value=row[column.key as keyof ContractRow];
@@ -197,12 +198,13 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const selection=useMemo<ContractSelection>(()=>({shown,picked,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked]);
   const scale=Number(me?.ui_scale_css??1);
   const widths=useGridWidths('contracts',root,scale,active&&!blocked);
-  const completeWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no','payment_term','payment_method','tag','arch','arch_no','ret_date'].includes(c.key)).map(c=>{
+  const completeWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no','approve_status','payment_term','payment_method','tag','arch','arch_no','ret_date'].includes(c.key)).map(c=>{
     const values=rows.map(row=>String(row[c.key as keyof ContractRow]??''));
+    if(c.key==='approve_status')values.push(...contractApprovalStatuses);
     if(c.key==='payment_method')values.push('未约定',...(query.data?.payment_methods??[]));
     if(c.key==='arch_no')values.push(...[...new Map(rows.map(row=>[row.project_key,row])).values()].map(row=>nextContractArchiveNo(rows,row)));
     if(c.key==='ret_date')values.push('2000-12-31');
-    const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch'].includes(c.key)?12:0;
+    const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch','approve_status'].includes(c.key)?12:0;
     return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
   })),[rows,query.data?.columns,query.data?.payment_methods,scale]);
   // Amount geometry depends on the rows and the totals row only: ticking a box must not re-measure seven money columns.
@@ -231,6 +233,10 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
           const row=p.data!;
           if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectRows.find(p=>p.warehouse_name===row.project_key)?.disp||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
           if(c.key==='tag'||c.key==='arch')return <Tag className={`status-tag ${c.key==='tag'?(row.tag==='纳入台账'?'status-positive':'status-neutral'):(row.arch==='已存档'?'status-positive':row.arch==='资产处'?'status-pending':'status-neutral')}`}>{String(p.value||'未存档')}</Tag>;
+          if(c.key==='approve_status'){
+            if(row.approve_status===null)return <span className="muted">—</span>;
+            return <Tag className={`status-tag ${row.approve_status==='已审批'?'status-positive':'status-pending'}`}>{row.approve_status}</Tag>;
+          }
           if(c.key==='payment_method')return row.payment_method?<EnumTag kind="payMethod" value={row.payment_method}/>:<span className="muted">未约定</span>;
           if(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)&&!(c.key==='trade_inv_sum'&&!row.trade_co))return <div className="contract-amount-action"><span>{money(String(p.value??'0'))}</span><Button size="small" aria-label={`${row.contract_no||row.material} ${c.key==='inv_sum'?'供应商发票':c.key==='trade_inv_sum'?'贸易公司发票':'付款'}子表`} onClick={()=>setSubtable({row,kind:c.key==='inv_sum'?'supplier':c.key==='trade_inv_sum'?'trade':'payment'})}>子表</Button></div>;
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
@@ -255,7 +261,16 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   function created(id:number){if(pageState.current.blocked||!pageState.current.active||pageState.current.editorId!=='new')return;setFilters({...initialFilters(),tag:''});setSearch('');pendingFocus.current=id;const row=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===id);closeEditor('new');if(row){grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');if(contractHistoryDate(row.remark))setSubtable({row,kind:'supplier'});}}
   return <section className="contracts-page" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>＋ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,search,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
     <div className="contract-selection"><span>已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
-    <div className="contract-filters"><label>项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label><label>纳入状态<Select aria-label="纳入状态" value={filters.tag} options={['',...(query.data?.tags??[])].map(value=>({value,label:value||'全部'}))} onChange={tag=>setFilters(old=>({...old,tag}))}/></label><label>存档情况<Select aria-label="合同存档筛选" value={filters.arch} options={['','未存档','资产处','已存档'].map(value=>({value,label:value||'全部'}))} onChange={arch=>setFilters(old=>({...old,arch}))}/></label><label className="contract-search-field">搜索<Input aria-label="搜索" placeholder="搜索各列内容" value={search} allowClear onChange={e=>setSearch(e.target.value)}/></label><Button disabled={blocked||!active} onClick={()=>setTool('party')}>甲方单位分类</Button><Button onClick={()=>{setFilters(initialFilters());setSearch('');}}>重置</Button><span className="contract-filter-count">已勾选 <b>{selected.length}</b> 行 ｜ {placeheld ? (readState==='reading'?'正在读取…':'尚未读取') : <>显示 <b>{shown.length}</b> 条</>}</span></div>
+    <div className="contract-filters">
+      <label>项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label>
+      <label>纳入状态<Select aria-label="纳入状态" value={filters.tag} options={['',...(query.data?.tags??[])].map(value=>({value,label:value||'全部'}))} onChange={tag=>setFilters(old=>({...old,tag}))}/></label>
+      <label>审批状态<Select aria-label="审批状态" value={filters.approval} options={approvalOptions} onChange={approval=>setFilters(old=>({...old,approval}))}/></label>
+      <label>存档情况<Select aria-label="合同存档筛选" value={filters.arch} options={['','未存档','资产处','已存档'].map(value=>({value,label:value||'全部'}))} onChange={arch=>setFilters(old=>({...old,arch}))}/></label>
+      <label className="contract-search-field">搜索<Input aria-label="搜索" placeholder="搜索各列内容" value={search} allowClear onChange={e=>setSearch(e.target.value)}/></label>
+      <Button disabled={blocked||!active} onClick={()=>setTool('party')}>甲方单位分类</Button>
+      <Button onClick={()=>{setFilters(initialFilters());setSearch('');}}>重置</Button>
+      <span className="contract-filter-count">已勾选 <b>{selected.length}</b> 行 ｜ {placeheld ? (readState==='reading'?'正在读取…':'尚未读取') : <>显示 <b>{shown.length}</b> 条</>}</span>
+    </div>
     {error&&<p className="notice" role="alert">{error}<Button onClick={()=>void reread()}>重读核对</Button></p>}
     <ReadStatusLane phase={readState} announce="正在读取集采合同…" className="contract-read-status">
       {(readState==='error'||readState==='stale')&&<ReadFailure read={query} retained="合同更新失败，保留上次结果。"/>}

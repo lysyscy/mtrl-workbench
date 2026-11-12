@@ -95,6 +95,7 @@ def list_contracts(
         out.append({
             "id": row.id,
             "contract_no": row.contract_no,
+            "approve_status": row.approve_status,
             "date": row.contract_date,
             "material": row.material_name,
             "supplier": row.supplier,
@@ -417,7 +418,7 @@ def insert_subtable_operation(s: Session, *, request_id: str, account: str, acti
 #: ⭐ `bill_name`（i8 单据名原文）**在列里**：它是 i8 的原文、不是人的地盘 ⇒ 重抓要刷新它。
 #:   ⚠️ 2026-09-19 补 —— 原先没带上它 ⇒ 落库时**静默丢掉原文**（材料名/供应商从此无法回溯）。
 #: ⭐ 2026-09-20（`M5-6b`）补 `party_name`（甲方单位）—— 它是"金额落哪一列"的判据（见下）。
-FETCH_COLS: tuple[str, ...] = ("contract_date", "supplier", "bill_name", "party_name")
+FETCH_COLS: tuple[str, ...] = ("contract_date", "supplier", "bill_name", "party_name", "approve_status")
 
 #: ⭐⭐ 「**空才填**」的列（`M5-6b` · 用户 2026-09-20 口径）—— 人工可改，**已有值就绝不覆盖**：
 #:   - `material_name`：i8 的 `ItemName` **有错**（实测确有 `g'c` / `hong's模板` 这种），用户会**逐一手改**
@@ -495,9 +496,11 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
         _party = str(row.get("party_kind") or KIND_PARTY_UNKNOWN)
         _is_trade = _party == KIND_PARTY_TRADE
         _party_name = str(row.get("party_name") or "")[:128]
+        approve_status = row.get("approve_status")
         if cur is None:
             s.add(JcContract(
                 contract_no=no,
+                approve_status=approve_status,
                 project_id=int(project_id),
                 contract_date=str(row.get("sign_date") or "")[:10],
                 material_name=str(row.get("material_name") or "")[:128],
@@ -519,9 +522,12 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
                              ("supplier", str(row.get("supplier_name") or "")[:128]),
                              ("bill_name", str(row.get("bill_name") or "")[:255]),
-                             ("party_name", _party_name)):
+                             ("party_name", _party_name),
+                             ("approve_status", approve_status)):
                 if key in FETCH_COLS:
                     if key == "contract_date" and cur.contract_date_locked:
+                        continue
+                    if key == "approve_status" and val is None:
                         continue
                     setattr(cur, key, val)
             # ② **空才填**的列：有人工值就留住（用户手改过 i8 的错材料名）

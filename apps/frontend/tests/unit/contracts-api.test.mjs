@@ -9,7 +9,7 @@ const base = {
   tag: '', arch: '', arch_no: '', ret_date: '',
 };
 const list = row => ({ rows: [row], columns: [{ key: 'material', label: '物料', type: 'text' }], tags: [], payment_methods: [] });
-const row = () => ({ ...base, project_key: '项目', notice_ids: [1] });
+const row = () => ({ ...base, project_key: '项目', notice_ids: [1], approve_status: null });
 const detail = () => ({ data: { ...base, supplier_invoices: [{ id: 2, kind: 'supplier', date: '', amount: '12.34' }], trade_invoices: [] } });
 
 test('list and detail keep their actual distinct contracts and extra input fields', () => {
@@ -18,6 +18,7 @@ test('list and detail keep their actual distinct contracts and extra input field
   const result = readContracts(envelope);
   assert.equal(result.rows[0], input);
   assert.equal(result.rows[0].extra, extra);
+  assert.equal(result.rows[0].approve_status, null);
   assert.equal(result.columns, envelope.columns);
   assert.equal(result.columns[0].extra, extra);
   const data = detail(); data.data.payments = [extra];
@@ -42,6 +43,10 @@ test('ret_date null normalization clones only the row and leaves raw input uncha
 });
 
 test('missing fields, invalid IDs and money remain rejected with existing error categories', () => {
+  for (const approve_status of ['已审批', '未审批']) {
+    assert.equal(readContracts(list({ ...row(), approve_status })).rows[0].approve_status, approve_status);
+  }
+  assert.throws(() => readContracts(list({ ...row(), approve_status: '已批' })), /合同归属或关联读取不完整/);
   for (const field of Object.keys(base)) {
     const input = row(); delete input[field];
     assert.throws(() => readContracts(list(input)), /合同读取不完整/, field);

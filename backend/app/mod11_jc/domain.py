@@ -38,7 +38,7 @@ ZERO = Decimal("0.00")
 MSG_BAD_AMOUNT = "金额不合法：必须是大于 0 的数字（不设上限），已保留原值"
 MSG_NEED_DATE = "日期必填：发票要能对上所属期（默认取系统当日，可改）"
 
-#: 集采台账**表头**（19 列）—— ⭐ **列的唯一主人**（`TAIL-298`）：屏幕表头 / 屏幕行为表（隐藏·钉列）
+#: 集采台账**表头** —— ⭐ **列的唯一主人**（`TAIL-298`）：屏幕表头 / 屏幕行为表（隐藏·钉列）
 #:   与 Excel 导出**一律从它派生**，⛔ 壳里不再另写一份列字面量、导出也不另写一份列清单。
 #  ⚠️ 顺序即口径（`ACC-JC-UI-001/001-12` 钉着"三列紧贴操作列左侧"），别按"好看"重排。
 #: ⭐ `key` = 列的**稳定身份**：壳的屏幕行为表按它定位（`web/shell/pages-b.js` 的
@@ -52,6 +52,7 @@ JC_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "date", "label": "合同日期", "type": "date"},
     {"key": "material", "label": "材料名", "type": "text"},
     {"key": "contract_no", "label": "合同编号", "type": "text"},
+    {"key": "approve_status", "label": "审批状态", "type": "tag"},
     {"key": "supplier", "label": "供应商", "type": "text"},
     {"key": "contract_amt", "label": "合同金额", "type": "num"},
     {"key": "inv_sum", "label": "发票金额", "type": "num"},          # = 供应商发票子表合计（派生）

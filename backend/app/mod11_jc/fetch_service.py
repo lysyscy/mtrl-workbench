@@ -50,10 +50,13 @@ from app.mod02_i8.browser_session import (
     StrictTargetMismatch,
 )
 from app.mod02_i8.contract_source import ContractFetcher
+from app.mod02_i8.notice_source import APPROVE_STATUS_DONE, APPROVE_STATUS_OTHER
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import CommonProjectSource, load_warehouse_rows
 from app.mod11_jc import repository as R
 from app.mod11_jc.models import KIND_PARTY_UNKNOWN
+
+_APPROVAL_LABELS = {APPROVE_STATUS_DONE: "已审批", APPROVE_STATUS_OTHER: "未审批"}
 
 #: 同表抓取串行锁的键（`D9`：同一张表抓取互斥）。
 TABLE = "jc_contract"
@@ -269,7 +272,9 @@ def run_fetch(
             stats = {"inserted": 0, "refreshed": 0, "skipped": 0}
             by_pid: dict[int, list[dict]] = {}
             for row in m["matched"]:
-                by_pid.setdefault(int(row["project_id"]), []).append(row)
+                by_pid.setdefault(int(row["project_id"]), []).append({
+                    **row, "approve_status": _APPROVAL_LABELS.get(row.get("approve_status")),
+                })
             for pid, group in by_pid.items():
                 part = R.upsert_fetched_contracts(s, project_id=pid, rows=group)
                 for k in stats:

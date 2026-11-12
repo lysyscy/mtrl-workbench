@@ -12,9 +12,10 @@ def dataset():
         a=_project(s,'__自检仓_290_A__'); b=_project(s,'__自检仓_290_B__')
         aa=[R.insert_contract(s,project_id=a.id,contract_date=dt,material_name='材料'+str(i),supplier='供应商'+str(i),contract_amt=10+i) for i,dt in enumerate(['2026-01-01','2026-01-01','2026-03-01',''])]
         bb=[R.insert_contract(s,project_id=b.id,contract_date='2026-01-01',material_name='乙材料') for _ in range(2)]
-        aa[2].contract_no='00CGHT前导';s.flush()
+        aa[2].contract_no='00CGHT前导';aa[2].approve_status='已审批';s.flush()
         def read(): return {r['id']:r for r in S.build_list(s)['rows']}
         rows=read()
+        assert (rows[aa[2].id]['approve_status'], rows[aa[0].id]['approve_status']) == ('已审批', None)
         assert [rows[c.id]['project_seq'] for c in aa]==[1,2,3,4]
         assert [rows[c.id]['project_seq'] for c in bb]==[1,2]
         assert S.build_list(s,supplier='供应商2',project_key=a.warehouse_name)['rows'][0]['project_seq']==3
@@ -23,11 +24,12 @@ def dataset():
         R.set_tag(s,aa[1].id,'纳入台账');rows=read()
         assert [rows[c.id]['project_seq'] for c in aa]==[1,2,3,4]
         ws=openpyxl.load_workbook(BytesIO(S.export_xlsx(s,ids=[aa[2].id,aa[0].id]))).active
-        assert [c.value for c in ws[1]][:7]==['序号','合同日期','材料名','合同编号','供应商','合同金额','发票金额']
+        assert [c.value for c in ws[1]][:8]==['序号','合同日期','材料名','合同编号','审批状态','供应商','合同金额','发票金额']
         assert ws['A2'].value==3 and ws['D2'].value=='00CGHT前导' and ws['A3'].value==1
         assert ws['D3'].value=='—'
-        assert ws['F2'].value==12 and ws['F3'].value==10 and ws['F4'].value==22
-        assert ws['F2'].number_format=='General' and ws['F2'].data_type=='n'
+        assert ws['E2'].value=='已审批' and ws['E3'].value is None and ws['E4'].value is None
+        assert ws['G2'].value==12 and ws['G3'].value==10 and ws['G4'].value==22
+        assert ws['G2'].number_format=='General' and ws['G2'].data_type=='n'
         assert ws.max_column==len(D.JC_COLUMNS)-len(D.PAGE_ONLY_KEYS)
         filtered=S.build_list(s,supplier='供应商2',project_key=a.warehouse_name)['rows']
         data=[{k:(str(v) if k in D.SUM_KEYS else v) for k,v in rows[c.id].items()} for c in aa+bb]

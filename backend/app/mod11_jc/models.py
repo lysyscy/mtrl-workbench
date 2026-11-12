@@ -81,7 +81,7 @@ PARTY_KIND_NAMES: dict[str, str] = {
 
 
 class JcContract(Base):
-    """集采**合同主表**一行（= §6.4.1 的 19 字段里落库的那 14 个）。"""
+    """集采合同主表的一行。"""
 
     __tablename__ = "jc_contract"
 
@@ -91,6 +91,7 @@ class JcContract(Base):
     #    ⚠️ **不设唯一约束**：手工新增 / Excel 导入的行可能是**空编号**，一加唯一键第二条就冲突
     #    （与 `jc_payment.notice_id` 的多 `NULL` 同理）⇒ 去重在**落库时按值判**，⛔ 不靠数据库拦。
     contract_no: Mapped[str] = mapped_column(String(64), index=True, default="")         # 合同编号（i8）
+    approve_status: Mapped[str | None] = mapped_column(String(8), nullable=True)
     contract_date: Mapped[str] = mapped_column(String(10), index=True, default="")      # 合同日期（抓取）
     # TAIL-313：仅本次已审核修正记录启用；其余日期仍按 i8 原策略同步。
     contract_date_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

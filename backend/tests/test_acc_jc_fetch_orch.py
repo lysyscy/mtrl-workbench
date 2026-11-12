@@ -178,6 +178,7 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
         pending = R.one_by_no(s, '__approval_0__')
         approved = R.one_by_no(s, '__approval_1__')
         assert pending is not None and approved is not None
+        assert (pending.approve_status, approved.approve_status) == ('未审批', '已审批')
         assert pending.project_id == approved.project_id == project.id
         assert pending.contract_amt == approved.contract_amt == Decimal('100.00')
         assert pending.material_name == '测试材料'
@@ -192,5 +193,6 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
         s.expire_all()
         same = R.one_by_no(s, '__approval_0__')
         assert same.id == pending_id
+        assert same.approve_status == '已审批'
         assert same.contract_amt == Decimal('125.00')
         assert (same.tag, same.remark) == (TAG_OUT, '保留人工备注')

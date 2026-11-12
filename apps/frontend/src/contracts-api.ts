@@ -3,6 +3,7 @@ import { ApiError, record, requestJson } from './api';
 import { body } from './notices-api';
 
 export const contractMoneyKeys = ['contract_amt','inv_sum','trade_contract_amt','trade_inv_sum','settle','pay_sum','debt'] as const;
+export const contractApprovalStatuses = ['已审批', '未审批'] as const;
 export const editableContractKeys = ['material_name','payment_term','payment_method','remark','arch','arch_no','ret_date'] as const;
 export type ContractFields = Record<typeof editableContractKeys[number], string>;
 const nonArrayObject = v.custom<object>(record);
@@ -16,7 +17,10 @@ const contractEntries = {
   remark: v.string(), tag: v.string(), arch: v.string(), arch_no: v.string(), ret_date: v.string(),
 };
 const contractSchema = v.intersect([v.object(contractEntries), nonArrayObject]);
-const rowSchema = v.intersect([v.object({ ...contractEntries, project_key: v.string(), notice_ids: v.array(positiveId) }), nonArrayObject]);
+const rowSchema = v.intersect([v.object({
+  ...contractEntries, project_key: v.string(), notice_ids: v.array(positiveId),
+  approve_status: v.nullable(v.picklist(contractApprovalStatuses)),
+}), nonArrayObject]);
 const invoiceSchema = v.intersect([v.object({ id: positiveId, kind: v.string(), date: v.string(), amount: moneyText }), nonArrayObject]);
 const detailSchema = v.intersect([v.object({ ...contractEntries, supplier_invoices: v.array(invoiceSchema), trade_invoices: v.array(invoiceSchema) }), nonArrayObject]);
 const listSchema = v.intersect([v.object({
