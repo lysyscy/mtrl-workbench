@@ -32,6 +32,46 @@ def _run_fetch(session, **kwargs):
         return FS.run_fetch(**kwargs)
 
 
+def test_rule_receipt_preserves_matched_conditions_and_existing_contract():
+    from app.mod02_i8 import service as records
+    from app.mod02_i8.repository import save_run_record
+
+    with session_scope() as s:
+        try:
+            project = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="回执测试项目",
+                                             warehouse_name="__receipt_test__", phid="")
+            old = R.insert_contract(s, project_id=project.id, material_name="原材料", tag="不纳入")
+            old.contract_no = "RECEIPT-1"
+            s.flush()
+            rule = R.add_ignored(s, kind="keyword", name_full="回执测试项目",
+                                 bill_name_keyword="测试合同", reason="原业务理由")
+            data = [
+                {"contract_no": "RECEIPT-1", "project_name": "回执测试项目", "bill_name": "测试合同A",
+                 "material_name": "新材料", "party_name": "被剔除的甲方"},
+                {"contract_no": "RECEIPT-2", "project_name": "未建档回执项目", "bill_name": "待归属合同"},
+            ]
+            result = _run_fetch(s, confirmed=True, fetch=lambda client: data, sync=lambda *a, **kw: {})
+            assert result["ignored"] == result["unmatched"] == 1
+            current = R.contract_of(s, old.id)
+            assert current.material_name == "原材料" and current.tag == "不纳入"
+            assert "被剔除的甲方" not in R.party_kind_map(s)
+            R.delete_ignored(s, ignore_id=rule["id"])
+
+            for index in range(51):
+                save_run_record(s, run_type="fetch", target=f"其他来源 {index}", status="success",
+                                success_count=0, fail_count=0, total_count=0, error_message="", detail={},
+                                started_at=None)
+            run = records.marked_fetch(s, R.JC_FETCH_MARK)
+            assert run.id == result["run_record_id"]
+            assert run.detail["jc_ignored"][0]["matches"][0]["reason"] == "原业务理由"
+            assert run.detail["jc_unsettled"][0]["doc_name"] == "待归属合同"
+            assert run.detail["jc_ignored_count"] == run.detail["jc_unsettled_count"] == 1
+            assert records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run.id).id == run.id
+            assert records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run.id + 1) is None
+        finally:
+            s.rollback()
+
+
 def test_sync_database_failure_keeps_prior_facts_and_discards_partial_sync(rollback_db):
     from types import SimpleNamespace
     from sqlalchemy import text, select

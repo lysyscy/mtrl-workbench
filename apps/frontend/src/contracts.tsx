@@ -29,6 +29,7 @@ import { createInlineFieldQueue } from './inline-field-queue';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { ContractFetch, ContractSettings } from './contract-tools';
+import { JcFetchReceipt } from './jc-fetch-receipt';
 import { ContractExports } from './contract-export';
 import { ContractSubtableDialog } from './contract-subtables';
 import { useContractSubtables } from './use-contract-subtables';
@@ -76,7 +77,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const client=useQueryClient(),grid=useRef<GridApi<ContractRow>|null>(null),root=useRef<HTMLDivElement>(null),lock=useRef(false),pendingFocus=useRef(0);
   const [filters,setFilters]=useState(initialFilters),[search,setSearch]=useState(''),[picked,setPicked]=useState<Set<number>>(()=>new Set()),[trade,setTrade]=useState(false);
   const editorSequence=useRef(0);
-  const [editors,setEditors]=useState<Record<string,{row:ContractRow|null;materialOnly:boolean;presenceId:number}>>({}),[editorId,setEditorId]=useState<string|null>(null),[tool,setTool]=useState<'fetch'|'party'|null>(null);
+  const [editors,setEditors]=useState<Record<string,{row:ContractRow|null;materialOnly:boolean;presenceId:number}>>({}),[editorId,setEditorId]=useState<string|null>(null),[tool,setTool]=useState<'fetch'|'party'|'receipt'|null>(null);
   function openEditor(row:ContractRow|null,materialOnly=Boolean(row)){const key=row?`${row.id}:${materialOnly?'material':'full'}`:'new',presenceId=++editorSequence.current;setEditors(old=>old[key]?old:{...old,[key]:{row,materialOnly,presenceId}});setEditorId(key);}
   function closeEditor(key:string){setEditors(old=>{const next={...old};delete next[key];return next;});setEditorId(current=>current===key?null:current);}
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[uncertain,setUncertain]=useState(false);
@@ -259,7 +260,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const placeheld=readState==='idle'||readState==='reading'||readState==='error';
   const pageState=useRef({blocked,active,editorId});pageState.current={blocked,active,editorId};
   function created(id:number){if(pageState.current.blocked||!pageState.current.active||pageState.current.editorId!=='new')return;setFilters({...initialFilters(),tag:''});setSearch('');pendingFocus.current=id;const row=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===id);closeEditor('new');if(row){grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');if(contractHistoryDate(row.remark))setSubtable({row,kind:'supplier'});}}
-  return <section className="contracts-page" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>＋ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,search,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
+  return <section className="contracts-page" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button disabled={blocked||!active} onClick={()=>setTool('receipt')}>最近抓取结果</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>＋ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,search,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
     <div className="contract-selection"><span>已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
     <div className="contract-filters">
       <label>项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label>
@@ -282,6 +283,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     <DialogPresence>{subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}</DialogPresence>
     <DialogPresence>{remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}</DialogPresence>
     <DialogPresence>{tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>
-    <DialogPresence>{tool==='party'&&<ContractSettings kind={tool} me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>
+    <DialogPresence>{tool==='receipt'&&<JcFetchReceipt active={!blocked&&active} close={()=>setTool(null)}/>}</DialogPresence>
+    <DialogPresence>{tool==='party'&&<ContractSettings me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>
   </section>;
 }

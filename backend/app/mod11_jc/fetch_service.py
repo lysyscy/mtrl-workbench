@@ -238,6 +238,7 @@ def run_fetch(
         # Re-read local project/party/contract facts in the apply transaction;
         # replayed loaders contain ordinary values, never network operations.
         with session_scope() as s:
+            R.lock_ignored_rules(s)
             current_rows, current_ignored = split_ignored(s, fetched_rows)
             if len(current_rows) != len(rows) or any(current is not previous for current, previous in zip(current_rows, rows)):
                 raise MustReportError('集采剔除名单已变化，本次未写入合同；请重新抓取。')
@@ -287,19 +288,16 @@ def run_fetch(
                 #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
                 detail={**record_detail(),
                         **R.fetch_detail(
+                            jc_unsettled_count=len(m["unmatched"]),
+                            jc_ignored_count=len(ignored_rows),
                             jc_unsettled=[
                                 {"contract_no": str(r.get("contract_no") or ""),
                                  "project_name": str(r.get("project_name") or ""),
-                                 "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                                 "doc_name": bill_name(r),
                                  "kind": r.get("unsettled_kind")}
                                 for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
                             ],
-                            # ⭐ `TAIL-96`：被名单剔除的（同样截断保护）
-                            jc_ignored=[
-                                {"contract_no": str(r.get("contract_no") or ""),
-                                 "project_name": str(r.get("project_name") or "")}
-                                for r in ignored_rows[:200]
-                            ])},
+                            jc_ignored=ignored_rows[:200])},
                 operator=operator, started_at=t0)
             return {
                 "ok": True, "degraded": False,
@@ -336,19 +334,41 @@ __all__ = ["TABLE", "CONFIRM_TOKEN", "KICK_WARNING",
            "match_projects", "default_loaders", "run_fetch"]
 
 
-def split_ignored(s: Session, rows: list) -> tuple:
-    """把命中**剔除名单**的行从 `rows` 里摘出来 ⇒ `(要保留的行, 被剔除的行)`（`TAIL-96`）。
+def bill_name(row: dict) -> str:
+    return str(row.get("bill_name") or (row.get("fields") or {}).get("BillName") or "")
 
-    ⭐ 命中口径 = **归一化全名相等**（与 `resolve_ownership` 同函数）⇒ 名单里写人看的全名就行；
-    ⚠️ 名单为空 ⇒ **原样返回**（与加名单之前**逐字节一致** —— 防回归，也是判据之一）。
-    """
-    names = R.ignored_names(s)
-    if not names:
+
+def split_ignored(s: Session, rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """保留原合同对象与顺序，另外返回剔除合同及命中条件的快照。"""
+    rules = R.ignored_rules(s)
+    if not rules:
         return rows, []
-    from app.mod01_projects.domain import norm_full_name
-    keep: list = []
-    out: list = []
+    by_number: dict[str, list[dict]] = {}
+    by_project: dict[str, list[dict]] = {}
+    for rule in rules:
+        payload = R.ignore_rule_payload(rule)
+        if rule.kind == "contract" and rule.contract_no:
+            by_number.setdefault(rule.contract_no, []).append(payload)
+        elif rule.kind in {"project", "keyword"} and (name := norm_full_name(rule.name_full)):
+            by_project.setdefault(name, []).append(payload)
+
+    candidates: list[tuple[str, dict]] = []
+    ignored: dict[str, dict] = {}
     for row in rows or ():
-        key = norm_full_name(str(row.get("project_name") or ""))
-        (out if key and key in names else keep).append(row)
-    return keep, out
+        project = str(row.get("project_name") or "")
+        number = str(row.get("contract_no") or "").strip()
+        name = bill_name(row)
+        matches = [*by_number.get(number, ()), *(
+            rule for rule in by_project.get(norm_full_name(project), ())
+            if rule["kind"] == "project" or (rule["bill_name_keyword"] and rule["bill_name_keyword"] in name)
+        )]
+        if matches:
+            if number not in ignored:
+                ignored[number] = {"contract_no": number, "project_name": project, "doc_name": name, "matches": matches}
+            else:
+                snapshot = ignored[number]["matches"]
+                seen = {rule["id"] for rule in snapshot}
+                snapshot.extend(rule for rule in matches if rule["id"] not in seen)
+        else:
+            candidates.append((number, row))
+    return [row for number, row in candidates if number not in ignored], list(ignored.values())

@@ -14,6 +14,86 @@ def test_actual_rules_and_anonymous_write_protection(server,browser_page,api):
     expect(page.locator('.rules-block').first).to_be_visible()
     expect(page.get_by_role('button',name='＋ 增加规则',exact=True)).to_be_disabled()
     assert page.request.post(server+'/api/m14/rules',data={}).status==401
+    page.get_by_role('navigation', name='规则所属业务').get_by_role('button', name='集采台账').click()
+    expect(page.get_by_role('heading', name='集采合同抓取剔除', exact=False)).to_be_visible()
+    expect(page.get_by_role('button', name='＋ 新增剔除规则', exact=True)).to_be_disabled()
+    assert page.request.delete(server+'/api/m14/jc-ignore/1').status==401
+
+
+def test_procurement_rule_create_search_filter_delete_and_receipt(server, browser_page, api, disposable):
+    page, _ = browser_page
+    number = 'QA-' + uuid4().hex
+    receipt_calls = []
+    page.on('request', lambda request: receipt_calls.append(request.url) if '/api/m14/jc-ignore/receipt' in request.url else None)
+    open_page(page, server, 'rules', '规则配置')
+    nav = page.get_by_role('navigation', name='规则所属业务')
+    expect(nav.get_by_role('button')).to_have_text(['付款通知书', '集采台账'])
+    nav.get_by_role('button', name='集采台账').click()
+    page.get_by_role('button', name='＋ 新增剔除规则').click()
+    add = page.get_by_role('dialog', name='新增集采剔除规则')
+    add.get_by_label('匹配条件').select_option('contract')
+    add.get_by_label('完整合同编号').fill(number)
+    add.get_by_label('业务理由（选填）').fill('浏览器自检')
+    add.get_by_role('button', name='新增', exact=True).click()
+    expect(add).not_to_be_visible()
+    page.get_by_label('条件类型').select_option('project')
+    expect(page.get_by_text(number, exact=True)).to_have_count(0)
+
+    nav.get_by_role('button', name='付款通知书').click()
+    page.get_by_role('searchbox', name='搜索全部规则').fill(number)
+    page.get_by_role('button', name='搜索全部规则', exact=True).click()
+    search = page.get_by_role('dialog', name='搜索全部规则')
+    search.get_by_role('button', name=number, exact=False).click()
+    expect(search).not_to_be_visible()
+    expect(page.locator('.rules-located')).to_contain_text(number)
+    page.get_by_label('条件类型').select_option('contract')
+    row = page.get_by_role('row').filter(has_text=number)
+    row.get_by_role('button', name='删除').click()
+    delete = page.get_by_role('dialog', name='删除集采剔除规则')
+    delete.get_by_role('button', name='删除', exact=True).click()
+    expect(row).to_have_count(0)
+    assert all(rule['contract_no'] != number for rule in get(api, '/api/m14/jc-ignore')['items'])
+
+    assert not receipt_calls
+    page.get_by_role('button', name='最近抓取结果', exact=True).click()
+    receipt = page.get_by_role('dialog', name='最近一次集采抓取结果')
+    expect(receipt.locator('.jc-receipt-summary, .state').first).to_be_visible()
+    assert len(receipt_calls) == 1
+    receipt.get_by_role('link', name='i8 接入层 · 执行记录').click()
+    expect(page.locator('#page-title')).to_have_text('i8 接入层')
+    expect(page.locator('#execution-records')).to_be_visible()
+
+
+def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server, browser_page):
+    page, _ = browser_page
+    rule = {
+        'id': 8, 'kind': 'keyword', 'name_full': '回执测试项目',
+        'contract_no': '', 'bill_name_keyword': '排除样例', 'reason': '当时的剔除理由',
+        'operator': '', 'created_at': '',
+    }
+    receipt = {
+        'id': 12, 'started_at': '2026-11-12T10:06:00', 'status': 'success', 'matched': 3,
+        'unsettled': [{'contract_no': 'QA-01', 'project_name': '待归属项目',
+                       'doc_name': '材料采购合同', 'kind': 'not_archived'}],
+        'ignored': [{'contract_no': 'QA-02', 'project_name': '回执测试项目',
+                     'doc_name': '排除样例合同', 'matches': [rule]},
+                    {'contract_no': 'QA-03', 'project_name': '旧回执项目'}],
+        'unsettled_count': 1, 'ignored_count': 2,
+    }
+    page.route('**/api/m14/jc-ignore/receipt?run_id=12', lambda route: route.fulfill(json={'receipt': receipt}))
+    page.route('**/api/m02/fetch/records*', lambda route: route.fulfill(json=[{
+        'id': 12, 'run_type': 'fetch', 'target': 'jc_contract 全量', 'status': 'success',
+        'success_count': 3, 'fail_count': 0, 'error_message': '',
+        'started_at': receipt['started_at'], 'finished_at': None, 'triggered_by': '验看账号', 'duration_seconds': None,
+    }]))
+    open_page(page, server, 'i8', 'i8 接入层')
+    page.get_by_role('button', name='查看明细', exact=True).click()
+    dialog = page.get_by_role('dialog', name='集采抓取明细')
+    expect(dialog.get_by_role('row').filter(has_text='QA-01')).to_contain_text('项目未建档')
+    matched = dialog.get_by_role('row').filter(has_text='QA-02')
+    expect(matched).to_contain_text('排除样例合同')
+    expect(matched).to_contain_text('当时的剔除理由')
+    expect(dialog.get_by_role('row').filter(has_text='QA-03')).to_contain_text('旧记录未保存命中条件')
 
 
 def test_actual_rule_edit_preserves_notice_exclusion_flags(server,browser_page,api,disposable):

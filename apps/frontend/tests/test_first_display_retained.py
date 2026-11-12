@@ -40,7 +40,10 @@ def test_rules_grids_do_not_paint_through_the_retained_page(server, browser_page
     page, _ = browser_page
     login(page, server)
     page.locator('a[href="/preview/rules"]').click()
-    expect(page.locator('.rules-page .business-grid[data-layout-state="ready"]')).to_have_count(3)
+    expect(page.get_by_role('region', name='剔除规则列表')).to_be_visible()
+    page.get_by_role('navigation', name='规则所属业务').get_by_role('button', name='集采台账').click()
+    expect(page.get_by_role('region', name='剔除规则列表')).to_have_count(0)
+    expect(page.get_by_role('region', name='集采剔除规则')).to_be_visible()
     page.locator('a[href="/preview/users"]').click()
     expect(page.locator('#page-title')).to_have_text('用户管理')
     expect(page.locator('.users-table[data-layout-state="ready"], .users-table .business-grid[data-layout-state="ready"]')).to_have_count(1)
@@ -49,7 +52,7 @@ def test_rules_grids_do_not_paint_through_the_retained_page(server, browser_page
       const rect = retained.getBoundingClientRect();
       return {hidden: retained.hidden, inert: retained.inert, width: rect.width, height: rect.height,
         visibleGrids: [...node.querySelectorAll('.business-grid')]
-          .filter(grid => getComputedStyle(grid).visibility === 'visible')
+          .filter(grid => grid.getClientRects().length && getComputedStyle(grid).visibility === 'visible')
           .map(grid => grid.getAttribute('aria-label'))};
     }""")
     assert state['hidden'] and state['inert'], state

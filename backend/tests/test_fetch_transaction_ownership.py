@@ -137,7 +137,7 @@ def test_jc_rejects_changed_ignore_scope_before_any_apply(initially_ignored, iso
         token,_=history.begin_request(actor,'POST','/api/m14/jc-ignore')
         try:
             with db.session_scope() as session:
-                if rule:contracts.set_ignored_active(session,ignore_id=rule['id'],active=False)
+                if rule:contracts.delete_ignored(session,ignore_id=rule['id'])
                 else:contracts.add_ignored(session,name_full=name)
         finally:history.end_request(token)
         return []

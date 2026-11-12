@@ -4,8 +4,9 @@ import Button from 'antd/es/button';
 import Segmented from 'antd/es/segmented';
 import { ReadGrid } from './business-grid';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
 import { duration, readRecords, recordLabel, recordScope, recordSource, sourceNames } from './i8-api';
@@ -13,6 +14,8 @@ import type { RunRecord } from './i8-api';
 import { relayAvailable } from './i8-browser-relay';
 import type { SessionMode } from './i8-browser-relay';
 import { useI8Session } from './i8-session';
+import { JcFetchReceipt } from './jc-fetch-receipt';
+import { DialogPresence } from './workspace-motion';
 
 function Status({ row }: { row: RunRecord }) {
   const unit = row.run_type === 'print' || row.run_type === 'export_pdf' ? '张' : '条';
@@ -104,10 +107,23 @@ function I8BrowserRelay() {
 export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null }) {
   const [limit, setLimit] = useState(50);
   const [type, setType] = useState('all');
+  const [receiptId, setReceiptId] = useState<number | null>(null);
+  const historySection = useRef<HTMLDetailsElement>(null);
+  const { hash, key } = useLocation();
   const records = useQuery({ queryKey: ['i8-records', limit], enabled: !blocked && !!me, queryFn: async ({ signal }) => readRecords(await requestJson(`/api/m02/fetch/records?limit=${limit}`, { signal })), refetchOnMount: 'always' });
   const visible = records.data?.filter(row => type === 'all' || row.run_type === type) ?? [];
   const readState = readPhase(records, (records.data?.length ?? 0) === 0);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
+  useEffect(() => {
+    if (blocked || placeheld || hash !== '#execution-records') return;
+    const frame = requestAnimationFrame(() => {
+      const section = historySection.current;
+      if (!section) return;
+      section.open = true;
+      section.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [blocked, hash, key, placeheld]);
   return <section data-page-chrome className="i8-page" aria-labelledby="page-title">
     <div className="i8-block">
       <I8Server blocked={blocked} me={me}/>
@@ -125,7 +141,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
           {colId:'result',headerName:'最近结果',cellRenderer:({data}:{data:{row:RunRecord|undefined}})=>data.row?<Status row={data.row}/>:'最近 '+limit+' 条中暂无记录'},
           {colId:'time',headerName:'开始时间',valueGetter:p=>p.data!.row?when(p.data!.row.started_at):'—'},
         ]}/>
-        <details className="i8-history" open>
+        <details id="execution-records" ref={historySection} className="i8-history" open>
           <summary>执行记录</summary>
           <div className="i8-record-tools"><label>读取范围<Select aria-label="读取范围" value={limit} onChange={setLimit} options={[50,100,200].map(value=>({value,label:`最近 ${value} 条`}))}/></label><label>动作<Select aria-label="动作" value={type} onChange={setType} options={[['all','全部'],['fetch','抓取'],['sync','同步'],['print','打印'],['export_pdf','导出 PDF']].map(([value,label])=>({value,label}))}/></label>{records.isFetching && <span role="status">正在更新记录…</span>}</div>
           {visible.length === 0
@@ -135,11 +151,16 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
             {colId:'action',headerName:'动作',valueGetter:p=>recordLabel(p.data!)},
             {field:'target',headerName:'范围 / 对象'},
             {field:'triggered_by',headerName:'操作人',valueFormatter:p=>p.value==='manual'?'未记录（旧记录）':p.value},
-            {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=><><Status row={row}/>{row.error_message&&<details className="i8-error"><summary>查看原因</summary><pre>{row.error_message}</pre></details>}</>},
+            {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=><>
+              <Status row={row}/>
+              {recordSource(row) === 'contracts' && <Button size="small" onClick={() => setReceiptId(row.id)}>查看明细</Button>}
+              {row.error_message && <details className="i8-error"><summary>查看原因</summary><pre>{row.error_message}</pre></details>}
+            </>},
             {colId:'duration',headerName:'耗时',valueGetter:p=>duration(p.data!)},
           ]}/>}
         </details>
       </>}
     </div>
+    <DialogPresence>{receiptId !== null && <JcFetchReceipt active={!blocked} close={() => setReceiptId(null)} runId={receiptId} history={false} />}</DialogPresence>
   </section>;
 }

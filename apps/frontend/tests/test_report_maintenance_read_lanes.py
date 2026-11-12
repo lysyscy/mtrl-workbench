@@ -237,18 +237,21 @@ def test_rules_blocks_read_independently_and_report_in_place(server, browser_pag
     expect(page.locator('#page-title')).to_have_text('规则配置')
 
     blocks = page.locator('.rules-block')
-    expect(blocks).to_have_count(3)
+    expect(blocks).to_have_count(2)
     first = blocks.first
     failure = first.locator('.rules-read-status .notice')
     expect(failure).to_have_count(1)
     expect(failure).to_have_attribute('role', 'alert')
     expect(failure.get_by_role('button', name='重试读取')).to_be_visible()
     expect(first.locator('.rules-read-reserve .read-placeholder-quiet')).to_have_count(1)
-    # The failed block does not hold the other two lists back.
-    expect(blocks.nth(1).locator('.rules-read-reserve')).to_have_count(0, timeout=30000)
-    expect(blocks.nth(2).locator('.rules-read-reserve')).to_have_count(0, timeout=30000)
     # Adding a rule needs the kinds that the failed read would have supplied.
     expect(first.get_by_role('button', name='＋ 增加规则', exact=True)).to_be_disabled()
+
+    tabs = page.get_by_role('navigation', name='规则所属业务')
+    tabs.get_by_role('button', name='集采台账').click()
+    expect(blocks.nth(1).locator('.rules-read-reserve')).to_have_count(0, timeout=30000)
+    expect(page.get_by_role('region', name='集采剔除规则')).to_be_visible()
+    tabs.get_by_role('button', name='付款通知书').click()
 
     page.unroute('**/api/m14/rules')
     failure.get_by_role('button', name='重试读取').click()

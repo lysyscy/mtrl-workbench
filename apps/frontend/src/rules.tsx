@@ -1,8 +1,8 @@
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
-import { createContext, useContext, useRef, useState } from 'react';
-import type { ColDef } from 'ag-grid-community';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
 import { body } from './notices-api';
@@ -12,13 +12,17 @@ import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { countNewRuleMatches } from './rule-add-recovery';
+import { JcRules } from './jc-rules';
+import { jcCondition, jcRuleKinds, jcRulesPath, readJcRules } from './jc-rule-data';
+import { PageActivity } from './page-activity';
 
 const NO_RECOMPUTE = '规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。';
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '').replace(/，§[\d.]+/g, '').replace(/\s*[—-]+\s*§[\d.]+(\s*\/\s*§[\d.]+)*/g, '');
 const splitValues = (raw: string) => raw.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
 
 function readMessage(value: unknown, fallback: string): string {
-  return record(value) && typeof value.message === 'string' && value.message ? plain(value.message) : fallback;
+  return record(value) && typeof value.message === 'string' && value.message
+    ? plain(value.message).replace(`（${NO_RECOMPUTE}）`, '') : fallback;
 }
 
 export interface RuleRow { id: number; kind: string; kindLabel: string; values: string; meaning: string }
@@ -42,44 +46,110 @@ export function readRules(value: unknown): RulesData {
   return { sourceLabel: value.source_label, rules, kinds };
 }
 
-export interface JcIgnoreRow { id: number; nameFull: string; reason: string; operator: string; active: boolean; createdAt: string }
-export function readJcIgnore(value: unknown): JcIgnoreRow[] {
-  if (!record(value) || !Array.isArray(value.items)) throw new ApiError('集采项目剔除名单读取不完整，请重试；仍失败请联系维护人员。');
-  return value.items.map((row: unknown) => {
-    if (!record(row) || typeof row.id !== 'number' || !Number.isInteger(row.id) || typeof row.name_full !== 'string' || typeof row.reason !== 'string' || typeof row.operator !== 'string' || typeof row.active !== 'boolean' || typeof row.created_at !== 'string') throw new ApiError('集采项目剔除名单读取不完整，请重试；仍失败请联系维护人员。');
-    return { id: row.id, nameFull: row.name_full, reason: row.reason, operator: row.operator, active: row.active, createdAt: row.created_at };
-  });
-}
-
-export interface MechRuleRow { warehouse: string; display: string; aliases: string[] }
-export function readMechRules(value: unknown): MechRuleRow[] {
-  if (!record(value) || !Array.isArray(value.items)) throw new ApiError('机械报表项目匹配读取不完整，请重试；仍失败请联系维护人员。');
-  return value.items.map((row: unknown) => {
-    if (!record(row) || typeof row.warehouse !== 'string' || typeof row.display !== 'string' || !Array.isArray(row.aliases) || !row.aliases.every((alias: unknown) => typeof alias === 'string')) throw new ApiError('机械报表项目匹配读取不完整，请重试；仍失败请联系维护人员。');
-    return { warehouse: row.warehouse, display: row.display, aliases: row.aliases as string[] };
-  });
-}
-
 function Feedback({ receipt, error }: { receipt: string; error: string }) {
   if (error) return <p className="notice" role="alert">{error}</p>;
   if (receipt) return <p className="rules-receipt" role="status">{receipt}</p>;
   return null;
 }
 
+type RulePage = 'notice' | 'procurement';
+type RuleLocation = { page: RulePage; id: number };
+const ruleTabs: Record<RulePage, string> = { notice: '付款通知书', procurement: '集采台账' };
+const headings: Record<RulePage, string> = { notice: '付款通知书抓取剔除', procurement: '集采合同抓取剔除' };
+
+function revealRule({ page, id }: RuleLocation) {
+  requestAnimationFrame(() => {
+    document.getElementById(`rule-${page}-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
+}
+
 export function RulesPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
   const enabled = active && !blocked;
   const writable = enabled && Boolean(me);
-  const [exclusionsSettled, setExclusionsSettled] = useState(false);
-  const [ignoreSettled, setIgnoreSettled] = useState(false);
+  const [page, setPage] = useState<RulePage>('notice');
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [location, setLocation] = useState<RuleLocation | null>(null);
+  const keyword = search.trim().toLowerCase();
+  const notice = useQuery({
+    queryKey: ['rules', 'exclusions'], enabled: enabled && (page === 'notice' || searchOpen),
+    queryFn: async ({ signal }) => readRules(await requestJson('/api/m14/rules', { signal })),
+  });
+  const procurement = useQuery({
+    queryKey: ['rules', 'jc-ignore'], enabled: enabled && (page === 'procurement' || searchOpen),
+    queryFn: async ({ signal }) => readJcRules(await requestJson(jcRulesPath, { signal })),
+  });
+  const matches = keyword ? [
+    ...(notice.data?.rules ?? []).map(row => ({
+      page: 'notice' as const, id: row.id, condition: `${row.kindLabel} · ${row.values}`, meaning: row.meaning,
+    })),
+    ...(procurement.data ?? []).map(row => ({
+      page: 'procurement' as const, id: row.id,
+      condition: `${jcRuleKinds[row.kind]} · ${jcCondition(row)}`, meaning: row.reason,
+    })),
+  ].filter(row => `${ruleTabs[row.page]} ${headings[row.page]} ${row.condition} ${row.meaning}`.toLowerCase().includes(keyword)) : [];
+  const searchClose = useDialogClose({ busy: false, dirty: false, close: () => setSearchOpen(false) });
+
+  function selectTab(next: RulePage) {
+    setLocation(null);
+    setPage(next);
+  }
+
+  function locate(next: RuleLocation) {
+    setSearchOpen(false);
+    setLocation(next);
+    setPage(next.page);
+    revealRule(next);
+  }
+
   return <section className="rules-page" aria-label="规则配置" data-page-chrome>
-    <ExclusionRules enabled={enabled} writable={writable} blocked={blocked} settled={setExclusionsSettled} />
-    <JcIgnore enabled={enabled} writable={writable} canPublish={exclusionsSettled} settled={setIgnoreSettled} />
-    <MechMatch enabled={enabled} writable={writable} canPublish={exclusionsSettled && ignoreSettled} />
+    <div className="rules-navigation">
+      <nav className="rules-tabs" aria-label="规则所属业务">
+        {(Object.keys(ruleTabs) as RulePage[]).map(tab =>
+          <Button key={tab} aria-current={page === tab ? 'page' : undefined} onClick={() => selectTab(tab)}>{ruleTabs[tab]}</Button>)}
+      </nav>
+      <form className="rules-search" onSubmit={event => { event.preventDefault(); if (keyword) setSearchOpen(true); }}>
+        <input type="search" aria-label="搜索全部规则" placeholder="项目、合同编号或关键词" value={search} onChange={event => setSearch(event.target.value)} />
+        <Button htmlType="submit" disabled={!enabled || !keyword}>搜索全部规则</Button>
+      </form>
+    </div>
+    <div hidden={page !== 'notice'}>
+      <PageActivity.Provider value={enabled && page === 'notice'}>
+        <ExclusionRules query={notice} writable={writable && page === 'notice'} blocked={!enabled || page !== 'notice'}
+          selected={location?.page === 'notice' ? location.id : null}
+          onPublished={() => { if (location?.page === 'notice') revealRule(location); }} />
+      </PageActivity.Provider>
+    </div>
+    <div hidden={page !== 'procurement'}>
+      <PageActivity.Provider value={enabled && page === 'procurement'}>
+        <JcRules query={procurement} writable={writable && page === 'procurement'} active={enabled && page === 'procurement'}
+          selected={location?.page === 'procurement' ? location.id : null} clearSelection={() => setLocation(null)}
+          onPublished={() => { if (location?.page === 'procurement') revealRule(location); }} />
+      </PageActivity.Provider>
+    </div>
+    <DialogPresence>{searchOpen && <BusinessModal open={enabled} className="rules-dialog rules-search-dialog" titleId="rules-search-title" requestClose={searchClose.requestClose}>
+      <DialogContents title="搜索全部规则" titleId="rules-search-title" closing={searchClose}>
+        <input type="search" aria-label="搜索规则关键词" value={search} onChange={event => setSearch(event.target.value)} />
+        {notice.isError && <ReadFailure read={notice} retained="付款通知书规则更新失败，保留上次结果。" />}
+        {procurement.isError && <ReadFailure read={procurement} retained="集采台账规则更新失败，保留上次结果。" />}
+        {(notice.isFetching || procurement.isFetching) && <p role="status">正在读取规则…</p>}
+        {keyword && !notice.isFetching && !procurement.isFetching && !notice.isError && !procurement.isError && matches.length === 0 && <p className="state">没有匹配的规则</p>}
+        {matches.length > 0 && <ul className="rules-search-results">{matches.map(row => <li key={`${row.page}-${row.id}`}>
+          <button type="button" onClick={() => locate(row)}>
+            <span className="muted">{ruleTabs[row.page]} › {headings[row.page]}</span>
+            <strong>{row.condition}</strong>
+            {row.meaning && <span>{row.meaning}</span>}
+          </button>
+        </li>)}</ul>}
+      </DialogContents>
+    </BusinessModal>}</DialogPresence>
   </section>;
 }
 
-function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: boolean; writable: boolean; blocked: boolean; settled: (value: boolean) => void }) {
-  const query = useQuery({ queryKey: ['rules', 'exclusions'], enabled, queryFn: async ({ signal }) => readRules(await requestJson('/api/m14/rules', { signal })) });
+function ExclusionRules({ query, writable, blocked, selected, onPublished }: {
+  query: UseQueryResult<RulesData, Error>; writable: boolean; blocked: boolean;
+  selected: number | null; onPublished: () => void;
+}) {
   const [form, setForm] = useState<RuleDraft | null>(null);
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -192,8 +262,8 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
     }
   }
   return <div className="rules-block">
-    <div className="rules-head"><h2>剔除规则{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
-      <div className="rules-head-tools">{data && <span className="muted">来源：{data.sourceLabel}</span>}
+    <div className="rules-head"><h2>{headings.notice}{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
+      <div className="rules-head-tools">{data?.sourceLabel.startsWith('出厂默认') && <span className="muted">出厂默认</span>}
         <Button htmlType="button" className="primary" disabled={writeDisabled || !empty}
           onClick={() => openForm({ id: null, kind: empty, values: '', meaning: '' })}>＋ 增加规则</Button></div></div>
     <ReadStatusLane phase={readState} announce="正在读取剔除规则…" className="rules-read-status">
@@ -208,22 +278,21 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
         <Button htmlType="button" disabled={!writable || busy} onClick={() => void rereadAddition()}>{busy ? '正在读取…' : '重新读取'}</Button>
       </p>}
     </ReadStatusLane>
-    <FirstReadRegion phase={placeheld ? readState === 'error' ? 'error' : 'pending' : 'content'} onSettledChange={settled}
+    <FirstReadRegion phase={placeheld ? readState === 'error' ? 'error' : 'pending' : 'content'} onPublished={onPublished}
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
     {data && <>
       <Feedback receipt={confirmedReadFailed ? '' : receipt} error={error} />
       <ReadGrid table="exclusion-rules" className="rules-table" label="剔除规则列表" domLayout="autoHeight" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
-        {field:'kindLabel',headerName:'规则类别'},
-        {field:'values',headerName:'命中值（多个用 ｜ 分隔）',cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
+        {field:'kindLabel',headerName:'规则类别',cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
+          {rule.kindLabel}<span className="rules-match-kind">{rule.kind === 'bill_name' ? '包含' : '精确'}</span>
+        </div>},
+        {field:'values',headerName:'命中值',cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
         {field:'meaning',headerName:'剔除的业务含义',valueFormatter:p=>p.value||'—'},
         {colId:'actions',headerName:'操作',minWidth:140,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
       ]}/>
-      <p className="rules-note muted">{NO_RECOMPUTE}</p>
-      <p className="rules-warning">剔除规则中不得配置「收款单位 = 资产处集中采购」：集采不走剔除，而是参与分类。</p>
     </>}</FirstReadRegion>
     <DialogPresence>{draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
-      {recovery ? <p className="rules-warning" role="alert">提交结果待核对。请重新读取列表核对本次提交的内容。</p>
-        : <p className="rules-note muted">修改只影响后续抓取，已有剔除标记不重算。</p>}
+      {recovery && <p className="rules-warning" role="alert">提交结果待核对。请重新读取列表核对本次提交的内容。</p>}
       <label>规则类别 ＊<select value={draft.kind} disabled={busy || Boolean(recovery)} onChange={event => { if (form && !lock.current) setForm({ ...form, kind: event.target.value }); }}>{recovery ? <option value={draft.kind}>{recovery.kindLabel}</option> : (data?.kinds ?? []).map(kind => <option key={kind.kind} value={kind.kind}>{kind.label}</option>)}</select></label>
       <label>命中值 ＊（多个用 ｜ 分隔）<input value={draft.values} readOnly={Boolean(recovery)} disabled={busy} placeholder="例：水电｜水费｜电费" onChange={event => { if (form && !lock.current) setForm({ ...form, values: event.target.value }); }} /></label>
       <label>剔除的业务含义<input value={draft.meaning} readOnly={Boolean(recovery)} disabled={busy} placeholder="例：期间费用，非材料/机械" onChange={event => { if (form && !lock.current) setForm({ ...form, meaning: event.target.value }); }} /></label>
@@ -243,111 +312,9 @@ function ExclusionRules({ enabled, writable, blocked, settled }: { enabled: bool
     </DialogContents></BusinessModal>}</DialogPresence>
     <DialogPresence>{deleting && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-delete-title" requestClose={deleteClosing.requestClose}><DialogContents title="删除剔除规则" titleId="rules-delete-title" closing={deleteClosing}>
       <p>确定删除「{deleting.kindLabel}」这条规则？命中值：{splitValues(deleting.values).join('、')}。</p>
-      <p className="rules-warning">配置类数据为硬删、不留痕，删除后无法找回。{NO_RECOMPUTE}</p>
+      <p className="rules-warning">{data?.rules.length === 1 ? '删除最后一条规则后，抓取将使用出厂默认规则。' : NO_RECOMPUTE}</p>
       <div className="dialog-actions"><Button htmlType="submit" disabled={deleteBusy} onClick={deleteClosing.requestClose}>取消</Button>
         <Button htmlType="submit" className="danger" disabled={deleteBusy} onClick={() => void remove()}>{deleteBusy ? '正在删除…' : '删除'}</Button></div>
     </DialogContents></BusinessModal>}</DialogPresence>
-  </div>;
-}
-
-function JcIgnore({ enabled, writable, canPublish, settled }: { enabled: boolean; writable: boolean; canPublish: boolean; settled: (value: boolean) => void }) {
-  const query = useQuery({ queryKey: ['rules', 'jc-ignore'], enabled, queryFn: async ({ signal }) => readJcIgnore(await requestJson('/api/m14/jc-ignore', { signal })) });
-  const [name, setName] = useState('');
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [receipt, setReceipt] = useState('');
-  const [error, setError] = useState('');
-  const rows = query.data;
-  const readState = readPhase(query, rows !== undefined && rows.length === 0);
-  const placeheld = rows === undefined;
-  async function add() {
-    if (busy) return;
-    if (!name.trim()) { setReceipt(''); setError('项目全名不能为空，请粘贴项目全名（与档案里那个名字一致）。'); return; }
-    setBusy(true); setError('');
-    try {
-      const result = await requestJson('/api/m14/jc-ignore', { method: 'POST', ...body({ name_full: name.trim(), reason: reason.trim() }) });
-      setReceipt(readMessage(result, '已加入剔除名单。')); setError(''); setName(''); setReason('');
-      await query.refetch();
-    } catch (failure) {
-      setReceipt(''); setError(failure instanceof Error ? failure.message : '没能加入，请核对后重试。');
-    } finally { setBusy(false); }
-  }
-  async function setActive(row: JcIgnoreRow, active: boolean) {
-    if (busy) return;
-    setBusy(true); setError('');
-    try {
-      const result = await requestJson(`/api/m14/jc-ignore/${row.id}`, { method: 'PUT', ...body({ active }) });
-      setReceipt(readMessage(result, '已更新。')); setError('');
-    } catch (failure) {
-      setReceipt(''); setError(failure instanceof Error ? failure.message : '没能修改，请重试。');
-    } finally {
-      setBusy(false);
-      await query.refetch();
-    }
-  }
-  return <div className="rules-block" inert={!canPublish} style={{visibility: canPublish ? undefined : 'hidden'}}>
-    <div className="rules-head"><h2>集采项目剔除名单{rows && <span className="rules-count">（{rows.filter(row => row.active).length} 项在用）</span>}</h2></div>
-    <ReadStatusLane phase={readState} announce="正在读取集采项目剔除名单…" className="rules-read-status">
-      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="名单更新失败，保留上次结果。" />}
-    </ReadStatusLane>
-    <FirstReadRegion phase={placeheld ? readState === 'error' ? 'error' : 'pending' : 'content'} canPublish={canPublish} onSettledChange={settled}
-      placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
-    {rows && <>
-      <Feedback receipt={receipt} error={error} />
-      {rows.length === 0 ? <p className="state">集采项目剔除名单为空；需要排除项目时，在下方加入项目全名。</p> : <ReadGrid table="jc-ignore-rules" className="rules-table" label="集采项目剔除名单" domLayout="autoHeight" rows={rows} rowId={row=>String(row.id)} grid={{getRowClass:p=>p.data?.active?'':'rules-inactive'}} columns={[
-        {field:'nameFull',headerName:'项目全名'}, {field:'reason',headerName:'加入理由',valueFormatter:p=>p.value||'—'},
-        {field:'operator',headerName:'操作人',valueFormatter:p=>p.value||'—'}, {field:'createdAt',headerName:'加入时间',valueFormatter:p=>p.value||'—'},
-        {colId:'state',headerName:'状态',cellRenderer:({data:row}:{data:JcIgnoreRow})=>row.active?<span className="status-tag status-neutral">在用</span>:'已停用'},
-        {colId:'actions',headerName:'操作',cellRenderer:({data:row}:{data:JcIgnoreRow})=><Button danger={row.active} disabled={!writable||busy} onClick={()=>void setActive(row,!row.active)}>{row.active?'停用':'恢复'}</Button>},
-      ]}/>}
-      <div className="rules-form">
-        <label>加入一项（粘贴项目全名）<input aria-label="项目全名" value={name} placeholder="例：某某项目安装工程" disabled={!writable || busy} onChange={event => setName(event.target.value)} /></label>
-        <label>理由（可选）<input aria-label="加入理由" value={reason} placeholder="例：老项目，款已付清" disabled={!writable || busy} onChange={event => setReason(event.target.value)} /></label>
-        <Button htmlType="submit" className="primary" disabled={!writable || busy} onClick={() => void add()}>加入剔除名单</Button>
-      </div>
-      <p className="rules-note muted">加入后：该项目从下次抓取起不再写入，也不再进「未写入」清单。停用只是不再参与过滤，记录留在册、可随时恢复。</p>
-    </>}</FirstReadRegion>
-  </div>;
-}
-
-type AliasEditing={text:(row:MechRuleRow)=>string;disabled:boolean;change:(warehouse:string,value:string)=>void;save:(row:MechRuleRow)=>void;errors:Record<string,string>};
-const AliasContext=createContext<AliasEditing>(null!);
-function AliasInput({data:row}:{data:MechRuleRow}){const edit=useContext(AliasContext);return <input className="rules-alias-input" aria-label={row.display+'的报表项目名'} value={edit.text(row)} disabled={edit.disabled} onChange={e=>edit.change(row.warehouse,e.target.value)}/>;}
-function AliasActions({data:row}:{data:MechRuleRow}){const edit=useContext(AliasContext);return <><Button disabled={edit.disabled} onClick={()=>edit.save(row)}>保存</Button>{edit.errors[row.warehouse]&&<p className="notice" role="alert">{edit.errors[row.warehouse]}</p>}</>;}
-const aliasColumns:ColDef<MechRuleRow>[]=[{field:'display',headerName:'项目'},{colId:'aliases',headerName:'报表项目名（多个用 ｜ 分隔）',initialFlex:2,minWidth:240,cellRenderer:AliasInput},{colId:'actions',headerName:'操作',cellRenderer:AliasActions}];
-function MechMatch({ enabled, writable, canPublish }: { enabled: boolean; writable: boolean; canPublish: boolean }) {
-  const query = useQuery({ queryKey: ['rules', 'mech-match'], enabled, queryFn: async ({ signal }) => readMechRules(await requestJson('/api/m14/mech-match', { signal })) });
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [busyRow, setBusyRow] = useState('');
-  const [receipt, setReceipt] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const rows = query.data;
-  const readState = readPhase(query, rows !== undefined && rows.length === 0);
-  const placeheld = rows === undefined;
-  const text = (row: MechRuleRow) => drafts[row.warehouse] ?? row.aliases.join(' ｜ ');
-  async function save(row: MechRuleRow) {
-    if (busyRow) return;
-    setBusyRow(row.warehouse);
-    try {
-      const result = await requestJson('/api/m14/mech-match', { method: 'PUT', ...body({ warehouse: row.warehouse, aliases: splitValues(text(row)) }) });
-      setReceipt(readMessage(result, '已保存。')); setErrors(old => ({ ...old, [row.warehouse]: '' }));
-      await query.refetch();
-      setDrafts(old => { const next = { ...old }; delete next[row.warehouse]; return next; });
-    } catch (failure) {
-      setReceipt(''); setErrors(old => ({ ...old, [row.warehouse]: failure instanceof Error ? failure.message : '没能保存，请核对后重试。' }));
-    } finally { setBusyRow(''); }
-  }
-  return <div className="rules-block" inert={!canPublish} style={{visibility: canPublish ? undefined : 'hidden'}}>
-    <div className="rules-head"><h2>机械报表项目匹配{rows && <span className="rules-count">（{rows.length} 项）</span>}</h2></div>
-    <ReadStatusLane phase={readState} announce="正在读取机械报表项目匹配…" className="rules-read-status">
-      {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="匹配规则更新失败，保留上次结果。" />}
-    </ReadStatusLane>
-    <FirstReadRegion phase={placeheld ? readState === 'error' ? 'error' : 'pending' : 'content'} canPublish={canPublish}
-      placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
-    {rows && <>
-      <Feedback receipt={receipt} error="" />
-      {rows.length === 0 ? <p className="state">还没有机械报表项目匹配规则。</p> : <AliasContext.Provider value={{text,disabled:!writable||busyRow!=='',change:(warehouse,value)=>setDrafts(old=>({...old,[warehouse]:value})),save:row=>void save(row),errors}}><ReadGrid table="mechanical-match-rules" className="rules-table" label="机械报表项目匹配" domLayout="autoHeight" rows={rows} rowId={row=>row.warehouse} columns={aliasColumns}/></AliasContext.Provider>}
-      <p className="rules-note muted">机械报表按这里的项目名对应到档案项目；两个项目用同一个名字会让报表混写，保存时后端会拒绝。</p>
-    </>}</FirstReadRegion>
   </div>;
 }

@@ -7,6 +7,11 @@ def recent_records(session, *, run_type: str, limit: int):
     return repository.recent_records(session, run_type=run_type, limit=limit)
 
 
+def marked_fetch(session, marker: str, *, run_id: int | None = None):
+    from app.mod02_i8 import repository
+    return repository.marked_fetch(session, marker, run_id=run_id)
+
+
 def save_run_record(session, *, started_at, **values):
     """包间写出口：一次抓取的结果与失败独立留底。"""
     from app.mod02_i8 import repository

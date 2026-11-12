@@ -1,9 +1,7 @@
 import { DialogPresence } from './workspace-motion';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
-import Input from 'antd/es/input';
 import Select from 'antd/es/select';
-import Tag from 'antd/es/tag';
 import { Link } from 'react-router';
 import { createContext, useContext, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -18,6 +16,8 @@ import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { receipt } from './notices-api';
 import { I8FetchActions, I8FetchRecovery, I8FetchStatus, useI8FetchAction } from './i8-fetch';
+
+import { JcFetchReceipt } from './jc-fetch-receipt';
 
 interface ToolProps { me:Identity|null;blocked:boolean;close:()=>void;refresh:()=>Promise<void> }
 const contractFetchCounts = [
@@ -36,6 +36,7 @@ function readContractFetch(value: unknown) {
   }
   return {
     message: value.message,
+    runId: typeof value.run_record_id === 'number' ? value.run_record_id : null,
     summary: contractFetchCounts.map(({ field, label }) => ({ label, count: Number(value[field]) })),
     details: value.unmatched_projects as { name: string; count: number }[],
   };
@@ -46,6 +47,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const [all, setAll] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof readContractFetch>>();
   const [ownershipOpen, setOwnershipOpen] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
   const closing = useDialogClose({ busy: action.busy, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
 
@@ -66,25 +68,26 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
           <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
         </label>
         {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
-        <p>已审批和未审批合同均写入台账。忽略名单内或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
+        <p>已审批和未审批合同均写入台账。命中剔除规则或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
       </>}
       {result && <>
         <p role="status">{result.message}</p>
         <div className="contract-fetch-summary">{result.summary.map(item => <span key={item.label}>{item.label} {item.count} 条</span>)}</div>
+        {result.runId !== null && <Button disabled={blocked} onClick={() => setReceiptOpen(true)}>查看本次抓取明细</Button>}
         {result.details.length > 0 && <>
           <div className="contract-unmatched"><h3>未写入项目</h3><ul>{result.details.map((item, index) => <li key={index}>{item.name}，{item.count} 条</li>)}</ul></div>
           <Button disabled={action.busy || blocked} onClick={() => setOwnershipOpen(true)}>去指定归属</Button>
         </>}
       </>}
       <DialogPresence>{ownershipOpen && <ContractOwnershipPending blocked={blocked || action.busy} close={() => setOwnershipOpen(false)} refresh={refresh} />}</DialogPresence>
+      <DialogPresence>{receiptOpen && result?.runId != null && <JcFetchReceipt active={!blocked} close={() => setReceiptOpen(false)} runId={result.runId} />}</DialogPresence>
       <I8FetchRecovery action={action} source="contracts" />
       <I8FetchActions action={action} close={closing.requestClose} onRun={() => void run()} />
     </DialogContents>
   </BusinessModal>;
 }
 interface Party {name:string;kind:string;kind_name:string;count:number}
-interface Ignored {id:number;name_full:string;reason:string;operator:string;active:boolean}
-interface Settings {parties:Party[];ignored:Ignored[];kinds:string[];names:Record<string,string>}
+interface Settings {parties:Party[];kinds:string[];names:Record<string,string>}
 const PartyEditing=createContext<{drafts:Record<string,string>;disabled:boolean;options:{value:string;label:string}[];change:(party:Party,value:string)=>void;save:(party:Party)=>void}>(null!);
 function PartyKindCell({data:party}:{data:Party}) {
   const editing=useContext(PartyEditing);
@@ -94,19 +97,15 @@ function PartySaveCell({data:party}:{data:Party}) {
   const editing=useContext(PartyEditing);
   return <Button size="small" disabled={editing.disabled||!editing.drafts[party.name]} onClick={()=>editing.save(party)}>保存</Button>;
 }
-export function ContractSettings({kind,me,blocked,close,refresh}:ToolProps&{kind:'party'|'ignore'}) {
-  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[feedback,setFeedback]=useState(''),[unknown,setUnknown]=useState(false),[name,setName]=useState(''),[reason,setReason]=useState('');
+export function ContractSettings({me,blocked,close,refresh}:ToolProps) {
+  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[feedback,setFeedback]=useState(''),[unknown,setUnknown]=useState(false);
   const [drafts,setDrafts]=useState<Record<string,string>>({});
-  const lock=useRef(false),closing=useDialogClose({busy,dirty:Boolean(name||reason||Object.keys(drafts).length),close,active:!blocked});
-  const query=useQuery({queryKey:['contract-settings',kind],enabled:!blocked,staleTime:0,refetchOnMount:'always',queryFn:async({signal}):Promise<Settings>=>{
-    const value=await requestJson(kind==='party'?'/api/m11/party-kinds':'/api/m14/jc-ignore',{signal});
+  const lock=useRef(false),closing=useDialogClose({busy,dirty:Boolean(Object.keys(drafts).length),close,active:!blocked});
+  const query=useQuery({queryKey:['contract-settings','party'],enabled:!blocked,staleTime:0,refetchOnMount:'always',queryFn:async({signal}):Promise<Settings>=>{
+    const value=await requestJson('/api/m11/party-kinds',{signal});
     if(!record(value)||!Array.isArray(value.items))throw new ApiError('清单读取不完整，请重读。');
-    if(kind==='party'){
-      if(!value.items.every(x=>record(x)&&typeof x.name==='string'&&typeof x.kind==='string'&&typeof x.kind_name==='string'&&typeof x.count==='number')||!Array.isArray(value.kinds)||!value.kinds.every(x=>typeof x==='string')||!record(value.kind_names)||!Object.values(value.kind_names).every(x=>typeof x==='string'))throw new ApiError('甲方分类读取不完整，请重读。');
-      return {parties:value.items as Party[],ignored:[],kinds:value.kinds as string[],names:value.kind_names as Record<string,string>};
-    }
-    if(!value.items.every(x=>record(x)&&Number.isSafeInteger(x.id)&&typeof x.name_full==='string'&&typeof x.reason==='string'&&typeof x.operator==='string'&&typeof x.active==='boolean'))throw new ApiError('忽略名单读取不完整，请重读。');
-    return {parties:[],ignored:value.items as Ignored[],kinds:[],names:{}};
+    if(!value.items.every(x=>record(x)&&typeof x.name==='string'&&typeof x.kind==='string'&&typeof x.kind_name==='string'&&typeof x.count==='number')||!Array.isArray(value.kinds)||!value.kinds.every(x=>typeof x==='string')||!record(value.kind_names)||!Object.values(value.kind_names).every(x=>typeof x==='string'))throw new ApiError('甲方分类读取不完整，请重读。');
+    return {parties:value.items as Party[],kinds:value.kinds as string[],names:value.kind_names as Record<string,string>};
   }});
   async function write(path:string,payload:unknown,method='POST',accepted?:()=>void){
     if(busy||blocked||!me||unknown||lock.current)return;
@@ -117,20 +116,14 @@ export function ContractSettings({kind,me,blocked,close,refresh}:ToolProps&{kind
   }
   async function reread(){if(busy||blocked)return;setBusy(true);try{await query.refetch({throwOnError:true});await refresh();setUnknown(false);setError('');setFeedback('已重读，请核对清单。');}catch(failure){setError(failure instanceof Error?failure.message:'重读失败。');}finally{setBusy(false);}}
   const unavailable=busy||blocked||!me||unknown||query.isPending||query.isError;
-  return <BusinessModal open={!blocked} className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title={kind==='party'?'甲方单位分类':'集采项目忽略名单'} titleId="contract-settings-title" closing={closing}>
-    <p>{kind==='party'?'分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。':'仅影响以后抓取。停用后项目可再次抓取，已保存的合同不删除。'}</p>
-    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party|Ignored> manualWidths table={'contract-settings-'+kind} className="contract-settings-table" label={kind==='party'?'甲方单位分类':'集采项目忽略名单'} domLayout="autoHeight" rows={kind==='party'?query.data.parties:query.data.ignored} rowId={row=>'id'in row?String(row.id):row.name} columns={kind==='party'?[
-      {colId:'name',headerName:'甲方单位',valueGetter:p=>(p.data as Party).name},
-      {colId:'count',headerName:'合同数',valueGetter:p=>(p.data as Party).count},
+  return <BusinessModal open={!blocked} className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title="甲方单位分类" titleId="contract-settings-title" closing={closing}>
+    <p>分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。</p>
+    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party> manualWidths table="contract-settings-party" className="contract-settings-table" label="甲方单位分类" domLayout="autoHeight" rows={query.data.parties} rowId={row=>row.name} columns={[
+      {colId:'name',headerName:'甲方单位',valueGetter:p=>p.data!.name},
+      {colId:'count',headerName:'合同数',valueGetter:p=>p.data!.count},
       {colId:'kind',headerName:'分类',cellRenderer:PartyKindCell},
       {colId:'actions',headerName:'操作',cellRenderer:PartySaveCell},
-    ]:[
-      {colId:'name',headerName:'项目全称',valueGetter:p=>(p.data as Ignored).name_full},
-      {colId:'reason',headerName:'原因',valueGetter:p=>(p.data as Ignored).reason||'—'},
-      {colId:'state',headerName:'状态',cellRenderer:({data:item}:{data:Ignored})=><Tag className={'status-tag '+(item.active?'status-pending':'status-neutral')}>{item.active?'正在忽略':'已停用'}</Tag>},
-      {colId:'actions',headerName:'操作',cellRenderer:({data:item}:{data:Ignored})=><Button size="small" disabled={unavailable} onClick={()=>void write('/api/m14/jc-ignore/'+item.id,{active:!item.active},'PUT')}>{item.active?'停用忽略':'恢复忽略'}</Button>},
     ]}/></PartyEditing.Provider>}
-    {kind==='ignore'&&<form className="contract-ignore-add" onSubmit={e=>{e.preventDefault();if(name.trim())void write('/api/m14/jc-ignore',{name_full:name,reason},'POST',()=>{setName('');setReason('');});}}><label>项目全称<Input value={name} disabled={unavailable} onChange={e=>setName(e.target.value)}/></label><label>忽略原因<Input value={reason} disabled={unavailable} onChange={e=>setReason(e.target.value)}/></label><Button htmlType="submit" disabled={unavailable||!name.trim()}>加入名单</Button></form>}
     {feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button disabled={busy||blocked} onClick={()=>void reread()}>重读清单</Button></div>
   </DialogContents></BusinessModal>;
 }

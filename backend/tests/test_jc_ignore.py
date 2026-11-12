@@ -1,19 +1,7 @@
-"""`ACC-JC-IGNORE-001` —— `TAIL-96` 集采**不纳入名单**（不要的项目 ⇒ 抓取时先剔除）的判据点。
-
-⭐ `TAIL-101`（2026-09-25）**补的契约面**：本文件的行为判据**早就在**（`TAIL-96` 落地时写的），
-   但那批**只做了实现**（用 `@acc()` 自检）—— 判据点**没登记进 `验收基线.json`**，`MOD-14.md` 与
-   《说明书》里也**没有这条能力** ⇒ 交付面**查不到有这条规则**。本批补齐：`ACC-JC-IGNORE-001`（4 点）。
-   ⚠️ 口径主人 = 《说明书》**§6.5.4**（本次新建）。
-
-⚠️ 非破坏：末尾 `s.rollback()`（同 `test_acc_jc_fetch.py` 的约定，⛔ 一行不留）。
-
-判据四条（都能证伪）：
-1. 名单命中 ⇒ **摘出**（且不动未命中的行）；
-2. 名单为空 ⇒ **原样返回**（与加名单之前逐字节一致 —— 防回归）；
-3. ⛔ **反例**：名单**不许**让"未走完的行"变得可落库（防"有名单就放行"）；
-4. 名单写入**同名幂等** ＋ 停用后**不再参与过滤**（但仍留在册，可复活）。
-"""
+"""集采抓取剔除的匹配、旧名单兼容和规则新增删除。"""
 from __future__ import annotations
+
+from sqlalchemy import text
 
 from app.core.db import session_scope
 from app.mod01_projects import repository as pj_repo
@@ -75,17 +63,69 @@ def test_反例_名单不许让未走完的行落库():
             s.rollback()
 
 
-def test_写入同名幂等_停用后不再过滤但留在册():
+def test_同条件幂等_删除即停止匹配():
     with session_scope() as s:
         try:
             a = R.add_ignored(s, name_full=FULL, reason="自检", operator="自检")
-            b = R.add_ignored(s, name_full=FULL, reason="自检2", operator="自检")
-            assert b["reused"] is True, "同名必须复用（⛔ 不重复插）"
-            assert a["id"] == b["id"]
-            assert len(R.ignored_names(s)) == 1
+            b = R.add_ignored(s, name_full=f" {FULL} ", reason="自检2", operator="自检")
+            assert b == {"id": a["id"], "reused": True}
+            assert len(R.list_ignored(s)) == 1
 
-            assert R.set_ignored_active(s, ignore_id=int(a["id"]), active=False) == 1
-            assert len(R.ignored_names(s)) == 0, "停用后不再参与抓取过滤"
-            assert any(x["id"] == a["id"] for x in R.list_ignored(s)), "停用必须**留在册**（可复活）"
+            R.delete_ignored(s, ignore_id=a["id"])
+            R.delete_ignored(s, ignore_id=a["id"])
+            assert R.list_ignored(s) == []
+            assert split_ignored(s, _rows())[1] == []
+        finally:
+            s.rollback()
+
+
+def test_旧名单保留原有效范围_新建同名不恢复旧记录():
+    with session_scope() as s:
+        try:
+            legacy = s.execute(text(
+                "INSERT INTO jc_ignore_project(name_full, reason, operator, active, created_at) "
+                "VALUES (:name, '', '', :active, CURRENT_TIMESTAMP) RETURNING id"
+            ), {"name": FULL, "active": True}).scalar_one()
+            retired = s.execute(text(
+                "INSERT INTO jc_ignore_project(name_full, reason, operator, active, created_at) "
+                "VALUES (:name, '', '', :active, CURRENT_TIMESTAMP) RETURNING id"
+            ), {"name": "另有其名的项目", "active": False}).scalar_one()
+            keep, ignored = split_ignored(s, _rows())
+            assert [row["contract_no"] for row in keep] == ["IG2"]
+            assert [rule["id"] for rule in ignored[0]["matches"]] == [legacy]
+            assert [(rule["id"], rule["kind"]) for rule in R.list_ignored(s)] == [(legacy, "project")]
+
+            added = R.add_ignored(s, name_full="另有其名的项目")
+            assert not added["reused"] and added["id"] != retired
+            R.delete_ignored(s, ignore_id=added["id"])
+            assert s.execute(text("SELECT active FROM jc_ignore_project WHERE id = :id"),
+                             {"id": retired}).scalar_one() is False
+        finally:
+            s.rollback()
+
+
+def test_三种条件_完整编号和项目范围_每份合同保留全部命中():
+    with session_scope() as s:
+        try:
+            project = R.add_ignored(s, name_full=FULL)["id"]
+            number = R.add_ignored(s, kind="contract", contract_no=" IG1 ")["id"]
+            keyword = R.add_ignored(s, kind="keyword", name_full=FULL, bill_name_keyword="测试")["id"]
+            scoped = R.add_ignored(s, kind="keyword", name_full="其他项目", bill_name_keyword="测试")["id"]
+            rows = [
+                {"contract_no": " IG1 ", "project_name": FULL, "bill_name": "检测测试合同"},
+                {"contract_no": "IG1", "project_name": FULL, "bill_name": "检测测试合同"},
+                {"contract_no": "IG10", "project_name": "项目外", "bill_name": "测试"},
+                {"contract_no": "IG11", "project_name": "其他项目", "bill_name": "测试"},
+                {"contract_no": "IG12", "project_name": "其他项目", "bill_name": "其他"},
+                {"contract_no": "IG13", "project_name": "项目外", "bill_name": "其他"},
+                {"contract_no": "IG1", "project_name": "项目外", "bill_name": "其他"},
+            ]
+            keep, ignored = split_ignored(s, rows)
+            assert keep == [rows[2], rows[4], rows[5]]
+            assert keep[0] is rows[2]
+            assert [row["contract_no"] for row in ignored] == ["IG1", "IG11"]
+            assert {rule["id"] for rule in ignored[0]["matches"]} == {project, number, keyword}
+            assert [rule["id"] for rule in ignored[1]["matches"]] == [scoped]
+            assert ignored[0]["doc_name"] == "检测测试合同"
         finally:
             s.rollback()

@@ -10,6 +10,8 @@
 .business-modal .ledger-export-dialog{width:min(calc(650px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .flow-revoke{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));padding:1.2rem}
 .business-modal .users-dialog,.business-modal .rules-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.business-modal .rules-search-dialog{width:min(calc(640px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .jc-receipt-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .big-order-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}

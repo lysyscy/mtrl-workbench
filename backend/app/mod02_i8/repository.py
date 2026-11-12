@@ -150,3 +150,14 @@ def recent_records(session: Session, *, run_type: str, limit: int) -> list[RunRe
     return list(session.execute(select(RunRecord).where(
         RunRecord.run_type == run_type
     ).order_by(RunRecord.id.desc()).limit(limit)).scalars().all())
+
+
+def marked_fetch(session: Session, marker: str, *, run_id: int | None = None) -> RunRecord | None:
+    """按来源标记定位指定或最近一次抓取。"""
+    from sqlalchemy import select
+    query = select(RunRecord).where(
+        RunRecord.run_type == "fetch", RunRecord.detail[marker].as_boolean().is_(True),
+    )
+    if run_id is not None:
+        query = query.where(RunRecord.id == run_id)
+    return session.scalar(query.order_by(RunRecord.id.desc()).limit(1))

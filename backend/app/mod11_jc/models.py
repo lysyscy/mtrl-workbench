@@ -217,21 +217,19 @@ __all__ = [
 ]
 
 
-class JcIgnoreProject(Base):
-    """集采**剔除名单**（`TAIL-96`）：这些**项目**的合同我不要 ⇒ 抓取时先剔除（既不落库、也不再报未落库）。
-
-    ⭐ 与付款侧**各一份、⛔ 不共用**（用户 2026-09-25 裁定）。
-    ⚠️ 命中口径 = `name_full` **归一化后相等**（与 `resolve_ownership` 同一个归一化函数
-       `app.mod01_projects.domain.norm_full_name`）⇒ 名单里存人看的全名即可。
-    ⚠️ `active=False` = 停用（**保留记录**，⛔ 不物理删 —— 免得"这条为什么没了"无从追溯）。
-    """
+class JcIgnoreRule(Base):
+    """集采合同写入前的剔除条件。"""
 
     __tablename__ = "jc_ignore_project"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(16), default="project", server_default="project")
     name_full: Mapped[str] = mapped_column(String(512), index=True, default="")
+    contract_no: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    bill_name_keyword: Mapped[str] = mapped_column(String(512), default="", server_default="")
     reason: Mapped[str] = mapped_column(String(255), default="")
     operator: Mapped[str] = mapped_column(String(64), default="")
+    # 历史停用行留在原表，不参与配置读写或抓取匹配。
     active: Mapped[bool] = mapped_column(Boolean, index=True, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

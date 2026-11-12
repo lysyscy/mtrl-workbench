@@ -5,7 +5,7 @@
 .contract-toolbar>div{margin-left:auto;justify-content:flex-end}
 .contract-filter-count{margin-left:auto;align-self:center;white-space:nowrap;color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .contract-filters{align-items:flex-end;padding:calc(16px * var(--fscale));gap:12px 16px;background:var(--sf);border-radius:var(--radius-card);box-shadow:var(--shadow)}
-.contract-filters label,.contract-form-grid label,.contract-ignore-add label,.contract-field,.contract-remark{display:flex;flex-direction:column;gap:6px;color:var(--tx2)}
+.contract-filters label,.contract-form-grid label,.contract-field,.contract-remark{display:flex;flex-direction:column;gap:6px;color:var(--tx2)}
 .contract-filters label{width:calc(112px * var(--fscale));min-width:0;font-size:calc(12px * var(--fscale))}
 .contract-filters label:has(.business-project-picker){width:calc(220px * var(--fscale));max-width:100%}
 .contract-filters label:has(.business-project-picker) .business-project-picker{width:100%!important;min-width:0}
@@ -55,7 +55,6 @@
 .contract-field{margin:16px 0}
 .contract-settings-table{max-height:48dvh;overflow:auto;border:1px solid var(--bd);border-radius:var(--radius-input)}
 .contract-settings-table .ant-select{width:100%;min-width:calc(110px * var(--fscale))}
-.contract-ignore-add{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:16px;margin-top:24px}
 .contract-fetch-summary{display:flex;gap:16px;flex-wrap:wrap;padding:16px 0}
 .contract-unmatched{max-height:32dvh;overflow:auto}
 .contract-conflict{background:var(--sf2);padding:16px;margin-top:16px;border-radius:var(--radius-inner)}
@@ -69,7 +68,7 @@
 .project-dialog .contract-remark{margin:0 0 16px}
 .contract-editor .dialog-close-heading{margin-bottom:16px}
 .business-modal .contract-editor-discard,.business-modal .contract-tool-discard{width:min(calc(420px * var(--fscale)),calc(100vw - 24px))}
-@media(max-width:700px){.contract-form-grid,.contract-evidence,.contract-ignore-add{grid-template-columns:1fr}.contract-toolbar>div{width:100%}}
+@media(max-width:700px){.contract-form-grid,.contract-evidence{grid-template-columns:1fr}.contract-toolbar>div{width:100%}}
 
 .contract-inline-select{width:100%;min-width:0;height:calc(28px * var(--fscale))}
 .contract-inline-select .ant-tag{margin:0}

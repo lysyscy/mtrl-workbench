@@ -266,7 +266,8 @@ def test_i8_records_first_read_failure_and_retry(server, browser_page):
     expect(page.locator('.i8-read-reserve .read-placeholder-quiet')).to_have_count(1)
     expect(page.get_by_text('还没有执行记录。')).to_have_count(0)
     after = page.locator('.i8-read-reserve').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
+    alert = failure.bounding_box()
+    assert after['y'] >= alert['y'] + alert['height'] - 1, (alert, after)
     assert abs(after['height'] - before['height']) < 1, (before, after)
 
     failure.get_by_role('button', name='重试读取').click()

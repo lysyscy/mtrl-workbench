@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import MustReportError   # `TAIL-96` 补：`add_ignored` 空名要抛它（拆件漏 import ⇒ 运行时 NameError）
+from app.core.errors import MustReportError
 from app.mod01_projects import service as PS
+from app.mod01_projects.domain import norm_full_name
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
 from app.mod11_jc.models import (
     KIND_PARTY_TRADE,
@@ -24,6 +25,7 @@ from app.mod11_jc.models import (
     SRC_NOTICE,
     TAG_IN,
     JcContract,
+    JcIgnoreRule,
     JcInvoice,
     JcPartyKind,
     JcPayment,
@@ -665,61 +667,67 @@ def latest_unsettled(session: Session) -> list[dict]:
 __all__ = ["JC_FETCH_MARK", "LOOKBACK", "fetch_detail", "latest_unsettled"]
 
 
-# ─────────────── `TAIL-96` 集采剔除名单（不要的项目 · 抓取时先剔除）───────────────
-def ignored_names(s: Session) -> set:
-    """**在用的**剔除名单全名（归一化后）—— 抓取过滤的唯一入口。
-
-    ⚠️ 归一化必须与 `resolve_ownership` **同一个函数**，否则"名单写了却不生效"这类静默错必现。
-    """
-    from app.mod01_projects.domain import norm_full_name
-    from app.mod11_jc.models import JcIgnoreProject
-    out = set()
-    for row in s.execute(select(JcIgnoreProject).where(JcIgnoreProject.active.is_(True))).scalars():
-        k = norm_full_name(str(row.name_full or ""))
-        if k:
-            out.add(k)
-    return out
+def ignored_rules(s: Session) -> list[JcIgnoreRule]:
+    return list(s.scalars(select(JcIgnoreRule).where(
+        JcIgnoreRule.active.is_(True),
+    ).order_by(JcIgnoreRule.id.desc())))
 
 
-def list_ignored(s: Session) -> list:
-    """名单（含停用）—— 给人看的清单。"""
-    from app.mod11_jc.models import JcIgnoreProject
-    rows = s.execute(select(JcIgnoreProject).order_by(JcIgnoreProject.id.desc())).scalars()
-    return [{"id": int(x.id), "name_full": str(x.name_full or ""), "reason": str(x.reason or ""),
-             "operator": str(x.operator or ""), "active": bool(x.active),
-             "created_at": x.created_at.strftime("%Y-%m-%d %H:%M") if x.created_at else ""} for x in rows]
+def lock_ignored_rules(s: Session, *, writing: bool = False) -> None:
+    """串行去重，并保持抓取最终校验到提交之间的规则版本一致。"""
+    if s.get_bind().dialect.name == "postgresql":
+        statement = ("LOCK TABLE jc_ignore_project IN SHARE ROW EXCLUSIVE MODE" if writing
+                     else "LOCK TABLE jc_ignore_project IN SHARE MODE")
+        s.connection().exec_driver_sql(statement)
 
 
-def add_ignored(s: Session, *, name_full: str, reason: str = "", operator: str = "") -> dict:
-    """加一条（⭐ **同名幂等**：已有同名的在用行 ⇒ 直接返回它，⛔ 不重复插）。"""
-    from app.mod01_projects.domain import norm_full_name
-    from app.mod11_jc.models import JcIgnoreProject
-    name = str(name_full or "").strip()
-    if not name:
-        raise MustReportError("项目全名不能为空")
-    key = norm_full_name(name)
-    for row in s.execute(select(JcIgnoreProject)).scalars():
-        if norm_full_name(str(row.name_full or "")) == key:
-            if not row.active:
-                row.active = True
-                s.flush()
-                return {"id": int(row.id), "reused": True, "reactivated": True}
-            return {"id": int(row.id), "reused": True, "reactivated": False}
-    obj = JcIgnoreProject(name_full=name, reason=str(reason or ""), operator=str(operator or ""), active=True)
+def ignore_rule_payload(row: JcIgnoreRule) -> dict:
+    return {
+        "id": row.id, "kind": row.kind, "name_full": row.name_full,
+        "contract_no": row.contract_no, "bill_name_keyword": row.bill_name_keyword,
+        "reason": row.reason, "operator": row.operator,
+        "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "",
+    }
+
+
+def list_ignored(s: Session) -> list[dict]:
+    return [ignore_rule_payload(row) for row in ignored_rules(s)]
+
+
+def add_ignored(s: Session, *, kind: str = "project", name_full: str = "", contract_no: str = "",
+                bill_name_keyword: str = "", reason: str = "", operator: str = "") -> dict:
+    if kind not in {"project", "contract", "keyword"}:
+        raise MustReportError("请选择剔除规则类型")
+    name = name_full.strip() if kind != "contract" else ""
+    number = contract_no.strip() if kind == "contract" else ""
+    keyword = bill_name_keyword.strip() if kind == "keyword" else ""
+    project = norm_full_name(name)
+    if kind != "contract" and not project:
+        raise MustReportError("请填写 i8 项目全名")
+    if kind == "contract" and not number:
+        raise MustReportError("请填写完整合同编号")
+    if kind == "keyword" and not keyword:
+        raise MustReportError("请填写单据名关键词")
+    reason = reason.strip()
+    if len(name) > 512 or len(number) > 64 or len(keyword) > 512 or len(reason) > 255:
+        raise MustReportError("剔除条件或原因超过允许长度")
+
+    lock_ignored_rules(s, writing=True)
+    for row in ignored_rules(s):
+        if (row.kind, norm_full_name(row.name_full), row.contract_no, row.bill_name_keyword) == (
+            kind, project, number, keyword,
+        ):
+            return {"id": row.id, "reused": True}
+    obj = JcIgnoreRule(kind=kind, name_full=name, contract_no=number, bill_name_keyword=keyword,
+                       reason=reason, operator=operator, active=True)
     s.add(obj)
     s.flush()
-    return {"id": int(obj.id), "reused": False, "reactivated": False}
+    return {"id": obj.id, "reused": False}
 
 
-def set_ignored_active(s: Session, *, ignore_id: int, active: bool) -> int:
-    """停用/启用（⛔ 不物理删）。"""
-    from app.mod11_jc.models import JcIgnoreProject
-    row = s.get(JcIgnoreProject, int(ignore_id))
-    if row is None:
-        return 0
-    row.active = bool(active)
-    s.flush()
-    return 1
+def delete_ignored(s: Session, *, ignore_id: int) -> None:
+    lock_ignored_rules(s, writing=True)
+    s.execute(delete(JcIgnoreRule).where(JcIgnoreRule.id == ignore_id, JcIgnoreRule.active.is_(True)))
 
 
 def links_by_notice(session, notice_ids: list[int] | None = None) -> dict[int, list[int]]:
