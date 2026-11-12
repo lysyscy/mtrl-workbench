@@ -78,7 +78,11 @@ class FakeSession:
         return None
 
     def add(self, obj) -> None:
-        self.by_model.setdefault(type(obj), []).append(obj)
+        from app.mod02_i8.models import RunRecord
+        rows = self.by_model.setdefault(type(obj), [])
+        if isinstance(obj, RunRecord) and obj.id is None:
+            obj.id = max((row.id or 0 for row in rows), default=0) + 1
+        rows.append(obj)
 
     def delete(self, obj) -> None:
         rows = self.by_model.get(type(obj), [])

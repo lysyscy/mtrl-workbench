@@ -57,7 +57,7 @@ def test_procurement_rule_create_search_filter_delete_and_receipt(server, browse
     assert not receipt_calls
     page.get_by_role('button', name='最近抓取结果', exact=True).click()
     receipt = page.get_by_role('dialog', name='最近一次集采抓取结果')
-    expect(receipt.locator('.jc-receipt-summary, .state').first).to_be_visible()
+    expect(receipt.locator('.i8-receipt-summary, .state').first).to_be_visible()
     assert len(receipt_calls) == 1
     receipt.get_by_role('link', name='i8 接入层 · 执行记录').click()
     expect(page.locator('#page-title')).to_have_text('i8 接入层')

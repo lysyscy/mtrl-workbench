@@ -47,6 +47,7 @@ from app.mod02_i8.browser_session import (
     StrictTargetMismatch,
 )
 from app.mod02_i8.repository import save_run_record
+from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.sources import load_warehouse_rows
 from app.mod08_inv import importer
 from app.mod08_inv.repository import upsert_details
@@ -165,11 +166,19 @@ def run_fetch(
                 object_desc=target, success=len(rows), fail=0),
                 # ⭐ 「待人工」清单随抓取记录落库（`TAIL-30`-③）—— 回执里那句话**只出现一次**，
                 #    而人要在 `m01` 上处理它 ⇒ 得先留住（读侧 = `pending.live_pending`）。
-                detail=record_detail(recovery_result.get("unresolved_items")), operator=operator,
+                detail={
+                    **record_detail(recovery_result.get("unresolved_items")),
+                    "report_stats": stats,
+                    "report_recovery": {
+                        "promote": recovery_result.get("promote"), "create": recovery_result.get("create"),
+                        "unsettled": recovery_result.get("unresolved"),
+                    },
+                    "report_warning": recovery_result.get("message", "") if recovery_result.get("degraded") else "",
+                }, operator=operator,
                 started_at=t0)
             return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
                     "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
-                    "run_record_id": getattr(run, "id", None)}
+                    "run_record_id": getattr(run, "id", None), "receipt": fetch_receipt(run)}
 
 
 __all__ = ["TABLE", "SPEC_KEY", "CONFIRM_TOKEN", "KICK_WARNING",

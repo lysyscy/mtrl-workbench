@@ -45,7 +45,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const [feedback, setFeedback] = useState('');
   const ruleLock = useRef(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
-  const closing = useDialogClose({ busy: action.busy || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
+  const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
   const projects = useQuery({queryKey: ['projects', 'all'], enabled: !blocked && Boolean(ownership),
     queryFn: async ({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', {signal}))});
   useHistoryGuard('jc-fetch-rule', () => ruleLock.current ? '集采剔除规则正在保存，请稍候。' : '');

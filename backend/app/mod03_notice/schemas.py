@@ -94,6 +94,7 @@ class FetchResponse(BaseModel):
     fetched: int
     upserted: int
     ignored: list[UnresolvedItemOut] = Field(default_factory=list)
+    receipt: dict | None = None
 
 
 class UnresolvedResponse(BaseModel):

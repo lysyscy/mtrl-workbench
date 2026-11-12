@@ -228,7 +228,7 @@ def test_http_mode_submit_keeps_the_original_payload(server, browser_page):
     submit = page.get_by_role('button', name='确认抓取')
     expect(submit).to_be_enabled(timeout=20000)
     submit.click()
-    expect(page.get_by_text(re.compile('抓取 1 条'))).to_be_visible(timeout=20000)
+    expect(page.get_by_text('抓取单据 1 条', exact=True)).to_be_visible(timeout=20000)
 
     assert len(fetched) == 1, fetched
     body = fetched[0]

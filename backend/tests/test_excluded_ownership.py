@@ -26,9 +26,9 @@ def test_import_excluded_ownership_is_nonblocking_and_preserves_existing(monkeyp
             def __init__(self, client): pass
             def fetch_month(self, ym): return rows
         monkeypatch.setattr(ex, 'session_scope', scope)
-        monkeypatch.setattr(ex, 'I8Client', Client)
+        monkeypatch.setattr(ex, 'open_i8_client', Client)
         monkeypatch.setattr(ex, 'NoticeFetcher', Fetcher)
-        assert ex.get_fetch_executor()('2026-07', False)[0] == 2
+        assert ex.get_fetch_executor()('2026-07', False).fetched == 2
         got=list(s.scalars(select(PaymentNotice).where(PaymentNotice.ph_id.in_([r['ph_id'] for r in rows])).order_by(PaymentNotice.id)))
         assert got[0].ownership_id == p.id and got[1].ownership_id is None
         assert all(n.excluded and n.exclude_source=='rule' for n in got)

@@ -31,6 +31,7 @@ from app.mod01_projects.domain import (
 from app.mod01_projects import service as P1S
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.client import I8Client
+from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
 from app.mod03_notice.merge import apply_placement_to_new, plan_merge
@@ -52,6 +53,7 @@ from app.mod03_notice.repository import (
     upsert_notice,
 )
 from app.mod03_notice.rules_repository import effective_rules
+from app.mod03_notice.schemas import FetchResponse
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
 from app.mod03_notice.print.dispatch import dispatch_pdf as print_dispatch, list_printers
@@ -148,10 +150,10 @@ def apply_fetched_row(session, row: dict, *,
     return False, plan.changed
 
 
-def get_fetch_executor() -> Callable[[str, bool], tuple[int, int, list[dict]]]:
+def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
     """抓取执行器（D4 最小取数）。测试可覆盖。"""
 
-    def _exec(year_month: str, allow_kick: bool) -> tuple[int, int, list[dict]]:
+    def _exec(year_month: str, allow_kick: bool) -> FetchResponse:
         # ⚠️ 耗时的**起点**：必须在 `I8Client` 登录 i8 **之前**（见 `create_run_record` 那段）
         t0 = datetime.now()
         # ⭐（`TAIL-476`）取数客户端走 `open_i8_client()` 工厂：**默认仍是产品原有 `I8Client`**
@@ -277,7 +279,10 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int, list[dict]]]:
                                     unresolved=ignored),
                 error_message=f"已忽略 {len(ignored)} 条归属未确定的单据，本月数据尚未导齐" if ignored else "",
             )
-        return len(rows), upserted, ignored
+            return FetchResponse(
+                year_month=year_month, fetched=len(rows), upserted=upserted, ignored=ignored,
+                receipt=fetch_receipt(rec),
+            )
 
     return _exec
 

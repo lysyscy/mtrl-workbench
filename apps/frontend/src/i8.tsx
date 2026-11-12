@@ -15,7 +15,14 @@ import { relayAvailable } from './i8-browser-relay';
 import type { SessionMode } from './i8-browser-relay';
 import { useI8Session } from './i8-session';
 import { JcFetchReceipt } from './jc-fetch-receipt';
+import { I8FetchReceiptDialog } from './i8-fetch-receipt';
+import type { ReceiptSource } from './i8-api';
 import { DialogPresence } from './workspace-motion';
+
+function receiptSource(row: RunRecord): ReceiptSource | 'contracts' | null {
+  const source = recordSource(row);
+  return source === 'notices' || source === 'settlement' || source === 'inventory' || source === 'contracts' ? source : null;
+}
 
 function Status({ row }: { row: RunRecord }) {
   const unit = row.run_type === 'print' || row.run_type === 'export_pdf' ? '张' : '条';
@@ -108,7 +115,7 @@ function I8BrowserRelay() {
 export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null }) {
   const [limit, setLimit] = useState(50);
   const [type, setType] = useState('all');
-  const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [receipt, setReceipt] = useState<{ id: number; source: ReceiptSource | 'contracts' } | null>(null);
   const historySection = useRef<HTMLDetailsElement>(null);
   const { hash, key } = useLocation();
   const records = useQuery({ queryKey: ['i8-records', limit], enabled: !blocked && !!me, queryFn: async ({ signal }) => readRecords(await requestJson(`/api/m02/fetch/records?limit=${limit}`, { signal })), refetchOnMount: 'always' });
@@ -152,16 +159,21 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
             {colId:'action',headerName:'动作',valueGetter:p=>recordLabel(p.data!)},
             {colId:'target',headerName:'范围 / 对象',valueGetter:p=>p.data && recordSource(p.data) === 'contracts' ? recordScope(p.data) : p.data?.target},
             {field:'triggered_by',headerName:'操作人',valueFormatter:p=>p.value==='manual'?'未记录（旧记录）':p.value},
-            {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=><>
+            {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=>{
+              const source = receiptSource(row);
+              return <>
               <Status row={row}/>
-              {recordSource(row) === 'contracts' && <Button size="small" onClick={() => setReceiptId(row.id)}>查看明细</Button>}
+              {source && <Button size="small" onClick={() => setReceipt({ id: row.id, source })}>查看明细</Button>}
               {row.error_message && <details className="i8-error"><summary>查看原因</summary><pre>{row.error_message}</pre></details>}
-            </>},
+              </>;
+            }},
             {colId:'duration',headerName:'耗时',valueGetter:p=>duration(p.data!)},
           ]}/>}
         </details>
       </>}
     </div>
-    <DialogPresence>{receiptId !== null && <JcFetchReceipt active={!blocked} close={() => setReceiptId(null)} runId={receiptId} history={false} />}</DialogPresence>
+    <DialogPresence>{receipt && (receipt.source === 'contracts'
+      ? <JcFetchReceipt active={!blocked} close={() => setReceipt(null)} runId={receipt.id} history={false} />
+      : <I8FetchReceiptDialog active={!blocked} close={() => setReceipt(null)} runId={receipt.id} source={receipt.source} />)}</DialogPresence>
   </section>;
 }

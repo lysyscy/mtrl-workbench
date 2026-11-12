@@ -63,6 +63,9 @@ registerHooks({
     if (specifier === './history') {
       return stub('export function useHistoryGuard() {}');
     }
+    if (specifier === './read-region') {
+      return stub('export function ReadFailure() {}');
+    }
     if (specifier === './time-picker') {
       return stub("export function TimePicker(p) { return { type: 'time-picker', props: p }; }");
     }
@@ -131,7 +134,7 @@ test('共用抓取动作防双击，收发结存走专属端点并可靠重读',
   assert.equal(calls, 1);
   finish();
   assert.equal(await second, undefined);
-  assert.match((await first).message, /保留手工行 3/);
+  assert.equal((await first).summary.kept_manual, 3);
   assert.equal(reads, 1);
   assert.equal(action().pending, false);
 });
@@ -150,13 +153,19 @@ test('回执月份不符保留未知标记，关闭再开不能重复发起', as
   assert.equal(action().pending, false);
 });
 
-test('抓取已确认但重读失败保留回执和待核对状态，不自动重投', async () => {
-  let calls = 0;
+test('抓取已确认但重读失败保留回执，重读台账只发本地读请求', async () => {
+  let calls = 0, reads = 0;
   globalThis.fetch = async () => {calls += 1; return response(reportResponse);};
-  const value = await action(async () => {throw new Error('read failed');}).run(fetchRequest);
-  assert.match(value.message, /抓取 4 行/);
-  assert.equal(action().pending, true);
-  assert.match(action().error, /重读失败/);
+  const refresh = async () => {if (++reads === 1) throw new Error('read failed');};
+  const value = await action(refresh).run(fetchRequest);
+  assert.equal(value.summary.total, 4);
+  const controller = action(refresh);
+  assert.equal(controller.pending, false);
+  assert.equal(controller.error, '');
+  assert.equal(controller.refreshError, 'read failed');
+  await controller.reread();
+  assert.equal(action().refreshError, '');
+  assert.equal(reads, 2);
   assert.equal(calls, 1);
 });
 
@@ -168,9 +177,9 @@ test('后端明确空结果沿requestJson显示原原因，不误报成功或未
 });
 
 test('按月回执区分库存调整保留和收发结存手工保留', () => {
-  assert.match(readReportFetchResult('settlement', '2026-10', reportResponse).message, /保留手工行 3/);
+  assert.equal(readReportFetchResult('settlement', '2026-10', reportResponse).summary.kept_manual, 3);
   assert.throws(() => readReportFetchResult('inventory', '2026-10', reportResponse));
-  assert.match(readReportFetchResult('inventory', '2026-10', {...reportResponse, stats: {...reportResponse.stats, kept_with_adjustment: 2}}).message, /保留有调整的源行 2/);
+  assert.equal(readReportFetchResult('inventory', '2026-10', {...reportResponse, stats: {...reportResponse.stats, kept_with_adjustment: 2}}).summary.kept_with_adjustment, 2);
 });
 
 /** 走一遍元素树，把所有命中条件的节点收起来。 */

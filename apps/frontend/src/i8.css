@@ -33,3 +33,15 @@
 .i8-relay-origin{font-size:calc(12px * var(--fscale));color:var(--tx2);overflow-wrap:anywhere}
 .i8-relay-note{font-size:calc(12px * var(--fscale));color:var(--tx2);margin:calc(8px * var(--fscale)) 0 0}
 .notice-fetch-mode{display:flex;align-items:center;gap:12px;margin:calc(12px * var(--fscale)) 0 0;font-size:calc(12px * var(--fscale));color:var(--tx2)}
+
+.i8-receipt-summary{display:grid;gap:.65em;margin-bottom:.75rem}
+.i8-receipt-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .8rem;color:var(--tx2)}
+.i8-receipt-meta strong{color:var(--tx)}
+.i8-receipt-counts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.75em 2em;width:fit-content;max-width:100%;padding:.65em .85em;background:var(--sf2);border-radius:var(--radius-inner)}
+.i8-receipt-count-group{display:grid;justify-items:start;min-width:0;gap:.2em}
+.i8-receipt-count-row,.i8-receipt-count-breakdown{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2em .8em}
+.i8-receipt-count-breakdown{color:var(--tx2)}
+.i8-receipt-count-value{white-space:nowrap;font-variant-numeric:tabular-nums}
+.i8-receipt-count-value b{font-weight:600;font-size:1.2em}
+.i8-receipt-count-breakdown b{font-size:inherit}
+.i8-receipt-count.is-attention{color:var(--wn-d);font-weight:600}

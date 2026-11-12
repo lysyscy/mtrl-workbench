@@ -36,8 +36,9 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
   });
   const [busy, setBusy] = useState(false), [sent, setSent] = useState(restored);
   const [pending, setPending] = useState(restored), [error, setError] = useState(''), [storageError, setStorageError] = useState('');
+  const [refreshError, setRefreshError] = useState(''), [refreshing, setRefreshing] = useState(false);
   const lock = useRef(false), pendingRef = useRef(restored), alive = useRef(true);
-  useHistoryGuard(`i8-fetch-${source ?? 'monthly'}`, () => busy ? 'i8 抓取正在处理，请稍候。' : pending ? 'i8 抓取结果待核实，请先核对。' : '');
+  useHistoryGuard(`i8-fetch-${source ?? 'monthly'}`, () => busy || refreshing ? 'i8 抓取正在处理，请稍候。' : pending ? 'i8 抓取结果待核实，请先核对。' : '');
   useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
   const config = useQuery({
     queryKey: ['i8-fetch-config', me?.account], enabled: enabled && !paused && Boolean(me),
@@ -68,11 +69,24 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
   }
   function reset() {
     if (lock.current || pendingRef.current) return;
-    setSent(false); setError('');
+    setSent(false); setError(''); setRefreshError('');
+  }
+  async function reread() {
+    if (lock.current || paused || !me) return;
+    lock.current = true; setRefreshing(true);
+    try {
+      await refresh();
+      if (alive.current) setRefreshError('');
+    } catch (failure) {
+      if (alive.current) setRefreshError(failure instanceof Error ? failure.message : '请重读台账。');
+    } finally {
+      lock.current = false;
+      if (alive.current) setRefreshing(false);
+    }
   }
   async function run<T>({path, payload, http = {}, parse}: FetchRequest<T>): Promise<T | undefined> {
     if (unavailable || lock.current || pendingRef.current) return undefined;
-    lock.current = true; setBusy(true); setError('');
+    lock.current = true; setBusy(true); setError(''); setRefreshError('');
     let confirmed = false, issued = false, parsed: T | undefined;
     try {
       const request = sessionPayload(session, http, payload);
@@ -87,8 +101,13 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
       if (issued) {
         try {await refresh();}
         catch (failure) {
-          confirmed = false;
-          if (alive.current) setError(previous => `${previous}${previous ? ' ' : ''}抓取后的数据重读失败：${failure instanceof Error ? failure.message : '请重读核对。'}`);
+          const reason = failure instanceof Error ? failure.message : '请重读核对。';
+          // Mechanical fetch produces a preview for adoption and keeps its own recovery policy.
+          if (source === 'mechanical') confirmed = false;
+          if (alive.current) {
+            if (parsed !== undefined && confirmed) setRefreshError(reason);
+            else setError(previous => `${previous} 抓取后的数据重读失败：${reason}`);
+          }
         }
       }
       if (confirmed) markPending(false);
@@ -98,7 +117,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
     return alive.current ? parsed : undefined;
   }
   const browserRecovery = browserBlocked && session.maintaining ? session.notice || '正在自动连接浏览器会话，请稍候。' : '';
-  return {busy, sent, pending, error, storageError, unavailable, browserBlocked, browserRecovery, config, mode: session.mode, run, reset, acknowledge};
+  return {busy, sent, pending, error, storageError, refreshError, refreshing, unavailable, browserBlocked, browserRecovery, config, mode: session.mode, run, reset, acknowledge, reread};
 }
 
 export type I8FetchAction = ReturnType<typeof useI8FetchAction>;
@@ -121,6 +140,10 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
       : <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>)}
     {action.busy && <p role="status">正在抓取，请稍候…</p>}
     {action.error && <p className="notice" role="alert">{action.error}</p>}
+    {action.refreshError && <div className="notice" role="alert">
+      抓取已完成，台账暂未刷新。{action.refreshError}
+      <Button disabled={action.refreshing} onClick={() => void action.reread()}>{action.refreshing ? '正在重读…' : '重读台账'}</Button>
+    </div>}
     {action.storageError && <p className="notice" role="alert">{action.storageError}</p>}
   </>;
 }
@@ -148,7 +171,7 @@ export function I8FetchActions({action, close, canRun = true, onRun, label = '�
   action: I8FetchAction; close: () => void; canRun?: boolean; onRun: () => void; label?: string;
 }) {
   return <div className="dialog-actions">
-    <Button htmlType="button" disabled={action.busy} onClick={close}>{action.sent ? '关闭' : '取消'}</Button>
+    <Button htmlType="button" disabled={action.busy || action.refreshing} onClick={close}>{action.sent ? '关闭' : '取消'}</Button>
     {!action.sent && <Button htmlType="button" type="primary" disabled={action.unavailable || action.pending || !canRun} onClick={onRun}>{label}</Button>}
   </div>;
 }

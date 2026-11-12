@@ -35,3 +35,33 @@ export function duration(row: RunRecord): string {
   if (row.duration_seconds === null) return '—';
   return `${row.duration_seconds < 10 ? row.duration_seconds.toFixed(2) : row.duration_seconds.toFixed(1)} 秒`;
 }
+
+const optionalText = (value: unknown) => typeof value === 'string' ? value : '';
+
+export type ReceiptSource = 'notices' | 'settlement' | 'inventory';
+
+export interface FetchReceipt {
+  source: ReceiptSource;
+  status: string;
+  scope: string;
+  startedAt: string;
+  duration: number | null;
+  summary: Record<string, unknown>;
+  items: Record<string, unknown>[] | null;
+  warning?: string;
+  note?: string;
+  error?: string;
+}
+
+export function readFetchReceipt(value: unknown, source: ReceiptSource): FetchReceipt {
+  if (!record(value) || value.source !== source || typeof value.status !== 'string' || !record(value.summary)) {
+    throw new ApiError('抓取回执不完整，请到执行记录核对。', 0, 'invalid_response');
+  }
+  return {
+    source, status: value.status, scope: optionalText(value.scope), startedAt: optionalText(value.started_at),
+    duration: typeof value.duration_seconds === 'number' && Number.isFinite(value.duration_seconds) && value.duration_seconds >= 0
+      ? value.duration_seconds : null,
+    summary: value.summary, items: Array.isArray(value.items) ? value.items.filter(record) : null,
+    warning: optionalText(value.warning), note: optionalText(value.note), error: optionalText(value.error_message),
+  };
+}

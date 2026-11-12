@@ -36,7 +36,7 @@ def case(monkeypatch):
                 raise state.error
             return state.rows
 
-    monkeypatch.setattr(ex, 'I8Client', Client)
+    monkeypatch.setattr(ex, 'open_i8_client', Client)
     monkeypatch.setattr(ex, 'NoticeFetcher', Fetcher)
     with db.session_scope() as s:
         s.add_all([Project(id=1, name_full='正常项目', warehouse_name='正常仓库'),
@@ -45,6 +45,8 @@ def case(monkeypatch):
                            warehouse_name='甲仓库', parent_shell_id=2, match_keywords=['甲'])])
     app = FastAPI()
     app.include_router(router.router)
+    from app.mod02_i8.router import router as i8_router
+    app.include_router(i8_router)
     with TestClient(app) as client:
         state.client = client
         yield state
@@ -79,6 +81,26 @@ def test_valid_rows_commit_and_ignored_rows_report_reasons(case):
         assert (run.status, run.success_count, run.fail_count, run.total_count) == ('partial', 2, 1, 3)
         assert run.detail['unresolved'][0]['bill_no'] == 'BAD'
         assert repository.latest_unresolved(s)[0]['bill_no'] == 'BAD'
+    receipt = result['receipt']
+    historical = case.client.get(f"/api/m02/fetch/records/{receipt['id']}/receipt")
+    assert historical.json()['receipt'] == receipt
+    assert receipt['summary'] == {
+        'total': 3, 'created': 2, 'updated': 0, 'excluded': 1, 'written': 2, 'unsettled': 1,
+    }
+    assert [row['bill_no'] for row in receipt['items']] == ['BAD']
+
+
+def test_old_report_receipt_keeps_missing_write_stats_unknown(case):
+    from app.mod02_i8.repository import save_run_record
+    with db.session_scope() as s:
+        run = save_run_record(s, run_type='fetch', target='setl 2026-09（1 个项目）',
+                              status='success', success_count=9, detail={'promote_pending': []})
+        run_id = run.id
+    response = case.client.get(f'/api/m02/fetch/records/{run_id}/receipt')
+    assert response.status_code == 200
+    receipt = response.json()['receipt']
+    assert receipt['source'] == 'settlement'
+    assert receipt['summary'] == {'total': 9, 'inserted': None, 'updated': None, 'deleted': None, 'kept_manual': None}
 
 
 @pytest.mark.parametrize('kind', ['not_archived', 'needs_choice'])

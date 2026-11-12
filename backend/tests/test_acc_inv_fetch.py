@@ -271,6 +271,9 @@ def test_每次抓取留一条执行记录():
     rec = next(r for r in s.by_model[RunRecord] if r.id == ok["run_record_id"])
     assert (rec.run_type, rec.status, rec.success_count) == ("fetch", "success", 2)
     assert "2026-08" in rec.target and rec.triggered_by == "科室用户"
+    assert ok["receipt"]["summary"]["inserted"] == ok["stats"]["inserted"]
+    assert ok["receipt"]["summary"]["kept_with_adjustment"] == 0
+    assert rec.detail["report_stats"] == ok["stats"]
 
     s2 = _sess()
     bad = _run(s2, boom=RuntimeError("boom"))

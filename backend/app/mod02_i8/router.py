@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy import select
 
 from app.core.db import session_scope
@@ -27,6 +27,7 @@ from app.mod02_i8.browser_session import (
     StrictTargetMismatch,
 )
 from app.mod02_i8.client import I8Client
+from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.fetch_task import (
     CONFIRM_CLOSES_DIALOG,
     MANUAL_ONLY,
@@ -526,6 +527,13 @@ def fetch_records(limit: int = Query(20, ge=1, le=200)) -> list[RunRecordOut]:
             s.execute(select(RunRecord).order_by(RunRecord.id.desc()).limit(limit)).scalars().all()
         )
         return [run_record_out(r) for r in rows]
+
+
+@router.get("/fetch/records/{run_id}/receipt")
+def fetch_record_receipt(run_id: int = Path(ge=1, le=2147483647)) -> dict:
+    with session_scope() as session:
+        run = session.get(RunRecord, run_id)
+        return {"receipt": fetch_receipt(run) if run is not None else None}
 
 
 # --------------------------------------------------------------- 内部

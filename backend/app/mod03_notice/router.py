@@ -84,7 +84,7 @@ router = APIRouter(prefix="/api/m03", tags=["mod03"])
 @router.post("/notices/fetch", response_model=FetchResponse)
 def fetch_notices(
     req: FetchRequest,
-    executor: Callable[[str, bool], tuple[int, int, list[dict]]] = Depends(get_fetch_executor),
+    executor: Callable[[str, bool], FetchResponse | tuple[int, int, list[dict]]] = Depends(get_fetch_executor),
 ) -> FetchResponse:
     """按核算年月抓取（D4 最小取数）。
 
@@ -102,9 +102,12 @@ def fetch_notices(
     build_fetch_params(req.year_month)
     if req.session_mode == MODE_BROWSER:
         with relay_scope(MODE_BROWSER, req.device_id):
-            fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
+            result = executor(req.year_month, req.allow_kick)
     else:
-        fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
+        result = executor(req.year_month, req.allow_kick)
+    if isinstance(result, FetchResponse):
+        return result
+    fetched, upserted, ignored = result
     return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted, ignored=ignored)
 
 
