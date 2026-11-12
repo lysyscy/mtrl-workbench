@@ -18,7 +18,7 @@ import { ProjectPicker } from './ledger-controls';
 import { contentWidth, fixedWidth, gridTheme, numberColumnWidth, textWidth } from './grid';
 import { manualGridColumns } from './grid-manual-widths';
 import { completeColumnWidth, EllipsisText } from './grid-text';
-import { archiveLabel, body, categories, cents, live, money, moneyKeys, readNotices, receipt, searchKey, selectable, total } from './notices-api';
+import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, readNotices, receipt, searchKey, selectable, total } from './notices-api';
 import type { MoneyKey, NoticeRow } from './notices-api';
 import { NoticeFetch } from './notice-fetch';
 import { NoticePaste } from './notice-paste';
@@ -27,7 +27,7 @@ import { DraftField, manualDraft, NoticeDialog, OwnershipPending } from './notic
 import { NoticeCells, StatCell, useNoticeCellSaves } from './notice-cell-save';
 import { ContractDialog } from './notice-contract';
 import type { Draft, NoticeDialogState } from './notice-maintenance';
-import { NoticePayment, PayAmountCell, paymentValue } from './notice-payment';
+import { NoticePayment, PayAmountCell, paymentValue, amount } from './notice-payment';
 import type { PayOverride } from './notice-payment';
 import { NoticePrint, PrinterSettings } from './notice-print';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
@@ -38,7 +38,7 @@ import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const noticeRowId = (row: NoticeRow) => String(row.notice_id);
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
-interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
+interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
 const defaultColumn: ColDef<NoticeRow> = { cellDataType: false, sortable: true, resizable: true, suppressMovable: true, wrapHeaderText: false };
 
@@ -69,14 +69,21 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[]}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
   const [params] = useSearchParams();
   const [payIds,setPayIds] = useState<number[]|null>(null), [payOverrides,setPayOverrides] = useState<Record<number,PayOverride>>({});
+  const payDrafts = useRef<Record<number,PayOverride>>({});
+  const [payError,setPayError] = useState('');
+  function editPay(row: NoticeRow, value: string | null) {
+    if (value === null) delete payDrafts.current[row.notice_id];
+    else payDrafts.current[row.notice_id] = {value,basis:`${row.amount_approved}:${row.amount_paid}`};
+    setPayError('');
+  }
   function setPay(row: NoticeRow, value: string) { setPayOverrides(old => ({ ...old, [row.notice_id]: { value, basis: `${row.amount_approved}:${row.amount_paid}` } })); }
   function paid(ids: number[]) { setPayOverrides(old => Object.fromEntries(Object.entries(old).filter(([id]) => !ids.includes(Number(id))))); setPicked(new Set()); }
-  useEffect(() => { const listener=(event:Event)=> { const id=Number((event as CustomEvent<number>).detail);setPayOverrides(old=>Object.fromEntries(Object.entries(old).filter(([key])=>Number(key)!==id))); };window.addEventListener('payment-revoked',listener);return()=>window.removeEventListener('payment-revoked',listener); },[]);
+  useEffect(() => { const listener=(event:Event)=> { const id=Number((event as CustomEvent<number>).detail);delete payDrafts.current[id];setPayOverrides(old=>Object.fromEntries(Object.entries(old).filter(([key])=>Number(key)!==id))); };window.addEventListener('payment-revoked',listener);return()=>window.removeEventListener('payment-revoked',listener); },[]);
   const [autoIds,setAutoIds] = useState<number[]|null>(null);
   const draftRef = useRef<Draft | null>(null), pendingFocus = useRef(0);
   const [draftUncertain, setDraftUncertain] = useState(false), [draftChecked, setDraftChecked] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null), [maintenance, setMaintenance] = useState<NoticeDialogState | null>(null), [focusId,setFocusId] = useState(0);
-  useEffect(() => { if (!active) return; const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),period:'全部',paid:''});setSearch('');} }, [params.get('notice'), active]);
+  useEffect(() => { if (!active) return; const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),period:'全部',paid:''});setSearch('');setPasteScope(null);} }, [params.get('notice'), active]);
   // Home todo tiles land here with ?todo=: conflicting old filters are reset so the
   // landed scope matches the tile count exactly (jc via plain filters, the other two
   // via the removable pending chip).
@@ -108,6 +115,26 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current ? '付款通知书有未保存输入，请先处理。' : '');
   const batchUnavailable = unavailable || !picked.size || hidden > 0;
   const batchReason = hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
+  function openPayment() {
+    if (batchUnavailable || !selectedPay.length || draft) return;
+    const next = {...payOverrides};
+    for (const row of selectedPay) {
+      const input = payDrafts.current[row.notice_id];
+      if (!input || input.basis !== `${row.amount_approved}:${row.amount_paid}`) continue;
+      const value = input.value.trim() ? amount(input.value) : decimal(cents(row.amount_approved)-cents(row.amount_paid));
+      if (value === null) {
+        setPayError(`${row.bill_no}：付款金额不合法，请修改后再付款。`);
+        const node = api.current?.getRowNode(String(row.notice_id));
+        if (node) api.current?.ensureNodeVisible(node,'middle');
+        api.current?.ensureColumnVisible('pay_amount');
+        requestAnimationFrame(() => pageRoot.current?.querySelector<HTMLInputElement>(`[data-pay-notice="${row.notice_id}"]`)?.focus());
+        return;
+      }
+      next[row.notice_id] = {...input,value};
+    }
+    for (const row of selectedPay) delete payDrafts.current[row.notice_id];
+    setPayError('');setPayOverrides(next);setPayIds([...picked]);
+  }
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['notices'],exact:true});
@@ -160,7 +187,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   function pick(id: number, checked: boolean) { setPicked(old => { const next = new Set(old); if (checked) next.add(id); else next.delete(id); return next; }); }
   function chooseAll(checked: boolean) { setPicked(old => { const next = new Set(old); for (const r of shown.filter(selectable)) { if (checked) next.add(r.notice_id); else next.delete(r.notice_id); } return next; }); }
   const scale = Number(me?.ui_scale_css) || 1;
-  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind,row) => setMaintenance({kind,row}), payOverrides, setPay, draftCell };
+  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind,row) => setMaintenance({kind,row}), payOverrides, payDrafts:payDrafts.current, editPay, setPay, draftCell };
   useEffect(() => {
     const grid = api.current, root = gridRoot.current; if (!active || !grid || !root) return;
     // The header observes selection directly; refreshHeader would rebuild it mid-click.
@@ -203,7 +230,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(key==='biz_type'||key==='input_by' ? completeColumnWidth(shown.map(row=>row[key]),['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!,scale) : key==='bill_name' ? textWidth(128,280,scale,2) : key==='payee' ? textWidth(112,240,scale,2) : textWidth(180,280,scale,1)),
       ...(key === 'jc_supplier' ? { cellRenderer: (p: ICellRendererParams<NoticeRow>) => { const r=p.data!; if(p.node.rowPinned || (r.category !== 'jc' || r.is_excluded || r.is_revoked) && !r.has_link) return '—'; return <Button data-contract-notice={r.notice_id} className="notice-association-trigger" htmlType="button" aria-label={`${r.bill_no}供应商与合同关联`} disabled={current.current.unavailable} onClick={() => current.current.open('link',r)}><EllipsisText text={r.jc_supplier || '选择供应商与合同'}/><small>{r.has_link ? '已关联合同' : '未关联合同'}</small></Button>; } } : key==='bill_name'||key==='payee' ? {cellRenderer:(p:ICellRendererParams<NoticeRow>)=><EllipsisText text={String(p.value??'')}/>} : {}) })),
     ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], ...contentWidth(moneyWidths[key], Math.max(moneyWidths[key],180), scale), cellClass: 'money', comparator: (a: string, b: string) => cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0,
-      cellRenderer: (p: ICellRendererParams<NoticeRow>) => !p.node.rowPinned && key === 'pay_amount' ? <PayAmountCell row={p.data!} override={current.current.payOverrides[p.data!.notice_id]} change={current.current.setPay} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} /> : !p.node.rowPinned && (key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && p.data!.is_manual) ? <StatCell row={p.data!} field={key} /> : <span>{money(p.data![key])}{!p.node.rowPinned && key === 'amount_paid' && p.data!.is_overpaid && <span className="notice-tag rule">超付</span>}</span> })),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => !p.node.rowPinned && key === 'pay_amount' ? <PayAmountCell row={p.data!} override={current.current.payOverrides[p.data!.notice_id]} draft={current.current.payDrafts[p.data!.notice_id]} edit={current.current.editPay} change={current.current.setPay} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} /> : !p.node.rowPinned && (key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && p.data!.is_manual) ? <StatCell row={p.data!} field={key} /> : <span>{money(p.data![key])}{!p.node.rowPinned && key === 'amount_paid' && p.data!.is_overpaid && <span className="notice-tag rule">超付</span>}</span> })),
     { field: 'approve_status', headerName: '审批状态', ...completeColumnWidth(shown.map(row=>row.approve_status),'审批状态',scale,12), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已批' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> }, { field: 'pay_status', headerName: '付款状态', ...completeColumnWidth(shown.map(row=>row.pay_status),'付款状态',scale,12), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已付清' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
     { colId: 'actions', headerName: '操作', ...completeColumnWidth(shown.map(row=>[row.has_any_flow?'查看流水':'',cents(row.amount_paid)>0n?'撤销付款':'',row.is_manual?'手动 编辑 删除':''].filter(Boolean).join(' ')), '操作', scale, 64), wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="submit" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="submit" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="submit" className="danger" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
@@ -237,7 +264,8 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     finally { lock.current = false; setBusy(false); }
   }
   return <NoticeCells.Provider value={cellSaves.cells}><NoticeSelectionContext.Provider value={current.current}><div className="notices-page" ref={pageRoot}>
-    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{money(total(selectedPay, 'amount_approved'))}</b> 元</span><span>本次应付 <b>{money(total(selectedPay, 'pay_amount'))}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={() => setPicked(new Set())}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={() => { if (!batchUnavailable) setPayIds([...picked]); }}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
+    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{money(total(selectedPay, 'amount_approved'))}</b> 元</span><span>本次应付 <b>{money(total(selectedPay, 'pay_amount'))}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={() => setPicked(new Set())}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
+    {payError && <p className="notice" role="alert">{payError}</p>}
     <section className="notice-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={unavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={unavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>

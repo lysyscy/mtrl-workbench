@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { PageActivity } from './page-activity';
+import { MotionAccess } from './workspace-motion';
 import { currentMonth } from './business-time';
 export { timeRange, timeMatches } from './business-time';
 export type { TimeRange } from './business-time';
@@ -73,7 +75,10 @@ function StandardTimePicker({ value, onChange, modes, disabled = false, label = 
 
 /** One popover owns mode and period selection; Calendar supplies the month grid. */
 function SingleEntryPeriod({ value, onChange, modes, disabled = false, label = '时间' }: TimePickerProps) {
+  const active = useContext(PageActivity), accessible = useContext(MotionAccess);
+  const availableToUser = active && accessible && !disabled;
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (!availableToUser) { setOpen(false);setStart(null);setHover(null); } }, [availableToUser]);
   const panel = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null);
   const initial = modeOf(value);
   const [mode, setMode] = useState<TimeMode>(initial === '全部' ? '月' : initial);
@@ -81,9 +86,9 @@ function SingleEntryPeriod({ value, onChange, modes, disabled = false, label = '
   const [start, setStart] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const available = modes.includes(mode) ? mode : modes.find(item => item !== '全部') ?? '月';
-  function commit(next: string) { onChange(next); setOpen(false); setStart(null); setHover(null); trigger.current?.focus(); }
+  function commit(next: string) { if (!availableToUser) return; onChange(next); setOpen(false); setStart(null); setHover(null); trigger.current?.focus(); }
   function changeOpen(next: boolean) {
-    if (disabled) return;
+    if (!availableToUser) return;
     setOpen(next); setStart(null); setHover(null);
     if (next) { setMode(initial === '全部' ? modes.find(item => item !== '全部') ?? '月' : initial); setYear(/^\d{4}/.test(value) ? Number(value.slice(0, 4)) : Number(currentMonth().slice(0, 4))); requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('.ant-segmented input:checked,button[aria-pressed="true"],button')?.focus()); }
   }
@@ -110,7 +115,7 @@ function SingleEntryPeriod({ value, onChange, modes, disabled = false, label = '
       }} />}
     <div className="business-period-footer"><span aria-live="polite">{available === '跨月' ? start === null ? '选择起月，再选择止月' : `已选 ${start + 1} 月，请选止月` : '选择即生效'}</span><Button type="link" onClick={() => commit(currentMonth())}>本月</Button></div>
   </div>;
-  return <Popover trigger="click" open={open && !disabled} onOpenChange={changeOpen} content={popup} placement="bottom" classNames={{ root: 'business-period-popover ag-custom-component-popup' }} getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body}>
-    <Button ref={trigger} className="business-period-trigger" disabled={disabled} aria-label={label} aria-haspopup="dialog" aria-expanded={open}>{timeLabel(value)}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></Button>
+  return <Popover trigger="click" open={open && availableToUser} onOpenChange={changeOpen} content={popup} placement="bottom" classNames={{ root: 'business-period-popover ag-custom-component-popup' }} getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body}>
+    <Button ref={trigger} className="business-period-trigger" disabled={!availableToUser} aria-label={`${label}：${timeLabel(value)}`} aria-haspopup="dialog" aria-expanded={open && availableToUser}>{timeLabel(value)}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></Button>
   </Popover>;
 }

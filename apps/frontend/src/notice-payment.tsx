@@ -6,7 +6,7 @@ import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { PaymentGrid } from './notice-payment-grid';
 import { numberColumnWidth,fullTextWidth } from './grid';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
@@ -23,20 +23,22 @@ export function paymentValue(row: NoticeRow, overrides: Record<number, PayOverri
   const draft = overrides[row.notice_id];
   return draft?.basis === basis(row) ? draft.value : row.pay_amount;
 }
-function amount(raw: string): string | null {
+export function amount(raw: string): string | null {
   const value = raw.replace(/[,，\s¥￥]/g, '');
   return /^-?\d+(?:\.\d{1,2})?$/.test(value) ? decimal(cents(value)) : null;
 }
-export function PayAmountCell({ row, override, disabled, change }: { row: NoticeRow; override: PayOverride | undefined; disabled: boolean; change: (row: NoticeRow, value: string) => void }) {
+export function PayAmountCell({ row, override, draft, disabled, change, edit }: { row: NoticeRow; override: PayOverride | undefined; draft: PayOverride | undefined; disabled: boolean; change: (row: NoticeRow, value: string) => void; edit: (row: NoticeRow, value: string | null) => void }) {
   const shown = override?.basis === basis(row) ? override.value : row.pay_amount;
-  const [value,setValue] = useState(shown), [error,setError] = useState('');
-  useEffect(() => { setValue(shown);setError(''); }, [shown,row.amount_approved,row.amount_paid]);
+  const draftValue = draft?.basis === basis(row) ? draft.value : shown;
+  const errorId = useId();
+  const [value,setValue] = useState(draftValue), [error,setError] = useState('');
+  useEffect(() => { setValue(draftValue);setError(''); }, [shown,row.amount_approved,row.amount_paid]);
   function commit() {
     const parsed = value.trim() ? amount(value) : decimal(cents(row.amount_approved)-cents(row.amount_paid));
     if (parsed === null) { setError('金额不合法，请修改'); return; }
-    setError('');setValue(parsed);change(row,parsed);
+    setError('');setValue(parsed);edit(row,null);change(row,parsed);
   }
-  return <span><input aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => setValue(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError(''); } }} />{error && <small role="alert">{error}</small>}</span>;
+  return <span><input data-pay-notice={row.notice_id} aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => { setValue(e.target.value);setError('');edit(row,e.target.value); }} onBlur={commit} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError('');edit(row,null); } }} />{error && <small id={errorId} role="alert">{error}</small>}</span>;
 }
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }

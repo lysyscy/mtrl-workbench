@@ -164,3 +164,43 @@ def test_notice_amount_blur_keeps_first_mouse_selection(server, browser_page, pr
     expect(amount).to_have_value('345.67')
     expect(search).to_have_value(label[2:])
     assert not writes, 'Amount and selection changes must remain local'
+
+
+def test_invalid_payment_draft_blocks_dialog_and_survives_filtered_remount(server, browser_page, api):
+    from decimal import Decimal
+    from live_data import get, open_page
+    page, _ = browser_page
+    rows = get(api, '/api/m03/notice-list', period='')['items']
+    row = next((r for r in rows if not r['pay_block_reason'] and not r['is_excluded']
+                and not r['is_revoked'] and Decimal(r['pay_amount']) > 1), None)
+    assert row, '真实副本没有可付款通知书，非法金额入口未覆盖'
+    open_page(page, server, 'notices', '付款通知书')
+    search = page.get_by_label('通知书搜索', exact=True)
+    search.fill(row['bill_no'])
+    page.get_by_label('勾选' + row['bill_no'], exact=True).check()
+    field = page.get_by_label(row['bill_no'] + '付款金额', exact=True)
+    writes = []
+    page.on('request', lambda req: writes.append(req.url) if '/api/' in req.url and req.method != 'GET' and '/payment-context' not in req.url else None)
+    field.fill('10.001')
+    page.locator('.notice-pay-action').click()
+    expect(page.get_by_role('dialog', name='批量付款', exact=True)).to_have_count(0)
+    expect(page.get_by_role('alert').filter(has_text='请修改后再付款')).to_be_visible()
+    expect(field).to_have_value('10.001')
+    expect(field).to_be_focused()
+    search.fill('audit-no-match')
+    expect(field).to_have_count(0)
+    search.fill(row['bill_no'])
+    expect(field).to_have_value('10.001')
+    page.locator('.notice-pay-action').click()
+    expect(page.get_by_role('dialog', name='批量付款', exact=True)).to_have_count(0)
+    field.fill('1.25')
+    page.locator('.notice-pay-action').click()
+    dialog = page.get_by_role('dialog', name='批量付款', exact=True)
+    expect(dialog.get_by_label(row['bill_no'] + '本次付款金额', exact=True)).to_have_value('1.25')
+    dialog.get_by_role('button', name='取消', exact=True).click()
+    field.fill('')
+    page.locator('.notice-pay-action').click()
+    expected = format(Decimal(row['amount_approved']) - Decimal(row['amount_paid']), '.2f')
+    expect(dialog.get_by_label(row['bill_no'] + '本次付款金额', exact=True)).to_have_value(expected)
+    dialog.get_by_role('button', name='取消', exact=True).click()
+    assert not writes, '金额修正和打开确认窗口不得登记付款'

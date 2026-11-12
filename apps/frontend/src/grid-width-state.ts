@@ -47,6 +47,16 @@ export function bindGridWidths(api: GridApi, options: {
 }) {
   const {key,channel:shared}=channelFor(options.owner,options.table,options.storage);
   let pendingReset=false;
+  let dragStart: {colId:string; width:number; flex:number|null} | null = null;
+  const beginDrag = (colId:string) => {
+    const column=api.getColumn(colId);
+    dragStart=column?{colId,width:column.getActualWidth(),flex:column.getFlex()??null}:null;
+  };
+  const restoreDrag = () => {
+    const state=dragStart;dragStart=null;
+    options.dragFinished?.();
+    if(state&&!api.isDestroyed())api.applyColumnState({state:[state]});
+  };
   const boundsReady=()=>{
     const drag=options.activeDragId?.();
     const ids=new Set([...Object.keys(shared.widths),...(drag?[drag]:[])]);
@@ -84,6 +94,8 @@ export function bindGridWidths(api: GridApi, options: {
   const resized = (event: ColumnResizedEvent) => {
     if (event.source !== 'uiColumnResized' || !event.finished) return;
     const id=options.activeDragId?.(),target=id?api.getColumn(id):null;
+    if(dragStart&&target&&Math.abs(target.getActualWidth()-dragStart.width)<.1){restoreDrag();return;}
+    dragStart=null;
     for (const column of target?[target]:event.columns ?? (event.column ? [event.column] : [])) {
       const definition = column.getColDef();
       if (definition.minWidth === definition.maxWidth && definition.minWidth !== undefined) continue;
@@ -119,11 +131,11 @@ export function bindGridWidths(api: GridApi, options: {
   };
   shared.listeners.add(receive);
   api.addEventListener('columnResized', resized);
-  const cancelled=()=>options.dragFinished?.();
+  const cancelled=restoreDrag;
   api.addEventListener('dragCancelled', cancelled);
   api.addEventListener('newColumnsLoaded', columnsLoaded);
   apply(); notify();
-  return {apply, fit, reset, dispose: () => {
+  return {apply, fit, reset, beginDrag, dispose: () => {
     shared.listeners.delete(receive);
     releaseChannel(key,shared);
     if (!api.isDestroyed()) { api.removeEventListener('columnResized', resized); api.removeEventListener('newColumnsLoaded', columnsLoaded); api.removeEventListener('dragCancelled', cancelled); }

@@ -32,6 +32,7 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
       const target=event.target instanceof Element?event.target:null;
       const id=target?.closest('.ag-header-cell-resize')?.closest('.ag-header-cell')?.getAttribute('col-id');
       if(id){
+        controller.beginDrag(id);
         const column=api.getColumn(id);
         // Releasing a flex column's auto minimum must not shrink it before AG
         // captures the mouse drag's starting width. Native state owns this handoff.

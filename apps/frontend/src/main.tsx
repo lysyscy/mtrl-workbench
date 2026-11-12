@@ -85,6 +85,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
   const [navigation, setNavigation] = useState({ page, direction: 1 });
   if (navigation.page !== page) setNavigation({ page, direction: pages.findIndex(entry => entry.path === page) >= pages.findIndex(entry => entry.path === navigation.page) ? 1 : -1 });
   const title = pages.find(entry => entry.path === page)?.title ?? '材料工作台';
+  useEffect(() => { document.title = `${title} · 材料工作台${appBase === '/preview' ? ' · 独立预览' : ''}`; }, [title]);
   const [visited, setVisited] = useState(() => new Set([page]));
   useEffect(() => { setVisited(old => old.has(page) ? old : new Set([...old, page])); }, [page]);
   const [busy, setBusy] = useState(false);

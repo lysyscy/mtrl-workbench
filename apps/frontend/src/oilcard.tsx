@@ -132,6 +132,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     await client.cancelQueries({ queryKey: ['oilcard-archives'], exact: true });
     const result = await client.fetchQuery({ queryKey: ['oilcard-archives'], staleTime: 0, queryFn: ({ signal }) => getOilArchives(signal) });
     currentData.current = result;
+    await projects.refetch({ throwOnError: true });
     if (historyAccount) await client.fetchQuery({ queryKey: ['oilcard-assignments', historyAccount], staleTime: 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
     if (me) await client.fetchQuery({ queryKey: ['history', `${me.id}:${me.account}`], staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
     return result;

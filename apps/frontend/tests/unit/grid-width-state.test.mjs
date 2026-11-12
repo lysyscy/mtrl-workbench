@@ -40,9 +40,10 @@ function fixture(storage, owner = 'reader', scoped = true, scale = 1) {
     dragFinished:()=>{dragging=null;render();},changed:(_custom,_error,reset)=>{if(reset){layoutRevision++;render();}}});
   return {api,binding:{...binding,dispose:()=>{unsubscribe();binding.dispose();}},definition:id=>column(id).getColDef(),width:id=>states.get(id).width,
     applyCalls:()=>applyCalls,
+    cancelDrag:(id,width)=>{binding.beginDrag(id);dragging=id;render();api.applyColumnState({state:[{colId:id,width,flex:null}]});emit('dragCancelled',{});},
     reread:()=>{base=scoped?manualGridColumns(original):original;render();},
     drag:(id,width)=>{
-      dragging=id;render();
+      binding.beginDrag(id);dragging=id;render();
       api.applyColumnState({state:[{colId:id,width,flex:null}]});
       emit('columnResized',{source:'uiColumnResized',finished:true,column:column(id)});
     }};
@@ -99,4 +100,25 @@ test('manual business widths use native limits; fixed columns, other owners and 
   assert.equal(normal.width('name'),120);
   await Promise.resolve();
   scoped.binding.dispose();other.binding.dispose();normal.binding.dispose();
+});
+
+
+test('a divider click or cancelled resize keeps automatic sizing and saved preferences',async()=>{
+  const storage=memoryStorage(),grid=fixture(storage);
+  grid.drag('name',180);
+  assert.equal(storage.getItem(gridWidthKey('reader','ledger')),null);
+  assert.equal(grid.api.getColumnState().find(c=>c.colId==='name').flex,1);
+  assert.equal(grid.definition('name').minWidth,120);
+  grid.cancelDrag('name',400);
+  assert.equal(grid.width('name'),180);
+  assert.equal(grid.api.getColumnState().find(c=>c.colId==='name').flex,1);
+  assert.equal(storage.getItem(gridWidthKey('reader','ledger')),null);
+  grid.drag('name',350);
+  await Promise.resolve();
+  const saved=storage.getItem(gridWidthKey('reader','ledger'));
+  grid.drag('name',350);
+  grid.cancelDrag('name',420);
+  assert.equal(grid.width('name'),350);
+  assert.equal(storage.getItem(gridWidthKey('reader','ledger')),saved);
+  grid.binding.dispose();
 });
