@@ -37,11 +37,17 @@
 .rules-search-results li+li{margin-top:.4rem}
 .rules-search-results button{display:grid;gap:.2rem;width:100%;text-align:start;cursor:pointer;color:var(--tx);background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-input);padding:.55rem .75rem;overflow-wrap:anywhere}
 .rules-search-results button:hover{border-color:var(--pri);background:var(--pri-l)}
-.jc-receipt-summary{display:grid;gap:.4rem;margin-bottom:.75rem}
-.jc-receipt-meta,.jc-receipt-counts{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .8rem}
-.jc-receipt-meta{color:var(--tx2)}
+.jc-receipt-summary{display:grid;gap:.65em;margin-bottom:.75rem}
+.jc-receipt-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .8rem;color:var(--tx2)}
 .jc-receipt-meta strong{color:var(--tx)}
-.jc-receipt-counts b{font-variant-numeric:tabular-nums}
+.jc-receipt-counts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.75em 2em;width:fit-content;max-width:100%;padding:.65em .85em;background:var(--sf2);border-radius:var(--radius-inner)}
+.jc-receipt-count-group{display:grid;justify-items:start;min-width:0;gap:.2em}
+.jc-receipt-count-row,.jc-receipt-count-breakdown{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2em .8em}
+.jc-receipt-count-breakdown{color:var(--tx2)}
+.jc-receipt-count-value{white-space:nowrap;font-variant-numeric:tabular-nums}
+.jc-receipt-count-value b{font-weight:600;font-size:1.2em}
+.jc-receipt-count-breakdown b{font-size:inherit}
+.jc-receipt-count.is-attention{color:var(--wn-d);font-weight:600}
 .jc-receipt-detail{min-width:0;overflow-wrap:anywhere}
 .jc-receipt-section{border-top:1px solid var(--bd);padding:.7rem 0}
 .jc-receipt-section h3{font-size:1em;margin:0}

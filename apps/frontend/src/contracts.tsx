@@ -140,7 +140,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         if(next!==latest[key]){
           const result=await contractWrite('/api/m11/fields',{id:latest.id,fields:{[key]:next}});
           written=true;await refresh();
-          if(notify)announce(receipt(result));
+          if(notify)announce(key==='arch'?`存档状态已更新为「${next}」。`:receipt(result));
         }
         if(inlineDraftRef.current[name]===value){
           const copy={...inlineDraftRef.current};delete copy[name];inlineDraftRef.current=copy;inlineControl.current.drafts=copy;setInlineDrafts(copy);
@@ -243,7 +243,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
-    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
+    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,projectRows,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
   const columns=useMemo(()=>manualGridColumns(baseColumns),[baseColumns]);
   // Keep the reset action on the material header, clear of complete identifiers.

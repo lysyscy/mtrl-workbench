@@ -87,6 +87,13 @@ function ContractEvidence({ row }: { row: ReceiptRow }) {
   </>;
 }
 
+function ReceiptCount({ label, value, attention = false }: { label: string; value: number | null; attention?: boolean }) {
+  if (value === null) return null;
+  return <span className={attention && value > 0 ? 'jc-receipt-count is-attention' : 'jc-receipt-count'}>
+    {label} <span className="jc-receipt-count-value"><b>{value}</b> 条</span>
+  </span>;
+}
+
 export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
   data: Receipt; pending?: ReceiptRow[]; actions?: (row: ReceiptRow) => ReactNode;
 }) {
@@ -105,20 +112,42 @@ export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
   })).filter(group => !needle || group.rows.length > 0);
   const status = data.status === 'success' ? '抓取完成'
     : data.status === 'failed' ? '抓取失败' : data.status === 'partial' ? '部分完成' : '抓取进行中';
-  const counts: [string, number | null][] = [
-    ['i8 返回', data.sourceCount],
-    ['编号缺失', data.sourceCount !== null && data.identifiedCount !== null && data.sourceCount > data.identifiedCount
-      ? data.sourceCount - data.identifiedCount : null],
-    ['已匹配', data.status === 'failed' ? null : data.matched],
-    ['新增', data.inserted], ['实际变更', data.changed], ['无变更', data.unchanged],
-    ['待指定归属', data.unsettledCount], ['规则剔除', data.ignoredCount],
-    ['材料名未补齐', data.materialBlank && data.materialBlank > 0 ? data.materialBlank : null],
-  ];
+  const missingNumber = data.sourceCount !== null && data.identifiedCount !== null && data.sourceCount > data.identifiedCount
+    ? data.sourceCount - data.identifiedCount : null;
+  const matched = data.status === 'failed' ? null : data.matched;
+  const hasBreakdown = [data.inserted, data.changed, data.unchanged].some(value => value !== null);
+  const materialBlank = data.materialBlank !== null && data.materialBlank > 0 ? data.materialBlank : null;
+  const hasDisposition = data.unsettledCount !== null || data.ignoredCount !== null;
+  const hasOther = hasDisposition || materialBlank !== null;
   return <>
     <div className="jc-receipt-summary" role="status">
       <div className="jc-receipt-meta"><strong>{status}</strong><time>{data.startedAt}</time><span>{data.scope || '范围未记录'}</span>
         {data.duration !== null && <span>耗时 {data.duration.toFixed(1)} 秒</span>}</div>
-      <div className="jc-receipt-counts">{counts.map(([label, value]) => value !== null && <span key={label}>{label} <b>{value}</b> 条</span>)}</div>
+      {(data.sourceCount !== null || matched !== null || hasBreakdown || hasOther) && <div className="jc-receipt-counts">
+        {data.sourceCount !== null && <div className="jc-receipt-count-group">
+          <ReceiptCount label="i8 返回" value={data.sourceCount} />
+          {missingNumber !== null && <div className="jc-receipt-count-breakdown">
+            <ReceiptCount label="编号缺失" value={missingNumber} />
+          </div>}
+        </div>}
+        {(matched !== null || hasBreakdown) && <div className="jc-receipt-count-group">
+          <ReceiptCount label="已匹配" value={matched} />
+          {hasBreakdown && <div className="jc-receipt-count-breakdown">
+            <ReceiptCount label="新增" value={data.inserted} />
+            <ReceiptCount label="实际变更" value={data.changed} />
+            <ReceiptCount label="无变更" value={data.unchanged} />
+          </div>}
+        </div>}
+        {hasOther && <div className="jc-receipt-count-group">
+          {hasDisposition && <div className="jc-receipt-count-row">
+            <ReceiptCount label="待指定归属" value={data.unsettledCount} attention />
+            <ReceiptCount label="规则剔除" value={data.ignoredCount} />
+          </div>}
+          {materialBlank !== null && <div className="jc-receipt-count-breakdown">
+            <ReceiptCount label="材料名未补齐" value={materialBlank} />
+          </div>}
+        </div>}
+      </div>}
     </div>
     {data.syncWarning && <p className="notice" role="alert">{data.syncWarning}</p>}
     {(data.unsettled.length > 0 || projects.length > 0) ? <div className="jc-receipt-detail" role="region" aria-label="合同抓取明细">
