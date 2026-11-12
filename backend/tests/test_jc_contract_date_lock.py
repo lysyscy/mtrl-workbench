@@ -41,7 +41,7 @@ def test_protected_date_and_other_sync_fields(session, source_date, locked):
     result = R.upsert_fetched_contracts(session, project_id=2, rows=[fetched("REVIEWED", source_date)])
     session.expire_all()
     row = session.get(JcContract, row.id)
-    assert result == {"inserted": 0, "refreshed": 1, "skipped": 0}
+    assert result == {"inserted": 0, "refreshed": 1, "changed": 1, "skipped": 0}
     assert row.contract_date == ("2025-02-25" if locked else source_date or "")
     assert row.contract_date_locked is locked
     assert (row.supplier, row.bill_name, row.party_name, row.contract_amt) == (
@@ -52,7 +52,7 @@ def test_protected_date_and_other_sync_fields(session, source_date, locked):
 def test_new_contract_is_unprotected_and_missing_number_skips(session):
     result = R.upsert_fetched_contracts(session, project_id=1, rows=[fetched("NEW", "2026-10-12"), fetched("", "")])
     row = session.execute(select(JcContract)).scalar_one()
-    assert result == {"inserted": 1, "refreshed": 0, "skipped": 1}
+    assert result == {"inserted": 1, "refreshed": 0, "changed": 0, "skipped": 1}
     assert row.contract_date == "2026-10-12"
     assert row.contract_date_locked is False
     R.upsert_fetched_contracts(session, project_id=1, rows=[fetched("NEW", "")])

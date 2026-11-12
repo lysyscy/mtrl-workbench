@@ -89,11 +89,16 @@ def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server,
     open_page(page, server, 'i8', 'i8 接入层')
     page.get_by_role('button', name='查看明细', exact=True).click()
     dialog = page.get_by_role('dialog', name='集采抓取明细')
-    expect(dialog.get_by_role('row').filter(has_text='QA-01')).to_contain_text('项目未建档')
-    matched = dialog.get_by_role('row').filter(has_text='QA-02')
+    expect(dialog.get_by_role('listitem').filter(has_text='QA-01')).to_contain_text('项目未建档')
+    expect(dialog.get_by_text('范围未记录', exact=True)).to_be_visible()
+    matched = dialog.get_by_role('listitem').filter(has_text='QA-02')
+    expect(matched).not_to_be_visible()
+    search = dialog.get_by_role('searchbox', name='查找被剔除的合同编号')
+    search.fill('QA-02')
     expect(matched).to_contain_text('排除样例合同')
     expect(matched).to_contain_text('当时的剔除理由')
-    expect(dialog.get_by_role('row').filter(has_text='QA-03')).to_contain_text('旧记录未保存命中条件')
+    search.fill('QA-03')
+    expect(dialog.get_by_role('listitem').filter(has_text='QA-03')).to_contain_text('旧记录未保存命中条件')
 
 
 def test_actual_rule_edit_preserves_notice_exclusion_flags(server,browser_page,api,disposable):

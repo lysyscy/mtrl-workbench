@@ -1,19 +1,21 @@
 import Button from 'antd/es/button';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { ApiError, record, requestJson } from './api';
-import { ReadGrid } from './business-grid';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { isJcRule, jcCondition, jcRuleKinds, jcRulesPath } from './jc-rule-data';
 import type { JcRule } from './jc-rule-data';
 import { ReadFailure } from './read-region';
 
-interface ReceiptRow {
+export interface ReceiptRow {
   id: string;
   contract: string;
   project: string;
   document: string;
+  kind: string;
   reason: string;
   matches: JcRule[];
 }
@@ -24,7 +26,7 @@ const ownershipReason: Record<string, string> = {
   not_archived: '项目未建档',
 };
 
-function readReceiptRows(value: unknown, ignored: boolean): ReceiptRow[] {
+export function readReceiptRows(value: unknown, ignored: boolean): ReceiptRow[] {
   if (!Array.isArray(value)) return [];
   return value.filter(record).map((row, index) => {
     const matches = Array.isArray(row.matches) ? row.matches.filter(isJcRule) : [];
@@ -33,6 +35,7 @@ function readReceiptRows(value: unknown, ignored: boolean): ReceiptRow[] {
       contract: typeof row.contract_no === 'string' ? row.contract_no : '',
       project: typeof row.project_name === 'string' ? row.project_name : '',
       document: typeof row.doc_name === 'string' ? row.doc_name : '',
+      kind: typeof row.kind === 'string' ? row.kind : '',
       reason: ignored ? matches.length ? '规则剔除' : '规则剔除 · 旧记录未保存命中条件'
         : typeof row.kind === 'string' ? ownershipReason[row.kind] ?? '归属待指定' : '归属待指定',
       matches,
@@ -40,7 +43,11 @@ function readReceiptRows(value: unknown, ignored: boolean): ReceiptRow[] {
   });
 }
 
-function readReceipt(value: unknown) {
+function count(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+export function readReceipt(value: unknown) {
   if (record(value) && value.receipt === null) return null;
   if (!record(value) || !record(value.receipt)) throw new ApiError('抓取结果读取不完整，请重试。');
   const item = value.receipt;
@@ -49,12 +56,96 @@ function readReceipt(value: unknown) {
   }
   const ignored = readReceiptRows(item.ignored, true);
   const unsettled = readReceiptRows(item.unsettled, false);
+  const summary = record(item.summary) ? item.summary : {};
+  const groups = Array.isArray(item.ignored_projects) ? item.ignored_projects.flatMap(group =>
+    record(group) && typeof group.name === 'string' && count(group.count) !== null
+      ? [{ name: group.name, count: Number(group.count) }] : []) : [];
   return {
+    id: count(item.id),
     startedAt: item.started_at.replace('T', ' '), status: item.status, matched: item.matched,
-    ignored: typeof item.ignored_count === 'number' ? item.ignored_count : null,
-    unsettled: typeof item.unsettled_count === 'number' ? item.unsettled_count : null,
-    rows: [...unsettled, ...ignored],
+    duration: typeof item.duration_seconds === 'number' && item.duration_seconds >= 0 ? item.duration_seconds : null,
+    scope: typeof item.scope === 'string' ? item.scope : '',
+    sourceCount: count(summary.source_count), identifiedCount: count(summary.identified_count),
+    inserted: count(summary.inserted), changed: count(summary.changed), unchanged: count(summary.unchanged),
+    materialBlank: count(summary.material_blank),
+    syncWarning: typeof item.sync_warning === 'string' ? item.sync_warning.replaceAll('**', '') : '',
+    ignoredCount: count(item.ignored_count), unsettledCount: count(item.unsettled_count),
+    ignored, unsettled, groups,
   };
+}
+
+type Receipt = NonNullable<ReturnType<typeof readReceipt>>;
+
+function ContractEvidence({ row }: { row: ReceiptRow }) {
+  return <>
+    <div className="jc-receipt-row-heading"><strong>{row.contract || '合同编号未记录'}</strong><span>{row.reason}</span></div>
+    <p>{row.project || '项目未记录'}</p>
+    <p>{row.document || '单据名未记录'}</p>
+    {row.matches.length > 0 && <ul className="jc-receipt-matches">{row.matches.map(rule => <li key={rule.id}>
+      {jcRuleKinds[rule.kind]}：{jcCondition(rule)}{rule.reason && `（${rule.reason}）`}
+    </li>)}</ul>}
+  </>;
+}
+
+export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
+  data: Receipt; pending?: ReceiptRow[]; actions?: (row: ReceiptRow) => ReactNode;
+}) {
+  const [keyword, setKeyword] = useState('');
+  const needle = keyword.trim().toLowerCase();
+  const byProject = new Map<string, ReceiptRow[]>();
+  for (const row of data.ignored) {
+    const project = row.project.trim() || '(无项目)';
+    const rows = byProject.get(project) ?? [];
+    rows.push(row);
+    byProject.set(project, rows);
+  }
+  const projects = data.groups.length ? data.groups : [...byProject].map(([name, rows]) => ({ name, count: rows.length }));
+  const groups = projects.map(group => ({
+    ...group, rows: (byProject.get(group.name) ?? []).filter(row => row.contract.toLowerCase().includes(needle)),
+  })).filter(group => !needle || group.rows.length > 0);
+  const status = data.status === 'success' ? '抓取完成'
+    : data.status === 'failed' ? '抓取失败' : data.status === 'partial' ? '部分完成' : '抓取进行中';
+  const counts: [string, number | null][] = [
+    ['i8 返回', data.sourceCount],
+    ['编号缺失', data.sourceCount !== null && data.identifiedCount !== null && data.sourceCount > data.identifiedCount
+      ? data.sourceCount - data.identifiedCount : null],
+    ['已匹配', data.status === 'failed' ? null : data.matched],
+    ['新增', data.inserted], ['实际变更', data.changed], ['无变更', data.unchanged],
+    ['待指定归属', data.unsettledCount], ['规则剔除', data.ignoredCount],
+    ['材料名未补齐', data.materialBlank && data.materialBlank > 0 ? data.materialBlank : null],
+  ];
+  return <>
+    <div className="jc-receipt-summary" role="status">
+      <div className="jc-receipt-meta"><strong>{status}</strong><time>{data.startedAt}</time><span>{data.scope || '范围未记录'}</span>
+        {data.duration !== null && <span>耗时 {data.duration.toFixed(1)} 秒</span>}</div>
+      <div className="jc-receipt-counts">{counts.map(([label, value]) => value !== null && <span key={label}>{label} <b>{value}</b> 条</span>)}</div>
+    </div>
+    {data.syncWarning && <p className="notice" role="alert">{data.syncWarning}</p>}
+    {(data.unsettled.length > 0 || projects.length > 0) ? <div className="jc-receipt-detail" role="region" aria-label="合同抓取明细">
+      {pending.length > 0 && <section className="jc-receipt-section" aria-label="待指定归属">
+        <h3>待指定归属（{pending.length} 条{data.unsettledCount !== null && data.unsettledCount > data.unsettled.length
+          ? '可查看' : ''}）</h3>
+        <ul className="jc-receipt-list">{pending.map(row => <li key={row.id}>
+          <ContractEvidence row={row} />
+          {actions?.(row)}
+        </li>)}</ul>
+      </section>}
+      {projects.length > 0 && <section className="jc-receipt-section" aria-label="规则剔除">
+        <div className="jc-receipt-section-head">
+          <h3>规则剔除（{data.ignoredCount ?? data.ignored.length} 条）</h3>
+          <input type="search" aria-label="查找被剔除的合同编号" placeholder="搜索合同编号" value={keyword}
+            onChange={event => setKeyword(event.target.value)} />
+        </div>
+        {data.ignoredCount !== null && data.ignoredCount > data.ignored.length && <p className="muted">已记录 {data.ignored.length} 条合同明细，可在其中搜索。</p>}
+        {groups.length === 0 && <p className="state">没有找到该合同编号</p>}
+        {groups.map(group => <details key={group.name} open={Boolean(needle) || undefined}>
+          <summary>{group.name} <span>{needle ? group.rows.length : group.count} 条</span></summary>
+          {group.rows.length > 0 ? <ul className="jc-receipt-list">{group.rows.map(row => <li key={row.id}><ContractEvidence row={row} /></li>)}</ul>
+            : <p className="state">本组明细未记录</p>}
+        </details>)}
+      </section>}
+    </div> : data.status !== 'failed' && <p className="state">无归属待指定或规则剔除明细</p>}
+  </>;
 }
 
 export function JcFetchReceipt({ active, close, runId, history = true }: {
@@ -68,37 +159,11 @@ export function JcFetchReceipt({ active, close, runId, history = true }: {
   });
   const closing = useDialogClose({ busy: false, dirty: false, close, active });
   const data = query.data;
-  const total = data && data.ignored !== null && data.unsettled !== null ? data.ignored + data.unsettled : null;
-  const status = data?.status === 'success' ? '抓取完成'
-    : data?.status === 'failed' ? '抓取失败' : data?.status === 'partial' ? '部分完成' : '抓取进行中';
   return <BusinessModal open={active} className="rules-dialog jc-receipt-dialog" titleId="jc-receipt-title" requestClose={closing.requestClose}>
     <DialogContents title={runId === undefined ? '最近一次集采抓取结果' : '集采抓取明细'} titleId="jc-receipt-title" closing={closing}>
       {query.isFetching && <p role="status">正在读取抓取结果…</p>}
       {query.isError && <ReadFailure read={query} />}
-      {!query.isFetching && (data ? <>
-        <div className="jc-receipt-summary">
-          <time>{data.startedAt}</time><strong>{status}</strong>
-          {data.status !== 'failed' && <span>已匹配 {data.matched} 份合同</span>}
-          {data.unsettled !== null && <span>归属待指定 {data.unsettled} 份</span>}
-          {data.ignored !== null && <span>规则剔除 {data.ignored} 份</span>}
-        </div>
-        {data.rows.length > 0 && <>
-          <ReadGrid table="jc-fetch-receipt" className="rules-table jc-receipt-table" label="合同抓取明细" domLayout="autoHeight"
-            rows={data.rows} rowId={row => row.id} columns={[
-              {field:'contract',headerName:'合同编号',valueFormatter:p=>p.value || '—'},
-              {field:'project',headerName:'i8 项目',valueFormatter:p=>p.value || '—'},
-              {field:'document',headerName:'单据名',valueFormatter:p=>p.value || '—'},
-              {field:'reason',headerName:'原因',cellRenderer:({data:row}:{data:ReceiptRow})=><div>
-                <div>{row.reason}</div>
-                {row.matches.length > 0 && <ul className="jc-receipt-matches">{row.matches.map(rule => <li key={rule.id}>
-                  {jcRuleKinds[rule.kind]} · {jcCondition(rule)}{rule.reason && `（${rule.reason}）`}
-                </li>)}</ul>}
-              </div>},
-            ]} />
-          {total !== null && total > data.rows.length && <p className="muted">本次记录保留了 {total} 份中的 {data.rows.length} 份合同明细。</p>}
-        </>}
-        {data.rows.length === 0 && data.status !== 'failed' && <p className="state">无归属待指定或规则剔除明细</p>}
-      </> : !query.isError && <p className="state">暂无集采抓取记录</p>)}
+      {!query.isFetching && (data ? <JcReceiptContents data={data} /> : !query.isError && <p className="state">暂无集采抓取记录</p>)}
       <div className="dialog-actions jc-receipt-actions">
         {history && <Link to="/i8#execution-records" onClick={close}>i8 接入层 · 执行记录</Link>}
         <Button onClick={closing.requestClose}>关闭</Button>

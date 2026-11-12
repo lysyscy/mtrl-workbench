@@ -10,9 +10,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.query import flatten_query
@@ -434,7 +434,7 @@ __all__ = ["router"]
 
 
 @router.get("/api/m11/unsettled")
-def api_unsettled() -> dict:
+def api_unsettled(run_id: Annotated[int | None, Query(ge=1, le=2147483647)] = None) -> dict:
     """**最近一次集采抓取**的「归属未走完」清单 ＋ 该壳下的候选小微（`TAIL-93` · 集采侧弹窗的数据源）。
 
     口径**逐条对齐付款侧** `GET /api/m03/notices/unresolved`（`TAIL-29`-② ／ `TAIL-41`）：
@@ -442,6 +442,8 @@ def api_unsettled() -> dict:
       它没带清单 ⇒ **空**，⛔ 不回溯更早（否则抓取成功之后还摆着旧清单，用户对着**已解决**的清单白干）；
     · 每条再按**当前档案现算**（`still_unsettled`）⇒ 用户**刚补的词 / 刚建的小微**当场生效、条目消失；
     · 附该壳下的候选小微（`candidates_of`）—— 供弹窗「选已有小微并补词」。
+
+    指定 `run_id` 时只检查该次集采抓取，按当前归属与剔除规则筛出窗口内仍可处理的合同。
 
     ⛔ **本端点只读**。写仍走 `POST /api/m03/notices/ownership-assign` —— 那个端点**只补档案**
       （原文：「⛔ 本端点**不写任何通知书数据**」）⇒ **与"付款"这个域无关**，集采**直接复用**，
@@ -455,7 +457,9 @@ def api_unsettled() -> dict:
 
     with session_scope() as session:
         projects = P1S.all_projects(session)
-        items = still_unsettled(R.latest_unsettled(session), projects)
+        items = still_unsettled(R.latest_unsettled(session, run_id=run_id), projects)
+        if run_id is not None:
+            items, _ = FS.split_ignored(session, items)
         out = [
             {**it,
              "candidates": (candidates_of(int(it["shell_id"]), projects) if it.get("shell_id") else [])}

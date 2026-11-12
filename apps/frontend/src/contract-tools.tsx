@@ -4,9 +4,9 @@ import Button from 'antd/es/button';
 import Select from 'antd/es/select';
 import { Link } from 'react-router';
 import { createContext, useContext, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ApiError, record, requestJson } from './api';
-import type { Identity, Project } from './api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './api';
+import type { Identity } from './api';
 import { readProjects } from './api';
 import { NoticeDialog } from './notice-maintenance';
 import type { NoticeRow } from './notices-api';
@@ -14,53 +14,115 @@ import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
-import { receipt } from './notices-api';
+import { body, receipt } from './notices-api';
 import { I8FetchActions, I8FetchRecovery, I8FetchStatus, useI8FetchAction } from './i8-fetch';
-
-import { JcFetchReceipt } from './jc-fetch-receipt';
+import { JcReceiptContents, readReceipt, readReceiptRows } from './jc-fetch-receipt';
+import type { ReceiptRow } from './jc-fetch-receipt';
+import { jcRulesPath } from './jc-rule-data';
+import { ReadFailure } from './read-region';
+import { useHistoryGuard } from './history';
 
 interface ToolProps { me:Identity|null;blocked:boolean;close:()=>void;refresh:()=>Promise<void> }
-const contractFetchCounts = [
-  { field: 'fetched', label: '抓取' },
-  { field: 'matched', label: '已匹配' },
-  { field: 'unmatched', label: '未写入' },
-  { field: 'ignored', label: '忽略' },
-  { field: 'material_blank', label: '材料名未补齐' },
-];
 
 function readContractFetch(value: unknown) {
-  if (!record(value) || value.ok !== true || typeof value.message !== 'string' ||
-    !contractFetchCounts.every(({ field }) => typeof value[field] === 'number') ||
-    !Array.isArray(value.unmatched_projects) || !value.unmatched_projects.every(item => record(item) && typeof item.name === 'string' && typeof item.count === 'number')) {
+  const result = readReceipt(value);
+  if (!record(value) || value.ok !== true || !result || !result.id) {
     throw new ApiError('采购合同抓取回执不完整。', 0, 'invalid_response');
   }
-  return {
-    message: value.message,
-    runId: typeof value.run_record_id === 'number' ? value.run_record_id : null,
-    summary: contractFetchCounts.map(({ field, label }) => ({ label, count: Number(value[field]) })),
-    details: value.unmatched_projects as { name: string; count: number }[],
-  };
+  return { ...result, id: result.id };
 }
 
 export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
+  const client = useQueryClient();
   const [since, setSince] = useState('');
   const [all, setAll] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof readContractFetch>>();
-  const [ownershipOpen, setOwnershipOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [pending, setPending] = useState<ReceiptRow[]>([]);
+  const [ownership, setOwnership] = useState<NoticeRow | null>(null);
+  const [rule, setRule] = useState<{ row: ReceiptRow; kind: 'project' | 'contract' } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [ruleError, setRuleError] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const ruleLock = useRef(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
-  const closing = useDialogClose({ busy: action.busy, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
+  const closing = useDialogClose({ busy: action.busy || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
+  const projects = useQuery({queryKey: ['projects', 'all'], enabled: !blocked && Boolean(ownership),
+    queryFn: async ({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', {signal}))});
+  useHistoryGuard('jc-fetch-rule', () => ruleLock.current ? '集采剔除规则正在保存，请稍候。' : '');
+
+  async function refreshPending(runId: number) {
+    const value = await requestJson(`/api/m11/unsettled?run_id=${runId}`);
+    if (!record(value) || !Array.isArray(value.items)) throw new ApiError('归属结果读取不完整。');
+    setPending(readReceiptRows(value.items, false));
+  }
 
   async function run() {
-    const receipt = await action.run({
+    const fetched = await action.run({
       path: '/api/m11/fetch',
       payload: { confirm: true, ...(all ? { since: '' } : since ? { since } : {}) },
       parse: readContractFetch,
     });
-    if (receipt) setResult(receipt);
+    if (fetched) {
+      setPending(fetched.unsettled);
+      setResult(fetched);
+    }
   }
 
-  return <BusinessModal open={!blocked} className={`project-dialog contract-fetch${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
+  function selectRule(row: ReceiptRow, kind: 'project' | 'contract') {
+    if (ruleLock.current) return;
+    setRuleError('');
+    setRule({ row, kind });
+  }
+
+  async function saveRule() {
+    if (!rule || !result || !me || blocked || ruleLock.current) return;
+    const { row, kind } = rule;
+    ruleLock.current = true;
+    setSaving(true);
+    setRuleError('');
+    setFeedback('');
+    try {
+      const response = await requestJson(jcRulesPath, { method: 'POST', ...body(kind === 'project'
+        ? { kind, name_full: row.project } : { kind, contract_no: row.contract }) });
+      confirmWrite(record(response) && response.ok === true, '规则保存回执不完整。');
+      setRule(null);
+      setPending(rows => rows.filter(item => kind === 'project' ? item.project !== row.project : item.contract !== row.contract));
+      setFeedback(record(response) && response.reused === true ? '已有相同剔除规则' : '已加入剔除规则');
+      void client.invalidateQueries({ queryKey: ['rules', 'jc-ignore'], refetchType: 'none' });
+      try {
+        await refreshPending(result.id);
+      } catch {
+        setFeedback('剔除规则已保存，其他合同的待指定列表未能刷新。');
+      }
+    } catch (failure) {
+      setRuleError(uncertainWrite(failure) ? '规则保存结果待确认，可以重试本次操作。'
+        : failure instanceof Error ? failure.message : '剔除规则保存失败。');
+    } finally {
+      ruleLock.current = false;
+      setSaving(false);
+    }
+  }
+
+  function pendingActions(row: ReceiptRow) {
+    return <div className="jc-receipt-row-actions">
+      {row.kind === 'not_archived' ? <Link to="/projects" onClick={close}>到项目档案核对</Link>
+        : <Button size="small" disabled={saving || Boolean(ownership) || blocked || !me} onClick={() => {
+          setRule(null);
+          setOwnership({ notice_id: 0, bill_no: row.contract, bill_name: row.document,
+            project_name: row.project, project_display: row.project } as NoticeRow);
+        }}>补归属关键词</Button>}
+      <Button size="small" disabled={saving || blocked || !me || !row.project.trim()} onClick={() => selectRule(row, 'project')}>剔除这个项目</Button>
+      <Button size="small" disabled={saving || blocked || !me || !row.contract.trim()} onClick={() => selectRule(row, 'contract')}>仅剔除这份合同</Button>
+      {rule?.row.id === row.id && <div className="jc-receipt-rule-confirm">
+        <p>{rule.kind === 'project' ? `下次抓取时，跳过「${row.project}」的所有合同。` : `下次抓取时，跳过合同「${row.contract}」。`}</p>
+        {ruleError && <p className="notice" role="alert">{ruleError}</p>}
+        <Button size="small" disabled={saving} onClick={() => setRule(null)}>取消剔除</Button>
+        <Button size="small" disabled={saving} type="primary" onClick={() => void saveRule()}>{saving ? '正在保存…' : '确认加入剔除规则'}</Button>
+      </div>}
+    </div>;
+  }
+
+  return <><BusinessModal open={!blocked && !(ownership && projects.data)} className={`project-dialog contract-fetch${result ? ' jc-receipt-dialog' : ''}${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
     <DialogContents title="抓取采购合同" titleId="contract-fetch-title" closing={closing}>
       <I8FetchStatus action={action} me={me} />
       {!action.sent && <>
@@ -71,20 +133,18 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
         <p>已审批和未审批合同均写入台账。命中剔除规则或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
       </>}
       {result && <>
-        <p role="status">{result.message}</p>
-        <div className="contract-fetch-summary">{result.summary.map(item => <span key={item.label}>{item.label} {item.count} 条</span>)}</div>
-        {result.runId !== null && <Button disabled={blocked} onClick={() => setReceiptOpen(true)}>查看本次抓取明细</Button>}
-        {result.details.length > 0 && <>
-          <div className="contract-unmatched"><h3>未写入项目</h3><ul>{result.details.map((item, index) => <li key={index}>{item.name}，{item.count} 条</li>)}</ul></div>
-          <Button disabled={action.busy || blocked} onClick={() => setOwnershipOpen(true)}>去指定归属</Button>
-        </>}
+        {feedback && <p role="status">{feedback}</p>}
+        {ownership && projects.isFetching && <p role="status">正在读取项目档案…</p>}
+        {ownership && projects.isError && <ReadFailure read={projects} />}
+        {ownership && !projects.data && <Button onClick={() => setOwnership(null)}>取消补归属</Button>}
+        <JcReceiptContents data={result} pending={pending} actions={pendingActions} />
       </>}
-      <DialogPresence>{ownershipOpen && <ContractOwnershipPending blocked={blocked || action.busy} close={() => setOwnershipOpen(false)} refresh={refresh} />}</DialogPresence>
-      <DialogPresence>{receiptOpen && result?.runId != null && <JcFetchReceipt active={!blocked} close={() => setReceiptOpen(false)} runId={result.runId} />}</DialogPresence>
       <I8FetchRecovery action={action} source="contracts" />
-      <I8FetchActions action={action} close={closing.requestClose} onRun={() => void run()} />
+      <I8FetchActions action={saving ? { ...action, busy: true } : action} close={closing.requestClose} onRun={() => void run()} />
     </DialogContents>
-  </BusinessModal>;
+  </BusinessModal><DialogPresence>{ownership && projects.data && result && <NoticeDialog state={{ kind: 'ownership', row: ownership }}
+    projects={projects.data} blocked={blocked} close={() => setOwnership(null)}
+    refresh={async () => { await refreshPending(result.id); await refresh(); }} announce={setFeedback} />}</DialogPresence></>;
 }
 interface Party {name:string;kind:string;kind_name:string;count:number}
 interface Settings {parties:Party[];kinds:string[];names:Record<string,string>}
@@ -126,25 +186,4 @@ export function ContractSettings({me,blocked,close,refresh}:ToolProps) {
     ]}/></PartyEditing.Provider>}
     {feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button disabled={busy||blocked} onClick={()=>void reread()}>重读清单</Button></div>
   </DialogContents></BusinessModal>;
-}
-
-export function readContractOwnershipPending(value:unknown):{bill_no:string;doc_name:string;project_name:string;kind:string}[] {
-  if(!record(value)||!Array.isArray(value.items)||!value.items.every(item=>record(item)&&['contract_no','doc_name','project_name','kind'].every(key=>typeof item[key]==='string')))throw new ApiError('集采归属待办读取不完整，请重读。');
-  return value.items.map(item=>({bill_no:item.contract_no,doc_name:item.doc_name,project_name:item.project_name,kind:item.kind}));
-}
-
-function ContractOwnershipPending({blocked,close,refresh}:{blocked:boolean;close:()=>void;refresh:()=>Promise<void>}) {
-  const [editing,setEditing]=useState<NoticeRow|null>(null),[feedback,setFeedback]=useState('');
-  const closing=useDialogClose({busy:false,dirty:false,close,active:!blocked});
-  const query=useQuery({queryKey:['contract-ownership-pending'],enabled:!blocked,refetchOnMount:'always',queryFn:async({signal})=>{
-    const value=await requestJson('/api/m11/unsettled',{signal});
-    return readContractOwnershipPending(value);
-  }});
-  const projects=useQuery({queryKey:['projects','all'],enabled:!blocked,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
-  const reasons:Record<string,string>={needs_keyword:'未命中具体小微，请补充关键词',needs_choice:'命中多个小微，请核对关键词',not_archived:'尚未建档，请先到项目档案核对'};
-  return <><BusinessModal open={!blocked&&!editing} className="project-dialog contract-ownership-pending" titleId="contract-ownership-title" requestClose={closing.requestClose}><DialogContents title="集采待指定归属" titleId="contract-ownership-title" closing={closing}>
-    <p>补关键词或建小微后，请重新抓取未完成归属的合同；已写入合同不受影响。</p>
-    {query.isPending||projects.isPending?<p role="status">正在读取归属待办…</p>:query.isError||projects.isError?<p className="notice" role="alert">{query.error?.message||projects.error?.message}</p>:<div>{query.data?.length?query.data.map((item,i)=><p key={`${item.bill_no}:${i}`}>{item.project_name}，{item.bill_no}，{item.doc_name}<br/>{reasons[item.kind]||'请核对项目归属'}{item.kind==='not_archived'?<Link to="/projects">到项目档案核对</Link>:<Button disabled={blocked} onClick={()=>setEditing({notice_id:0,bill_no:item.bill_no,bill_name:item.doc_name,project_name:item.project_name,project_display:item.project_name} as NoticeRow)}>指定归属</Button>}</p>):<p>没有待指定归属的合同。</p>}</div>}
-    {feedback&&<p role="status">{feedback}</p>}<div className="dialog-actions"><Button onClick={closing.requestClose}>关闭</Button><Button disabled={query.isFetching||projects.isFetching} onClick={()=>{void query.refetch();void projects.refetch();}}>重读待办</Button></div>
-  </DialogContents></BusinessModal><DialogPresence>{editing&&<NoticeDialog state={{kind:'ownership',row:editing}} projects={(projects.data??[]) as Project[]} blocked={blocked} close={()=>setEditing(null)} refresh={async()=>{await refresh();await query.refetch({throwOnError:true});}} announce={setFeedback}/>}</DialogPresence></>;
 }

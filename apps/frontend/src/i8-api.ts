@@ -20,6 +20,10 @@ export function recordSource(row: RunRecord): keyof typeof sourceNames | null {
 }
 export function recordScope(row: RunRecord): string {
   if (row.run_type === 'sync') return '—';
+  if (row.target.startsWith('jc_contract ')) {
+    const scope = row.target.slice('jc_contract '.length);
+    return /^全量(?:（\d+ 条）)?$/.test(scope) ? '范围未记录' : scope;
+  }
   return row.target.replace(/^(inv|setl|付款通知书) /, '');
 }
 export function recordLabel(row: RunRecord): string {

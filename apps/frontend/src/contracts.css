@@ -48,15 +48,13 @@
 .contract-detail-totals strong{font-variant-numeric:tabular-nums}
 .contract-evidence{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .contract-evidence:has(>section:only-child){grid-template-columns:1fr}
-.contract-evidence h3,.contract-linked h3,.contract-unmatched h3{font-size:1em;margin:8px 0}
+.contract-evidence h3,.contract-linked h3{font-size:1em;margin:8px 0}
 .contract-evidence .table-scroll{max-height:calc(220px * var(--fscale));overflow:auto}
 .contract-linked{margin-top:16px}
 .contract-linked>div{display:flex;flex-direction:column;gap:8px}
 .contract-field{margin:16px 0}
 .contract-settings-table{max-height:48dvh;overflow:auto;border:1px solid var(--bd);border-radius:var(--radius-input)}
 .contract-settings-table .ant-select{width:100%;min-width:calc(110px * var(--fscale))}
-.contract-fetch-summary{display:flex;gap:16px;flex-wrap:wrap;padding:16px 0}
-.contract-unmatched{max-height:32dvh;overflow:auto}
 .contract-conflict{background:var(--sf2);padding:16px;margin-top:16px;border-radius:var(--radius-inner)}
 .contract-evidence>section,.contract-linked{border:0;border-radius:0;background:transparent;overflow:visible}
 .business-modal .contract-editor{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));width:min(calc(920px * var(--fscale)),calc(100vw - 24px))}

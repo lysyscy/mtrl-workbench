@@ -173,10 +173,14 @@ def run_fetch(
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
     t0 = datetime.now()
-    if since is None:
+    automatic = since is None
+    if automatic:
         with session_scope() as s:
             since = default_since(s)
     since = str(since or "")
+    scope = f"{since} 起" if since else "全部合同"
+    if automatic:
+        scope = f"自动范围（{scope}）"
     operator = operator or current_operator()
     client_factory = client_factory or (
         lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
@@ -192,6 +196,8 @@ def run_fetch(
             try:
                 fetcher = ContractFetcher(client)
                 fetched_rows = fetcher.fetch_in_locked_batch(since=since) if fetch is None else fetch(client)
+                source_count = getattr(fetcher, "source_count", None) if fetch is None else None
+                source_count = len(fetched_rows) if source_count is None else source_count
                 with session_scope() as s:
                     rows, ignored_rows = split_ignored(s, fetched_rows)
                     known = R.existing_contract_nos(s, [str(r.get("contract_no") or "") for r in rows]) if fetch is None and rows else set()
@@ -223,9 +229,9 @@ def run_fetch(
             notice = fetch_task.degrade_to_excel(exc)
             with session_scope() as s:
                 run = save_run_record(s, **fetch_task.fetch_record_payload(
-                    object_desc=f"{TABLE} 全量", success=0, fail=1,
+                    object_desc=f"{TABLE} {scope}", success=0, fail=1,
                     error_message=f"{type(exc).__name__}: {exc}"),
-                    detail={**record_detail(), **R.fetch_detail()},
+                    detail={**record_detail(), **R.fetch_detail(jc_scope=scope)},
                     operator=operator, started_at=t0)
             return {"ok": False, "degraded": True, "message": notice["message"],
                     "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
@@ -270,7 +276,7 @@ def run_fetch(
             m = match_projects(rows, P1S.all_projects(s))
 
             # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
-            stats = {"inserted": 0, "refreshed": 0, "skipped": 0}
+            stats = {"inserted": 0, "refreshed": 0, "changed": 0, "skipped": 0}
             by_pid: dict[int, list[dict]] = {}
             for row in m["matched"]:
                 by_pid.setdefault(int(row["project_id"]), []).append({
@@ -281,13 +287,23 @@ def run_fetch(
                 for k in stats:
                     stats[k] += int(part.get(k) or 0)
 
+            ignored_projects = _tally(ignored_rows, "project_name")
+            summary = {
+                "source_count": source_count, "identified_count": len(fetched_rows),
+                "inserted": stats["inserted"], "changed": stats["changed"],
+                "unchanged": stats["refreshed"] - stats["changed"], "material_blank": material_blank,
+            }
             run = save_run_record(s, **fetch_task.fetch_record_payload(
-                object_desc=f"{TABLE} 全量（{len(rows)} 条）",
+                object_desc=f"{TABLE} {scope}",
                 success=len(m["matched"]), fail=0),
                 # ⚠️ `record_detail()` 是**材料侧**的键（`promote_pending`，集采天然用不上）⇒ 在其后**追加集采自己的**
                 #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
                 detail={**record_detail(),
                         **R.fetch_detail(
+                            jc_scope=scope,
+                            jc_summary=summary,
+                            jc_sync_warning=sync_result.get("message") if sync_result.get("degraded") else None,
+                            jc_ignored_projects=ignored_projects,
                             jc_unsettled_count=len(m["unmatched"]),
                             jc_ignored_count=len(ignored_rows),
                             jc_unsettled=[
@@ -309,7 +325,7 @@ def run_fetch(
                 #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
                 "new_parties": new_parties,
                 # ⭐ `TAIL-96`：被剔除名单挡下的（⛔ 不静默 —— 得让人看见"哪些项目被当成不要的了"）
-                "ignored": len(ignored_rows), "ignored_projects": _tally(ignored_rows, "project_name"),
+                "ignored": len(ignored_rows), "ignored_projects": ignored_projects,
                 "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
                 # ⭐ `TAIL-92`：没落库的按**归属类别**分开报（⛔ 禁静默 —— 得让人看出"卡在哪一步"）：
                 #    `needs_keyword` = 壳认出来了、但单据名里没有该壳下任何小微的关键词（**最常见**，要人去指认/补词）
@@ -321,10 +337,11 @@ def run_fetch(
                 "unmatched_projects": _tally(m["unmatched"], "project_name"),
                 "sync": {k: v for k, v in (sync_result or {}).items() if k != "created"},
                 "run_record_id": getattr(run, "id", None),
+                "receipt": R.fetch_receipt(run),
                 "message": (
-                    f"抓取 {len(rows)} 条 · 匹配上 {len(m['matched'])} 条"
-                    f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
-                    f"归属未走完、未写入 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
+                    f"i8 返回 {source_count} 条，新增 {stats['inserted']} 条，"
+                    f"实际变更 {stats['changed']} 条，待指定归属 {len(m['unmatched'])} 条，"
+                    f"规则剔除 {len(ignored_rows)} 条"
                     + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")
                 ),
             }
@@ -335,7 +352,7 @@ __all__ = ["TABLE", "CONFIRM_TOKEN", "KICK_WARNING",
 
 
 def bill_name(row: dict) -> str:
-    return str(row.get("bill_name") or (row.get("fields") or {}).get("BillName") or "")
+    return str(row.get("bill_name") or (row.get("fields") or {}).get("BillName") or row.get("doc_name") or "")
 
 
 def split_ignored(s: Session, rows: list[dict]) -> tuple[list[dict], list[dict]]:

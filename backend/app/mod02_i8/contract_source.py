@@ -109,6 +109,7 @@ class ContractFetcher:
 
     def __init__(self, client: I8Client) -> None:
         self._client = client
+        self.source_count = 0
 
     def fetch_all(self, *, since: str = "") -> list[dict]:
         """取一次（**人工触发**）⇒ 映射后的行列表（无法识别编号的**已丢弃**，见 `_map_record`）。
@@ -144,6 +145,7 @@ class ContractFetcher:
                 continue
             mapped.append(row)
         logger.info("采购合同取数：取到 {} 条 / 有效合同 {} 条", len(records), len(mapped))
+        self.source_count = len(records)
         return mapped
 
     def fetch_item_name(self, ph_id: str) -> str:

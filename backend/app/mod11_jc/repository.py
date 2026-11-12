@@ -487,7 +487,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
       ⇒ ⛔ **不碰**存档三列 / 备注 / 付款方式 / 贸易公司（人的地盘），
         ⛔ 也**不许**把人工标的「不纳入」改回来（判据 `001-10` 的铁律）。
     """
-    inserted = refreshed = skipped = 0
+    inserted = refreshed = skipped = changed = 0
     for row in rows or ():
         no = str(row.get("contract_no") or "").strip()
         if not no:
@@ -556,8 +556,10 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             #    人工标的「不纳入」⇒ 原样保留；其余（含新抓的）一律「纳入台账」。
             cur.tag = D.tag_after_fetch(cur.tag)
             refreshed += 1
+            if s.is_modified(cur, include_collections=False):
+                changed += 1
     s.flush()
-    return {"inserted": inserted, "refreshed": refreshed, "skipped": skipped}
+    return {"inserted": inserted, "refreshed": refreshed, "changed": changed, "skipped": skipped}
 
 
 # ============================================================ 甲方单位分类（`M5-6b`）
@@ -645,7 +647,26 @@ def fetch_detail(**extra) -> dict:
     return {JC_FETCH_MARK: True, **extra}
 
 
-def latest_unsettled(session: Session) -> list[dict]:
+def fetch_receipt(run) -> dict:
+    detail = run.detail
+    return {
+        "id": run.id,
+        "started_at": run.started_at.isoformat(timespec="seconds"),
+        "duration_seconds": (run.finished_at - run.started_at).total_seconds() if run.finished_at else None,
+        "status": run.status,
+        "matched": run.success_count,
+        "scope": detail.get("jc_scope"),
+        "summary": detail.get("jc_summary"),
+        "sync_warning": detail.get("jc_sync_warning"),
+        "ignored_projects": detail.get("jc_ignored_projects"),
+        "unsettled": detail.get("jc_unsettled"),
+        "ignored": detail.get("jc_ignored"),
+        "unsettled_count": detail.get("jc_unsettled_count"),
+        "ignored_count": detail.get("jc_ignored_count"),
+    }
+
+
+def latest_unsettled(session: Session, *, run_id: int | None = None) -> list[dict]:
     """**最近一次集采抓取**带的「归属未走完」清单（`TAIL-93` 弹窗的数据源）。
 
     ⚠️⚠️ **只认最近一次**（与付款侧 `mod03_notice.repository.latest_unresolved` **同一条口径**）：
@@ -654,6 +675,9 @@ def latest_unsettled(session: Session) -> list[dict]:
     ⛔ 这里**不暂存任何合同数据**（口径同付款侧：补完词**再抓一次**，库里不留半成品）。
     """
     from app.mod02_i8 import service as records
+    if run_id is not None:
+        run = records.marked_fetch(session, JC_FETCH_MARK, run_id=run_id)
+        return list(run.detail.get("jc_unsettled") or []) if run else []
     recs = records.recent_records(session, run_type="fetch", limit=LOOKBACK)
     # ⚠️ 离线桩不处理 `order_by` ⇒ 再显式按 id 倒序一次（真库本来有序 ⇒ 语义不变）
     for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):

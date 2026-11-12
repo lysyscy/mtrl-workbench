@@ -48,16 +48,4 @@ def api_jc_ignore_delete(ignore_id: int) -> dict:
 def api_jc_ignore_receipt(run_id: int | None = Query(None, ge=1, le=2147483647)) -> dict:
     with session_scope() as s:
         run = records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run_id)
-        if run is None:
-            return {"receipt": None}
-        detail = run.detail
-        return {"receipt": {
-            "id": run.id,
-            "started_at": run.started_at.isoformat(timespec="seconds"),
-            "status": run.status,
-            "matched": run.success_count,
-            "unsettled": detail.get("jc_unsettled"),
-            "ignored": detail.get("jc_ignored"),
-            "unsettled_count": detail.get("jc_unsettled_count"),
-            "ignored_count": detail.get("jc_ignored_count"),
-        }}
+        return {"receipt": R.fetch_receipt(run) if run is not None else None}

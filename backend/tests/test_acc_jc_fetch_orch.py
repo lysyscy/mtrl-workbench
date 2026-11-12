@@ -35,6 +35,7 @@ def _run_fetch(session, **kwargs):
 def test_rule_receipt_preserves_matched_conditions_and_existing_contract():
     from app.mod02_i8 import service as records
     from app.mod02_i8.repository import save_run_record
+    from app.mod11_jc import api as jc_api
 
     with session_scope() as s:
         try:
@@ -63,11 +64,20 @@ def test_rule_receipt_preserves_matched_conditions_and_existing_contract():
                                 started_at=None)
             run = records.marked_fetch(s, R.JC_FETCH_MARK)
             assert run.id == result["run_record_id"]
+            assert R.fetch_receipt(run) == result["receipt"]
+            assert result["receipt"]["summary"]["source_count"] == 2
+            assert result["receipt"]["summary"]["inserted"] == result["receipt"]["summary"]["changed"] == 0
             assert run.detail["jc_ignored"][0]["matches"][0]["reason"] == "原业务理由"
             assert run.detail["jc_unsettled"][0]["doc_name"] == "待归属合同"
             assert run.detail["jc_ignored_count"] == run.detail["jc_unsettled_count"] == 1
             assert records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run.id).id == run.id
             assert records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run.id + 1) is None
+            with patch.object(jc_api, "session_scope", lambda: nullcontext(s)):
+                assert jc_api.api_unsettled()["total"] == 0
+                assert [item["contract_no"] for item in jc_api.api_unsettled(run_id=run.id)["items"]] == ["RECEIPT-2"]
+                R.add_ignored(s, kind="keyword", name_full="未建档回执项目", bill_name_keyword="待归属")
+                assert jc_api.api_unsettled(run_id=run.id) == {"items": [], "total": 0}
+                assert R.fetch_receipt(run) == result["receipt"]
         finally:
             s.rollback()
 
@@ -203,7 +213,7 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
 
     def post_json(url, **kwargs):
         if url.endswith('/contracts'):
-            return {'Record': records}
+            return {'Record': [*records, {'BillName': '缺少合同编号'}]}
         return {'Data': {'Grid': {'results': [{'ItemName': '测试材料'}]}}}
 
     client = SimpleNamespace(post_json=post_json, close=lambda: None)
@@ -215,6 +225,8 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
                          sync=lambda *args, **kwargs: {})
         assert out['ok'] is True
         assert (out['fetched'], out['matched'], out['stats']['inserted']) == (2, 2, 2)
+        assert out['receipt']['summary']['source_count'] == 3
+        assert out['receipt']['summary']['identified_count'] == 2
         pending = R.one_by_no(s, '__approval_0__')
         approved = R.one_by_no(s, '__approval_1__')
         assert pending is not None and approved is not None
@@ -230,6 +242,8 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
         again = _run_fetch(s, confirmed=True, client_factory=lambda: client,
                            sync=lambda *args, **kwargs: {})
         assert (again['stats']['inserted'], again['stats']['refreshed']) == (0, 2)
+        assert again['receipt']['summary']['changed'] == 1
+        assert again['receipt']['summary']['unchanged'] == 1
         s.expire_all()
         same = R.one_by_no(s, '__approval_0__')
         assert same.id == pending_id

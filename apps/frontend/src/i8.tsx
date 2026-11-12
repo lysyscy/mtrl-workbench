@@ -19,7 +19,8 @@ import { DialogPresence } from './workspace-motion';
 
 function Status({ row }: { row: RunRecord }) {
   const unit = row.run_type === 'print' || row.run_type === 'export_pdf' ? '张' : '条';
-  const text = ({ success: `成功 ${row.success_count} ${unit}`, failed: '失败', partial: `部分成功 ${row.success_count} / ${row.success_count + row.fail_count} ${unit}`, running: '执行中' } as Record<string, string>)[row.status] ?? `其他状态：${row.status}`;
+  const success = recordSource(row) === 'contracts' ? `完成（匹配 ${row.success_count} 条）` : `成功 ${row.success_count} ${unit}`;
+  const text = ({ success, failed: '失败', partial: `部分成功 ${row.success_count} / ${row.success_count + row.fail_count} ${unit}`, running: '执行中' } as Record<string, string>)[row.status] ?? `其他状态：${row.status}`;
   const tone = ['success', 'failed', 'partial', 'running'].includes(row.status) ? row.status : 'unknown';
   return <Tag className={`status-tag status-${tone==='success'?'positive':tone==='failed'?'negative':tone==='partial'||tone==='running'?'pending':'neutral'}`}>{text}</Tag>;
 }
@@ -149,7 +150,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
             : <ReadGrid table="i8-records" className="i8-records" label="执行记录列表" domLayout="normal" style={{height:'min(60dvh,600px)'}} rows={visible} rowId={row=>String(row.id)} columns={[
             {field:'started_at',headerName:'开始时间',valueFormatter:p=>when(p.value)},
             {colId:'action',headerName:'动作',valueGetter:p=>recordLabel(p.data!)},
-            {field:'target',headerName:'范围 / 对象'},
+            {colId:'target',headerName:'范围 / 对象',valueGetter:p=>p.data && recordSource(p.data) === 'contracts' ? recordScope(p.data) : p.data?.target},
             {field:'triggered_by',headerName:'操作人',valueFormatter:p=>p.value==='manual'?'未记录（旧记录）':p.value},
             {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=><>
               <Status row={row}/>
