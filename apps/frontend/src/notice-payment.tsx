@@ -36,7 +36,7 @@ export function PayAmountCell({ row, override, disabled, change }: { row: Notice
     if (parsed === null) { setError('金额不合法，请修改'); return; }
     setError('');setValue(parsed);change(row,parsed);
   }
-  return <span><input aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => setValue(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError(''); } }} />{error && <small role="alert">{error}</small>}</span>;
+  return <span><input aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => setValue(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError(''); } }} />{error && <small role="alert">{error}</small>}</span>;
 }
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }
