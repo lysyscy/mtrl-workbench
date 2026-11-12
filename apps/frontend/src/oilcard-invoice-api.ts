@@ -66,20 +66,24 @@ function checkParts(saved: OilInvoice, parts: OilAllocationFields[]) {
 export interface OilManualInvoiceFields {
   invoice_no: string; date_text: string; cutoff_ym: string | null; amount: string; remark: string; allocations: OilAllocationFields[];
 }
-export async function saveManualOilInvoice(fields: OilManualInvoiceFields, identity: { request_id: string } | { id: number; version: string; request_id: string }, signal: AbortSignal) {
+export type OilManualInvoiceIdentity = { request_id: string } | { id: number; version: string; request_id: string };
+export function matchesManualOilInvoice(saved: OilInvoice, identity: OilManualInvoiceIdentity, fields: OilManualInvoiceFields) {
+  const dateText = fields.date_text.trim();
+  return saved.status === 'registered' && saved.kind === 'normal' && !saved.deleted && saved.manual_request_id === identity.request_id &&
+    (!('id' in identity) || saved.id === identity.id) && saved.invoice_no === (fields.invoice_no || null) &&
+    saved.invoice_date === (/^\d{4}-\d{2}-\d{2}$/.test(dateText) ? dateText : null) &&
+    saved.manual_date_text === fields.date_text && saved.manual_cutoff_ym === fields.cutoff_ym &&
+    saved.remark === fields.remark && saved.amount !== null && cents(saved.amount) === cents(fields.amount) &&
+    checkParts(saved, fields.allocations);
+}
+export async function saveManualOilInvoice(fields: OilManualInvoiceFields, identity: OilManualInvoiceIdentity, signal: AbortSignal) {
   const updating = 'id' in identity;
   const path = updating ? '/api/m13/invoices/' + identity.id + '/manual' : '/api/m13/invoices/manual';
   const result = await requestJson(path, { method: updating ? 'PUT' : 'POST', signal,
     ...body({ ...fields, ...(updating ? { version: identity.version } : { request_id: identity.request_id }) }) });
   confirmWrite(record(result) && result.ok === true, '手工登记回执待核实，请重读核对。');
   const saved = readOilInvoice((result as Record<string, unknown>).item);
-  const dateText = fields.date_text.trim();
-  confirmWrite(saved.status === 'registered' && !saved.deleted && saved.manual_request_id === identity.request_id &&
-    (!updating || saved.id === identity.id) && saved.invoice_no === (fields.invoice_no || null) &&
-    saved.invoice_date === (/^\d{4}-\d{2}-\d{2}$/.test(dateText) ? dateText : null) &&
-    saved.manual_date_text === fields.date_text && saved.manual_cutoff_ym === fields.cutoff_ym &&
-    saved.remark === fields.remark && cents(saved.amount!) === cents(fields.amount) &&
-    checkParts(saved, fields.allocations), '手工登记回执与输入不一致，请重读核对。');
+  confirmWrite(matchesManualOilInvoice(saved, identity, fields), '手工登记回执与输入不一致，请重读核对。');
   return saved;
 }
 export async function changeOilInvoice(row: OilInvoice, action: 'correct' | 'allocations' | 'credit' | 'delete' | `originals/${number}/resolve`, fields: Record<string, unknown>, signal: AbortSignal) {

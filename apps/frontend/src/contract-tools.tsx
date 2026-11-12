@@ -2,14 +2,12 @@ import { DialogPresence } from './workspace-motion';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import Select from 'antd/es/select';
-import { Link } from 'react-router';
 import { createContext, useContext, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
-import { readProjects } from './api';
-import { NoticeDialog } from './notice-maintenance';
-import type { NoticeRow } from './notices-api';
+import { OwnershipDialog, OwnershipProjectLink, useContractOwnershipPending } from './ownership';
+import type { OwnershipDocument } from './ownership';
 import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
@@ -37,8 +35,8 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const [since, setSince] = useState('');
   const [all, setAll] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof readContractFetch>>();
-  const [pending, setPending] = useState<ReceiptRow[]>([]);
-  const [ownership, setOwnership] = useState<NoticeRow | null>(null);
+  const [fallbackPending, setFallbackPending] = useState<ReceiptRow[]>([]);
+  const [ownership, setOwnership] = useState<OwnershipDocument | null>(null);
   const [rule, setRule] = useState<{ row: ReceiptRow; kind: 'project' | 'contract' } | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleError, setRuleError] = useState('');
@@ -46,15 +44,9 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const ruleLock = useRef(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
   const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
-  const projects = useQuery({queryKey: ['projects', 'all'], enabled: !blocked && Boolean(ownership),
-    queryFn: async ({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', {signal}))});
+  const { read: pendingRead, omit } = useContractOwnershipPending(result?.id ?? 0, !blocked && Boolean(result?.unsettled.length));
+  const pending = pendingRead.data ? readReceiptRows(pendingRead.data, false) : fallbackPending;
   useHistoryGuard('jc-fetch-rule', () => ruleLock.current ? '集采剔除规则正在保存，请稍候。' : '');
-
-  async function refreshPending(runId: number) {
-    const value = await requestJson(`/api/m11/unsettled?run_id=${runId}`);
-    if (!record(value) || !Array.isArray(value.items)) throw new ApiError('归属结果读取不完整。');
-    setPending(readReceiptRows(value.items, false));
-  }
 
   async function run() {
     const fetched = await action.run({
@@ -63,7 +55,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
       parse: readContractFetch,
     });
     if (fetched) {
-      setPending(fetched.unsettled);
+      setFallbackPending(fetched.unsettled);
       setResult(fetched);
     }
   }
@@ -86,11 +78,12 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
         ? { kind, name_full: row.project } : { kind, contract_no: row.contract }) });
       confirmWrite(record(response) && response.ok === true, '规则保存回执不完整。');
       setRule(null);
-      setPending(rows => rows.filter(item => kind === 'project' ? item.project !== row.project : item.contract !== row.contract));
+      setFallbackPending(rows => rows.filter(item => kind === 'project' ? item.project !== row.project : item.contract !== row.contract));
+      omit(item => kind === 'project' ? item.project_name === row.project : item.contract_no === row.contract);
       setFeedback(record(response) && response.reused === true ? '已有相同剔除规则' : '已加入剔除规则');
       void client.invalidateQueries({ queryKey: ['rules', 'jc-ignore'], refetchType: 'none' });
       try {
-        await refreshPending(result.id);
+        await pendingRead.refetch({ throwOnError: true });
       } catch {
         setFeedback('剔除规则已保存，其他合同的待指定列表未能刷新。');
       }
@@ -104,12 +97,15 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   }
 
   function pendingActions(row: ReceiptRow) {
+    if (!result) return null;
+    const document: OwnershipDocument = {
+      source: 'contract', runId: result.id, number: row.contract, name: row.document, project: row.project,
+    };
     return <div className="jc-receipt-row-actions">
-      {row.kind === 'not_archived' ? <Link to="/projects" onClick={close}>到项目档案核对</Link>
+      {row.kind === 'not_archived' ? <OwnershipProjectLink document={document} />
         : <Button size="small" disabled={saving || Boolean(ownership) || blocked || !me} onClick={() => {
           setRule(null);
-          setOwnership({ notice_id: 0, bill_no: row.contract, bill_name: row.document,
-            project_name: row.project, project_display: row.project } as NoticeRow);
+          setOwnership(document);
         }}>补归属关键词</Button>}
       <Button size="small" disabled={saving || blocked || !me || !row.project.trim()} onClick={() => selectRule(row, 'project')}>剔除这个项目</Button>
       <Button size="small" disabled={saving || blocked || !me || !row.contract.trim()} onClick={() => selectRule(row, 'contract')}>仅剔除这份合同</Button>
@@ -122,7 +118,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
     </div>;
   }
 
-  return <><BusinessModal open={!blocked && !(ownership && projects.data)} className={`project-dialog contract-fetch${result ? ' jc-receipt-dialog' : ''}${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
+  return <><BusinessModal open={!blocked && !ownership} className={`project-dialog contract-fetch${result ? ' jc-receipt-dialog' : ''}${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
     <DialogContents title="抓取采购合同" titleId="contract-fetch-title" closing={closing}>
       <I8FetchStatus action={action} me={me} />
       {!action.sent && <>
@@ -134,17 +130,14 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
       </>}
       {result && <>
         {feedback && <p role="status">{feedback}</p>}
-        {ownership && projects.isFetching && <p role="status">正在读取项目档案…</p>}
-        {ownership && projects.isError && <ReadFailure read={projects} />}
-        {ownership && !projects.data && <Button onClick={() => setOwnership(null)}>取消补归属</Button>}
+        {pendingRead.isError && <ReadFailure read={pendingRead} label="归属待办" retained="保留上次读取的归属待办。" />}
         <JcReceiptContents data={result} pending={pending} actions={pendingActions} />
       </>}
       <I8FetchRecovery action={action} source="contracts" />
       <I8FetchActions action={saving ? { ...action, busy: true } : action} close={closing.requestClose} onRun={() => void run()} />
     </DialogContents>
-  </BusinessModal><DialogPresence>{ownership && projects.data && result && <NoticeDialog state={{ kind: 'ownership', row: ownership }}
-    projects={projects.data} blocked={blocked} close={() => setOwnership(null)}
-    refresh={async () => { await refreshPending(result.id); await refresh(); }} announce={setFeedback} />}</DialogPresence></>;
+  </BusinessModal><DialogPresence>{ownership && <OwnershipDialog document={ownership}
+    blocked={blocked} close={() => setOwnership(null)} refresh={refresh} announce={setFeedback} />}</DialogPresence></>;
 }
 interface Party {name:string;kind:string;kind_name:string;count:number}
 interface Settings {parties:Party[];kinds:string[];names:Record<string,string>}

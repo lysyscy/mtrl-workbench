@@ -80,7 +80,7 @@ def guards(monkeypatch):
 
 def _pump(store: BrowserBroker, *, device: str = DEVICE, owner: str = OWNER, reply=None,
           status: int = 200, body: bytes = b'{"Success":true}', headers=None,
-          declared_length: int | None = None):
+          declared_length: int | None = None, relay_failure: str | None = None):
     """在后台扮演"页面 + 扩展"：取活、回帖。返回线程，便于 join。"""
 
     def run():
@@ -90,6 +90,7 @@ def _pump(store: BrowserBroker, *, device: str = DEVICE, owner: str = OWNER, rep
         store.complete(owner, device, pending.ticket, status=status,
                        headers=headers or {"content-type": "application/json"}, body=body,
                        declared_length=declared_length if declared_length is not None else len(body),
+                       relay_failure=relay_failure,
                        generation=pending.generation)
 
     thread = threading.Thread(target=run, daemon=True)
@@ -240,6 +241,84 @@ def test_同键换站点会把旧队列判停(store):
 
 
 # --------------------------------------------------------------- transport：只读白名单与脱敏
+
+
+@pytest.mark.parametrize("reason,expected,phrase", [
+    ("timeout", StrictSessionEnded, "超时"),
+    ("redirect", StrictRedirectStopped, "不透明"),
+    ("target", StrictTargetMismatch, "不一致"),
+    ("network", StrictSessionUnavailable, "网络"),
+    ("unavailable", StrictSessionUnavailable, "暂不可用"),
+    ("malformed", StrictSessionUnavailable, "无法核对"),
+])
+def test_中继失败穿过真实回帖与仓库容错后仍停止(store, monkeypatch, guards, reason, expected, phrase):
+    from app.core import session
+    from app.mod02_i8.router import browser_complete
+    from app.mod02_i8.schemas import BrowserCompleteRequest
+    from app.mod02_i8.sources import load_warehouse_rows
+
+    monkeypatch.setattr(session, "current_name", lambda: OWNER)
+    store.connect(OWNER, DEVICE, BASE)
+    with relay_scope(MODE_BROWSER, DEVICE):
+        client = open_i8_client(owner=OWNER)
+    replies = []
+
+    def complete():
+        pending = store.take_pending(OWNER, DEVICE, timeout=3)
+        assert pending is not None
+        replies.append(browser_complete(BrowserCompleteRequest(
+            device_id=DEVICE, ticket=pending.ticket, generation=pending.generation,
+            status=599, body_b64="", declared_length=0, relay_failure=reason,
+        )).accepted)
+
+    thread = threading.Thread(target=complete, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(expected, match=phrase):
+            load_warehouse_rows(client)
+    finally:
+        client.close()
+        thread.join(timeout=3)
+    assert replies == [True]
+    assert guards == {"login": 0, "cache": []}
+
+
+def test_上游HTTP错误没有中继失败标识时仍按业务降级(store, guards):
+    from app.mod02_i8.sources import load_warehouse_rows
+
+    store.connect(OWNER, DEVICE, BASE)
+    with relay_scope(MODE_BROWSER, DEVICE):
+        client = open_i8_client(owner=OWNER)
+    # Even 599 is not a relay stop without the separate marker.
+    thread = _pump(store, status=599, body=b"")
+    try:
+        assert load_warehouse_rows(client) is None
+    finally:
+        client.close()
+        thread.join(timeout=3)
+    assert guards == {"login": 0, "cache": []}
+
+
+def test_集采最后仓库读取的中继停止不得进入应用事务(store, monkeypatch, guards, rollback_db):
+    from app.mod02_i8.sources import load_warehouse_rows
+    from app.mod11_jc import fetch_service as contracts
+
+    store.connect(OWNER, DEVICE, BASE)
+    with relay_scope(MODE_BROWSER, DEVICE):
+        client = open_i8_client(owner=OWNER)
+    applied = []
+    thread = _pump(store, status=599, body=b"", relay_failure="timeout")
+    try:
+        with pytest.raises(StrictSessionEnded, match="超时"):
+            contracts.run_fetch(
+                confirmed=True, operator=OWNER, client_factory=lambda: client,
+                fetch=lambda _: [], loaders=(lambda: [], lambda: load_warehouse_rows(client) or []),
+                sync=lambda *a, **k: applied.append(True),
+            )
+    finally:
+        thread.join(timeout=3)
+    assert applied == []
+    assert guards == {"login": 0, "cache": []}
 
 
 def test_每条请求都核目标而不是只核初始化地址(store):

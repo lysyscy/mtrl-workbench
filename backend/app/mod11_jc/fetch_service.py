@@ -44,11 +44,7 @@ from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
 from app.mod02_i8.client import serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
-from app.mod02_i8.browser_session import (
-    StrictSessionEnded,
-    StrictSessionUnavailable,
-    StrictTargetMismatch,
-)
+from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.contract_source import ContractFetcher
 from app.mod02_i8.notice_source import APPROVE_STATUS_DONE, APPROVE_STATUS_OTHER
 from app.mod02_i8.repository import save_run_record
@@ -215,7 +211,7 @@ def run_fetch(
                 load_common, load_wh = loaders if loaders is not None else default_loaders(client)
                 try:
                     common_rows, warehouse_rows = load_common(), load_wh()
-                except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+                except StrictSessionStopped:
                     raise
                 except Exception as exc:
                     sync_failure = exc
@@ -223,7 +219,7 @@ def run_fetch(
                 close = getattr(client, "close", None)
                 if callable(close):
                     close()
-        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        except StrictSessionStopped:
             raise
         except Exception as exc:
             notice = fetch_task.degrade_to_excel(exc)
@@ -253,7 +249,7 @@ def run_fetch(
                 with s.begin_nested():
                     sync_result = (sync or sync_and_archive)(
                         s, load_common=common_snapshot, load_warehouses=lambda: warehouse_rows)
-            except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+            except StrictSessionStopped:
                 raise
             except Exception as exc:
                 sync_result = {"degraded": True, "message": human_reason(

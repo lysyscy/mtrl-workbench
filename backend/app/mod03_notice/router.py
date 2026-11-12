@@ -235,16 +235,12 @@ def warehouse_check(
     #    `http`（缺省）路径与改动前**逐字节一致**；`browser` 缺连接 ⇒ `wh_loader` 当场抛
     #    `BrowserRelayUnavailable`，⛔ 不会悄悄变成登录。
     from app.mod02_i8.browser_relay import scope_of
-    from app.mod02_i8.browser_session import (
-        StrictSessionEnded,
-        StrictSessionUnavailable,
-        StrictTargetMismatch,
-    )
+    from app.mod02_i8.browser_session import StrictSessionStopped
 
     try:
         with scope_of(req):
             rows = wh_loader(req.allow_kick)
-    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+    except StrictSessionStopped:
         # ⛔ 严格通道的停止（会话不在/身份或站点不符/浏览器没回音）**不许**被这里的
         #    "回落上一次缓存"吞掉：那会让用户以为名单是刚查的、而实际上是没查成。
         #    普通取数失败（网络抖动、i8 报错）仍走下面的缓存兜底 —— 那是既有行为。

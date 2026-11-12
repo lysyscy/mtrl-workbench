@@ -61,6 +61,8 @@
 - 浏览器模式下 `I8Client` 的重登与强踢路径**结构上不可达**：子类 `_login()` 直接抛 `StrictSessionEnded` 并计数，`_ensure_cookie()` 不碰产品会话缓存 ⇒ 不会登录、不会顶掉在线会话、不写 `cookie_store`。
 - 浏览器模式连不上就失败（`i8_browser_relay_unavailable`），⛔ 绝不静默改走登录。
 
+浏览器搬运失败通过回帖的可选`relay_failure`传递固定类别（timeout、redirect、target、network、unavailable、malformed），不借HTTP 599推断会话状态。后端在解析HTTP响应前还原严格异常；所有严格停止共用`StrictSessionStopped`基类穿透业务降级。没有该标记的真实上游HTTP错误保持原有业务处理；前端和扩展都不重放失败的取数票。
+
 ### 只读端点范围（两侧必须逐条一致）
 
 | 方法 | 路径 | 用途 |

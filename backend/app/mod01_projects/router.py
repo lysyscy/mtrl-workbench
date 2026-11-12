@@ -26,6 +26,7 @@ from app.mod01_projects.schemas import (
     CreateProjectRequest,
     LogOut,
     OrdRequest,
+    OwnershipCandidateOut,
     OwnershipRequest,
     OwnershipResponse,
     ProjectOut,
@@ -395,11 +396,12 @@ def ownership(req: OwnershipRequest) -> OwnershipResponse:
     with session_scope() as s:
         projects = list(s.execute(select(Project)).scalars().all())
         d = resolve_ownership(name_full=req.name_full, doc_name=req.doc_name, projects=projects)
-        cands: list[CandidateOut] = []
+        cands: list[OwnershipCandidateOut] = []
         if d.shell_id:
             children = [p for p in projects if p.parent_shell_id == d.shell_id]
             cands = [
-                CandidateOut(
+                OwnershipCandidateOut(
+                    id=p.id,
                     key=p.warehouse_name or "",
                     display=p.disp or p.warehouse_name or "",
                     archived=p.is_archived,

@@ -324,7 +324,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
     return { failed: '请求地址不成形' };
   }
   if (`${target.protocol}//${target.host}` !== `${location.protocol}//${location.host}`) {
-    return { failed: '请求目标不是当前标签的站点' };
+    return { failed: '请求目标不是当前标签的站点', code: 'target-mismatch' };
   }
   // 端点白名单二次核对（service worker 侧已经拒过一次；这里是"到了页面再拒一次"）。
   const endpoints = (allowedEndpoints && allowedEndpoints[method]) || [];
@@ -360,15 +360,15 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
   } catch (error) {
     // 超时是**超时**：⛔ 不许说成会话/身份失效（那会把用户推向重登，反而顶号）。
     if (error && error.name === 'AbortError') {
-      return { failed: '这条请求超过它自己的时间预算还没回来，本次已停止（超时）。没有重试，也没有当成登录状态问题。' };
+      return { failed: '这条请求超过它自己的时间预算还没回来，本次已停止（超时）。没有重试，也没有当成登录状态问题。', code: 'request-timeout' };
     }
-    return { failed: '请求没有发出去（网络或站点不可达）' };
+    return { failed: '请求未能完成（网络或站点不可达）', code: 'request-network' };
   } finally {
     if (timer) clearTimeout(timer);
   }
   if (response.type === 'opaqueredirect' || response.type === 'opaque') {
     // 不透明响应拿不到状态与正文 ⇒ 不许当成结果继续解析（后端也会判停，这里先拦）。
-    return { failed: '浏览器返回了不透明响应（无法核对结果）' };
+    return { failed: '浏览器返回了不透明响应（无法核对结果）', code: 'opaque-response' };
   }
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -452,7 +452,7 @@ async function execute(message, senderKey) {
     return { ok: false, message: '还没有选中 i8 标签：请点一下扩展图标选中那个已登录的 i8 业务页。' };
   }
   if (originOf(request.url) !== entry.origin) {
-    return { ok: false, message: '请求目标与选中的 i8 标签不是同一个站点，已拒绝执行。' };
+    return { ok: false, code: 'target-mismatch', message: '请求目标与选中的 i8 标签不是同一个站点，已拒绝执行。' };
   }
   // 方法与端点都在**注入脚本之前**拒掉：不该为一条越界的请求去碰用户标签。
   if (!ALLOWED_METHODS.includes(String(request.method || '').toUpperCase())) {
@@ -487,7 +487,7 @@ async function execute(message, senderKey) {
   const first = Array.isArray(results) ? results[0] : null;
   const value = first && first.result ? first.result : null;
   if (!value) return { ok: false, message: '标签里没有返回结果，本次已停止。' };
-  if (value.failed) return { ok: false, message: String(value.failed) };
+  if (value.failed) return { ok: false, message: String(value.failed), code: value.code || 'malformed' };
   if (typeof value.status !== 'number' || typeof value.body_b64 !== 'string') {
     return { ok: false, message: '标签返回的结果不成形，本次已停止。' };
   }

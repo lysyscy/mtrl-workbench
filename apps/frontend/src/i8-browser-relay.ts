@@ -83,6 +83,7 @@ export interface RelayReply {
   body_b64: string;
   /** 扩展自己数出来的字节数；后端会拿它和实际解码长度核对（截断即停）。 */
   declared_length: number;
+  relay_failure?: 'timeout' | 'redirect' | 'target' | 'network' | 'unavailable' | 'malformed';
 }
 
 /** 扩展从选中标签读取的站点；不再读取账号菜单。 */
@@ -263,9 +264,10 @@ export function readRelayRequest(value: unknown): RelayRequest | null {
 
 export function readRelayReply(value: unknown): RelayReply {
   if (!record(value) || typeof value.status !== 'number' || !Number.isInteger(value.status)
+    || value.status < 100 || value.status > 599
     || typeof value.body_b64 !== 'string' || typeof value.declared_length !== 'number'
     || !Number.isInteger(value.declared_length) || value.declared_length < 0) {
-    throw new ApiError('浏览器回帖不完整，本次已停止，请重试。');
+    throw new ApiError('浏览器回帖不完整，本次已停止，请刷新工作台并更新扩展。', 0, 'malformed');
   }
   return {
     status: value.status,
@@ -383,6 +385,17 @@ export function isTransientRelayError(error: unknown): boolean {
     && ['extension-unavailable', 'tab-paused', 'binding-lost'].includes(error.code ?? '');
 }
 
+/** Fixed categories only: upstream HTTP errors remain ordinary replies. */
+function relayFailure(error: unknown): NonNullable<RelayReply['relay_failure']> {
+  const code = error instanceof ApiError ? error.code : '';
+  if (code === 'request-timeout') return 'timeout';
+  if (code === 'opaque-response') return 'redirect';
+  if (code === 'target-mismatch') return 'target';
+  if (code === 'request-network') return 'network';
+  if (code === 'malformed' || code === 'invalid_response') return 'malformed';
+  return 'unavailable';
+}
+
 /**
  * 通道主循环：**只有页面打开且已连接时**才跑；关页面即停（没有后台常驻）。
  *
@@ -484,14 +497,14 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       // 扩展侧失败也必须回一个「终止」信号，否则后端会一直挂到自己的等待上限。
       // 回帖本身失败 ⇒ 通道已不可用：停止并把失败交出去（⛔ 不吞、不假装已回帖）。
       try {
-        await postReply({ status: 599, headers: {}, body_b64: '', declared_length: 0 }, request, signal);
+        await postReply({ status: 599, headers: {}, body_b64: '', declared_length: 0, relay_failure: relayFailure(failure) }, request, signal);
       } catch (postFailure) {
         stopped('failed');
         throw postFailure instanceof ApiError
           ? postFailure
           : new ApiError('浏览器回帖失败：和工作台的连接断了，本次已停止，请重新连接。');
       }
-      stopped(isTransientRelayError(failure) ? 'reconnect' : 'failed');
+      stopped(relayFailure(failure) === 'malformed' ? 'malformed' : isTransientRelayError(failure) ? 'reconnect' : 'failed');
       if (failure instanceof ApiError) return;
       throw failure;
     }
@@ -518,6 +531,7 @@ async function postReply(reply: RelayReply, request: RelayRequest, signal?: Abor
     headers: reply.headers,
     body_b64: reply.body_b64,
     declared_length: reply.declared_length,
+    ...(reply.relay_failure ? { relay_failure: reply.relay_failure } : {}),
   };
   await requestJson('/api/m02/browser/complete', {
     method: 'POST',

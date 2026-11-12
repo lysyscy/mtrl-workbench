@@ -23,10 +23,12 @@ import type { MoneyKey, NoticeRow } from './notices-api';
 import { NoticeFetch } from './notice-fetch';
 import { NoticePaste } from './notice-paste';
 import { AutoLinkDialog } from './notice-auto-link';
-import { DraftField, manualDraft, NoticeDialog, OwnershipPending } from './notice-maintenance';
+import { DraftField, manualDraft, NoticeDeleteDialog } from './notice-maintenance';
+import { OwnershipDialog, OwnershipPending, refreshNoticeOwnershipPending } from './ownership';
+import type { OwnershipDocument } from './ownership';
 import { NoticeCells, StatCell, useNoticeCellSaves } from './notice-cell-save';
 import { ContractDialog } from './notice-contract';
-import type { Draft, NoticeDialogState } from './notice-maintenance';
+import type { Draft } from './notice-maintenance';
 import { NoticePayment, PayAmountCell, paymentValue, amount } from './notice-payment';
 import type { PayOverride } from './notice-payment';
 import { NoticePrint, PrinterSettings } from './notice-print';
@@ -37,6 +39,7 @@ import { DialogContents, useDialogClose } from './dialog-close';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const noticeRowId = (row: NoticeRow) => String(row.notice_id);
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }
+type NoticeDialogState = { kind: 'delete' | 'link'; row: NoticeRow } | { kind: 'ownership'; document: OwnershipDocument };
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
 interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
@@ -140,7 +143,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     await client.cancelQueries({queryKey:['notices'],exact:true});
     const data = await client.fetchQuery({queryKey:['notices'],staleTime:0,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
     if(scope==='ownership')await projects.refetch({throwOnError:true});
-    if(scope!=='notice')await client.invalidateQueries({queryKey:['notice-ownership-pending'],exact:true},{throwOnError:true});
+    if(scope==='fetch')await refreshNoticeOwnershipPending(client);
     if(me){const queryKey=['history',`${me.id}:${me.account}`];await client.cancelQueries({queryKey,exact:true});await client.fetchQuery({queryKey,staleTime:0,queryFn:async({signal})=>readHistory(await requestJson('/api/history/status',{signal}))});}
     return data;
   }
@@ -187,7 +190,9 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   function pick(id: number, checked: boolean) { setPicked(old => { const next = new Set(old); if (checked) next.add(id); else next.delete(id); return next; }); }
   function chooseAll(checked: boolean) { setPicked(old => { const next = new Set(old); for (const r of shown.filter(selectable)) { if (checked) next.add(r.notice_id); else next.delete(r.notice_id); } return next; }); }
   const scale = Number(me?.ui_scale_css) || 1;
-  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind,row) => setMaintenance({kind,row}), payOverrides, payDrafts:payDrafts.current, editPay, setPay, draftCell };
+  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind, row) => setMaintenance(kind === 'ownership'
+    ? { kind, document: { source: 'notice', number: row.bill_no, name: row.bill_name, project: row.project_name, noticeId: row.notice_id } }
+    : { kind, row }), payOverrides, payDrafts:payDrafts.current, editPay, setPay, draftCell };
   useEffect(() => {
     const grid = api.current, root = gridRoot.current; if (!active || !grid || !root) return;
     // The header observes selection directly; refreshHeader would rebuild it mid-click.
@@ -282,9 +287,11 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       {placeheld ? <div className="notice-grid notice-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : <PreparedGrid presentation={presentation} className="notice-grid grid-single-line" role="region" aria-label="付款通知书列表" grid={{theme:gridTheme,onRowDataUpdated:e=>e.api.refreshCells({columns:['jc_supplier'],force:true}),rowBuffer:2,alwaysShowVerticalScroll:true,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,getRowId:p=>String(p.data.notice_id),getRowClass:p=>p.data?.notice_id===focusId?'notice-focused':'',defaultColDef:defaultColumn,suppressScrollOnNewData:true,animateRows:false,postSortRows,onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选条件下没有付款通知书，请调整条件或按月抓取。'}} />}
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
-      <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={row => {if(!unavailable)setMaintenance({kind:'ownership',row});}} />
+      <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={document => { if (!unavailable) setMaintenance({ kind: 'ownership', document }); }} />
       <DialogPresence>{autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
-      <DialogPresence>{maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} /> : maintenance && <NoticeDialog state={maintenance} projects={projects.data ?? []} blocked={blocked || !active} close={()=>setMaintenance(null)} refresh={()=>refresh(maintenance.kind==='ownership'?'ownership':'notice')} announce={announce} />}</DialogPresence>
+      <DialogPresence>{maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} />
+        : maintenance?.kind === 'ownership' ? <OwnershipDialog document={maintenance.document} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh('ownership')} announce={announce} />
+        : maintenance && <NoticeDeleteDialog row={maintenance.row} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh()} announce={announce} />}</DialogPresence>
     </section>
     <DialogPresence>{print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
     <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>

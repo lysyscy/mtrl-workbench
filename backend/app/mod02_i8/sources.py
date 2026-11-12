@@ -129,11 +129,11 @@ def load_warehouse_rows(client) -> list[dict] | None:
        不是"补档案失败"，而是**整条链该停**的理由 —— 吞掉它会让后续取数继续按失效身份跑，
        甚至部分采用。⛔ 别把 `Strict*` 加进下面的 `except`。
     """
-    from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionUnavailable, StrictTargetMismatch
+    from app.mod02_i8.browser_session import StrictSessionStopped
 
     try:
         return WarehouseSource(client).fetch()
-    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+    except StrictSessionStopped:
         raise
     except Exception:                                   # noqa: BLE001
         return None

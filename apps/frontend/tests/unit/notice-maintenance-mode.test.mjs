@@ -3,7 +3,7 @@
  *
  * 为什么单列一个文件：这个按钮曾经**完全不带会话来源**，选了「浏览器已有会话」
  * 之后它还是会去登录 i8、可能把账号顶下线 —— 而这在源码里看不出来（它只是少拼一个字段）。
- * 这里真的渲染 `MaintenanceDialog` 并点一下按钮，断言发出去的 body 里到底有什么。
+ * 这里从共用归属窗口选择新建小微并查询，断言发出去的 body 里到底有什么。
  *
  * 覆盖：
  *   1. 选了浏览器方式且已连接 ⇒ `session_mode=browser` + 本页 `device_id`，⛔ 不带强踢；
@@ -17,7 +17,7 @@ import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 
-const cells = { list: [], index: 0, overrides: {} };
+const cells = { list: [], index: 0 };
 const stub = source => ({ url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true });
 
 registerHooks({
@@ -31,9 +31,7 @@ registerHooks({
         const cell = () => { const at = globalThis.__notCells.index++; return globalThis.__notCells.list[at] ??= { value: undefined, set: false }; };
         export function useState(initial) {
           const slot = cell();
-          const index = globalThis.__notCells.index - 1;
           if (!slot.set) { slot.set = true; slot.value = typeof initial === 'function' ? initial() : initial; }
-          if (index in globalThis.__notCells.overrides) slot.value = globalThis.__notCells.overrides[index];
           return [slot.value, next => { slot.value = next; }];
         }
         export function useRef(initial) { const slot = cell(); if (!slot.set) { slot.set = true; slot.value = { current: initial }; } return slot.value; }
@@ -43,7 +41,7 @@ registerHooks({
       `);
     }
     if (specifier === '@tanstack/react-query') {
-      return stub("export function useQuery() { return globalThis.__notQuery; } export function useQueryClient() { return { invalidateQueries() {} }; }");
+      return stub("export const queryOptions = options => options; export function useQuery() { return globalThis.__notQuery; } export function useQueryClient() { return {}; }");
     }
     if (specifier === 'antd/es/button') {
       return stub('export default function Button(p) { return { type: "button", props: p }; }');
@@ -57,24 +55,6 @@ registerHooks({
     if (specifier === './dialog-close') {
       return stub("export function DialogContents(p) { return { type: 'wrapper', props: { children: p.children } }; } export function useDialogClose() { return { requestClose() {} }; }");
     }
-    if (specifier === './time-picker') {
-      return stub("export function BusinessDate(p) { return { type: 'date', props: p }; }");
-    }
-    if (specifier === './ledger-controls') {
-      return stub("export function ProjectPicker(p) { return { type: 'picker', props: p }; }");
-    }
-    if (specifier === './notice-contract') {
-      return stub("export function ContractDialog() { return { type: 'contract', props: {} }; }");
-    }
-    if (specifier === './notices-api') {
-      return stub(`
-        export const categories = {};
-        export const currentMonth = () => '2026-11';
-        export const money = value => String(value);
-        export const receipt = () => '';
-        export const body = payload => ({ body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
-      `);
-    }
     if (specifier === './i8-session') {
       return stub("export function useI8Session() { return globalThis.__notSession; }");
     }
@@ -82,7 +62,7 @@ registerHooks({
   },
 });
 
-const { NoticeDialog } = await import('../../src/notice-maintenance.tsx');
+const { OwnershipDialog } = await import('../../src/ownership.tsx');
 
 class MemoryStorage {
   #m = new Map();
@@ -94,7 +74,7 @@ class MemoryStorage {
   key(index) { return [...this.#m.keys()][index] ?? null; }
 }
 
-const row = { notice_id: 7, bill_no: 'ZD-7', bill_name: '钢材采购', project_name: '第四工程公司', project_display: '第四工程公司' };
+const document = { source: 'notice', number: 'ZD-7', name: '钢材采购', project: '第四工程公司' };
 let restored;
 
 beforeEach(() => {
@@ -108,13 +88,11 @@ beforeEach(() => {
     isError: false,
     error: null,
     refetch: async () => {},
-    data: { reason: '请指定归属', candidates: [], shell_id: 0 },
+    data: { reason: '请指定归属', candidates: [], shellId: 18 },
   };
   globalThis.__notSession = { mode: 'http', connected: false, state: null, busy: false, notice: '', extensionReady: true, halted: false };
   cells.list = [];
   cells.index = 0;
-  // useRef(lock)=0 → useState(newName)=1 … useState(value)=7；只在这次渲染里塞这两个格子。
-  cells.overrides = { 1: '新建仓库A', 7: 'new' };
 });
 
 afterEach(() => {
@@ -126,13 +104,7 @@ afterEach(() => {
   delete globalThis.__notSession;
 });
 
-/**
- * 走一遍元素树，把所有命中条件的节点收起来。
- *
- * 这里比 `notice-fetch-submit.test.mjs` 多做一步：`NoticeDialog` 返回的是
- * `<MaintenanceDialog {...props} />` 这个**元素**（不是渲染结果），所以在命中判定之后
- * 还要把函数型组件真的调用一次，才能看到它里面的按钮 —— 否则"按钮不存在"只是因为没渲染。
- */
+// Follow function elements as well as DOM elements in the test renderer.
 function walk(node, hit, found = []) {
   if (node === null || node === undefined || typeof node === 'boolean') return found;
   if (Array.isArray(node)) { for (const child of node) walk(child, hit, found); return found; }
@@ -146,12 +118,16 @@ function walk(node, hit, found = []) {
 
 function render(mode, connected) {
   cells.index = 0;
-  cells.list = [];
   globalThis.__notSession = { mode, connected, state: null, busy: false, notice: '', extensionReady: true, halted: false };
-  return NoticeDialog({ state: { kind: 'ownership', row }, projects: [], blocked: false, close() {}, refresh: async () => {}, announce() {} });
+  return OwnershipDialog({ document, blocked: false, close() {}, refresh: async () => {}, announce() {} });
 }
 
-function warehouseButton(tree) {
+function warehouseButton(mode, connected) {
+  const [select] = walk(render(mode, connected), node => node.type === 'select');
+  select.props.onChange({ target: { value: 'new' } });
+  const [warehouseLabel] = walk(render(mode, connected), node => node.type === 'label' && node.props.children[0] === '新小微仓库名');
+  warehouseLabel.props.children[1].props.onChange({ target: { value: '新建仓库A' } });
+  const tree = render(mode, connected);
   const [button] = walk(tree, node => node.props?.children === '查询 i8 仓库名单');
   return button;
 }
@@ -167,12 +143,12 @@ function recorder() {
 
 async function click(button) {
   button.props.onClick();
-  for (let i = 0; i < 40; i += 1) await new Promise(resolve => setTimeout(resolve, 5));
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 test('仓库名单：选了浏览器方式且已连接 ⇒ 带 session_mode=browser 与本页 device_id，⛔ 不带强踢', async () => {
   const calls = recorder();
-  const button = warehouseButton(render('browser', true));
+  const button = warehouseButton('browser', true);
   assert.ok(button, '必须渲染出「查询 i8 仓库名单」按钮');
   assert.equal(button.props.disabled, false);
   await click(button);
@@ -187,7 +163,7 @@ test('仓库名单：选了浏览器方式且已连接 ⇒ 带 session_mode=brow
 
 test('仓库名单：选了直连 ⇒ session_mode=http 且保留原来的强踢授权', async () => {
   const calls = recorder();
-  await click(warehouseButton(render('http', false)));
+  await click(warehouseButton('http', false));
   assert.equal(calls.length, 1);
   assert.equal(calls[0].body.session_mode, 'http');
   assert.equal(calls[0].body.allow_kick, true, '直连保持改动前的授权语义');
@@ -197,7 +173,7 @@ test('仓库名单：选了直连 ⇒ session_mode=http 且保留原来的强踢
 
 test('仓库名单：选了浏览器方式但连接不在 ⇒ 按钮禁用、零请求（⛔ 不退回登录）', async () => {
   const calls = recorder();
-  const button = warehouseButton(render('browser', false));
+  const button = warehouseButton('browser', false);
   assert.ok(button, '按钮仍要显示，好让用户知道该去哪儿重连');
   assert.equal(button.props.disabled, true, '没连接时必须禁用');
   await click(button);

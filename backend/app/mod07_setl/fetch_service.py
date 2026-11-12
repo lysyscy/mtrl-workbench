@@ -36,11 +36,7 @@ from app.mod01_projects import service as P1S
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
-from app.mod02_i8.browser_session import (
-    StrictSessionEnded,
-    StrictSessionUnavailable,
-    StrictTargetMismatch,
-)
+from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.sources import load_warehouse_rows
@@ -126,7 +122,7 @@ def run_fetch(
                 if callable(close):
                     close()
             rows = importer.parse_rows(content, ym=plan["ym"])
-        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        except StrictSessionStopped:
             # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
             #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
             #    吞掉它去写一条"稍后重试"的失败记录，等于让人对着错的原因反复点。

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime
 
 from app.mod01_projects.models import Project
@@ -151,19 +152,40 @@ def test_还没建档的行照旧留着():
     assert D.still_unsettled([], projects) == [] and D.still_unsettled(None, projects) == []
 
 
-def test_读端点必须走现算过滤():
-    """⭐ 端点那一层也不许"把记录里那份当时的判定直接端出去" —— 必须过 `still_unsettled`。
-
-    ⚠️ `still_unsettled` 自己测过了，但**端点用没用它**是另一件事（没接上 = 白做）。
-    """
-    import inspect
-
+def test_读端点跟随当前档案而不改抓取回执(monkeypatch):
     from app.mod03_notice import router as RO
 
-    src = inspect.getsource(RO.unresolved_notices)
-    assert "still_unsettled(" in src, "端点必须按当前档案现算过滤"
-    assert "still_unsettled(latest_unresolved(session), projects)" in src, \
-        "过滤要包在**读清单**外面（⛔ 别读一份、端一份）"
+    recorded = {**item(full=SHELL_FULL), "kind": "not_archived", "reason": "未建档"}
+    run = rec(1, reason="ownership_unsettled", items=[recorded])
+    small = p(11, SHELL_FULL, "本壳仓库", ptype="small", parent=10)
+    small.status = "active"
+    session = M09Session({
+        RunRecord: [run],
+        Project: [p(10, SHELL_FULL, None, ptype="shell"), small],
+    })
+    monkeypatch.setattr(RO, "session_scope", lambda: nullcontext(session))
+    [current] = RO.unresolved_notices().items
+    assert current.kind == "needs_keyword"
+    assert current.shell_id == 10
+    assert "未命中" in current.reason
+    assert [candidate.warehouse_name for candidate in current.candidates] == ["本壳仓库"]
+    assert R.latest_unresolved(session) == [recorded]
+    assert (recorded["kind"], recorded["reason"], recorded["shell_id"]) == ("not_archived", "未建档", None)
+
+
+def test_归属候选提供当前壳的档案ID且保留仓库键(monkeypatch):
+    from app.mod01_projects import router as RO
+    from app.mod01_projects.schemas import OwnershipRequest
+
+    projects = [
+        p(10, SHELL_FULL, None, ptype="shell"),
+        p(11, SHELL_FULL, "本壳仓库", ptype="small", parent=10),
+        p(20, "其他小微项目", None, ptype="shell"),
+        p(21, "其他小微项目", "其他仓库", ptype="small", parent=20),
+    ]
+    monkeypatch.setattr(RO, "session_scope", lambda: nullcontext(M09Session({Project: projects})))
+    decision = RO.ownership(OwnershipRequest(name_full=SHELL_FULL, doc_name=MISS_DOC))
+    assert [(candidate.id, candidate.key) for candidate in decision.candidates] == [(11, "本壳仓库")]
 
 
 def test_现算走的是链路C同一个出口():

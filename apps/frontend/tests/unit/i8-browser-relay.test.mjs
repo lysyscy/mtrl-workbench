@@ -216,10 +216,12 @@ test('请求票成形性：缺票/缺地址/缺代号/缺超时预算一律当�
   }
 });
 
-test('回帖字段不完整就抛错（后端会按等待上限判停，页面不许瞎编）', () => {
+test('回帖字段不完整明确标记协议错误', () => {
   const ok = { status: 200, headers: {}, body_b64: 'e30=', declared_length: 2 };
   assert.deepEqual(readRelayReply(ok), ok);
   for (const broken of [
+    { ...ok, status: 99 },
+    { ...ok, status: 600 },
     { ...ok, status: 200.5 },
     { ...ok, status: '200' },
     { ...ok, declared_length: -1 },
@@ -227,7 +229,7 @@ test('回帖字段不完整就抛错（后端会按等待上限判停，页面�
     { ...ok, body_b64: undefined },
     null,
   ]) {
-    assert.throws(() => readRelayReply(broken), error => error instanceof ApiError);
+    assert.throws(() => readRelayReply(broken), error => error instanceof ApiError && error.code === 'malformed');
   }
 });
 
@@ -392,10 +394,33 @@ test('扩展没有应答时回终止信号（599），不让后端干等到超�
   await runBrowserRelay({ send: async () => { throw new ApiError('浏览器扩展没有应答。'); } });
   assert.equal(posted.length, 1);
   assert.equal(posted[0].status, 599);
+  assert.equal(posted[0].relay_failure, 'unavailable');
   assert.equal(posted[0].declared_length, 0);
   assert.equal(posted[0].ticket, 't-9');
   assert.equal(posted[0].generation, 4);
 });
+
+for (const [code, category] of [['request-timeout', 'timeout'], ['opaque-response', 'redirect'], ['target-mismatch', 'target'], ['request-network', 'network'], ['malformed', 'malformed'], ['tab-paused', 'unavailable']]) {
+  test(`扩展 ${code} 跨回帖保留固定停止类别，不重放`, async () => {
+    const posted = [];
+    let polls = 0, executes = 0;
+    globalThis.fetch = async (path, init) => {
+      if (path.startsWith('/api/m02/browser/pending')) {
+        polls++;
+        return jsonResponse({ request: { ticket: 'stop-ticket', generation: 7, method: 'GET', url: 'https://i8.example.test/x', headers: {}, body_b64: '', timeout_ms: 200 } });
+      }
+      posted.push(JSON.parse(init.body));
+      return jsonResponse({ accepted: true });
+    };
+    await runBrowserRelay({ send: async () => { executes++; return { ok: false, code, message: '固定错误提示' }; } });
+    assert.equal(polls, 1);
+    assert.equal(executes, 1);
+    assert.equal(posted.length, 1);
+    assert.equal(posted[0].relay_failure, category);
+    assert.equal(posted[0].body_b64, '');
+    assert.equal(Object.hasOwn(posted[0], 'message'), false);
+  });
+}
 
 test('回帖失败不吞：通道当场停（不再假装"已连接在等活"）', async () => {
   let polls = 0;

@@ -41,11 +41,7 @@ from app.mod02_i8 import fetch_task, report_export, source_cache
 logger = logging.getLogger(__name__)
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
-from app.mod02_i8.browser_session import (
-    StrictSessionEnded,
-    StrictSessionUnavailable,
-    StrictTargetMismatch,
-)
+from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.sources import load_warehouse_rows
@@ -135,7 +131,7 @@ def run_fetch(
             except OSError as cache_exc:           # 「含透视导出」只读这份缓存（⛔ 不再现场登 i8）。
                 logger.warning("i8 源文件存档失败（不影响抓取）：%s", cache_exc)
             rows = importer.parse_rows(content)
-        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        except StrictSessionStopped:
             # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
             #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
             raise

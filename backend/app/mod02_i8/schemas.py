@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -105,6 +107,7 @@ class BrowserCompleteRequest(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     body_b64: str = ""
     declared_length: int | None = None
+    relay_failure: Literal["timeout", "redirect", "target", "network", "unavailable", "malformed"] | None = None
 
 
 class BrowserCompleteOut(BaseModel):

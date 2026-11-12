@@ -128,6 +128,8 @@ class PendingRequest:
     reply_body: bytes = b""
     #: 扩展/页面自报的响应字节数（用于**完整性**核对）。`None` = 对方没报。
     reply_declared_length: int | None = None
+    #: 通道明确失败与上游 HTTP 状态分开保存，不保存异常原文。
+    relay_failure: str | None = None
     #: 被判定失效/断连/超时时的受控原因（取值见 `_REASONS`），不是异常原文。
     stopped: str = ""
 
@@ -337,6 +339,7 @@ class BrowserBroker:
     def complete(self, owner: str, device: str, ticket: str, *, status: int,
                  headers: dict[str, str], body: bytes,
                  declared_length: int | None = None,
+                 relay_failure: str | None = None,
                  generation: int | None = None) -> bool:
         """回帖（**一次性**）。返回 False 表示这张票已经作废/已用过/不属于本连接。
 
@@ -375,6 +378,7 @@ class BrowserBroker:
             item.reply_headers = dict(headers)
             item.reply_body = body
             item.reply_declared_length = declared_length
+            item.relay_failure = relay_failure
             self._connections[key] = replace(connection, last_seen=time.time())
             item.done.set()
             return True

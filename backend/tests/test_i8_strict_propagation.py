@@ -21,6 +21,7 @@ from app.mod02_i8 import sources as i8_sources
 from app.mod02_i8.browser_broker import BrowserRelayUnavailable
 from app.mod02_i8.browser_relay import MODE_BROWSER, MODE_HTTP, current_scope, relay_scope
 from app.mod02_i8.browser_session import (
+    StrictSessionStopped,
     StrictSessionEnded,
     StrictSessionUnavailable,
     StrictTargetMismatch,
@@ -62,6 +63,7 @@ class _Boom:
 
 
 STRICT_CASES = [
+    StrictSessionStopped("新的通道停止类别也必须穿透现有业务容错。"),
     StrictSessionUnavailable("没有可复用的浏览器会话，本次未发出任何 i8 请求。"),
     StrictTargetMismatch("浏览器的 i8 站点与工作台当前配置不一致，本次已停止。"),
     StrictSessionEnded("浏览器里的 i8 会话已经不认了，本次已停止。"),

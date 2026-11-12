@@ -112,8 +112,12 @@ class TrailOut(BaseModel):
 
 
 class OwnershipRequest(BaseModel):
-    name_full: str = Field(..., description="付款通知书的「付款项目」全名（i8 只给全名）")
+    name_full: str = Field(..., description="i8 单据上的项目全名")
     doc_name: str = Field("", description="单据名称（壳全名时用它匹配关键词）")
+
+
+class OwnershipCandidateOut(CandidateOut):
+    id: int
 
 
 class OwnershipResponse(BaseModel):
@@ -124,7 +128,7 @@ class OwnershipResponse(BaseModel):
     keyword_to_add: str | None = None
     reason: str = ""
     settled: bool = False
-    candidates: list[CandidateOut] = Field(default_factory=list, description="该壳下的具体小微候选")
+    candidates: list[OwnershipCandidateOut] = Field(default_factory=list, description="该壳下的具体小微候选")
 
 
 class PromoteRowOut(BaseModel):

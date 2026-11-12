@@ -446,6 +446,7 @@ test('跳转请求仍然不跟随，且真机结果按不透明响应停下', as
   const answer = await page.call(exec());
   assert.equal(answer.ok, false);
   assert.match(answer.message, /不透明响应/);
+  assert.equal(answer.code, 'opaque-response');
   assert.equal(seen[0].redirect, 'manual', '⛔ 不许让浏览器自己跟到登录页');
   assert.equal(seen[0].credentials, 'same-origin');
   assert.equal(seen[0].cache, 'no-store');
@@ -618,6 +619,7 @@ test('请求自带的 timeout_ms 真的当预算用，超时按超时停（不�
   const answer = await page.call(exec({ timeout_ms: 20, url: `${I8}/PMS/PCM/Contract/GetCntMList` }));
   assert.equal(answer.ok, false);
   assert.match(answer.message, /超过它自己的时间预算/);
+  assert.equal(answer.code, 'request-timeout');
   assert.ok(!/会话|登录不|重新登录/.test(answer.message), `⛔ 超时不许说成身份/会话问题：${answer.message}`);
   assert.ok(seenSignal, '页面里必须真的把 signal 交给 fetch');
 });

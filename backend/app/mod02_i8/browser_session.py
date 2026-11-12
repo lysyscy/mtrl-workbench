@@ -39,6 +39,7 @@ __all__ = [
     "ReusedBrowserSession",
     "StrictRedirectStopped",
     "StrictSessionEnded",
+    "StrictSessionStopped",
     "StrictSessionUnavailable",
     "StrictTargetMismatch",
     "strict_payment_notice_by_bill_no",
@@ -55,14 +56,18 @@ _STOP_NO_BILL = "没给要查的单号，本次未发出任何 i8 请求。"
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
 
-class StrictSessionUnavailable(AppError):
+class StrictSessionStopped(AppError):
+    """浏览器通道要求整次动作停止；业务容错不得将其降级为空结果。"""
+
+
+class StrictSessionUnavailable(StrictSessionStopped):
     """没拿到可复用的浏览器会话 —— 未发任何请求就停止。"""
 
     code = "i8_strict_session_unavailable"
     http_status = 400
 
 
-class StrictTargetMismatch(DataConflictError):
+class StrictTargetMismatch(DataConflictError, StrictSessionStopped):
     """会话所在站点（或本次请求目的地）与产品配置的 i8 服务地址不一致 —— 停止。"""
 
     code = "i8_strict_target_mismatch"
@@ -74,7 +79,7 @@ class StrictRedirectStopped(StrictTargetMismatch):
     code = "i8_strict_redirect_stopped"
 
 
-class StrictSessionEnded(ExternalServiceError):
+class StrictSessionEnded(ExternalServiceError, StrictSessionStopped):
     """会话在 i8 侧已失效 —— 立即停止，不重登、不强踢。"""
 
     code = "i8_strict_session_ended"

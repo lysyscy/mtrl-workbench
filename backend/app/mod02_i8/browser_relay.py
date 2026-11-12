@@ -50,6 +50,7 @@ from app.mod02_i8.browser_session import (
     I8BrowserSessionClient,
     ReusedBrowserSession,
     StrictRedirectStopped,
+    StrictSessionEnded,
     StrictSessionUnavailable,
     StrictTargetMismatch,
     _origin_of,
@@ -187,11 +188,25 @@ def _safe_headers(headers: httpx.Headers) -> dict[str, str]:
 
 
 def _decode_reply(status: object, raw_headers: object, body_b64: object,
-                  declared_length: object = None) -> tuple[int, dict[str, str], bytes]:
+                  declared_length: object = None, relay_failure: str | None = None) -> tuple[int, dict[str, str], bytes]:
     """解浏览器回帖（base64 body + 可选长度声明）。形状不对 ⇒ 受控停止。
 
     ⛔ 不把原始字符串抛给用户、不把响应片段写日志 —— 失败一律给固定文案。
     """
+    # A relay failure is not an HTTP response from i8. Keep it strict before
+    # optional material/warehouse readers can turn ordinary errors into blanks.
+    if relay_failure is not None:
+        if relay_failure == "timeout":
+            raise StrictSessionEnded("浏览器在这条请求的时间预算内没有回音，本次已停止（超时，未重试、未登录）。")
+        if relay_failure == "redirect":
+            raise StrictRedirectStopped("浏览器返回了无法核对的不透明响应，本次已停止（未跟随跳转、未重试、未登录）。")
+        if relay_failure == "target":
+            raise StrictTargetMismatch("请求目标与选中的 i8 标签不一致，本次已停止（未重试、未登录）。")
+        if relay_failure == "network":
+            raise StrictSessionUnavailable("浏览器未能完成本次取数，请核对网络与站点；本次已停止（未重试、未登录）。")
+        if relay_failure == "unavailable":
+            raise StrictSessionUnavailable("浏览器取数通道暂不可用，本次已停止；连接恢复后请核对结果，再重新发起抓取。")
+        raise StrictSessionUnavailable("浏览器取数结果无法核对，本次已停止；请更新页面与扩展后重新连接。")
     if not isinstance(status, int) or isinstance(status, bool) or status < 100 or status > 599:
         raise StrictSessionUnavailable("浏览器回帖的状态码不成形，本次已停止（未重试、未登录）。")
     headers: dict[str, str] = {}
@@ -262,6 +277,7 @@ class BrowserRelayTransport(httpx.BaseTransport):
             # ⚠️ 长度核对用的是**浏览器自报**的那个数（`reply_declared_length`），
             #    不是本地算出来的长度 —— 否则"截断"永远检不出来。
             pending.reply_declared_length,
+            pending.relay_failure,
         )
         return httpx.Response(status, headers=headers, content=content, request=request)
 

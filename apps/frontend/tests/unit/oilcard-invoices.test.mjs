@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { changeOilInvoice, readOilInvoices, receiveOilInvoice, readOilReceipt } from '../../src/oilcard-invoice-api.ts';
 import { uncertainWrite } from '../../src/api.ts';
+import { CellSaveQueue } from '../../src/cell-save.ts';
+import { OilManualRegistration } from '../../src/oilcard-manual-registration.ts';
 
 const digest = 'a'.repeat(64);
 const original = { id: 1, invoice_id: 1, sha256: digest, byte_size: 10, outcome: 'received', reason: '', resolution: null, recognized: { invoice_no: null, invoice_date: null, amount: null, card_no: null } };
@@ -95,4 +97,181 @@ test('整体分配回执必须对应每项归属，合计相同也不能吞掉�
     await assert.rejects(changeOilInvoice(invoice, 'allocations', { allocations: [{ project_id: 1, account_id: 2, amount: '2000' }, { project_id: 1, account_id: 4, amount: '1000' }] }, new AbortController().signal), error => uncertainWrite(error));
     await changeOilInvoice(invoice, 'allocations', { allocations: [{ project_id: 1, account_id: 2, amount: '3000' }] }, new AbortController().signal);
   } finally { globalThis.fetch = previous; }
+});
+
+const manualFields = () => ({ invoice_no: '', date_text: '原始数据', cutoff_ym: '2025-12', amount: '3000.00', remark: '历史开票',
+  allocations: [{ project_id: 1, account_id: 2, amount: '3000.00' }] });
+
+function manualRow(requestId, fields = manualFields()) {
+  return { ...invoice, invoice_no: fields.invoice_no || null, invoice_date: fields.invoice_no ? fields.date_text : null,
+    manual_request_id: requestId, manual_date_text: fields.date_text, manual_cutoff_ym: fields.cutoff_ym, remark: fields.remark, originals: [] };
+}
+
+function connectManualLedger(t, write) {
+  const registration = new OilManualRegistration();
+  const ledger = { rows: [], total: '0.00', failRead: false, readback: undefined, writes: [] };
+  const previous = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previous; });
+  globalThis.fetch = async (path, init) => {
+    const request = { path, method: init.method, fields: JSON.parse(init.body) };
+    ledger.writes.push(request);
+    const item = await write(request, ledger);
+    return item instanceof Response ? item : new Response(JSON.stringify({ ok: true, item }));
+  };
+  const queue = new CellSaveQueue(() => ({
+    enabled: true,
+    write: async () => assert.fail('manual registration uses the shared action entry'),
+    acknowledge: () => undefined, saved: () => '',
+    read: async () => {
+      if (ledger.failRead) throw new Error('确认读取失败');
+      const data = readOilInvoices({ invoices: ledger.rows, total_amount: ledger.total });
+      ledger.readback = registration.readBack(data.invoices);
+      return data;
+    },
+  }));
+  t.after(queue.dispose);
+  return { registration, queue, ledger };
+}
+
+test('新增手工登记已落账但回执丢失，可靠读回并确认后结束原登记', async t => {
+  const { registration, queue, ledger } = connectManualLedger(t, ({ fields }, ledger) => {
+    ledger.rows = [manualRow(fields.request_id)];
+    ledger.total = '3000.00';
+    throw new TypeError('连接中断');
+  });
+  const form = registration.open();
+  assert.equal(await form.submit(manualFields(), queue.run), true);
+  assert.equal(queue.getSnapshot().uncertain, true);
+
+  ledger.failRead = true;
+  assert.equal(await queue.reread(), false);
+  queue.confirm(); registration.confirmRead();
+  assert.equal(queue.getSnapshot().uncertain, true);
+  assert.equal(registration.getPhase(), 'checking');
+  assert.equal(registration.open(), undefined);
+
+  ledger.failRead = false;
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'matched');
+  assert.equal(ledger.readback.id, invoice.id);
+  assert.equal(registration.getPhase(), 'checking');
+  queue.confirm(); registration.confirmRead();
+  assert.equal(registration.getPhase(), 'idle');
+  await registration.retry(queue.run);
+  assert.equal(await form.submit(manualFields(), queue.run), false);
+  assert.equal(ledger.writes.length, 1);
+  assert.equal(ledger.total, '3000.00');
+});
+
+test('可靠读回无原登记时只续用同一请求和快照，连续点击不会重复提交', async t => {
+  const { registration, queue, ledger } = connectManualLedger(t, ({ fields }, ledger) => {
+    if (ledger.writes.length === 1) throw new TypeError('连接中断');
+    ledger.rows = [manualRow(fields.request_id)];
+    ledger.total = '3000.00';
+    return ledger.rows[0];
+  });
+  const form = registration.open();
+  const fields = manualFields();
+  const submission = form.submit(fields, queue.run);
+  assert.equal(await form.submit(fields, queue.run), false);
+  fields.remark = '后续输入';
+  fields.allocations[0].account_id = 99;
+  assert.equal(await submission, true);
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'missing');
+  await registration.retry(queue.run);
+  assert.equal(ledger.writes.length, 1);
+
+  queue.confirm(); registration.confirmRead();
+  assert.equal(registration.getPhase(), 'retry');
+  assert.equal(registration.open(), undefined);
+  await Promise.all([registration.retry(queue.run), registration.retry(queue.run)]);
+  assert.equal(registration.getPhase(), 'idle');
+  assert.equal(ledger.writes.length, 2);
+  assert.deepEqual(ledger.writes[1], ledger.writes[0]);
+  assert.equal(ledger.writes[0].method, 'POST');
+  assert.equal(ledger.total, '3000.00');
+});
+
+test('已收到成功回执但读回内容有变化，继续核对且不重放已有登记', async t => {
+  const { registration, queue, ledger } = connectManualLedger(t, ({ fields }, ledger) => {
+    const saved = manualRow(fields.request_id);
+    ledger.rows = [{ ...saved, remark: '其他账号已更新备注' }];
+    ledger.total = '3000.00';
+    return saved;
+  });
+  assert.equal(await registration.open().submit(manualFields(), queue.run), true);
+  assert.equal(queue.getSnapshot().uncertain, true);
+  assert.match(queue.getSnapshot().error, /已保存，重读失败/);
+  assert.equal(registration.getPhase(), 'checking');
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'changed');
+  assert.equal(ledger.readback.id, invoice.id);
+  queue.confirm(); registration.confirmRead();
+  assert.equal(registration.getPhase(), 'idle');
+  await registration.retry(queue.run);
+  assert.equal(ledger.writes.length, 1);
+  assert.equal(ledger.rows[0].remark, '其他账号已更新备注');
+});
+
+test('原登记重试收到冲突，重新读回和确认前保持锁定，缺行也不第三次提交', async t => {
+  const { registration, queue, ledger } = connectManualLedger(t, (_, ledger) => {
+    if (ledger.writes.length === 1) throw new TypeError('连接中断');
+    return Response.json({ ok: false, message: '这次手工登记已有记录或已经更正，请重读核对，勿重复登记。' }, { status: 409 });
+  });
+  assert.equal(await registration.open().submit(manualFields(), queue.run), true);
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'missing');
+  queue.confirm(); registration.confirmRead();
+  await registration.retry(queue.run);
+  assert.equal(queue.getSnapshot().uncertain, true);
+  assert.equal(registration.getPhase(), 'checking');
+  assert.deepEqual(ledger.writes[1], ledger.writes[0]);
+
+  ledger.failRead = true;
+  assert.equal(await queue.reread(), false);
+  queue.confirm(); registration.confirmRead();
+  assert.equal(queue.getSnapshot().uncertain, true);
+  assert.equal(registration.open(), undefined);
+  ledger.failRead = false;
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'missing');
+  assert.match(ledger.readback.message, /冲突.*核对操作历史/);
+  assert.equal(registration.open(), undefined);
+  queue.confirm(); registration.confirmRead();
+  assert.equal(queue.getSnapshot().uncertain, false);
+  assert.equal(registration.getPhase(), 'idle');
+  await registration.retry(queue.run);
+  assert.equal(ledger.writes.length, 2);
+});
+
+test('补票号使用原行版本，丢回执时读到旧行不能当成修改成功或续办新增', async t => {
+  const requestId = '00000000-0000-4000-8000-000000000002';
+  const existing = manualRow(requestId);
+  const fields = { ...manualFields(), invoice_no: invoice.invoice_no, date_text: invoice.invoice_date, cutoff_ym: null };
+  const { registration, queue, ledger } = connectManualLedger(t, ({ fields }, ledger) => {
+    if (ledger.writes.length > 1) ledger.rows = [{ ...manualRow(requestId, fields), version: '00000000-0000-4000-8000-000000000003' }];
+    throw new TypeError('连接中断');
+  });
+  ledger.rows = [existing];
+  ledger.total = '3000.00';
+  assert.equal(await registration.open(existing).submit(fields, queue.run), true);
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'changed');
+  assert.equal(ledger.readback.id, existing.id);
+  queue.confirm(); registration.confirmRead();
+  assert.equal(registration.getPhase(), 'idle');
+  await registration.retry(queue.run);
+  assert.equal(ledger.writes.length, 1);
+
+  assert.equal(await registration.open(ledger.rows[0]).submit(fields, queue.run), true);
+  assert.equal(await queue.reread(), true);
+  assert.equal(ledger.readback.status, 'matched');
+  queue.confirm(); registration.confirmRead();
+  assert.equal(registration.getPhase(), 'idle');
+  assert.deepEqual(ledger.writes, Array(2).fill({ path: `/api/m13/invoices/${existing.id}/manual`, method: 'PUT', fields: { ...fields, version: existing.version } }));
+  assert.equal(ledger.rows[0].invoice_no, invoice.invoice_no);
+  assert.equal(ledger.rows[0].manual_request_id, requestId);
+  assert.equal(ledger.rows[0].id, existing.id);
+  assert.equal(ledger.total, '3000.00');
 });

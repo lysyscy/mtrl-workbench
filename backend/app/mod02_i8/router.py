@@ -22,8 +22,7 @@ from app.mod02_i8.browser_relay import (
     scope_of,
 )
 from app.mod02_i8.browser_session import (
-    StrictSessionEnded,
-    StrictSessionUnavailable,
+    StrictSessionStopped,
     StrictTargetMismatch,
 )
 from app.mod02_i8.client import I8Client
@@ -304,6 +303,7 @@ def browser_complete(req: BrowserCompleteRequest) -> BrowserCompleteOut:
         owner, req.device_id, req.ticket,
         status=int(req.status), headers=dict(req.headers or {}), body=body,
         declared_length=req.declared_length, generation=int(req.generation or 0),
+        relay_failure=req.relay_failure,
     )
     if not accepted:
         return BrowserCompleteOut(accepted=False, message="这张回帖已作废或不属于当前连接，已忽略。")
@@ -342,7 +342,7 @@ def fetch_preview(
     with scope_of(req):
         try:
             rows = rows_loader(req.year_month, req.allow_kick)
-        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        except StrictSessionStopped:
             # ⛔（`TAIL-476`）浏览器方式下的停止**不降级成"可以去手动导 Excel"**：
             #    用户点的是"用浏览器里那个会话"，真实原因是连接不在/站点不符/会话失效，
             #    而"i8 抓不到数 ⇒ 请手动导 Excel"既不真、也让人以为该去导表。
@@ -378,7 +378,7 @@ def fetch_run(
     try:
         with scope_of(req):
             rows = rows_loader(req.year_month, req.allow_kick)
-    except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded) as exc:
+    except StrictSessionStopped as exc:
         # ⛔（`TAIL-476`）严格通道的停止：**仍要留失败执行记录**（001-07），
         #    但给用户的说明必须是真实原因，⛔ 不能改口成"已降级为手动 Excel 导入"。
         _persist_fetch(

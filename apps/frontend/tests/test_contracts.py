@@ -38,10 +38,18 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
         'ready': True, 'account': me['account'], 'i8_user': 'offline-test', 'message': '',
     }))
     page.route('**/api/m11/fetch', lambda route: route.fulfill(json={'ok': True, 'receipt': receipt}))
-    page.route('**/api/m11/unsettled?run_id=12', lambda route: route.fulfill(json={'items': pending[len(written):]}))
+    pending_available = True
+
+    def read_pending(route):
+        if pending_available:
+            route.fulfill(json={'items': pending[len(written):]})
+        else:
+            route.fulfill(status=503, json={'message': '待办读取暂时失败'})
+
+    page.route('**/api/m11/unsettled?run_id=12', read_pending)
     page.route('**/api/m01/ownership', lambda route: route.fulfill(json={
-        'kind': 'needs_keyword', 'reason': '缺少识别词', 'candidates': [
-            {'key': small['warehouse_name'], 'display': small['disp'], 'archived': False},
+        'kind': 'needs_keyword', 'reason': '缺少识别词', 'shell_id': small['parent_shell_id'], 'candidates': [
+            {'id': small['id'], 'key': small['warehouse_name'], 'display': small['disp'], 'archived': False},
         ],
     }))
     page.route('**/api/m03/notices/ownership-assign', save)
@@ -56,8 +64,20 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
     dialog.get_by_role('button', name='补归属关键词').click()
     editor = page.get_by_role('dialog', name='指定项目归属')
     editor.get_by_label('归属小微').select_option(str(small['id']))
+    editor.get_by_role('link', name='到项目档案核对').click()
+    return_link = page.get_by_role('link', name=f"返回集采台账核对合同 {pending[0]['contract_no']}")
+    expect(return_link).to_have_attribute('href', '/preview/contracts')
+    return_link.click()
+    expect(editor.get_by_label('归属小微')).to_have_value(str(small['id']))
+    editor.get_by_label('关键词', exact=True).fill('不在单据名中的词')
+    expect(editor.get_by_role('button', name='确认补充档案')).to_be_disabled()
     editor.get_by_label('关键词', exact=True).fill(keyword)
+    pending_available = False
     editor.get_by_role('button', name='确认补充档案').click()
+    expect(editor.get_by_role('alert')).to_contain_text('档案已保存，但重读失败')
+    expect(editor.get_by_role('button', name='确认补充档案')).to_have_count(0)
+    pending_available = True
+    editor.get_by_role('button', name='重读核对').click()
     expect(editor).not_to_be_visible()
     expect(dialog.get_by_text(pending[0]['contract_no'], exact=True)).not_to_be_visible()
 

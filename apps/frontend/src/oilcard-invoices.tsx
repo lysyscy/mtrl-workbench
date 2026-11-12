@@ -3,7 +3,7 @@ import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, FilterChangedEvent, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, cents, decimal, money, projectLabel, requestFile, requestJson } from './api';
@@ -17,14 +17,15 @@ import type { ValueFilterModel } from './grid-value-filter-model';
 import { readHistory } from './history';
 import type { OilArchives } from './oilcard-api';
 import { getOilReconciliation } from './oilcard-ledger-api';
-import { changeOilInvoice, getOilInvoices, readOilReceipt, receiveOilInvoice, saveManualOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
-import type { OilInvoice, OilInvoices, OilManualInvoiceFields } from './oilcard-invoice-api';
+import { changeOilInvoice, getOilInvoices, readOilReceipt, receiveOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
+import type { OilInvoice, OilInvoices } from './oilcard-invoice-api';
 import { OilInvoiceDialog } from './oilcard-invoice-dialogs';
 import type { InvoiceAction } from './oilcard-invoice-dialogs';
+import { OilManualRegistration } from './oilcard-manual-registration';
+import type { OilManualRegistrationForm } from './oilcard-manual-registration';
 import { OilReceiveDialog } from './oilcard-receive';
 import { useCellSaveQueue } from './use-cell-save';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
-import { randomUUID } from './random-id';
 
 type Row = OilInvoice & { project: string; account: string; total?: boolean };
 type Draft = { id: number; field: 'remark' | 'allocation'; original: string; value: string; project_id: number; account_id: number; error: string };
@@ -73,10 +74,9 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const [selected, setSelected] = useState(0), [originalId, setOriginalId] = useState(0), [preparing, setPreparing] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [result, setResult] = useState('');
   const [downloadError, setDownloadError] = useState(''), [downloading, setDownloading] = useState(false);
-  const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | { mode: 'manual'; row?: OilInvoice; requestId: string } | null>(null);
-  const [pendingManual, setPendingManual] = useState<{ requestId: string; fields: OilManualInvoiceFields } | null>(null);
-  const manualRequest = useRef<typeof pendingManual>(null);
-  const manualSubmitting = useRef(false);
+  const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | { mode: 'manual'; form: OilManualRegistrationForm } | null>(null);
+  const [manual] = useState(() => new OilManualRegistration());
+  const manualPhase = useSyncExternalStore(manual.subscribe, manual.getPhase);
   const [receiveOpen, setReceiveOpen] = useState(false), [batchLocked, setBatchLocked] = useState(false), [batchUncertain, setBatchUncertain] = useState(false);
   const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true), upload = useRef<{ file: File; digest: string } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
@@ -84,7 +84,18 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const query = useQuery({ queryKey: ['oilcard-invoices'], enabled: active && !blocked, queryFn: ({ signal }) => getOilInvoices(signal) });
   const current = useRef(query.data); current.current = query.data;
   const saves = useCellSaveQueue<Draft, OilInvoices>({
-    enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !locked), read: submitted => reload(submitted?.field !== 'remark'),
+    enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !locked),
+    read: async submitted => {
+      const data = await reload(submitted?.field !== 'remark');
+      if (!submitted) {
+        const readback = manual.readBack(data.invoices);
+        if (readback) {
+          if ('id' in readback) { setSelected(readback.id); setOriginalId(0); }
+          if (readback.message) setResult(readback.message);
+        }
+      }
+      return data;
+    },
     write: async (draft, signal) => {
       const row = current.current?.invoices.find(r => r.id === draft.id);
       if (!row || (draft.field === 'remark' ? row.remark : pairKey(row)) !== draft.original) throw new ApiError('发票字段已变化，请重读核对保留输入。', 409);
@@ -106,14 +117,6 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
       setResult(received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
     }
-    const manual = manualRequest.current;
-    if (manual) {
-      const actual = data.invoices.find(row => row.manual_request_id === manual.requestId);
-      if (actual) {
-        setSelected(actual.id); setOriginalId(0);
-        setResult('已在发票台账读到本次手工登记。');
-      }
-    }
     if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
     if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
     return data;
@@ -123,7 +126,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   useEffect(() => { onUncertain(uncertain || batchUncertain); }, [uncertain, batchUncertain, onUncertain]);
   const receiveDisabled = blocked || !active || !me || locked || uncertain || preparing || !query.data || query.isError;
   const disabled = receiveDisabled || batchLocked;
-  const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0 || Boolean(pendingManual);
+  const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0 || manualPhase !== 'idle';
   const row = query.data?.invoices.find(item => item.id === selected);
   const original = row?.originals.find(o => o.id === originalId) ?? row?.originals[0];
   const rows = useMemo<Row[]>(() => (query.data?.invoices ?? []).map(row => ({ ...row,
@@ -215,33 +218,24 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   function open(mode: InvoiceAction, sourceId: number | null = null, target = row) {
     if (!target || structuralDisabled) return;
     saves.clearFeedback(); setResult('');
-    setDialog(mode === 'edit' && target.manual_request_id && !target.invoice_no
-      ? { mode: 'manual', row: target, requestId: target.manual_request_id } : { mode, row: target, sourceId });
+    const form = mode === 'edit' ? manual.open(target) : undefined;
+    setDialog(form ? { mode: 'manual', form } : { mode, row: target, sourceId });
   }
-  async function submitManual(fields: OilManualInvoiceFields, requestId: string, existing?: OilInvoice) {
-    if (manualSubmitting.current) return;
-    manualSubmitting.current = true;
-    try {
-      if (!existing) manualRequest.current = { requestId, fields };
-      const outcome = await saves.run(async signal => {
-        const saved = await saveManualOilInvoice(fields, existing
-          ? { id: existing.id, version: existing.version, request_id: requestId } : { request_id: requestId }, signal);
-        setSelected(saved.id); setOriginalId(0);
-      }, () => '', '手工登记：');
-      if (outcome === 'uncertain' && !existing) setPendingManual({ requestId, fields });
-      else if (!existing && (outcome !== 'blocked' || !pendingManual)) { manualRequest.current = null; setPendingManual(null); }
-      if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);
-    } finally {
-      manualSubmitting.current = false;
-    }
+  function openManual() {
+    if (structuralDisabled) return;
+    const form = manual.open();
+    if (!form) return;
+    saves.clearFeedback(); setResult(''); setDialog({ mode: 'manual', form });
+  }
+  function closeManual(form: OilManualRegistrationForm) {
+    form.dismiss();
+    setDialog(current => current?.mode === 'manual' && current.form === form ? null : current);
   }
   function confirmRead() {
+    if (!verified || blocked || busy || !active || !me) return;
     saves.confirm();
     upload.current = null;
-    if (pendingManual && current.current?.invoices.some(row => row.manual_request_id === pendingManual.requestId)) {
-      manualRequest.current = null;
-      setPendingManual(null);
-    }
+    manual.confirmRead();
     saves.update(ds => Object.fromEntries(Object.entries(ds).flatMap(([key, draft]) => {
       const actual = current.current?.invoices.find(r => r.id === draft.id);
       const original = actual ? draft.field === 'remark' ? actual.remark : pairKey(actual) : draft.original;
@@ -263,7 +257,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     <div className="oilcard-ledger-chrome">
     <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div><input ref={input} type="file" accept="application/pdf,.pdf" hidden aria-label="上传发票PDF" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void receive(file); }} />
       <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => { if (!structuralDisabled) { if (key === 'pdf') input.current?.click(); else setReceiveOpen(true); } } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
-      <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setResult(''); setDialog({ mode: 'manual', requestId: randomUUID() }); }}>手动增行</Button>
+      <Button disabled={structuralDisabled} onClick={openManual}>手动增行</Button>
       </div></div>
     <ReadStatusLane phase={readState} announce="正在读取发票台账…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
@@ -276,7 +270,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>发票 #{d.id}：{d.error}<Button disabled={disabled || busy} onClick={() => saves.save(key, true)}>重试保存</Button><Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>放弃本次输入</Button></p>)}
     {row && <div className="oilcard-invoice-detail">{row.reason && <p className="notice">{row.reason}</p>}{row.kind === 'credit' && <p>红冲关联原票：{query.data?.invoices.find(r => r.id === row.related_invoice_id)?.invoice_no || `#${row.related_invoice_id}`}</p>}{row.change_note && <p>{row.void_date ? `作废日期 ${row.void_date}，` : ''}{row.change_note}</p>}{row.originals.length > 1 && <label>原件<Select aria-label="选择发票原件" value={original?.id ?? null} options={row.originals.map((o, i) => ({ value: o.id, label: `${i === 0 ? '主原件' : o.outcome === 'conflict' ? o.resolution ? '已核冲突原件' : '冲突原件待核' : '补档原件'} #${o.id}` }))} onChange={value => setOriginalId(value)} /></label>}{original?.outcome === 'conflict' && <><p className={original.resolution ? '' : 'notice'}>{original.resolution || original.reason}</p>{!original.resolution && <div className="oilcard-toolbar"><Button disabled={structuralDisabled} onClick={() => open('resolve', original.id)}>确认保留原票</Button><Button disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit', original.id)}>采用此原件更正</Button></div>}</>}</div>}
     {row?.manual_cutoff_ym && <p className="oilcard-pending-hint">历史截至月 {row.manual_cutoff_ym}</p>}
-    {pendingManual && !uncertain && <p className="notice" role="alert">本次手工登记尚未读到，可按原请求重试。<Button disabled={disabled || busy} onClick={() => void submitManual(pendingManual.fields, pendingManual.requestId)}>重试原登记</Button></p>}
+    {manualPhase === 'retry' && !uncertain && <p className="notice" role="alert">本次手工登记尚未读到，可按原请求重试。<Button disabled={disabled || busy} onClick={() => void manual.retry(saves.run)}>重试原登记</Button></p>}
     </div>
     <FirstReadRegion className="oilcard-grid-slot" phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
     {query.data ? <InvoiceCells.Provider value={{ drafts, disabled, structuralDisabled, archives, projects, change, save: key => saves.save(key), act: (mode, target) => open(mode, null, target) }}><div className="oilcard-grid-frame" onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'view', label: '查看发票', disabled: disabled || !original }, { key: 'download', label: '下载原件', disabled: disabled || busy || downloading || !original }], onClick: ({ key }) => actOnInvoice(key) }}><div className="oilcard-grid-frame"><BusinessGrid table="oilcard-invoices" label="油卡发票台账" rows={rows} columns={columns} totals={totals} rowId={row => String(row.id)} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
@@ -286,7 +280,9 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       rowClassRules: { 'oilcard-selected': p => p.data?.id === selected },
     }} /></div></Dropdown></div></InvoiceCells.Provider> : placeheld && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}
     </FirstReadRegion>
-    <DialogPresence>{dialog?.mode === 'manual' ? <OilInvoiceDialog key={dialog.requestId} mode="manual" row={dialog.row} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={fields => submitManual(fields, dialog.requestId, dialog.row)} /> : dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
+    <DialogPresence>{dialog?.mode === 'manual' ? <OilInvoiceDialog key={dialog.form.key} mode="manual" row={dialog.form.row} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => closeManual(dialog.form)} submit={async fields => {
+      if (await dialog.form.submit(fields, saves.run)) closeManual(dialog.form);
+    }} /> : dialog && <OilInvoiceDialog row={dialog.row} mode={dialog.mode} source={dialog.sourceId ? dialog.row.originals.find(o => o.id === dialog.sourceId) ?? null : null} archives={archives} projects={projects} disabled={disabled} busy={busy} error={error} close={() => setDialog(null)} submit={async fields => {
       const action = dialog.mode === 'resolve' ? `originals/${dialog.sourceId!}/resolve` as const : dialog.mode === 'edit' ? dialog.row.kind === 'credit' ? 'credit' : 'correct' : 'delete';
       const outcome = await saves.run(async signal => { await changeOilInvoice(dialog.row, action, fields, signal); }, () => '', `发票 ${dialog.row.invoice_no || dialog.row.id}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);

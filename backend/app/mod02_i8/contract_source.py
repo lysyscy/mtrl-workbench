@@ -163,11 +163,7 @@ class ContractFetcher:
            吞掉它会让后面每一条都继续按失效身份去问，最后落一批半残数据。
            ⇒ 严格通道的停止**必须穿透**（下面第一个 `except`），别并进最后的 `except Exception`。
         """
-        from app.mod02_i8.browser_session import (
-            StrictSessionEnded,
-            StrictSessionUnavailable,
-            StrictTargetMismatch,
-        )
+        from app.mod02_i8.browser_session import StrictSessionStopped
 
         pid = str(ph_id or "").strip()
         if not pid:
@@ -176,7 +172,7 @@ class ContractFetcher:
             resp = self._client.post_json(configured_detail_url(),
                                           params={"id": pid, "type": DETAIL_TYPE},
                                           data={}, timeout=DETAIL_TIMEOUT)
-        except (StrictSessionUnavailable, StrictTargetMismatch, StrictSessionEnded):
+        except StrictSessionStopped:
             raise                      # ⛔ 严格通道的停止不在这里降级成"本条留空"
         except Exception as exc:                        # noqa: BLE001 —— 见上：单条失败不断整批
             logger.warning("合同 {} 的材料名取数失败（本条留空，不影响落库）：{}", pid, exc)
