@@ -16,7 +16,7 @@ React 重写已签收，现行业务和界面约束归 requirements 与 frontend
 
 ## 目录与退出
 
-本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；网页字体、模板按运行消费者保留。`.scratch/<effort>`只放活动Markdown/票；默认开发输出由`tools/audit/workspace_paths.py`自动登记到项目`.artifacts/runs`，短命计算文件用系统TEMP。成功释放已结束消费者的work，必要证据及已核纯开发失败保留30天；未知、在用与恢复资料继续保护。setup负责随仓固定版本部署，实际路径、显式任务和失败分支见[实际接入](../guides/artifact-lifecycle.md#本项目实际接入)。旧AgentArtifacts登记区和显式`.artifacts/active`运行沿原入口与期限；未迁移旧运行才执行旧workspace_check，不扩扫历史目录。无相关产物的简单任务不造effort/run；仍供验收的主预览按原用途保留，不能因回复结束停服。
+本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；网页字体、模板按运行消费者保留。`.scratch/<effort>`只放活动Markdown/票；默认开发输出由`tools/audit/workspace_paths.py`自动登记到项目`.artifacts/runs`，短命计算文件用系统TEMP。现有自动生产者按原收尾约定运行，新增和迁移后的留存规则见产物生命周期；未知、在用与恢复资料继续保护。setup负责随仓固定版本部署，实际路径、显式任务和失败分支见[实际接入](../guides/artifact-lifecycle.md#本项目实际接入)。旧AgentArtifacts登记区和显式`.artifacts/active`运行沿原入口与期限；未迁移旧运行才执行旧workspace_check，不扩扫历史目录。无相关产物的简单任务不造effort/run；仍供验收的主预览按原用途保留，不能因回复结束停服。
 
 历史有效独有知识先归现行正文；可达Git提交及原路径足够追溯且无活动用途时，旧正文退出。本项目仍保活动依赖、验收和范围裁决所需最小集合，终态不推定缺票已完成。恢复用可达提交及原路径，核后续修改后只取所需内容。
 
@@ -34,12 +34,14 @@ backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manag
 
 ## 共享记忆
 
-共同记忆政策由宿主已部署指令直接提供；setup 模板只用于布置，不是日常回读入口。本项目固定 bank ID 为 `project-3379fef93fbada35`；子目录和同项目其他工作树沿用此身份，分支相关记录保留来源分支、必要版本及合并/部署状态。无有效内容不建空库。
+共同记忆政策由宿主已部署指令直接提供；setup 模板只用于布置，不是日常回读入口。本项目固定 bank ID 为 `coding-agent::mtrl-workbench`；子目录和同项目其他工作树沿用此身份，分支相关记录保留来源分支、必要版本及合并/部署状态。无有效内容不建空库。
 
 普通业务按已有业务入口和显式技能执行，记忆使用不触发工程实施、票务或额外收尾；开发代码、辅助工具或技能才读取本页实施方法。现行规则、关键理由与活动状态仍由项目文件持有，偏好、决定背景及验证经验按共同政策留存。首次完整接入和专项内容迁移才读取同源 `references/memory-adoption.md`，平常任务不重跑筛选。
 
 本仓历史React重写分支沿用同一记忆库。2026-10-28用户已签收正式React入口并批准旧版退役，原React与切换候选两棵冻结工作树在必要本机资料保全后均已退出；分支提交仍可达。源码退役、现场加载和资源退出分别记录，当前状态回status；[退役回执](https://github.com/lysyscy/mtrl-workbench/blob/040bbdc2b9462a264490de2e9fd5add19ba96ffe/.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)按Git追溯，后续任务的预览按实际登记由对应owner持有。
 
 ## 已接入的个人产物生命周期
+
+新接入或获准迁移的生产者采用个人包 `c4f1b57dc596216774c23628678dc36d0cfb5121` 的结项退出规则，分类与实际入口见[产物生命周期](../guides/artifact-lifecycle.md#本项目实际接入)；现有自动生产者、旧登记及固定运行沿原基线。
 
 2026-11-06按[ADR](../adr/0001-development-artifact-ownership.md)采用个人包`2e0e153c0b434da03a2b1363b45945599a76b0c9`的项目内默认与setup固定版本部署。实际CLI、保留分支、调度验收和旧运行边界统一见[产物生命周期](../guides/artifact-lifecycle.md)，其他项目不因此切换。

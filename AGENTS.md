@@ -1,6 +1,6 @@
 # Agent 读取入口
 
-共享记忆按宿主统一自定义指令执行；本项目固定库为 `project-3379fef93fbada35`，逻辑身份和普通业务/开发分流见 [工作流绑定](docs/agents/workflow.md#共享记忆)。记忆不能替代当前规则或授权。
+共享记忆按宿主统一自定义指令执行；本项目固定库为 `coding-agent::mtrl-workbench`，逻辑身份和普通业务/开发分流见 [工作流绑定](docs/agents/workflow.md#共享记忆)。记忆不能替代当前规则或授权。
 
 按当前动作读取下列主人及其必要源码。接手活动工作先从 [status](docs/status.md) 到原规格/票，核所在分支、工作树及实际进度。
 
