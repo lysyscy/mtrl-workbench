@@ -92,7 +92,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
   const projectRows=useMemo(()=>projects.data??[],[projects.data]);
   const needle=searchKey(search);
-  const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||row.arch===filters.arch)&&(!filters.approval||(row.approve_status??'无状态')===filters.approval)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
+  const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||(row.arch||'未存档')===filters.arch)&&(!filters.approval||(row.approve_status??'无状态')===filters.approval)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
     projectRows.find(p=>p.warehouse_name===row.project_key)?.disp??'',
     ...(query.data?.columns??[]).filter(column=>column.key!=='ops').flatMap(column=>{
       const value=row[column.key as keyof ContractRow];
@@ -174,7 +174,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   // 行操作只在身份/权限/待核实期间禁用：存档号 blur 保存进行中不得让"推进存档"在点击中途变灰。
   const actionDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError||!projects.data||projects.isError;
   const paymentMethodsKey=JSON.stringify(query.data?.payment_methods??[]);
-  const nextArch=(arch:string)=>arch==='未存档'?'资产处':arch==='资产处'?'已存档':'未存档';
+  const nextArch=(arch:string)=>!arch||arch==='未存档'?'资产处':arch==='资产处'?'已存档':'未存档';
   const advancing=useRef(false);
   // 一次点击完成：先存这一行的存档号草稿（排队等它真的写入并刷新），再推进存档；任一失败/未知都不推进。
   async function advance(row:ContractRow) {

@@ -1,4 +1,5 @@
 """Existing contract real field write, corrupted receipt and unified search."""
+from copy import deepcopy
 from uuid import uuid4
 
 from playwright.sync_api import expect
@@ -108,6 +109,47 @@ def test_real_unified_search_and_no_supplier_or_amount_control(server,browser_pa
     expect(page.get_by_label('供应商',exact=True)).to_have_count(0)
     expect(page.get_by_label('合同金额筛选',exact=True)).to_have_count(0)
     page.locator('.contract-search-field .ant-input-clear-icon').click();expect(search).to_have_value('')
+
+
+def test_project_filter_advance_empty_archive_after_number_edit(server, browser_page, api, projects):
+    page, _ = browser_page
+    project_by_key = {project['warehouse_name']: project for project in projects if project['warehouse_name'] and project['project_type'] != 'shell'}
+    listing = get(api, '/api/m11/list')
+    candidates = listing['rows']
+    row = next(row for row in candidates if row['project_key'] in project_by_key and (row['contract_no'] or row['material']))
+    project = project_by_key[row['project_key']]
+    label = row['contract_no'] or row['material']
+    saved = {'arch': '', 'arch_no': ''}
+    writes = []
+
+    def read_list(route):
+        data = deepcopy(listing)
+        selected = next(item for item in data['rows'] if item['id'] == row['id'])
+        selected.update(saved, tag='纳入台账')
+        route.fulfill(json=data)
+
+    def save_field(route):
+        payload = route.request.post_data_json
+        assert payload['id'] == row['id']
+        writes.append(payload['fields'])
+        saved.update(payload['fields'])
+        route.fulfill(json={'ok': True})
+
+    page.route('**/api/m11/list', read_list)
+    page.route('**/api/m11/fields', save_field)
+    open_page(page, server, 'contracts', '集采台账')
+    page.get_by_label('合同筛选项目').click()
+    page.locator('.business-project-option').filter(has=page.get_by_text(project['disp'], exact=True)).first.click()
+    page.keyboard.press('Escape')
+    page.get_by_label('合同存档筛选').click()
+    page.get_by_title('未存档', exact=True).last.click()
+    target = grid_row(page, '.contracts-grid', row['id'])
+    expect(target).to_be_visible()
+    target.get_by_label(label + ' 存档号', exact=True).fill('QA-123')
+    target.get_by_role('button', name='推进存档').click()
+    expect(target).not_to_be_visible()
+    assert writes == [{'arch_no': 'QA-123'}, {'arch': '资产处'}]
+    assert saved == {'arch': '资产处', 'arch_no': 'QA-123'}
 
 
 def test_real_contract_field_bad_receipt_locks_until_readback(server,browser_page,api,disposable):
