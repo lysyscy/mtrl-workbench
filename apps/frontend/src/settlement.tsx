@@ -163,6 +163,6 @@ function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').Annua
   const total = useMemo<AnnualRow[]>(() => [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}], [grid]);
   const presentation = useGridPresentation({table: `extract-${grid.kind}`, root, active, rows: grid.rows, totals: total, columns, rowId: annualRowId, scale, scope: grid.year, identity: grid.year});
   return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><PreparedGrid presentation={presentation} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
-    getRowId:p=>p.data.warehouse,defaultColDef:{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
+    getRowId:p=>p.data.warehouse,defaultColDef:{resizable:true,sortable:false,suppressMovable:true},
     overlayNoRowsTemplate:`当前筛选条件下没有${grid.kind}数据`,suppressScrollOnNewData:true,suppressColumnVirtualisation:true}} /></section>;
 }

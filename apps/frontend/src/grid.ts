@@ -4,6 +4,7 @@ import {
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule,
   ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule, CustomFilterModule,
 } from 'ag-grid-community';
+import type { SuppressKeyboardEventParams } from 'ag-grid-community';
 
 // Register adopted public modules; their dependencies supply the grid defaults.
 ModuleRegistry.registerModules([
@@ -11,9 +12,26 @@ ModuleRegistry.registerModules([
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule, CustomFilterModule,
 ]);
-// Ordinary reads and reordering stay still; project drag feedback is handled separately.
-// Native drag selection/copy is shared by every grid; retain virtualisation.
-provideGlobalGridOptions({ animateRows: false, enableCellTextSelection: true, ensureDomOrder: true });
+const editorKeys = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown',
+  'Backspace', 'Delete', 'Enter', 'Escape', 'Tab', ' ',
+]);
+const editorShortcuts = new Set(['a', 'c', 'd', 'v', 'x', 'y', 'z']);
+
+function suppressEditorKeyboardEvent({ event, editing }: SuppressKeyboardEventParams) {
+  if (editing) return false; // AG Grid's own editors manage their edit lifecycle.
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !(target.isContentEditable || target.closest('input, textarea, select, [role="combobox"]'))) return false;
+  return event.isComposing || editorKeys.has(event.key) ||
+    ((event.ctrlKey || event.metaKey) && editorShortcuts.has(event.key.toLowerCase()));
+}
+
+// Merge the input rule into local column defaults, including grids mounted directly.
+provideGlobalGridOptions({
+  // Keep ordinary reads and reordering still, with native text selection.
+  animateRows: false, enableCellTextSelection: true, ensureDomOrder: true,
+  defaultColDef: { suppressKeyboardEvent: suppressEditorKeyboardEvent },
+}, 'deep');
 export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(12px * var(--fscale))', cellHorizontalPadding: 'calc(4px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',

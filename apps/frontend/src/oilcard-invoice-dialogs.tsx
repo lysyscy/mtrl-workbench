@@ -76,7 +76,7 @@ export function OilInvoiceDialog(props: DialogAction & {
     <form onSubmit={e => { e.preventDefault(); void save(); }}>
       {manual && <div className="oilcard-invoice-facts">
         <label>价税合计<Input aria-label="手工登记价税合计" inputMode="decimal" value={amount} disabled={disabled || busy} onChange={e => edit(() => setAmount(e.target.value))} /></label>
-        <label>开票日期或原标记<OilDateText label="手工登记日期或原标记" value={date} disabled={disabled || busy} change={value => edit(() => setDate(value))} save={() => {}} /></label>
+        <OilDateText caption="开票日期或原标记" label="手工登记日期或原标记" value={date} disabled={disabled || busy} change={value => edit(() => setDate(value))} save={() => {}} />
         {!hasDate && <label>历史截至月<Input aria-label="历史截至月" placeholder="YYYY-MM，可留空" maxLength={7} value={cutoff} disabled={disabled || busy} onChange={e => edit(() => setCutoff(e.target.value))} /></label>}
         <label>发票号码<Input aria-label="手工登记发票号码" placeholder="已有真实票号时填写" value={number} maxLength={20} disabled={disabled || busy} onChange={e => edit(() => setNumber(e.target.value))} /></label>
       </div>}

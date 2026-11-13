@@ -17,7 +17,7 @@ import { FirstReadRegion, ReadPlaceholder } from './read-region';
 const ledgerRowId = (row: LedgerRow) => row.key;
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
-const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: true, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
+const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: true, suppressMovable: true };
 
 interface Scope { key: string; owner: string; project: number; end: string }
 interface Draft { text: string; base: string; version: number; queued: boolean; month: string }

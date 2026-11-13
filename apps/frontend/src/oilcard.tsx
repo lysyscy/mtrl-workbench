@@ -25,13 +25,13 @@ import { motion } from 'motion/react';
 import { DialogPresence, WorkspacePanel, workspaceSpring } from './workspace-motion';
 
 type ArchiveKind = 'card' | 'account';
-type Field = 'card_no' | 'kind' | 'parent_card_id' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
+type Field = 'card_no' | 'kind' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
 type Draft = { kind: ArchiveKind; id: number; field: Field; original: string; value: string; error: string };
 type PendingAccount = OilAccount;
 const keyOf = (kind: ArchiveKind, id: number, field: Field) => `${kind}:${id}:${field}`;
 const text = (value: unknown) => value === null || value === undefined ? '' : String(value);
 const cardLabel = (card: OilCard) => `${card.card_no || `卡号待补 #${card.id}`}${card.status === 'archived' ? '（归档）' : ''}`;
-const fieldLabels: Record<Field, string> = { card_no: '完整卡号更正', kind: '主卡/副卡', parent_card_id: '所属主卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
+const fieldLabels: Record<Field, string> = { card_no: '完整卡号更正', kind: '主卡/副卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
 interface Cells {
   drafts: Record<string, Draft>; disabled: boolean; busy: boolean; projects: Project[]; cards: OilCard[]; accounts: OilAccount[]; pending: PendingAccount | null;
   change: (kind: ArchiveKind, row: OilCard | OilAccount, field: Field, value: string) => void;
@@ -58,8 +58,7 @@ function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row:
   if (field === 'kind') options = [{ value: 'primary', label: '主卡' }, { value: 'secondary', label: '副卡' }];
   if (field === 'status') options = [{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }];
   if (field === 'project_id') options = [{ value: '', label: '请选择项目' }, ...state.projects.filter(p => p.project_type !== 'shell').map(p => ({ value: String(p.id), label: `${projectLabel(p)}${p.status === 'archived' ? '（项目归档）' : ''}` }))];
-  if (field === 'parent_card_id' || field === 'card_id') options = [{ value: '', label: field === 'parent_card_id' ? '无' : '未关联卡片' }, ...state.cards.filter(c => (field === 'parent_card_id' ? c.kind === 'primary' && c.id !== row.id : c.kind === 'secondary') && (c.status === 'active' || String(c.id) === value)).map(c => ({ value: String(c.id), label: cardLabel(c) }))];
-  if (field === 'parent_card_id' && 'kind' in row && (state.drafts[keyOf(kind, row.id, 'kind')]?.value ?? row.kind) === 'primary') return <span className="muted">—</span>;
+  if (field === 'card_id') options = [{ value: '', label: '未关联卡片' }, ...state.cards.filter(c => c.kind === 'secondary' && (c.status === 'active' || String(c.id) === value)).map(c => ({ value: String(c.id), label: cardLabel(c) }))];
   return <div className="oilcard-cell">{options ? <Select aria-label={label} value={field === 'project_id' && value === '0' ? '' : value} disabled={disabled} status={draft?.error ? 'error' : ''}
     showSearch={{ optionFilterProp: 'label' }} options={options} onChange={next => change(next)} /> : <Input aria-label={label} value={value} disabled={disabled} status={draft?.error ? 'error' : ''}
     className="record-value" placeholder={field === 'card_no' ? '未知可留空' : undefined} onChange={e => change(e.target.value)}
@@ -117,7 +116,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       if (!row) throw new ApiError('这条档案已不在当前结果内，请重读核对。', 409);
       const original = text((row as unknown as Record<string, unknown>)[draft.field]);
       if (original !== draft.original) throw new ApiError('这个字段已变化，请重读核对后处理保留输入。', 409);
-      const value = ['parent_card_id', 'project_id', 'card_id'].includes(draft.field) ? draft.value ? Number(draft.value) : null : draft.field === 'card_no' ? draft.value.trim() || null : draft.field === 'name' ? draft.value.trim() : draft.value;
+      const value = ['project_id', 'card_id'].includes(draft.field) ? draft.value ? Number(draft.value) : null : draft.field === 'card_no' ? draft.value.trim() || null : draft.field === 'name' ? draft.value.trim() : draft.value;
       if (draft.kind === 'card') {
         const fields = { ...cardFields(row as OilCard), [draft.field]: value };
         if (draft.field === 'kind' && value === 'primary') fields.parent_card_id = null;
@@ -164,7 +163,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       else next[key] = { kind, id: row.id, field, value, original: previous?.original ?? original, error: '' };
       return next;
     });
-    if (['kind', 'parent_card_id', 'project_id', 'card_id', 'status'].includes(field)) saves.save(key);
+    if (['kind', 'project_id', 'card_id', 'status'].includes(field)) saves.save(key);
   }
   function save(kind: ArchiveKind, row: OilCard | OilAccount, field: Field) {
     const actual = kind === 'card' ? currentData.current?.cards.find(item => item.request_id === row.request_id) : currentData.current?.accounts.find(item => item.request_id === row.request_id);
@@ -246,7 +245,6 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const cardColumns = useMemo<ColDef<OilCard>[]>(() => [
     { field: 'card_no', headerName: '完整卡号', rowDrag: true, ...contentWidth(Math.max(240, cardNumberWidth / scale + 100), 380, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardNumber row={row} /> },
     { field: 'kind', headerName: '主卡/副卡', ...contentWidth(100, 130, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="kind" /> },
-    { field: 'parent_card_id', headerName: '所属主卡', ...contentWidth(150, 250, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="parent_card_id" /> },
     { field: 'status', headerName: '状态', ...contentWidth(90, 120, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="status" /> },
     { field: 'remark', headerName: '备注', ...contentWidth(130, 350, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <ArchiveEditor kind="card" row={row} field="remark" /> },
     { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(150, 180, scale), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardActions row={row} /> },

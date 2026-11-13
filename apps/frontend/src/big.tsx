@@ -176,7 +176,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
       cancel:id=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[id];return next;})}}>
       {!query.data.mat_available && <p className="notice">主材累计暂不可得，请先核对集采取数。</p>}
       <PreparedGrid presentation={presentation} className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
-        getRowId:p=>p.data.warehouse,defaultColDef:{resizable: true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
+        getRowId:p=>p.data.warehouse,defaultColDef:{resizable: true,sortable:false,suppressMovable:true,wrapHeaderText:true},
         groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
         overlayNoRowsTemplate:`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`,
 }} />

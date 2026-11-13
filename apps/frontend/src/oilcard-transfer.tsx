@@ -44,7 +44,7 @@ export function OilTransferDialog({ archives, projects, disabled, busy, error, c
         <label>备注<Input aria-label={`${item.label}备注`} value={item.data.remark} disabled={locked} onChange={e => changeEndpoint(item.side, 'remark', e.target.value)} /></label>
       </fieldset>)}</div>
       <div className="oilcard-transfer-common"><label>转账金额<Input aria-label="转账金额" value={amount} disabled={locked} placeholder="填写正数" onChange={e => setAmount(e.target.value)} /></label>
-        <label>日期<OilDateText label="转账日期" value={date} disabled={locked} change={setDate} save={() => {}} /></label></div>
+        <OilDateText caption="日期" label="转账日期" value={date} disabled={locked} change={setDate} save={() => {}} /></div>
       {outgoing.account > 0 && outgoing.account === incoming.account && <p className="notice" role="alert">转入和转出请选择不同用卡账户。</p>}
       {error && <p className="notice" role="alert">{error}</p>}
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" htmlType="submit" disabled={locked || !valid}>登记转账</Button></div>
