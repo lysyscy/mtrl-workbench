@@ -6,4 +6,4 @@ patchedDependencies:
   ag-grid-community@36.3.0: patches/ag-grid-community@36.3.0.patch
   antd@6.7.0: patches/antd@6.7.0.patch
   '@rc-component/cascader@1.26.0': patches/rc-component__cascader@1.26.0.patch
-  '@rc-component/menu@>=1.6.1 <=1.6.2': patches/rc-component__menu-type-compatibility.patch
+  '@rc-component/menu@1.6.2': patches/rc-component__menu-type-compatibility.patch
