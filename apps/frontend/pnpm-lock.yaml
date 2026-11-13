@@ -165,7 +165,7 @@ settings:
 patchedDependencies:
   '@rc-component/cascader@1.26.0': 757d3acf4f9a57375364c68fef8585b1817e55752a50e824fdb50543b4f0e7b1
   '@rc-component/image@1.10.0': 6225711c7ec2043cb09f136af2a26822a4d8c141e50bf12a0572a41fd51ab854
-  '@rc-component/menu@1.6.1': a4853dabc5e5dac6cd0995d2e48e92557357fc2eea8dfdb5d1fc70def35b8453
+  '@rc-component/menu@>=1.6.1 <=1.6.2': a4853dabc5e5dac6cd0995d2e48e92557357fc2eea8dfdb5d1fc70def35b8453
   ag-grid-community@36.3.0: be98e9190c506d8f5f5b30ef31eff2b5e39c95c0559818a1761bf9664de51a9b
   antd@6.7.0: 872ac9a2537b899dfb52ed4b24e83120366d25496214212e4b4fd49152bdb4ab
 
