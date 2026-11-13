@@ -113,3 +113,17 @@ finish --group <任务标识> --confirmed --days 30
 ```
 
 各独立消费者持有登记直到实际退出。用途结束、评审已关闭且消费者均已退出后，负责人用 `finish` 将产物按散列移入受管证据目录并封存。正在验看、用途不明或恢复所需的材料保留保护。收尾中断时重试仅处理仍匹配的余项。通过 `exec --read` 读取已封存证据不延长期限。旧资料沿原负责人及授权处理，调度仅检查已登记的运行。
+
+## smyw过程产物
+
+本项目新建的 smyw 规格、预览和反馈使用已登记的任务工作目录，不写上游示例的项目根 `.smyw`。上游技能及其更新保持原渠道；从仓根使用当前宿主实际加载的 smyw 技能目录：
+
+```text
+backend/.venv/Scripts/python.exe -B tools/_vendor/setup_solo_workflow/smyw_artifacts.py --project . start --group <任务标识> --owner <负责人> --skill <smyw技能目录>
+backend/.venv/Scripts/python.exe -B tools/_vendor/setup_solo_workflow/smyw_artifacts.py --project . build --group <任务标识> --skill <smyw技能目录>
+backend/.venv/Scripts/python.exe -B tools/_vendor/setup_solo_workflow/smyw_artifacts.py --project . apply --group <任务标识> --skill <smyw技能目录> --feedback feedback-v<N>.md
+```
+
+`start` 返回工作目录及规格路径；规格、预览、版本和原样反馈均留在该目录。`build`、`apply` 在消费期内调用当前上游脚本；`apply --dry-run` 保留反馈预检。每次操作前以合成数据验证当前上游的目录构建与反馈回写，接口不兼容或检查中发生更新时停止并保护草稿；不要同时更新技能。其他独立生成或预览进程通过 `exec --group <任务标识> -- <命令>` 持有消费，外部浏览器不能自动识别，仍在查看或等待反馈时保持 active。
+
+用户和所有消费者结束、决定及必要反馈已归位后，负责人执行 `finish --group <任务标识> --confirmed`。该标志确认用途结束，不新增例行用户确认；运行以 `work` 结项并立即具备清理资格，实际删除仍由已接入清理入口执行。需保留的最小证据按具名后续用途另行登记；旧 `.smyw` 不自动接管或清理。

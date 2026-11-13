@@ -13,6 +13,7 @@
 | 改共享结构、写入/撤销或刷新链 | [架构](docs/architecture.md) |
 | 改界面与文案 | [前端设计](docs/guides/frontend-design.md) |
 | React 构建、启动、更新、核验或退出预览 | [预览指南](docs/guides/frontend-preview.md)与活动规格；先核在用资源与目标 schema |
+| smyw 变更预览及反馈 | [smyw产物接入](docs/guides/artifact-lifecycle.md#smyw过程产物)；新产物使用登记的工作目录，替代上游示例的项目根 `.smyw` 路径 |
 | 已选定数据库、浏览器或专项检查，查询参数与隔离 | [验证参考](docs/guides/development-and-verification.md)的对应分支 |
 | 配置、启停、部署或服务加载 | [部署](docs/guides/deployment.md)；恢复再读 [备份](docs/guides/database-backup.md) |
 | i8 调用、探测或解析 | [i8 契约](docs/reference/i8-contract.md)与既有封装 |
