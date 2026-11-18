@@ -19,6 +19,28 @@ LINK = 'http://invoice.sinopec.com/' + TOKEN
 PDF_URL = 'https://ymhce-vpc3-xls-bmp-invoice.oss-cn-beijing.aliyuncs.com/synthetic.pdf'
 
 
+@pytest.mark.parametrize('line', [
+    LINK,
+    'invoice.sinopec.com/' + TOKEN,
+    '【中国石化】您于2026年11月18日申请的发票已生成，请点击invoice.sinopec.com/' + TOKEN,
+    '【中国石化】您于2026年11月18日申请的发票已生成，请点击invoice.sinopec.com/' + TOKEN + '\\',
+])
+def test_link_token_accepts_pasted_sms_and_short_links(line):
+    assert delivery.link_token(line) == TOKEN
+
+
+@pytest.mark.parametrize('link', [
+    'https://example.invalid/' + TOKEN,
+    'invoice.sinopec.com.example.invalid/' + TOKEN,
+    'https://invoice.sinopec.com@another.example/' + TOKEN,
+    LINK + '?extra=1',
+    LINK + '/another',
+])
+def test_link_token_rejects_unsupported_links_in_sms(link):
+    with pytest.raises(delivery.DeliveryError, match='链接格式不支持'):
+        delivery.link_token('【中国石化】您于2026年11月18日申请的发票已生成，请点击' + link)
+
+
 def test_real_http_adapter_shape_and_pdf_bytes():
     content = invoice_pdf()
     requests = []

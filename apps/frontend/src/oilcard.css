@@ -31,6 +31,7 @@
 .oilcard-cell-error { color: var(--dg-d); margin: 4px 0; white-space: normal; line-height: 1.5; }
 .oilcard-draft-error { color: var(--dg-d); display: flex; align-items: center; gap: 8px; margin: 0; }
 .oilcard-pending-hint { margin: 0; }
+.oilcard-upload-results { margin: 0; padding-inline-start: 1.5em; max-height: 8rem; overflow: auto; overflow-wrap: anywhere; }
 .oilcard-selected { background: var(--pri-l); }
 .oilcard-assignment-history { flex: none; max-height: 24dvh; overflow: auto; border-top: .5px solid var(--bd); padding-top: 16px; }
 .oilcard-assignment-history h2 { margin: 0; font-size: inherit; font-weight: 600; }

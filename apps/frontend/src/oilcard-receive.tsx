@@ -91,7 +91,7 @@ export function OilReceiveDialog({ active, disabled, scale, close, onUpdated, on
     { field: 'invoice_id', headerName: '发票', ...contentWidth(120, 170, scale), cellRenderer: InvoiceAction },
   ], [scale]);
   return <BusinessModal open className="oilcard-receive-dialog" titleId="oilcard-receive-title" requestClose={closing.requestClose}><DialogContents title="交付链接收票" titleId="oilcard-receive-title" closing={closing}>
-    <label>交付链接<Input.TextArea aria-label="交付链接" value={links} disabled={blocked} onChange={e => setLinks(e.target.value)} autoSize={{ minRows: 3, maxRows: 6 }} placeholder="每行一条中石化交付链接，最多100条" /></label>
+    <label>交付链接<Input.TextArea aria-label="交付链接" value={links} disabled={blocked} onChange={e => setLinks(e.target.value)} autoSize={{ minRows: 3, maxRows: 6 }} placeholder="每行一条中石化交付链接或开票短信，最多100条" /></label>
     <div className="oilcard-toolbar"><Button type="primary" disabled={blocked || !links.trim()} loading={busy} onClick={() => void start(true)}>下载并入账</Button>
       <label>历史批次<Select aria-label="选择收票批次" disabled={blocked || recent.isPending || recent.isError} value={selected || null} showSearch={{ optionFilterProp: 'label' }} options={(recent.data ?? []).map(b => ({ value: b.id, label: `批次 #${b.id}  ${b.created_at.replace('T', ' ').slice(0, 19)}` }))} onChange={setSelected} /></label></div>
     {(error || recent.isError || query.isError) && <p className="notice" role="alert">{error || recent.error?.message || query.error?.message}</p>}

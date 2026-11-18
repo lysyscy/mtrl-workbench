@@ -29,6 +29,7 @@ import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './r
 
 type Row = OilInvoice & { project: string; account: string; total?: boolean };
 type Draft = { id: number; field: 'remark' | 'allocation'; original: string; value: string; project_id: number; account_id: number; error: string };
+type PdfUpload = { file: File; message: string };
 const InvoiceCells = createContext<{ drafts: Record<string, Draft>; disabled: boolean; structuralDisabled: boolean; archives: OilArchives; projects: Project[]; change: (row: Row, field: 'remark' | 'project_id' | 'account_id', value: string) => void; save: (key: string) => void; act: (mode: 'edit' | 'delete', row: Row) => void } | null>(null);
 function InvoiceActions({ data: row, node }: ICellRendererParams<Row>) {
   const { structuralDisabled, act } = useContext(InvoiceCells)!;
@@ -72,13 +73,14 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
 }) {
   const client = useQueryClient(), input = useRef<HTMLInputElement | null>(null);
   const [selected, setSelected] = useState(0), [originalId, setOriginalId] = useState(0), [preparing, setPreparing] = useState(false);
+  const [uploads, setUploads] = useState<PdfUpload[]>([]);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [result, setResult] = useState('');
   const [downloadError, setDownloadError] = useState(''), [downloading, setDownloading] = useState(false);
   const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | { mode: 'manual'; form: OilManualRegistrationForm } | null>(null);
   const [manual] = useState(() => new OilManualRegistration());
   const manualPhase = useSyncExternalStore(manual.subscribe, manual.getPhase);
   const [receiveOpen, setReceiveOpen] = useState(false), [batchLocked, setBatchLocked] = useState(false), [batchUncertain, setBatchUncertain] = useState(false);
-  const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true), upload = useRef<{ file: File; digest: string } | null>(null);
+  const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true), upload = useRef<{ index: number; digest: string } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
   useEffect(() => { if (!active || blocked) downloadRequest.current?.abort(); }, [active, blocked]);
   const query = useQuery({ queryKey: ['oilcard-invoices'], enabled: active && !blocked, queryFn: ({ signal }) => getOilInvoices(signal) });
@@ -110,12 +112,14 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     await client.cancelQueries({ queryKey: ['oilcard-invoices'], exact: true });
     const data = await client.fetchQuery({ queryKey: ['oilcard-invoices'], staleTime: 0, queryFn: ({ signal }) => getOilInvoices(signal) });
     current.current = data;
-    if (upload.current) {
-      const received = await readOilReceipt(upload.current.digest);
-      const invoice = data.invoices.find(row => row.originals.some(o => o.sha256 === upload.current?.digest));
-      const original = invoice?.originals.find(o => o.sha256 === upload.current?.digest);
+    const pendingUpload = upload.current;
+    if (pendingUpload) {
+      const { digest, index } = pendingUpload;
+      const received = await readOilReceipt(digest);
+      const invoice = data.invoices.find(row => row.originals.some(o => o.sha256 === digest));
+      const original = invoice?.originals.find(o => o.sha256 === digest);
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
-      setResult(received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
+      reportUpload(index, received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
     }
     if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
     if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
@@ -187,23 +191,56 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     const draft = draftRef.current[key];
     if (kind === 'allocation' && draft?.project_id && draft.account_id) saves.save(key);
   }
-  async function receive(file: File) {
-    if (structuralDisabled) return;
-    setResult(''); saves.clearFeedback();
-    if (file.size > 20 * 1024 * 1024) { setResult('请选择不超过20 MiB的PDF原件。'); return; }
+  function reportUpload(index: number, message: string) {
+    setUploads(items => items.map((item, position) => position === index ? { ...item, message } : item));
+  }
+
+  async function receive(items: PdfUpload[]) {
+    if (structuralDisabled || receiveOpen || dialog) return;
+    setResult('');
+    saves.clearFeedback();
+    setUploads(items);
     setPreparing(true);
     try {
-      const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))].map(n => n.toString(16).padStart(2, '0')).join('');
-      if (!alive.current) return;
-      upload.current = { file, digest };
-      const outcome = await saves.run(async signal => {
-        const result = await receiveOilInvoice(file, digest, signal);
-        setSelected(result.item.deleted ? 0 : result.item.id); setOriginalId(result.item.deleted ? 0 : result.original.id);
-        setResult(result.message || result.item.originals.find(o => o.id === result.original.id)?.resolution || (result.original.outcome === 'conflict' ? result.original.reason : result.item.status === 'registered' ? '原件已接收并登记。' : result.item.reason));
-      }, () => '', '收票：');
-      if (outcome !== 'uncertain') upload.current = null;
-    } catch (failure) { if (alive.current) setResult(failure instanceof Error ? failure.message : '原件读取失败，请重新选择PDF。'); }
-    finally { if (alive.current) setPreparing(false); }
+      for (const [index, { file, message }] of items.entries()) {
+        if (message) continue;
+        if (file.size > 20 * 1024 * 1024) {
+          reportUpload(index, '原件超过20 MiB。');
+          continue;
+        }
+        let digest: string;
+        try {
+          const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+          digest = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+        } catch {
+          reportUpload(index, '原件读取失败，请重新选择PDF。');
+          continue;
+        }
+        if (!alive.current) return;
+        upload.current = { index, digest };
+        let rejection = '原件接收失败，请重试。';
+        const outcome = await saves.run(async signal => {
+          const receipt = await receiveOilInvoice(file, digest, signal).catch((failure: unknown) => {
+            if (failure instanceof Error) rejection = failure.message;
+            throw failure;
+          });
+          setSelected(receipt.item.deleted ? 0 : receipt.item.id);
+          setOriginalId(receipt.item.deleted ? 0 : receipt.original.id);
+        }, () => '', `${file.name}：`);
+        if (outcome === 'uncertain') {
+          reportUpload(index, '收票结果待核实。');
+          break;
+        }
+        upload.current = null;
+        if (outcome === 'blocked') break;
+        if (outcome === 'rejected') {
+          reportUpload(index, rejection);
+          saves.clearFeedback();
+        }
+      }
+    } finally {
+      if (alive.current) setPreparing(false);
+    }
   }
   async function download(path: string) {
     if (disabled || busy || downloading) return;
@@ -255,7 +292,11 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section className="oilcard-ledger-pane" aria-label="发票台账">
     <div className="oilcard-ledger-chrome">
-    <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div><input ref={input} type="file" accept="application/pdf,.pdf" hidden aria-label="上传发票PDF" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void receive(file); }} />
+    <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div><input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden aria-label="上传发票PDF" onChange={e => {
+      const files = Array.from(e.currentTarget.files ?? []);
+      e.currentTarget.value = '';
+      if (files.length) void receive(files.map(file => ({ file, message: '' })));
+    }} />
       <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => { if (!structuralDisabled) { if (key === 'pdf') input.current?.click(); else setReceiveOpen(true); } } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
       <Button disabled={structuralDisabled} onClick={openManual}>手动增行</Button>
       </div></div>
@@ -265,6 +306,10 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     {(pending > 0 || conflicts > 0) && <p className="oilcard-pending-hint">{pending > 0 && `${pending}张待确认，尚未计入开票合计。`}{conflicts > 0 && `${conflicts}份同票号冲突原件待核，原已确认金额保持。`}</p>}
     {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {result && <p className="oilcard-pending-hint" role="status">{result}</p>}
+    {uploads.length > 0 && <div role="status"><ul className="oilcard-upload-results">
+      {uploads.map(({ file, message }, index) => <li key={index}>{file.name}：{message || '等待上传'}</li>)}
+    </ul></div>}
+    {!preparing && uploads.some(item => !item.message) && <Button disabled={structuralDisabled} onClick={() => void receive(uploads)}>继续上传剩余PDF</Button>}
     {downloadError && <p className="notice" role="alert">{downloadError}</p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '请先重读核对刚才的发票保存结果。' : '已读取当前发票，请核对保留输入。'}<Button disabled={!verified || blocked || busy} onClick={confirmRead}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>发票 #{d.id}：{d.error}<Button disabled={disabled || busy} onClick={() => saves.save(key, true)}>重试保存</Button><Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>放弃本次输入</Button></p>)}

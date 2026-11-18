@@ -7,9 +7,11 @@ import httpx
 
 from .invoice_pdf import MAX_PDF_BYTES
 
-ORIGIN = 'https://invoice.sinopec.com'
+HOST = 'invoice.sinopec.com'
+ORIGIN = 'https://' + HOST
 DETAIL_PATH = '/api/invoice-digital-download-cos/delivery/getInvoiceDetail'
-PDF_HOSTS = frozenset({'invoice.sinopec.com', 'ymhce-vpc3-xls-bmp-invoice.oss-cn-beijing.aliyuncs.com'})
+PDF_HOSTS = frozenset({HOST, 'ymhce-vpc3-xls-bmp-invoice.oss-cn-beijing.aliyuncs.com'})
+SMS_PREFIX = re.compile(r'^【中国石化】[^\r\n]*?请点击\s*')
 
 
 class DeliveryError(ValueError):
@@ -17,9 +19,12 @@ class DeliveryError(ValueError):
 
 
 def link_token(raw):
+    link = SMS_PREFIX.sub('', raw.strip()).removesuffix('\\').rstrip()
+    if link.lower().startswith(HOST + '/'):
+        link = 'https://' + link
     try:
-        url = urlsplit(raw.strip())
-        if url.scheme not in ('http', 'https') or url.hostname != 'invoice.sinopec.com' or url.port not in (None, 80, 443) or url.username or url.password or url.query or url.fragment:
+        url = urlsplit(link)
+        if url.scheme not in ('http', 'https') or url.hostname != HOST or url.port not in (None, 80, 443) or url.username or url.password or url.query or url.fragment:
             raise ValueError()
         token = url.path.strip('/')
         if not re.fullmatch(r'[A-Za-z0-9_-]{10,128}', token) or url.path.count('/') != 1:
