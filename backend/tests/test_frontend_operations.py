@@ -86,24 +86,38 @@ class ListenerOwnershipTests(unittest.TestCase):
         from types import SimpleNamespace
         stream = SimpleNamespace(get_extra_info=lambda key: {'client_addr': ('127.0.0.1', 32123), 'server_addr': ('127.0.0.1', 8000)}[key])
         response = SimpleNamespace(status_code=200, extensions={'network_stream': stream})
-        with patch.object(release, 'powershell', side_effect=[{'owned': False, 'listener_pids': []}, {'owned': True, 'listener_pids': [42]}]) as query:
-            result = self.service.verify_listener(get=lambda route: response)
+        with patch.object(release, 'powershell', side_effect=[{'owned': False, 'listener_pids': []}, {'owned': True, 'listener_pids': [42]}]) as query, \
+             patch.object(release.httpx, 'stream', return_value=nullcontext(response)) as health:
+            result = self.service.verify_listener()
         self.assertEqual(result['verification'], 'health-connection')
         self.assertIn('-RemotePort 32123', query.call_args.args[0])
+        health.assert_called_once_with('GET', 'http://127.0.0.1:8000/healthz', timeout=3, trust_env=False)
 
     def test_healthy_connection_owned_by_another_process_is_rejected(self):
         from types import SimpleNamespace
         stream = SimpleNamespace(get_extra_info=lambda key: {'client_addr': ('127.0.0.1', 32123), 'server_addr': ('127.0.0.1', 8000)}[key])
         response = SimpleNamespace(status_code=200, extensions={'network_stream': stream})
-        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': [99]}):
+        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': [99]}), \
+             patch.object(release.httpx, 'stream', return_value=nullcontext(response)):
             with self.assertRaisesRegex(RuntimeError, '未归属'):
-                self.service.verify_listener(get=lambda route: response)
+                self.service.verify_listener()
 
     def test_health_without_transport_identity_is_rejected(self):
         from types import SimpleNamespace
-        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': []}):
+        response = SimpleNamespace(status_code=200, extensions={})
+        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': []}), \
+             patch.object(release.httpx, 'stream', return_value=nullcontext(response)):
             with self.assertRaisesRegex(RuntimeError, '未归属'):
-                self.service.verify_listener(get=lambda route: SimpleNamespace(status_code=200, extensions={}))
+                self.service.verify_listener()
+
+    def test_closed_health_socket_is_reported_without_accepting_health_alone(self):
+        def closed_socket(key):
+            raise OSError('socket closed')
+        response = SimpleNamespace(status_code=200, extensions={'network_stream': SimpleNamespace(get_extra_info=closed_socket)})
+        with patch.object(release, 'powershell', return_value={'owned': False, 'listener_pids': []}), \
+             patch.object(release.httpx, 'stream', return_value=nullcontext(response)):
+            with self.assertRaisesRegex(RuntimeError, '无法在健康连接关闭前核对'):
+                self.service.verify_listener()
 
 
 class ReleaseTests(unittest.TestCase):

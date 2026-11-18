@@ -318,7 +318,7 @@ class WindowsService:
         if self.info()['state'] != expected:
             raise RuntimeError(f'服务未达到{expected}状态')
 
-    def verify_listener(self, *, get=None):
+    def verify_listener(self):
         def owners(selection):
             return powershell("$ErrorActionPreference='Stop';$s=Get-CimInstance Win32_Service -Filter "
                 + ps_quote("Name='" + self.name + "'")
@@ -331,16 +331,18 @@ class WindowsService:
             return result
         # Some Windows CIM providers report a listening socket as unknown (0).
         # Prove ownership of the actual HTTP connection instead of accepting health alone.
-        if get is not None:
-            response = get('/healthz')
-            stream = response.extensions.get('network_stream')
-            if response.status_code == 200 and stream is not None:
-                client, server = [stream.get_extra_info(key) for key in ('client_addr', 'server_addr')]
-                if client and server and client[0] == server[0] == '127.0.0.1' and server[1] == 8000:
-                    result = owners('Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 '
-                        + '-RemoteAddress 127.0.0.1 -RemotePort ' + str(int(client[1])) + ' -ErrorAction SilentlyContinue')
-                    if result['owned']:
-                        return {**result, 'verification': 'health-connection'}
+        try:
+            with httpx.stream('GET', 'http://127.0.0.1:8000/healthz', timeout=3, trust_env=False) as response:
+                stream = response.extensions.get('network_stream')
+                if response.status_code == 200 and stream is not None:
+                    client, server = [stream.get_extra_info(key) for key in ('client_addr', 'server_addr')]
+                    if client and server and client[0] == server[0] == '127.0.0.1' and server[1] == 8000:
+                        result = owners('Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 '
+                            + '-RemoteAddress 127.0.0.1 -RemotePort ' + str(int(client[1])) + ' -ErrorAction SilentlyContinue')
+                        if result['owned']:
+                            return {**result, 'verification': 'health-connection'}
+        except (OSError, httpx.HTTPError) as error:
+            raise RuntimeError('无法在健康连接关闭前核对8000进程归属') from error
         raise RuntimeError('8000监听进程未归属本次正式服务，不能确认重启完成')
 
 
@@ -441,7 +443,7 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
         after = service.validate()
         if after['state'] != 'Running' or after['pid'] == before['pid'] or after['account'] != before['account']:
             raise RuntimeError('重启后的服务身份不符')
-        report['listener'] = service.verify_listener(get=get)
+        report['listener'] = service.verify_listener()
         report.update(status='loaded', service=after, finished_at=datetime.now(timezone.utc).isoformat())
         checkpoint('actual-version-verified')
         if candidate:
@@ -463,7 +465,7 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
                 if service.info()['state'] != 'Running':
                     service.control('start')
                 verify_http(get, old_manifest, wait)
-                report['recovery_listener'] = service.verify_listener(get=get)
+                report['recovery_listener'] = service.verify_listener()
                 report['recovery'] = 'previous-frontend-verified'
             except BaseException as recovery:
                 report['recovery'] = 'failed'; report['recovery_error'] = type(recovery).__name__
@@ -580,7 +582,7 @@ def main():
                 return outcome(0, run, status=report['status'], product_commit=report['product_commit'],
                                status_document=status_document)
             return outcome(code, run, status='failed')
-        with release_lock(ROOT), httpx.Client(base_url='http://127.0.0.1:8000', timeout=3) as client:
+        with release_lock(ROOT), httpx.Client(base_url='http://127.0.0.1:8000', timeout=3, trust_env=False) as client:
             report = apply_release(ROOT, host, client.get, run / 'reports/deployment.json', candidate=candidate, wait=args.wait_sec)
             status_document = record_status_document_check(ROOT, run, report)
         return outcome(0, run, status=report['status'], product_commit=report['product_commit'],
