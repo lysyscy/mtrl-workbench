@@ -10,6 +10,8 @@
 
 2026-11-04增量采用 My-Skills `af51f214dd06a3cc66c443f21f9481d2c120b1fa` 的 implement-solo-spec/coordination 第5步（发现证据、原始意图与处置条件）。本机Manager安装及Codex独立子Agent上下文的显式读取已核，未推定其他宿主自动加载。仅适用于此后新采用跨票统筹的任务；在途任务的切换仍按下段办理。
 
+2026-11-18增量采用 My-Skills [预览模板](https://github.com/lysyscy/My-Skills/blob/48efd9b6e99c7bfe43b469f459dd955ce168b454/skills/setup-solo-workflow/templates/preview.md)中的既有页面评审规则。项目执行见[界面评审规则](../guides/frontend-preview.md#界面改版何时需要评审)。
+
 在途任务沿原规格的业务、验收和授权基线；必要的规则切换在原记录写明来源及采用点。主预览只在原计划的验收点提供，记录实际版本和待用户判断事项；仍供验收时保留，资源按本项目指南退出。
 
 React 重写已签收，现行业务和界面约束归 requirements 与 frontend-design，原任务材料按 Git 追溯。开发、隔离验证、人工验收、正式切换和旧版退役分别判定；主线状态不能覆盖独立工作树进度。跨任务文档在安全批次边界整合，遇修改/删除冲突先将独有有效知识迁到现行主人，保护双方内容。
