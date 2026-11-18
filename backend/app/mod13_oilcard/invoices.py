@@ -111,19 +111,15 @@ def _receipt_account(session, card_no):
     if card is None:
         return None, '完整卡号没有在用账户，请确认归属。'
 
-    label = '完整卡号'
+    accounts = select(OilAccount).where(OilAccount.status == 'active')
     if card.kind == 'primary':
-        children = list(session.scalars(select(OilCard).where(
-            OilCard.parent_card_id == card.id, OilCard.kind == 'secondary', OilCard.status == 'active').limit(2)))
-        if not children:
-            return None, '主卡下没有在用副卡，请确认归属。'
-        if len(children) > 1:
-            return None, '主卡下有多张在用副卡，请确认归属。'
-        card = children[0]
-        label = '主卡的在用副卡'
-
-    candidates = list(session.scalars(select(OilAccount).where(
-        OilAccount.card_id == card.id, OilAccount.status == 'active').limit(2)))
+        accounts = accounts.join(OilCard, OilAccount.card_id == OilCard.id).where(
+            OilCard.parent_card_id == card.id, OilCard.kind == 'secondary', OilCard.status == 'active')
+        label = '主卡下'
+    else:
+        accounts = accounts.where(OilAccount.card_id == card.id)
+        label = '该副卡'
+    candidates = list(session.scalars(accounts.limit(2)))
     if len(candidates) == 1:
         return candidates[0], ''
     condition = '有多个在用账户' if candidates else '没有在用账户'

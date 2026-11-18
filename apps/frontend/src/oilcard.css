@@ -31,7 +31,6 @@
 .oilcard-cell-error { color: var(--dg-d); margin: 4px 0; white-space: normal; line-height: 1.5; }
 .oilcard-draft-error { color: var(--dg-d); display: flex; align-items: center; gap: 8px; margin: 0; }
 .oilcard-pending-hint { margin: 0; }
-.oilcard-upload-results { margin: 0; padding-inline-start: 1.5em; max-height: 8rem; overflow: auto; overflow-wrap: anywhere; }
 .oilcard-selected { background: var(--pri-l); }
 .oilcard-assignment-history { flex: none; max-height: 24dvh; overflow: auto; border-top: .5px solid var(--bd); padding-top: 16px; }
 .oilcard-assignment-history h2 { margin: 0; font-size: inherit; font-weight: 600; }
@@ -68,6 +67,23 @@
 .oilcard-receive-dialog label { display: flex; flex-direction: column; gap: 6px; margin-block: 12px; }
 .oilcard-receive-dialog .oilcard-toolbar > label { flex: 1; min-width: min(280px, 100%); }
 .oilcard-receive-dialog .ant-select { width: 100%; }
+.oilcard-receive-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.oilcard-receive-actions > label { display: grid; gap: 4px; min-width: min(100%, 260px); margin: 0; }
+.oilcard-relations-scroll { overflow: auto; max-block-size: 28dvh; }
+.oilcard-relations-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.oilcard-relations-table :is(th, td) { text-align: start; padding: 6px 10px; border-block-end: 1px solid var(--bd); white-space: nowrap; }
+.oilcard-relations-table thead th { position: sticky; inset-block-start: 0; background-color: var(--sf2); font-weight: 600; }
+.oilcard-relations-table tbody th { font-weight: 400; }
+.oilcard-relations-table small { display: block; color: var(--tx2); font-size: inherit; white-space: normal; }
+.oilcard-relations-table .oilcard-receipt-message { white-space: normal; min-inline-size: 12rem; }
+.oilcard-receive-dialog > .oilcard-relations-scroll { margin-block-start: 8px; }
+.oilcard-receive-detail { margin-block-start: 12px; }
+.oilcard-receive-detail h3 { margin-block: 12px 6px; }
+.oilcard-receive-detail h3 span { font-weight: 400; }
+.oilcard-receive-detail .oilcard-receive-actions { margin-block-start: 12px; }
+.oilcard-archive-relations { display: grid; gap: 8px; padding-block-end: 12px; }
+#oilcard-panel-archives:has(.oilcard-archive-relations) { display: flex; flex-direction: column; }
+#oilcard-panel-archives:has(.oilcard-archive-relations) .oilcard-archive-panes { flex: 1; min-height: 0; height: auto; }
 @media (max-width: 700px) { .oilcard-invoice-facts { grid-template-columns: 1fr; } .oilcard-invoice-part { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .oilcard-date-text { display: flex; width: 100%; align-items: center; gap: 4px; }
 .oilcard-date-text > .ant-input { min-width: 0; flex: 1; }

@@ -62,6 +62,12 @@ class VersionedDelete(BaseModel):
     version: UUID
 
 
+class AccountArchive(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: UUID
+    card_version: UUID | None = None
+
+
 class ArchiveOrder(BaseModel):
     model_config = ConfigDict(extra='forbid')
     kind: Literal['account', 'primary', 'secondary']
@@ -137,6 +143,14 @@ def create_account(req: AccountCreate):
 def update_account(account_id: int, req: AccountUpdate):
     return _write(lambda session: service.save_account(session, req.model_dump(mode='json', exclude={'version'}),
         key=account_id, version=str(req.version)), service.account_data)
+
+
+@router.post('/accounts/{account_id}/archive')
+def archive_account(account_id: int, req: AccountArchive):
+    with session_scope() as session:
+        row, card = service.archive_account(session, account_id, str(req.version),
+            card_version=str(req.card_version) if req.card_version is not None else None)
+        return {'ok': True, 'item': service.account_data(row), 'card': service.card_data(card) if card is not None else None}
 
 
 class ReplacementCard(BaseModel):
@@ -392,6 +406,7 @@ class InvoiceAllocation(BaseModel):
     project_id: int = Field(gt=0)
     account_id: int = Field(gt=0)
     amount: StrictStr
+    account_version: UUID | None = None
 
 
 class InvoiceAllocationUpdate(BaseModel):

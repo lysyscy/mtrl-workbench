@@ -16,6 +16,8 @@ import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { deleteOilArchive, getOilArchives, getOilAssignments, oilArchiveOrder, saveOilAccount, saveOilArchiveOrder, saveOilCard } from './oilcard-api';
 import type { AccountFields, CardFields, OilAccount, OilArchives, OilCard, OilOrderKind } from './oilcard-api';
 import { OilDeleteDialog } from './oilcard-delete-dialog';
+import { OilArchiveAccountDialog, OilCardRelationsTable } from './oilcard-receive-detail';
+import { archiveOilAccount } from './oilcard-api';
 import { OilLedgerSheet } from './oilcard-ledger';
 import { OilReconciliationSheet } from './oilcard-reconciliation';
 import { OilLinkageSheet } from './oilcard-linkage';
@@ -98,6 +100,8 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const client = useQueryClient();
   const [tab, setTab] = useState<'overview' | 'ledger' | 'linkage' | 'archives'>('overview'), [status, setStatus] = useState('active');
   const [cardStatus, setCardStatus] = useState('active');
+  const [focusPrimaryId, setFocusPrimaryId] = useState<number | null>(null);
+  const [archiving, setArchiving] = useState<{ account: OilAccount; card: OilCard } | null>(null);
   const [ledgerVisited, setLedgerVisited] = useState(false), [ledgerLocked, setLedgerLocked] = useState(false);
   const [ledgerUncertain, setLedgerUncertain] = useState(false);
   const [linkageVisited, setLinkageVisited] = useState(false), [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
@@ -108,7 +112,11 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const query = useQuery({ queryKey: ['oilcard-archives'], enabled: active && !blocked, queryFn: ({ signal }) => getOilArchives(signal) });
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: active && !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const assignments = useQuery({ queryKey: ['oilcard-assignments', historyAccount], enabled: active && !blocked && historyAccount > 0, queryFn: ({ signal }) => getOilAssignments(historyAccount, signal) });
-  const data = query.data, currentData = useRef(data); currentData.current = data;
+  const data = query.data;
+  const currentData = useRef(data); currentData.current = data;
+  const focusPrimary = data?.cards.find(card => card.id === focusPrimaryId && card.kind === 'primary');
+  const focusCards = useMemo(() => focusPrimary && data ? data.cards.filter(card => card.parent_card_id === focusPrimary.id) : [], [data, focusPrimary]);
+  const focusCardIds = useMemo(() => focusPrimary ? new Set([focusPrimary.id, ...focusCards.map(card => card.id)]) : null, [focusPrimary, focusCards]);
   const saves = useCellSaveQueue<Draft, OilArchives>({
     enabled: active && !blocked && Boolean(me), canWrite: Boolean(data && !query.isError && projects.data && !projects.isError && !ledgerLocked && !linkageLocked),
     read: reload, write: async (draft, signal) => {
@@ -125,7 +133,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     },
     acknowledge: (current, submitted) => current.value === submitted.value ? undefined : { ...current, original: submitted.field === 'card_no' || submitted.field === 'name' ? submitted.value.trim() : submitted.value },
     saved: () => '', validate: d => d.field === 'name' && !d.value.trim() ? '请填写账户名称。' : '',
-  }, { key: 'oilcard-archives', label: '油卡档案', pending: Boolean(pending) });
+  }, { key: 'oilcard-archives', label: '油卡档案', pending: Boolean(pending || archiving) });
   async function reload() {
     await client.invalidateQueries({ refetchType: 'none' });
     await client.cancelQueries({ queryKey: ['oilcard-archives'], exact: true });
@@ -150,6 +158,13 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     if (disabled) return;
     const actual = kind === 'card' ? currentData.current?.cards.find(item => item.request_id === row.request_id) : currentData.current?.accounts.find(item => item.request_id === row.request_id);
     if (actual) row = actual;
+    if (kind === 'account' && 'name' in row && row.id && field === 'status' && row.status === 'active' && value === 'archived') {
+      const card = data?.cards.find(item => item.id === row.card_id && item.kind === 'secondary' && item.status === 'active');
+      if (card && !data?.accounts.some(account => account.id !== row.id && account.card_id === card.id && account.status === 'active')) {
+        if (!structuralDisabled) { saves.clearFeedback(); setArchiving({ account: row, card }); }
+        return;
+      }
+    }
     if (row.id === 0 && pendingRef.current) {
       const next = { ...pendingRef.current, [field]: ['project_id', 'card_id'].includes(field) ? value ? Number(value) : field === 'project_id' ? 0 : null : value };
       pendingRef.current = next; setPending(next);
@@ -170,6 +185,12 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     if (actual) row = actual;
     if (row.id === 0) { if (pendingRef.current) void createAccount(pendingRef.current); }
     else saves.save(keyOf(kind, row.id, field));
+  }
+  async function submitArchive(together: boolean) {
+    if (!archiving || structuralDisabled) return;
+    const { account, card } = archiving;
+    const outcome = await saves.run(signal => archiveOilAccount(account, together ? card : null, signal), () => '', '归档用卡账户：');
+    if (outcome === 'saved' || outcome === 'uncertain') setArchiving(null);
   }
   async function addCard(parent?: OilCard) {
     if (structuralDisabled) return;
@@ -218,12 +239,12 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const accountPreview = accountDrag.preview?.order, cardPreview = cardDrag.preview;
   const accounts = useMemo(() => {
     const saved = data?.accounts ?? [];
-    return [...rowsInOrder(saved, accountPreview, row => row.id).filter(a => status === 'all' || a.status === status),
+    return [...rowsInOrder(saved, accountPreview, row => row.id).filter(a => (!focusCardIds || a.card_id !== null && focusCardIds.has(a.card_id)) && (status === 'all' || a.status === status)),
       ...(pending && !saved.some(a => a.request_id === pending.request_id) ? [pending] : [])];
-  }, [data, status, pending, accountPreview]);
+  }, [data, status, pending, accountPreview, focusCardIds]);
   const cards = useMemo(() => data?.cards ?? [], [data]);
   const { visibleCards, visibleParents } = useMemo(() => {
-    const included = cards.filter(card => cardStatus === 'all' || card.status === cardStatus);
+    const included = cards.filter(card => (!focusCardIds || focusCardIds.has(card.id)) && (cardStatus === 'all' || card.status === cardStatus));
     const children = new Map<number | null, OilCard[]>();
     for (const card of included) if (card.kind === 'secondary') {
       const group = children.get(card.parent_card_id) ?? [];
@@ -240,7 +261,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
         .flatMap(card => [card, ...(collapsed.has(card.id) ? [] : children.get(card.id) ?? [])]), ...children.get(null) ?? []],
       visibleParents: new Set([...children.keys()].filter((id): id is number => id !== null)),
     };
-  }, [cards, cardStatus, collapsed, cardPreview]);
+  }, [cards, cardStatus, collapsed, cardPreview, focusCardIds]);
   const cardNumberWidth = fullTextWidth(cards.map(c => c.card_no || '卡号待补 #000'), scale).minWidth;
   const cardColumns = useMemo<ColDef<OilCard>[]>(() => [
     { field: 'card_no', headerName: '完整卡号', rowDrag: true, ...contentWidth(Math.max(240, cardNumberWidth / scale + 100), 380, scale, 1), cellRenderer: ({ data: row }: ICellRendererParams<OilCard>) => row && <CardNumber row={row} /> },
@@ -284,6 +305,21 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       {ledgerVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-ledger" labelledBy="oilcard-tab-ledger" active={tab === 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></WorkspacePanel>}
       {linkageVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} accounts={data.accounts} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
       <WorkspacePanel id="oilcard-panel-archives" labelledBy="oilcard-tab-archives" active={tab === 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
+        {data && <div className="oilcard-archive-relations">
+          <div data-page-chrome className="oilcard-receive-actions">
+            <label>按主卡核对<Select aria-label="按主卡核对" allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="输入卡号或尾号"
+              value={focusPrimaryId} options={cards.filter(card => card.kind === 'primary').map(card => ({ value: card.id, label: cardLabel(card) }))}
+              onChange={id => {
+                setFocusPrimaryId(id ?? null);
+                if (id) {
+                  setStatus('all'); setCardStatus('all');
+                  setCollapsed(previous => { const next = new Set(previous); next.delete(id); return next; });
+                }
+              }} /></label>
+            {focusPrimary && <span>主卡 {focusPrimary.status === 'active' ? '在用' : '已归档'}</span>}
+          </div>
+          {focusPrimary && <OilCardRelationsTable archives={data} projects={projects.data ?? []} cards={focusCards} />}
+        </div>}
         <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button></div></div>
         <FirstReadRegion className="oilcard-grid-slot" phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
         {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="normal" grid={{ ...accountDrag.grid,
@@ -297,6 +333,8 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       </PageActivity.Provider></WorkspacePanel>
       </div>
     </ArchiveCells.Provider>
+    <DialogPresence>{archiving && <OilArchiveAccountDialog account={archiving.account} card={archiving.card} busy={busy} error={error}
+      close={() => setArchiving(null)} confirm={together => void submitArchive(together)} />}</DialogPresence>
     <DialogPresence>{deletion && <OilDeleteDialog title={deletion.kind === 'card' ? '删除实体油卡' : '删除用卡账户'} busy={busy} disabled={structuralDisabled} error={error} close={() => setDeletion(null)} submit={() => void submitDelete()}>
       <p>{'name' in deletion.row ? deletion.row.name : cardLabel(deletion.row)}</p>
       <p>仅可删除未被业务使用的档案。主卡须先处理所属副卡。</p>

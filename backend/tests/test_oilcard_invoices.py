@@ -68,22 +68,26 @@ def test_receipt_actual_pdf_reconciliation_repeat_and_original(scene):
     assert invoices(client)['total_amount'] == '3000.00'
 
 
-@pytest.mark.parametrize(('card_status', 'other_card_status', 'accounts', 'auto_register'), [
+@pytest.mark.parametrize(('card_status', 'other_account', 'accounts', 'auto_register'), [
     ('active', None, 1, True),
     ('active', 'archived', 1, True),
+    ('active', 'unlinked', 1, True),
     ('active', 'active', 1, False),
     ('active', None, 2, False),
     ('active', None, 0, False),
     ('archived', None, 0, False),
 ])
-def test_primary_card_receipt_requires_unique_active_secondary_and_account(
-        scene, card_status, other_card_status, accounts, auto_register):
+def test_primary_card_receipt_requires_unique_active_account(
+        scene, card_status, other_account, accounts, auto_register):
     client, (project, _) = scene
     primary_number = '1000111400012345679'
     primary = create(client, 'cards', card_no=primary_number, kind='primary')
     card = create(client, 'cards', card_no=CARD, parent_card_id=primary['id'], status=card_status)
-    if other_card_status is not None:
-        create(client, 'cards', parent_card_id=primary['id'], status=other_card_status)
+    if other_account is not None:
+        other_card = create(client, 'cards', parent_card_id=primary['id'])
+        if other_account != 'unlinked':
+            create(client, 'accounts', name='另一张副卡的账户', project_id=project,
+                   card_id=other_card['id'], status=other_account)
     linked = [create(client, 'accounts', name=f'合成账户{n}', project_id=project, card_id=card['id'])
               for n in range(accounts)]
 
@@ -103,6 +107,21 @@ def test_primary_card_receipt_requires_unique_active_secondary_and_account(
         assert '主卡' in row['reason']
         assert not row['allocations']
         assert invoices(client)['total_amount'] == '0.00'
+        if other_account == 'active':
+            account = linked[0]
+            request = {'version': row['version'], 'allocations': [{
+                'project_id': project, 'account_id': account['id'], 'amount': row['amount'],
+                'account_version': account['version']}]}
+            path = f"/api/m13/invoices/{row['id']}/allocations"
+            account = edit(client, 'accounts', account, remark='核对期间有变化')
+            assert client.put(path, json=request).status_code == 409
+            assert invoices(client)['total_amount'] == '0.00'
+            request['allocations'][0]['account_version'] = account['version']
+            saved = client.put(path, json=request)
+            assert saved.status_code == 200, saved.text
+            assert invoices(client)['total_amount'] == '3000.00'
+            assert receive(client, content)['item']['status'] == 'registered'
+            assert len(invoices(client)['invoices']) == 1
 
 
 @pytest.mark.parametrize('scenario', ['unknown', 'short', 'ambiguous', 'archived', 'unreliable'])

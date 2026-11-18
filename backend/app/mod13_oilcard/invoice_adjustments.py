@@ -11,7 +11,7 @@ from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from .ledger import _amount, _attribution, _date
 from .invoices import _allocations, number_owner, require_editable
-from .models import OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
+from .models import OilAccount, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
 
@@ -83,6 +83,8 @@ def _replace_allocations(session, row, values):
             raise MustReportError('同一用卡账户请合并成一项分配。')
         seen.add(value['account_id'])
         current = existing.get(value['account_id'])
+        if value.get('account_version') is not None:
+            _check_version(_get(session, OilAccount, value['account_id']), value['account_version'])
         amount = _amount(value['amount'])
         if amount == ZERO or row.amount is None or (amount > ZERO) != (row.amount > ZERO):
             raise MustReportError('每项分配须与票面金额同号且不为0。')

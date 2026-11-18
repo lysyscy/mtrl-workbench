@@ -17,19 +17,22 @@ import type { ValueFilterModel } from './grid-value-filter-model';
 import { readHistory } from './history';
 import type { OilArchives } from './oilcard-api';
 import { getOilReconciliation } from './oilcard-ledger-api';
-import { changeOilInvoice, getOilInvoices, readOilReceipt, receiveOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
+import { getOilArchives } from './oilcard-api';
+import { changeOilInvoice, confirmOilInvoiceAttribution, getOilInvoices, readOilReceipt, receiveOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
 import type { OilInvoice, OilInvoices } from './oilcard-invoice-api';
 import { OilInvoiceDialog } from './oilcard-invoice-dialogs';
 import type { InvoiceAction } from './oilcard-invoice-dialogs';
 import { OilManualRegistration } from './oilcard-manual-registration';
 import type { OilManualRegistrationForm } from './oilcard-manual-registration';
 import { OilReceiveDialog } from './oilcard-receive';
+import type { OilAccount } from './oilcard-api';
+import { OilPdfReceiveDialog } from './oilcard-receive-detail';
+import type { OilPdfUpload } from './oilcard-receive-detail';
 import { useCellSaveQueue } from './use-cell-save';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 type Row = OilInvoice & { project: string; account: string; total?: boolean };
 type Draft = { id: number; field: 'remark' | 'allocation'; original: string; value: string; project_id: number; account_id: number; error: string };
-type PdfUpload = { file: File; message: string };
 const InvoiceCells = createContext<{ drafts: Record<string, Draft>; disabled: boolean; structuralDisabled: boolean; archives: OilArchives; projects: Project[]; change: (row: Row, field: 'remark' | 'project_id' | 'account_id', value: string) => void; save: (key: string) => void; act: (mode: 'edit' | 'delete', row: Row) => void } | null>(null);
 function InvoiceActions({ data: row, node }: ICellRendererParams<Row>) {
   const { structuralDisabled, act } = useContext(InvoiceCells)!;
@@ -71,15 +74,16 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   me: Identity | null; archives: OilArchives; projects: Project[]; active: boolean; blocked: boolean; scale: number; locked: boolean;
   onWriteLock: (value: boolean) => void; onUncertain: (value: boolean) => void;
 }) {
-  const client = useQueryClient(), input = useRef<HTMLInputElement | null>(null);
+  const client = useQueryClient();
   const [selected, setSelected] = useState(0), [originalId, setOriginalId] = useState(0), [preparing, setPreparing] = useState(false);
-  const [uploads, setUploads] = useState<PdfUpload[]>([]);
+  const [uploads, setUploads] = useState<OilPdfUpload[]>([]);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [result, setResult] = useState('');
   const [downloadError, setDownloadError] = useState(''), [downloading, setDownloading] = useState(false);
   const [dialog, setDialog] = useState<{ mode: InvoiceAction; row: OilInvoice; sourceId: number | null } | { mode: 'manual'; form: OilManualRegistrationForm } | null>(null);
   const [manual] = useState(() => new OilManualRegistration());
   const manualPhase = useSyncExternalStore(manual.subscribe, manual.getPhase);
   const [receiveOpen, setReceiveOpen] = useState(false), [batchLocked, setBatchLocked] = useState(false), [batchUncertain, setBatchUncertain] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState<'pdf' | 'pending' | null>(null);
   const downloadRequest = useRef<AbortController | null>(null), alive = useRef(true), upload = useRef<{ index: number; digest: string } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; downloadRequest.current?.abort(); }; }, []);
   useEffect(() => { if (!active || blocked) downloadRequest.current?.abort(); }, [active, blocked]);
@@ -88,7 +92,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const saves = useCellSaveQueue<Draft, OilInvoices>({
     enabled: active && !blocked && Boolean(me), canWrite: Boolean(query.data && !query.isError && !locked),
     read: async submitted => {
-      const data = await reload(submitted?.field !== 'remark');
+      const data = !submitted && pdfOpen && !upload.current ? await reloadAttribution() : await reload(submitted?.field !== 'remark');
       if (!submitted) {
         const readback = manual.readBack(data.invoices);
         if (readback) {
@@ -106,7 +110,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     },
     acknowledge: (present, submitted) => present.value === submitted.value && present.project_id === submitted.project_id && present.account_id === submitted.account_id ? undefined : { ...present, original: submitted.field === 'remark' ? submitted.value : `${submitted.project_id}:${submitted.account_id}` },
     saved: () => '',
-  }, { key: 'oilcard-invoices', label: '油卡发票', pending: preparing || Boolean(dialog) || receiveOpen });
+  }, { key: 'oilcard-invoices', label: '油卡发票', pending: preparing || Boolean(dialog) || receiveOpen || Boolean(pdfOpen) });
   async function reload(reconcile = true) {
     await client.invalidateQueries({ refetchType: 'none' });
     await client.cancelQueries({ queryKey: ['oilcard-invoices'], exact: true });
@@ -119,10 +123,15 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       const invoice = data.invoices.find(row => row.originals.some(o => o.sha256 === digest));
       const original = invoice?.originals.find(o => o.sha256 === digest);
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
-      reportUpload(index, received.deleted ? received.message : received.received ? original?.resolution || (original?.outcome === 'conflict' ? original.reason : invoice?.status === 'registered' ? '原件已接收并登记。' : invoice?.reason || '原件已接收。') : '本次原件尚未登记，可再次收票。');
+      reportUpload(index, received.received ? original?.resolution || received.message || '原件已接收。' : '本次原件尚未登记，可再次收票。', invoice);
     }
     if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
     if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
+    return data;
+  }
+  async function reloadAttribution() {
+    const data = await reload();
+    await client.fetchQuery({ queryKey: ['oilcard-archives'], staleTime: 0, queryFn: ({ signal }) => getOilArchives(signal) });
     return data;
   }
   const { drafts, busy, uncertain, verified, error } = saves;
@@ -191,11 +200,13 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     const draft = draftRef.current[key];
     if (kind === 'allocation' && draft?.project_id && draft.account_id) saves.save(key);
   }
-  function reportUpload(index: number, message: string) {
-    setUploads(items => items.map((item, position) => position === index ? { ...item, message } : item));
+  function reportUpload(index: number, message: string, invoice?: OilInvoice) {
+    setUploads(items => items.map((item, position) => position === index ? {
+      ...item, message, invoiceId: invoice?.id ?? null, pending: invoice?.status === 'pending',
+    } : item));
   }
 
-  async function receive(items: PdfUpload[]) {
+  async function receive(items: OilPdfUpload[]) {
     if (structuralDisabled || receiveOpen || dialog) return;
     setResult('');
     saves.clearFeedback();
@@ -241,6 +252,10 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     } finally {
       if (alive.current) setPreparing(false);
     }
+  }
+  async function confirmReceipt(invoice: OilInvoice, account: OilAccount) {
+    if (structuralDisabled) return;
+    await saves.run(signal => confirmOilInvoiceAttribution(invoice, account, signal), () => '', '发票归属：');
   }
   async function download(path: string) {
     if (disabled || busy || downloading) return;
@@ -292,26 +307,23 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section className="oilcard-ledger-pane" aria-label="发票台账">
     <div className="oilcard-ledger-chrome">
-    <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div><input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden aria-label="上传发票PDF" onChange={e => {
-      const files = Array.from(e.currentTarget.files ?? []);
-      e.currentTarget.value = '';
-      if (files.length) void receive(files.map(file => ({ file, message: '' })));
-    }} />
-      <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => { if (!structuralDisabled) { if (key === 'pdf') input.current?.click(); else setReceiveOpen(true); } } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
+    <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div>
+      <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => {
+        if (structuralDisabled) return;
+        if (key === 'pdf') { setUploads([]); saves.clearFeedback(); setPdfOpen('pdf'); }
+        else setReceiveOpen(true);
+      } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
+      {pending > 0 && <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setPdfOpen('pending'); }}>核对归属（{pending}）</Button>}
       <Button disabled={structuralDisabled} onClick={openManual}>手动增行</Button>
       </div></div>
     <ReadStatusLane phase={readState} announce="正在读取发票台账…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     </ReadStatusLane>
     {(pending > 0 || conflicts > 0) && <p className="oilcard-pending-hint">{pending > 0 && `${pending}张待确认，尚未计入开票合计。`}{conflicts > 0 && `${conflicts}份同票号冲突原件待核，原已确认金额保持。`}</p>}
-    {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
+    {error && !pdfOpen && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {result && <p className="oilcard-pending-hint" role="status">{result}</p>}
-    {uploads.length > 0 && <div role="status"><ul className="oilcard-upload-results">
-      {uploads.map(({ file, message }, index) => <li key={index}>{file.name}：{message || '等待上传'}</li>)}
-    </ul></div>}
-    {!preparing && uploads.some(item => !item.message) && <Button disabled={structuralDisabled} onClick={() => void receive(uploads)}>继续上传剩余PDF</Button>}
     {downloadError && <p className="notice" role="alert">{downloadError}</p>}
-    {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '请先重读核对刚才的发票保存结果。' : '已读取当前发票，请核对保留输入。'}<Button disabled={!verified || blocked || busy} onClick={confirmRead}>已核对，保留输入继续</Button></p>}
+    {!pdfOpen && (uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '请先重读核对刚才的发票保存结果。' : '已读取当前发票，请核对保留输入。'}<Button disabled={!verified || blocked || busy} onClick={confirmRead}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).filter(([, d]) => d.error).map(([key, d]) => <p className="oilcard-draft-error" key={key}>发票 #{d.id}：{d.error}<Button disabled={disabled || busy} onClick={() => saves.save(key, true)}>重试保存</Button><Button disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; return next; })}>放弃本次输入</Button></p>)}
     {row && <div className="oilcard-invoice-detail">{row.reason && <p className="notice">{row.reason}</p>}{row.kind === 'credit' && <p>红冲关联原票：{query.data?.invoices.find(r => r.id === row.related_invoice_id)?.invoice_no || `#${row.related_invoice_id}`}</p>}{row.change_note && <p>{row.void_date ? `作废日期 ${row.void_date}，` : ''}{row.change_note}</p>}{row.originals.length > 1 && <label>原件<Select aria-label="选择发票原件" value={original?.id ?? null} options={row.originals.map((o, i) => ({ value: o.id, label: `${i === 0 ? '主原件' : o.outcome === 'conflict' ? o.resolution ? '已核冲突原件' : '冲突原件待核' : '补档原件'} #${o.id}` }))} onChange={value => setOriginalId(value)} /></label>}{original?.outcome === 'conflict' && <><p className={original.resolution ? '' : 'notice'}>{original.resolution || original.reason}</p>{!original.resolution && <div className="oilcard-toolbar"><Button disabled={structuralDisabled} onClick={() => open('resolve', original.id)}>确认保留原票</Button><Button disabled={structuralDisabled || row.status === 'voided'} onClick={() => open('edit', original.id)}>采用此原件更正</Button></div>}</>}</div>}
     {row?.manual_cutoff_ym && <p className="oilcard-pending-hint">历史截至月 {row.manual_cutoff_ym}</p>}
@@ -332,7 +344,15 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       const outcome = await saves.run(async signal => { await changeOilInvoice(dialog.row, action, fields, signal); }, () => '', `发票 ${dialog.row.invoice_no || dialog.row.id}：`);
       if (outcome === 'saved' || outcome === 'uncertain') setDialog(null);
     }} />}</DialogPresence>
-    <DialogPresence>{receiveOpen && <OilReceiveDialog active={active} disabled={receiveDisabled || busy} scale={scale} close={() => setReceiveOpen(false)} onUpdated={reload} onLock={setBatchLocked} onUncertain={setBatchUncertain} onOpenInvoice={item => {
+    <DialogPresence>{pdfOpen && <OilPdfReceiveDialog mode={pdfOpen} archives={archives} projects={projects} invoices={query.data?.invoices ?? []}
+      uploads={uploads} preparing={preparing} busy={busy} disabled={blocked || !active || !me || locked} error={error}
+      uncertain={uncertain} verified={verified} close={() => setPdfOpen(null)}
+      receive={files => void receive(files.map(file => ({ file, message: '', invoiceId: null, pending: false })))}
+      resume={() => void receive(uploads)} reread={() => void saves.reread()} acceptRead={confirmRead}
+      confirm={(invoice, account) => void confirmReceipt(invoice, account)} inspect={invoice => { setPdfOpen(null); open('edit', null, invoice); }} />}</DialogPresence>
+    <DialogPresence>{receiveOpen && <OilReceiveDialog active={active} disabled={receiveDisabled || busy} scale={scale}
+      archives={archives} projects={projects} invoices={query.data?.invoices ?? []}
+      close={() => setReceiveOpen(false)} onUpdated={reloadAttribution} onLock={setBatchLocked} onUncertain={setBatchUncertain} onOpenInvoice={item => {
       void reload().then(() => {
         const actual = current.current?.invoices.find(row => row.id === item.invoice_id);
         if (!actual) throw new ApiError('发票尚未读到，请重新读取核对。');

@@ -1,4 +1,5 @@
 import { ApiError, body, cents, confirmWrite, record, requestJson } from './api';
+import type { OilAccount } from './oilcard-api';
 
 export interface OilInvoiceOriginal { id: number; sha256: string; invoice_id: number; byte_size: number; outcome: 'received' | 'duplicate' | 'conflict'; reason: string; recognized: { invoice_no: string | null; invoice_date: string | null; amount: string | null; card_no: string | null }; resolution: string | null }
 export interface OilInvoiceAllocation { id: number; account_id: number; project_id: number; card_id: number | null; amount: string }
@@ -96,4 +97,12 @@ export async function changeOilInvoice(row: OilInvoice, action: 'correct' | 'all
   if (action === 'delete') confirmWrite(saved.deleted && saved.invoice_no === row.invoice_no && saved.originals.length === row.originals.length && saved.originals.every(original => row.originals.some(before => before.id === original.id && before.sha256 === original.sha256)), '发票删除回执未能核对，请重读。');
   if (action.startsWith('originals/')) confirmWrite(saved.originals.some(o => o.id === Number(action.split('/')[1]) && o.resolution === String(fields.note).trim()), '原件处理结论未能核对，请重读。');
   return saved;
+}
+
+export async function confirmOilInvoiceAttribution(invoice: OilInvoice, account: OilAccount, signal: AbortSignal) {
+  if (!invoice.amount || invoice.status !== 'pending') throw new ApiError('请先重读待确认发票。');
+  const saved = await changeOilInvoice(invoice, 'allocations', { allocations: [{
+    account_id: account.id, project_id: account.project_id, amount: invoice.amount, account_version: account.version,
+  }] }, signal);
+  confirmWrite(saved.status === 'registered' && saved.allocations[0]?.card_id === account.card_id, '归属回执待核实，请重新读取。');
 }

@@ -54,6 +54,17 @@ export async function saveOilAccount(fields: AccountFields, target: { id: number
   confirmWrite(('id' in target ? item.id === target.id : item.request_id === target.request_id) && Object.entries(fields).every(([k, v]) => item[k as keyof OilAccount] === v), '保存回执与本次输入不一致，请重读核对。');
   return item;
 }
+export async function archiveOilAccount(account: OilAccount, card: OilCard | null, signal: AbortSignal) {
+  const result = await requestJson('/api/m13/accounts/' + account.id + '/archive', {
+    method: 'POST', signal, ...body({ version: account.version, card_version: card?.version ?? null }),
+  });
+  confirmWrite(record(result) && result.ok === true, '归档回执待核实，请重读核对。');
+  const data = result as Record<string, unknown>, saved = readOilAccount(data.item);
+  const savedCard = card ? readOilCard(data.card) : null;
+  confirmWrite(saved.id === account.id && saved.card_id === account.card_id && saved.status === 'archived' &&
+    (card ? savedCard?.id === card.id && savedCard.status === 'archived' : data.card === null),
+  '归档回执与所选范围不一致，请重读核对。');
+}
 export async function getOilAssignments(accountId: number, signal: AbortSignal): Promise<OilAssignment[]> {
   const data = await requestJson(`/api/m13/accounts/${accountId}/assignments`, { signal });
   if (!Array.isArray(data) || !data.every(r => validAssignment(r, accountId))) throw new ApiError('关联历史读取不完整，请重读核对。');

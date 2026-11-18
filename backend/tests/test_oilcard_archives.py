@@ -48,6 +48,33 @@ def read(client):
     return response.json()
 
 
+def test_archive_last_account_with_or_without_card_is_one_reversible_operation(scene):
+    client, (project, _) = scene
+    card = create(client, 'cards', card_no='0001234567890123456')
+    account = create(client, 'accounts', name='最后一户', project_id=project, card_id=card['id'])
+    other = create(client, 'accounts', name='另一户', project_id=project, card_id=card['id'])
+    path = f"/api/m13/accounts/{account['id']}/archive"
+    both = {'version': account['version'], 'card_version': card['version']}
+    before = read(client)
+    assert client.post(path, json=both).status_code == 400
+    assert read(client) == before
+    edit(client, 'accounts', other, status='archived')
+    assert client.post(path, json={**both, 'card_version': str(uuid4())}).status_code == 409
+    assert read(client)['accounts'][0]['status'] == 'active'
+    result = client.post(path, json={'version': account['version']})
+    assert result.status_code == 200 and result.json()['card'] is None
+    assert read(client)['cards'][0]['status'] == 'active'
+    account = edit(client, 'accounts', result.json()['item'], status='active')
+    result = client.post(path, json={**both, 'version': account['version']})
+    assert result.status_code == 200, result.text
+    assert result.headers.get('X-Operation-History') == 'recorded'
+    assert result.json()['item']['status'] == result.json()['card']['status'] == 'archived'
+    operation = client.get('/api/history/status').json()['undo']
+    undone = client.post('/api/history/undo', json={'operation_id': operation['id']})
+    assert undone.status_code == 200, undone.text
+    assert read(client)['accounts'][0]['status'] == read(client)['cards'][0]['status'] == 'active'
+
+
 def test_roundtrip_multiple_accounts_unknown_cards_and_independent_archive(scene):
     client, (project_a, project_b) = scene
     primary = create(client, 'cards', card_no='0000123456789012', kind='primary', remark='主卡圈存资料')

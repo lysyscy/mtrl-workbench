@@ -80,6 +80,7 @@ def configure():
         ('POST', r'/api/m13/cards/\d+/delete', '删除实体油卡', [oil_card]),
         ('POST', r'/api/m13/accounts/\d+/delete', '删除用卡账户', [oil_account, oil_assignment]),
         ('POST', r'/api/m13/accounts/\d+/replace-card', '用卡账户换卡', [oil_card, oil_account, oil_assignment]),
+        ('POST', r'/api/m13/accounts/\d+/archive', '归档用卡账户', [oil_account, oil_card]),
         ('POST', '/api/m13/ledger/entries', '登记油卡充值或调整', [oil_entry]),
         ('PUT', r'/api/m13/ledger/entries/\d+', '更正油卡账务', [oil_entry]),
         ('POST', r'/api/m13/ledger/entries/\d+/delete', '删除油卡账务', [oil_entry]),

@@ -170,6 +170,33 @@ def save_account(session, values, *, key=None, version=''):
     return row
 
 
+def archive_account(session, key, version, *, card_version=None):
+    _lock(session)
+    row = _get(session, OilAccount, key)
+    _check_version(row, version)
+    if row.status != 'active':
+        raise DataConflictError('账户状态已变化，请重读核对。')
+    card = None
+    if card_version is not None:
+        if row.card_id is None:
+            raise DataConflictError('账户已无关联副卡，请重读核对。')
+        card = _get(session, OilCard, row.card_id)
+        _check_version(card, card_version)
+        if card.kind != 'secondary' or card.status != 'active':
+            raise DataConflictError('关联副卡已变化，请重读核对。')
+        other_active = session.scalars(select(OilAccount.name).where(
+            OilAccount.card_id == card.id, OilAccount.id != row.id, OilAccount.status == 'active'))
+        _reject_children(list(other_active), '账户')
+    fields = {'name': row.name, 'project_id': row.project_id, 'card_id': row.card_id,
+        'status': 'archived', 'remark': row.remark}
+    row = save_account(session, fields, key=key, version=version)
+    if card is not None:
+        fields = {'card_no': card.card_no, 'kind': card.kind, 'parent_card_id': card.parent_card_id,
+            'status': 'archived', 'remark': card.remark}
+        card = save_card(session, fields, key=card.id, version=card_version)
+    return row, card
+
+
 def replace_card(session, account_id, values):
     """换卡只修改选定账户；新卡、关联事件与账户在同一历史事务中保存。"""
     _lock(session)
