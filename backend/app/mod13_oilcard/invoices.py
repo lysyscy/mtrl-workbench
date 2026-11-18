@@ -106,6 +106,30 @@ def _archive(session, content, recognized, invoice_id, outcome, reason):
     return ReceivedOriginal(source)
 
 
+def _receipt_account(session, card_no):
+    card = session.scalar(select(OilCard).where(OilCard.card_no == card_no, OilCard.status == 'active'))
+    if card is None:
+        return None, '完整卡号没有在用账户，请确认归属。'
+
+    label = '完整卡号'
+    if card.kind == 'primary':
+        children = list(session.scalars(select(OilCard).where(
+            OilCard.parent_card_id == card.id, OilCard.kind == 'secondary', OilCard.status == 'active').limit(2)))
+        if not children:
+            return None, '主卡下没有在用副卡，请确认归属。'
+        if len(children) > 1:
+            return None, '主卡下有多张在用副卡，请确认归属。'
+        card = children[0]
+        label = '主卡的在用副卡'
+
+    candidates = list(session.scalars(select(OilAccount).where(
+        OilAccount.card_id == card.id, OilAccount.status == 'active').limit(2)))
+    if len(candidates) == 1:
+        return candidates[0], ''
+    condition = '有多个在用账户' if candidates else '没有在用账户'
+    return None, f'{label}{condition}，请确认归属。'
+
+
 def receive_pdf(session, content, recognized):
     """Caller extracts first. Hash + invoice number are cross-batch identities.
 
@@ -135,16 +159,11 @@ def receive_pdf(session, content, recognized):
         if number:
             session.add(OilInvoiceNumber(invoice_id=invoice.id, number=number))
         if recognized['reliable']:
-            candidates = list(session.scalars(select(OilAccount).join(OilCard, OilAccount.card_id == OilCard.id).where(
-                OilCard.card_no == recognized['card_no'], OilCard.kind == 'secondary',
-                OilCard.status == 'active', OilAccount.status == 'active')))
-            if len(candidates) == 1:
-                account = candidates[0]
-                invoice.status, invoice.reason = 'registered', ''
+            account, invoice.reason = _receipt_account(session, recognized['card_no'])
+            if account is not None:
+                invoice.status = 'registered'
                 session.add(OilInvoiceAllocation(invoice_id=invoice.id, account_id=account.id,
                     project_id=account.project_id, card_id=account.card_id, amount=invoice.amount))
-            else:
-                invoice.reason = '完整卡号有多个在用账户，请确认归属。' if candidates else '完整卡号没有在用账户，请确认归属。'
     return _archive(session, content, recognized, invoice.id, outcome, reason)
 
 

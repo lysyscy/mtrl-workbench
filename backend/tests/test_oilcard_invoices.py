@@ -68,6 +68,43 @@ def test_receipt_actual_pdf_reconciliation_repeat_and_original(scene):
     assert invoices(client)['total_amount'] == '3000.00'
 
 
+@pytest.mark.parametrize(('card_status', 'other_card_status', 'accounts', 'auto_register'), [
+    ('active', None, 1, True),
+    ('active', 'archived', 1, True),
+    ('active', 'active', 1, False),
+    ('active', None, 2, False),
+    ('active', None, 0, False),
+    ('archived', None, 0, False),
+])
+def test_primary_card_receipt_requires_unique_active_secondary_and_account(
+        scene, card_status, other_card_status, accounts, auto_register):
+    client, (project, _) = scene
+    primary_number = '1000111400012345679'
+    primary = create(client, 'cards', card_no=primary_number, kind='primary')
+    card = create(client, 'cards', card_no=CARD, parent_card_id=primary['id'], status=card_status)
+    if other_card_status is not None:
+        create(client, 'cards', parent_card_id=primary['id'], status=other_card_status)
+    linked = [create(client, 'accounts', name=f'合成账户{n}', project_id=project, card_id=card['id'])
+              for n in range(accounts)]
+
+    content = invoice_pdf(card=primary_number)
+    result = receive(client, content)
+    row = result['item']
+    assert result['original']['recognized']['card_no'] == row['card_no'] == primary_number
+    if auto_register:
+        assert row['status'] == 'registered' and result['receipt_status'] == 'success'
+        allocation, = row['allocations']
+        assert (allocation['card_id'], allocation['account_id'], allocation['project_id'], allocation['amount']) == (
+            card['id'], linked[0]['id'], project, '3000.00')
+        assert receive(client, content) == result
+        assert invoices(client)['total_amount'] == '3000.00'
+    else:
+        assert row['status'] == result['receipt_status'] == 'pending'
+        assert '主卡' in row['reason']
+        assert not row['allocations']
+        assert invoices(client)['total_amount'] == '0.00'
+
+
 @pytest.mark.parametrize('scenario', ['unknown', 'short', 'ambiguous', 'archived', 'unreliable'])
 def test_uncertain_card_or_layout_never_guesses_account(scene, scenario):
     client, (project, _) = scene
