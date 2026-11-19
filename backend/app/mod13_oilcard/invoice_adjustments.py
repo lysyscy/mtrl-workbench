@@ -10,7 +10,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from .ledger import _amount, _attribution, _date
-from .invoices import _allocations, _receipt_account, can_reimport, number_owner, require_editable
+from .invoices import _allocations, number_owner, require_editable
 from .models import OilAccount, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
@@ -264,37 +264,3 @@ def delete(session, key, values):
     session.flush()
     validate_credits(session)
     return row
-
-
-def reimport(session, targets):
-    """Reuse the original invoice identity and match against current accounts."""
-    _lock(session)
-    ids = [target['invoice_id'] for target in targets]
-    if len(set(ids)) != len(ids):
-        raise MustReportError('同一张发票请只选一次。')
-    entries = []
-    for target in targets:
-        row = _get(session, OilInvoice, target['invoice_id'])
-        source = session.get(OilInvoiceOriginal, target['original_id'])
-        if source is None or source.invoice_id != row.id or not can_reimport(row, source):
-            raise MustReportError('该原件不能用于重新导入，请核对票据。')
-        if row.deleted:
-            _check_version(row, target['version'])
-        entries.append((row, source))
-    for row, source in entries:
-        if not row.deleted:
-            continue
-        recognized = json.loads(source.recognized_json)
-        facts = (row.invoice_no, row.invoice_date.isoformat() if row.invoice_date else None,
-                 str(row.amount) if row.amount is not None else None, row.card_no)
-        reliable = (recognized.get('reliable') and row.invoice_no and row.invoice_date and row.amount is not None
-            and row.amount > ZERO and facts == tuple(recognized.get(key) for key in ('invoice_no', 'invoice_date', 'amount', 'card_no')))
-        account, reason = _receipt_account(session, row.card_no) if reliable else (None, '请核对票面及归属。')
-        allocations = [{'account_id': account.id, 'project_id': account.project_id, 'amount': str(row.amount)}] if account else []
-        _replace_allocations(session, row, allocations, refresh_attribution=True)
-        row.deleted = False
-        row.reason = reason
-        _touch(row)
-    session.flush()
-    validate_credits(session)
-    return [row for row, _ in entries]

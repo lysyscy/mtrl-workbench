@@ -126,6 +126,33 @@ def test_per_item_results_same_receipt_no_long_transaction_and_cross_batch_reuse
     assert b['items'][2]['status'] == 'success' and invoices(client)['total_amount'] == '6000.00'
 
 
+def test_new_link_submission_receives_deleted_invoice_and_old_batch_does_not(scene, monkeypatch):
+    client, (project, _) = scene
+    setup_account(client, project)
+    content = invoice_pdf()
+    calls = []
+
+    def download(token):
+        calls.append(token)
+        return content, NUMBER
+
+    monkeypatch.setattr(delivery, 'download_pdf', download)
+    first = batch(client, LINK)
+    first = run(client, first, first['items'][0])
+    row = invoices(client)['invoices'][0]
+    assert client.post(f"/api/m13/invoices/{row['id']}/delete", json={'version': row['version']}).status_code == 200
+    assert run(client, first, first['items'][0])['items'][0]['status'] == 'deleted'
+    assert len(calls) == 1 and invoices(client)['invoices'] == []
+
+    next_batch = batch(client, LINK)
+    assert next_batch['items'][0]['can_run']
+    current = run(client, next_batch, next_batch['items'][0])
+    assert current['items'][0]['status'] == 'success' and current['items'][0]['invoice_id'] == row['id']
+    assert len(calls) == 2 and invoices(client)['total_amount'] == row['amount']
+    assert run(client, current, current['items'][0]) == current
+    assert len(calls) == 2
+
+
 def test_expired_claim_fences_old_worker_and_resumes(scene):
     client, (project, _) = scene
     setup_account(client, project)

@@ -1,21 +1,15 @@
 import { ApiError, body, confirmWrite, record, requestJson } from './api';
-import { isOilReimportTarget } from './oilcard-invoice-api';
-import type { OilReimportTarget } from './oilcard-invoice-api';
 
 export type DeliveryStatus = 'queued' | 'working' | 'uncertain' | 'success' | 'duplicate' | 'pending' | 'deleted' | 'failed';
-export interface DeliveryItem { id: number; position: number; invoice_id: number | null; original_id: number | null; status: DeliveryStatus; message: string; can_run: boolean; reimport?: OilReimportTarget }
+export interface DeliveryItem { id: number; position: number; invoice_id: number | null; original_id: number | null; status: DeliveryStatus; message: string; can_run: boolean }
 export interface DeliveryBatch { id: number; request_id: string; created_at: string; items: DeliveryItem[] }
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(v);
-export const deliveryLabels: Record<DeliveryStatus, string> = { queued: '等待下载', working: '处理中', uncertain: '待核实', success: '已接收', duplicate: '重复已处理', pending: '待确认', deleted: '已删除', failed: '失败' };
+export const deliveryLabels: Record<DeliveryStatus, string> = { queued: '等待下载', working: '处理中', uncertain: '待核实', success: '已入账', duplicate: '台账已存在', pending: '待确认', deleted: '已删除', failed: '失败' };
 export function readDeliveryBatch(v: unknown): DeliveryBatch {
   if (!record(v) || !id(v.id) || !uuid(v.request_id) || typeof v.created_at !== 'string' || !Array.isArray(v.items) || !v.items.length || !v.items.every(i => record(i) && id(i.id) && id(i.position) && (i.invoice_id === null || id(i.invoice_id)) && (i.original_id === null || id(i.original_id)) && typeof i.status === 'string' && Object.hasOwn(deliveryLabels, i.status) && typeof i.message === 'string' && typeof i.can_run === 'boolean' && ((i.invoice_id === null) === (i.original_id === null)) && (!['success', 'duplicate', 'pending', 'deleted'].includes(i.status) || id(i.invoice_id) && !i.can_run))) throw new ApiError('收票批次读取不完整，请重新读取核对。');
   const batch = v as unknown as DeliveryBatch;
   if (new Set(batch.items.map(i => i.id)).size !== batch.items.length || batch.items.some((item, index) => item.position !== index + 1)) throw new ApiError('收票批次条目未能完整核对，请重新读取。');
-  if (batch.items.some(item => item.reimport !== undefined &&
-    (item.status !== 'deleted' || !isOilReimportTarget(item.reimport, item.invoice_id, item.original_id)))) {
-    throw new ApiError('重导发票的原件身份未能核对，请重新读取。');
-  }
   return batch;
 }
 export async function getDeliveryBatch(id: number, signal?: AbortSignal) { return readDeliveryBatch(await requestJson(`/api/m13/invoice-batches/${id}`, signal ? { signal } : {})); }

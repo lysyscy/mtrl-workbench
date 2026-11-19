@@ -9,6 +9,7 @@ from app.mod09_fee.models import FeeItem, FeeManualItem
 from app.mod11_jc.models import JcContract
 from app.mod13_oilcard.models import OilAccount, OilAccountAssignment, OilCard, OilEntry, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilFeeCustom, OilBigCustom
 from app.mod13_oilcard.ledger import validate_live_refunds
+from app.mod13_oilcard.invoice_retirement import record_deletion
 from app.mod13_oilcard.service import _lock as lock_oilcard, validate_archive_hierarchy
 
 
@@ -98,5 +99,4 @@ def configure():
         ('POST', r'/api/m13/invoices/\d+/credit', '登记油卡发票红冲', [oil_invoice, oil_allocation, oil_number]),
         ('POST', r'/api/m13/invoices/\d+/void', '登记油卡发票作废', [oil_invoice]),
         ('POST', r'/api/m13/invoices/\d+/delete', '删除油卡本地发票登记', [oil_invoice]),
-        ('POST', '/api/m13/invoices/reimport', '重新导入已删除油卡发票', [oil_invoice, oil_allocation]),
-    ])
+    ], recorded=record_deletion)

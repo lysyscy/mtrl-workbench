@@ -6,7 +6,7 @@ import type { Project } from './api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import type { OilAccount, OilArchives, OilCard } from './oilcard-api';
-import type { OilInvoice, OilReimportTarget } from './oilcard-invoice-api';
+import type { OilInvoice } from './oilcard-invoice-api';
 
 const stateLabel = (status: 'active' | 'archived') => status === 'active' ? '在用' : '已归档';
 const projectName = (projects: Project[], account: OilAccount) => {
@@ -95,15 +95,14 @@ export function OilReceiveDetails({ archives, projects, invoice, disabled, back,
   </section>;
 }
 
-export type OilPdfUpload = { file: File; message: string; invoiceId: number | null; pending: boolean; reimport: OilReimportTarget | null };
+export type OilPdfUpload = { file: File; message: string; invoiceId: number | null; pending: boolean };
 
 export function OilPdfReceiveDialog({ mode, archives, projects, invoices, uploads, preparing, busy, disabled, uncertain, verified, error,
-  receive, resume, reread, acceptRead, confirm, reimport, inspect, close }: {
+  receive, resume, reread, acceptRead, confirm, inspect, close }: {
   mode: 'pdf' | 'pending'; archives: OilArchives; projects: Project[]; invoices: OilInvoice[]; uploads: OilPdfUpload[];
   preparing: boolean; busy: boolean; disabled: boolean; uncertain: boolean; verified: boolean; error: string;
   receive: (files: File[]) => void; resume: () => void; reread: () => void; acceptRead: () => void;
   confirm: (invoice: OilInvoice, account: OilAccount) => void; inspect: (invoice: OilInvoice) => void; close: () => void;
-  reimport: (receipts: OilReimportTarget[]) => void;
 }) {
   const id = useId(), [selectedId, setSelectedId] = useState(0), [files, setFiles] = useState<File[]>([]);
   const closing = useDialogClose({ busy: preparing || busy || uncertain, dirty: false, close });
@@ -112,13 +111,9 @@ export function OilPdfReceiveDialog({ mode, archives, projects, invoices, upload
   const list = mode === 'pending' ? pending.map(row => ({ title: row.invoice_no || '发票 #' + row.id, message: row.reason, invoice: row })) :
     uploads.map(upload => {
       const row = invoices.find(item => item.id === upload.invoiceId);
-      const message = upload.reimport && row ? row.reason || '已重新导入，发票已入账。' :
-        upload.pending && row?.status === 'registered' ? '归属已确认，发票已入账。' : upload.message || '等待上传';
+      const message = upload.pending && row?.status === 'registered' ? '归属已确认，发票已入账。' : upload.message || '等待上传';
       return { title: upload.file.name, message, invoice: row };
     });
-  const targets = mode === 'pdf' ? [...new Map(uploads.flatMap(upload =>
-    upload.reimport && !invoices.some(row => row.id === upload.reimport!.invoice_id) ?
-      [[upload.reimport.invoice_id, upload.reimport] as const] : [])).values()].slice(0, 100) : [];
   const title = mode === 'pdf' ? '上传PDF收票' : '发票归属核对';
   const blocked = preparing || busy || disabled || uncertain;
   return <BusinessModal open className="oilcard-receive-dialog" titleId="oilcard-pdf-receive" requestClose={closing.requestClose}>
@@ -144,7 +139,6 @@ export function OilPdfReceiveDialog({ mode, archives, projects, invoices, upload
         {mode === 'pdf' && !preparing && uploads.some(item => !item.message) && <Button disabled={blocked} onClick={resume}>继续上传剩余PDF</Button>}
       </>}
       <div className="dialog-actions">
-        {!invoice && targets.length > 0 && <Button disabled={blocked} onClick={() => reimport(targets)}>重新导入 {targets.length} 张已删除票</Button>}
         {error && <Button disabled={busy || preparing} onClick={reread}>重新读取并核对</Button>}
         {uncertain && <Button disabled={busy || !verified} onClick={acceptRead}>已核对结果</Button>}
         <Button disabled={busy || preparing || uncertain} onClick={closing.requestClose}>关闭</Button>

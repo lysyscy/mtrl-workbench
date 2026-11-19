@@ -15,7 +15,6 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
-import { manualGridColumns } from './grid-manual-widths';
 import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { useRetainedGridColumns } from './grid-layout';
@@ -245,13 +244,9 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,projectRows,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
-  const columns=useMemo(()=>manualGridColumns(baseColumns),[baseColumns]);
-  // Keep the reset action on the material header, clear of complete identifiers.
-  const resetColumns=useMemo(()=>columns.filter(c=>c.field==='material'),[columns]);
-  const resetColumn=useGridWidthColumns(resetColumns)[0];
-  const decoratedColumns=useMemo(()=>columns.map(c=>c.field==='material'&&resetColumn?resetColumn:c),[columns,resetColumn]);
-  const retainedColumns=useRetainedGridColumns(decoratedColumns,root,widths.layoutKey);
-  const widthColumns=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
+  const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey);
+  const activeWidths=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
+  const widthColumns=useGridWidthColumns(activeWidths,widths.savedWidths,'material');
   const {busy:subBusy,uncertain:subUncertain,dirty:subDirty}=subtables.summary;
   const exportUnavailable=blocked||!active?'当前页面暂不可操作。':!me?'请先登录。':busy||subBusy?'合同正在保存，请稍候。':uncertain||subUncertain?'合同操作结果待核实，请先重读。':subDirty?'合同子表有未保存输入，请先处理。':query.isPending||query.isFetching||projects.isPending||projects.isFetching?'正在读取合同及项目，请稍候。':query.isError||projects.isError?'合同或项目读取失败，请先重读。':Object.keys(inlineDrafts).length?'请先保存收发登记输入。':Object.keys(editors).length||tool||subtable||remarkEditor?'请先处理并关闭合同窗口。':'';
   function exportIds(){if(!grid.current)throw new Error('合同列表尚未准备好，请稍候。');const ids:number[]=[];grid.current.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});return ids;}

@@ -13,6 +13,7 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .ag-custom-component-popup{font-family:var(--fs)}
 .grid-width-header{display:flex;align-items:center;gap:calc(4px * var(--fscale));width:100%;min-width:0}
 .grid-width-header>span:first-child{min-width:0}
+.grid-width-header[data-compact]{position:absolute;inset-inline-start:3px;inset-block:0;width:max-content;z-index:1}
 .grid-width-tools{display:inline-flex;align-items:center;flex:none;margin-inline-start:auto}
 .grid-width-tools .ant-btn{width:calc(24px * var(--fscale));height:calc(24px * var(--fscale));min-height:0;padding:0;font-size:calc(18px * var(--fscale));line-height:1}
 .grid-width-tools .sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

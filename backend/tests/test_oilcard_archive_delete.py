@@ -35,10 +35,16 @@ def test_manual_invoice_idempotent_create_undo_and_add_ticket_on_same_row(scene)
     assert saved['manual_request_id'] == payload['request_id'] and saved['invoice_no'] is None and saved['originals'] == []
     assert client.post('/api/m13/invoices/manual', json=payload).json() == response.json()
     assert client.post('/api/m13/invoices/manual', json={**payload, 'remark': '变化'}).status_code == 409
+    assert remove(client, saved).status_code == 200
+    removal = client.get('/api/history/status').json()['undo']
+    replay(client, 'undo', removal)
     operation = client.get('/api/history/status').json()['undo']
     replay(client, 'undo', operation)
     assert invoices(client)['total_amount'] == '0.00'
     replay(client, 'redo', operation)
+    replay(client, 'redo', removal)
+    assert invoices(client)['total_amount'] == '0.00'
+    replay(client, 'undo', removal)
     current = invoices(client)['invoices'][0]
     correction = {**fields, 'version': current['version'], 'invoice_no': '20261031000000000001',
         'date_text': '2026-10-31', 'cutoff_ym': None}
@@ -130,19 +136,10 @@ def test_delete_whole_invoice_excludes_totals_exports_keeps_original_aliases_and
     assert client.get(f'/api/m13/invoices/originals/{source_id}').content == content
     receipt = client.get('/api/m13/invoices/receipts/' + sha256(content).hexdigest()).json()
     assert receipt['received'] is True and receipt['receipt_status'] == 'deleted'
-    assert '不会再次登记金额' in receipt['receipt_message']
     assert client.put(f"/api/m13/invoices/{row['id']}/remark", json={
         'version': deleted['version'], 'remark': '不允许改已删除票'}).status_code == 400
     assert allocate(client, deleted, [allocation(first, '3000')]).status_code == 400
     assert correct(client, deleted, [allocation(first, '3000')]).status_code == 400
-    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_other_actor__'))
-    for pdf in (content, invoice_pdf(variant='same old number new file'),
-            invoice_pdf(number='20261031000000000009', buyer='同票号冲突证据')):
-        repeated = receive(client, pdf)
-        assert repeated['item']['id'] == row['id'] and repeated['item']['deleted'] is True
-        assert repeated['receipt_status'] == 'deleted'
-    assert invoices(client)['total_amount'] == '0.00'
-    client.cookies.set(SESS.COOKIE_NAME, SESS.make('__oilcard_actor__'))
     replay(client, 'undo', operation)
     restored = invoices(client)['invoices'][0]
     assert not restored['deleted'] and restored['allocations'] == row['allocations']
@@ -151,38 +148,67 @@ def test_delete_whole_invoice_excludes_totals_exports_keeps_original_aliases_and
     assert invoices(client)['total_amount'] == '0.00'
 
 
-def test_reimport_deleted_receipts_reuses_identity_and_matches_current_accounts(scene):
+def test_normal_pdf_receipt_reregisters_deleted_ticket_using_current_accounts(scene):
     client, (project, _) = scene
     previous = setup_account(client, project)
     first_pdf = invoice_pdf()
     second_pdf = invoice_pdf(number='20261031000000000002', card='1000111400099999999')
     first = receive(client, first_pdf)['item']
     second = receive(client, second_pdf)['item']
+    changed = client.put(f"/api/m13/invoices/{first['id']}/remark", json={'version': first['version'], 'remark': '旧备注'})
+    assert changed.status_code == 200
+    first = changed.json()['item']
     for row in (first, second):
         assert remove(client, row).status_code == 200
     edit(client, 'accounts', previous, status='archived')
     current = create(client, 'accounts', name='现用账户', project_id=project, card_id=previous['card_id'])
-    receipts = [receive(client, pdf)['reimport'] for pdf in (first_pdf, second_pdf)]
-    assert [receipt['invoice_id'] for receipt in receipts] == [first['id'], second['id']]
     assert invoices(client)['total_amount'] == '0.00'
 
-    path = '/api/m13/invoices/reimport'
-    stale = [receipts[0], {**receipts[1], 'version': str(uuid4())}]
-    assert client.post(path, json={'receipts': stale}).status_code == 409
-    assert invoices(client)['invoices'] == []
-    result = client.post(path, json={'receipts': receipts})
-    assert result.status_code == 200 and result.headers['X-Operation-History'] == 'recorded'
-    registered, pending = result.json()['items']
+    received = receive(client, first_pdf)
+    registered = received['item']
+    assert received['receipt_status'] == 'success'
     assert (registered['id'], registered['originals']) == (first['id'], first['originals'])
-    assert registered['status'] == 'registered' and registered['allocations'][0]['account_id'] == current['id']
+    assert registered['remark'] == '' and registered['allocations'][0]['account_id'] == current['id']
+    pending = receive(client, second_pdf)['item']
     assert pending['id'] == second['id'] and pending['status'] == 'pending' and not pending['allocations']
+    assert receive(client, first_pdf)['receipt_status'] == 'duplicate'
     assert invoices(client)['total_amount'] == '3000.00'
-    operation = client.get('/api/history/status').json()['undo']
-    assert client.post(path, json={'receipts': receipts}).json()['items'] == [registered, pending]
-    assert invoices(client)['total_amount'] == '3000.00'
-    replay(client, 'undo', operation)
-    assert invoices(client)['invoices'] == []
-    assert client.get(f"/api/m13/invoices/originals/{first['originals'][0]['id']}").content == first_pdf
+
+
+def test_retirement_purges_only_new_deletion_once_undo_expires(scene, monkeypatch):
+    from app.mod13_oilcard import delivery
+    from app.mod13_oilcard.invoice_retirement import purge_expired
+    from app.mod13_oilcard.models import OilInvoiceRetirement
+    from tests.oilcard_invoice_samples import NUMBER
+    from tests.test_oilcard_delivery import LINK, batch, run
+
+    client, (project, _) = scene
+    account = setup_account(client, project)
+    legacy = receive(client, invoice_pdf(number='20261031000000000003'))['item']
+    monkeypatch.setattr(delivery, 'download_pdf', lambda token: (invoice_pdf(), NUMBER))
+    submitted = batch(client, LINK + '\ninvalid')
+    run(client, submitted, submitted['items'][0])
+    current = next(row for row in invoices(client)['invoices'] if row['invoice_no'] == NUMBER)
+    with session_scope() as session:
+        session.get(OilInvoice, legacy['id']).deleted = True
+    assert remove(client, current).status_code == 200
+    deleted_operation = client.get('/api/history/status').json()['undo']['id']
+    for step in range(19):
+        account = edit(client, 'accounts', account, name=f'历史测试 {step}')
+    purge_expired()
+    with session_scope() as session:
+        assert session.get(OilInvoiceRetirement, current['id']).operation_id == deleted_operation
+        assert session.get(history.OperationHistory, deleted_operation) is not None
+    assert edit(client, 'accounts', account, name='最后一步')
+    purge_expired()
+    with session_scope() as session:
+        assert session.get(history.OperationHistory, deleted_operation) is None
+        assert session.get(OilInvoice, current['id']) is None
+        assert session.get(OilInvoice, legacy['id']).deleted
+    assert not client.get('/api/m13/invoices/receipts/' + sha256(invoice_pdf()).hexdigest()).json()['received']
+    remaining = client.get(f"/api/m13/invoice-batches/{submitted['id']}").json()['items']
+    assert len(remaining) == 1 and remaining[0]['position'] == 1 and remaining[0]['status'] == 'failed'
+    assert receive(client, invoice_pdf())['receipt_status'] == 'success'
 
 
 def test_delete_credit_requires_order_restores_net_and_keeps_parent_conflict_guard(scene):

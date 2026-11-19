@@ -13,6 +13,7 @@ Starlette 的中间件是"**后 add 的先执行**"，所以实际 add 顺序必
 
 from __future__ import annotations
 
+import asyncio
 import re
 import stat
 import uuid
@@ -202,10 +203,31 @@ def _install_error_handlers(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    from app.mod13_oilcard.invoice_retirement import purge_expired
+
+    stopping = asyncio.Event()
+
+    async def expire_deleted_invoices():
+        while not stopping.is_set():
+            try:
+                await asyncio.wait_for(stopping.wait(), timeout=30)
+                return
+            except TimeoutError:
+                pass
+            try:
+                await asyncio.to_thread(purge_expired)
+            except Exception as error:
+                get_logger().error('油卡已删发票清理失败，将继续重试：{}', type(error).__name__)
+
     setup_logging()
     get_logger().info("应用启动 env={}", get_settings().app_env)
-    yield
-    get_logger().info("应用停止")
+    cleanup = asyncio.create_task(expire_deleted_invoices())
+    try:
+        yield
+    finally:
+        stopping.set()
+        await cleanup
+        get_logger().info("应用停止")
 
 
 def _static_file(request: Request, path: Path, media_type: str) -> Response:

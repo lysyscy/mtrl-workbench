@@ -5,7 +5,7 @@ import type { ColDef, ColGroupDef, GridApi, IHeaderParams, SizeColumnsToContentS
 import Button from 'antd/es/button';
 import { bindGridWidths, gridWidthPreferences } from './grid-width-state';
 import { GridWidthOwner } from './grid-width-owner';
-import { widthModeColumns } from './grid-manual-widths';
+import { manualGridColumns, widthModeColumns } from './grid-manual-widths';
 
 export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean) {
   const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),[dragging,setDragging]=useState<string|null>(null);
@@ -50,34 +50,44 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
   const fit=useCallback(()=>binding.current?.fit(),[]);
-  const columns=useCallback(<T,>(definitions:(ColDef<T>|ColGroupDef<T>)[])=>widthModeColumns(definitions,manualIds),[manualIds]);
-  return {attach, strategy,columns,custom:Object.keys(preferences.getWidths()).length>0,error:preferences.getError(),layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
+  const columns=useCallback(<T,>(definitions:(ColDef<T>|ColGroupDef<T>)[])=>widthModeColumns(manualGridColumns(definitions),manualIds),[manualIds]);
+  return {attach, strategy,columns,savedWidths:preferences.getWidths(),custom:Object.keys(preferences.getWidths()).length>0,error:preferences.getError(),layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
 }
 
 export const GridWidthContext=createContext<ReturnType<typeof useGridWidths>|null>(null);
-function WidthHeader(params:IHeaderParams&{originalHeader?:ComponentType<IHeaderParams>}) {
+function WidthHeader(params:IHeaderParams&{originalHeader?:ComponentType<IHeaderParams>;compactReset?:boolean}) {
   const widths=useContext(GridWidthContext),Original=params.originalHeader;
-  return <span className="grid-width-header"><span>{Original?<Original {...params}/>:params.displayName}</span>{widths&&<span className="grid-width-tools" data-page-chrome>
+  return <span className="grid-width-header" data-compact={params.compactReset || undefined}>
+    {!params.compactReset && <span>{Original?<Original {...params}/>:params.displayName}</span>}{widths&&<span className="grid-width-tools" data-page-chrome>
     <Button type="text" size="small" aria-label="恢复自动列宽" disabled={!widths.custom&&!widths.error} title={widths.error||'恢复自动列宽（保留排序、筛选和勾选）'}
       onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();widths.reset();}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6" /></svg></Button>
     {widths.error&&<span className="sr-only" role="status">{widths.error}</span>}
   </span>}</span>;
 }
 // Use the native header extension point. One action per grid, without a toolbar row.
-export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[]) {
+export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],
+  savedWidths: Readonly<Record<string, number>>, preferred?: string) {
   return useMemo(()=>{
-    let added=false;
+    const leaves:ColDef<T>[]=[];
+    const collect=(items:(ColDef<T>|ColGroupDef<T>)[])=>items.forEach(column=>{
+      if('children'in column)collect(column.children);
+      else if(!column.hide&&!column.headerComponent&&column.resizable!==false)leaves.push(column);
+    });
+    collect(columns);
+    const fits=(column:ColDef<T>)=>(savedWidths[column.colId??String(column.field)]
+      ??column.minWidth??column.width??column.initialWidth??88)>=80;
+    const reset=leaves.find(column=>(column.colId??column.field)===preferred&&fits(column))
+      ??leaves.find(fits)??leaves[0];
     const visit=(items:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]=>items.map(column=>{
       if('children'in column)return {...column,children:visit(column.children)};
       // Pinned columns cannot flex; leaving flex set also makes native reset skip their width.
       const {flex,initialFlex,...fixed}=column;
       const leaf:ColDef<T>=column.pinned&&(flex!==undefined||initialFlex!==undefined)?{...fixed,suppressAutoSize:column.suppressAutoSize??true}:column;
-      if(added)return leaf;
-      if(leaf.headerComponent||(leaf.minWidth??leaf.width??leaf.initialWidth??88)<80)return leaf;
-      added=true;
+      if(column!==reset)return leaf;
       const params=leaf.headerComponentParams??{};
-      return {...leaf,headerComponentParams:{...params,originalHeader:params.innerHeaderComponent,innerHeaderComponent:WidthHeader}};
+      return {...leaf,headerComponentParams:{...params,originalHeader:params.innerHeaderComponent,innerHeaderComponent:WidthHeader,
+        compactReset:!fits(column)}};
     });
     return visit(columns);
-  },[columns]);
+  },[columns,savedWidths,preferred]);
 }

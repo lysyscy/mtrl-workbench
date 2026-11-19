@@ -8,7 +8,7 @@ from hashlib import sha256
 import json
 import re
 
-from sqlalchemy import DateTime, Integer, JSON, String, event, literal_column, select, update
+from sqlalchemy import DateTime, Integer, JSON, String, delete, event, literal_column, select, update
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.ddl import sort_tables
 
@@ -48,6 +48,8 @@ class RequestHistory:
 _request: ContextVar[RequestHistory | None] = ContextVar('operation_history', default=None)
 _policies = []
 _rules = {}
+_recorded = None
+UNDO_STEPS = 20
 _TECHNICAL = {'updated_at'}
 
 
@@ -56,10 +58,27 @@ def actor_key(actor):
     return sha256(actor.encode('utf-8')).hexdigest()
 
 
-def bind_policies(policies):
-    global _policies, _rules
+def bind_policies(policies, *, recorded=None):
+    global _policies, _rules, _recorded
     _policies = [(method, re.compile(path), label, rules) for method, path, label, rules in policies]
     _rules = {rule.model.__tablename__: rule for *_, rules in policies for rule in rules}
+    _recorded = recorded
+
+
+def _window(actor):
+    return select(OperationHistory.id).where(
+        OperationHistory.actor == actor, OperationHistory.state.in_(('applied', 'undone')),
+    ).order_by(OperationHistory.id.desc()).limit(UNDO_STEPS)
+
+
+def _prune(session, actor):
+    table = OperationHistory.__table__
+    current_barrier = select(table.c.id).where(
+        table.c.actor == actor, table.c.state == 'barrier',
+    ).order_by(table.c.id.desc()).limit(1)
+    session.connection().execute(delete(table).where(
+        table.c.actor == actor, table.c.id.not_in(_window(actor)), table.c.id.not_in(current_barrier),
+    ))
 
 
 def begin_request(actor, method, path):
@@ -225,6 +244,9 @@ class Tracker:
         )
         self.session.add(self.operation)
         self.session.flush()
+        if not self.unsupported and _recorded is not None:
+            _recorded(self.session, self.operation)
+        _prune(self.session, self.operation.actor)
 
     def committed(self):
         if self.operation is not None:
@@ -250,7 +272,10 @@ def record_barrier(session, actor, label):
     session.connection().execute(update(OperationHistory).where(
         OperationHistory.actor == actor_key(actor), OperationHistory.state == 'undone'
     ).values(state='discarded'))
-    session.add(OperationHistory(actor=actor_key(actor), label=label, state='barrier', changes=[]))
+    key = actor_key(actor)
+    session.add(OperationHistory(actor=key, label=label, state='barrier', changes=[]))
+    session.flush()
+    _prune(session, key)
 
 
 def _barrier_id(session, actor):
@@ -265,7 +290,7 @@ def _top(session, actor, direction):
     order = OperationHistory.id.desc() if direction == 'undo' else OperationHistory.id.asc()
     return session.scalar(select(OperationHistory).where(
         OperationHistory.actor == actor_key(actor), OperationHistory.id > barrier,
-        OperationHistory.state == state,
+        OperationHistory.state == state, OperationHistory.id.in_(_window(actor_key(actor))),
     ).order_by(order).limit(1))
 
 

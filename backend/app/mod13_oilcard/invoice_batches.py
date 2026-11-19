@@ -11,7 +11,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from . import delivery, invoices
 from .invoice_pdf import recognize_pdf
-from .models import OilDeliveryBatch, OilDeliveryItem, OilDeliveryLink, OilInvoiceOriginal
+from .models import OilDeliveryBatch, OilDeliveryItem, OilDeliveryLink, OilInvoice, OilInvoiceOriginal
 from .service import _get, _lock
 
 LEASE = timedelta(minutes=3)
@@ -42,7 +42,14 @@ def create(session, request_id, text):
         if link is None:
             link = OilDeliveryLink(link_key=key, token=token)
             session.add(link); session.flush()
-        session.add(OilDeliveryItem(batch_id=batch.id, position=position, link_id=link.id, reused=reused))
+        source = session.get(OilInvoiceOriginal, link.original_id) if link.original_id else None
+        deleted_version = None
+        if source and source.outcome != 'conflict':
+            invoice = session.get(OilInvoice, source.invoice_id)
+            if invoices.can_receive_deleted(session, invoice):
+                deleted_version = invoice.version
+        session.add(OilDeliveryItem(batch_id=batch.id, position=position, link_id=link.id, reused=reused,
+            deleted_version=deleted_version))
     session.flush()
     return batch
 
@@ -51,19 +58,23 @@ def _expired(link):
     return link.claimed_at is None or link.claimed_at < datetime.now() - LEASE
 
 
+def _current_retry(session, item, source):
+    if not item.deleted_version:
+        return False
+    invoice = session.get(OilInvoice, source.invoice_id)
+    return invoice.deleted and invoice.version == item.deleted_version
+
+
 def _item_data(session, item):
     base = {'id': item.id, 'position': item.position, 'invoice_id': None, 'original_id': None}
     if item.link_id is None:
         return {**base, 'status': 'failed', 'message': item.error, 'can_run': False}
     link = session.get(OilDeliveryLink, item.link_id)
-    if link.state == 'done' and link.original_id is not None:
-        source = session.get(OilInvoiceOriginal, link.original_id)
+    source = session.get(OilInvoiceOriginal, link.original_id) if link.original_id else None
+    if source and not _current_retry(session, item, source):
         outcome = invoices.receipt_outcome(session, source, repeated=item.reused or link.duplicate)
-        result = {**base, 'invoice_id': source.invoice_id, 'original_id': source.id,
+        return {**base, 'invoice_id': source.invoice_id, 'original_id': source.id,
             'status': outcome['receipt_status'], 'message': outcome['receipt_message'], 'can_run': False}
-        if 'reimport' in outcome:
-            result['reimport'] = outcome['reimport']
-        return result
     if link.state == 'running':
         expired = _expired(link)
         return {**base, 'status': 'uncertain' if expired else 'working',
@@ -103,7 +114,8 @@ def _claim(session, batch_id, item_id):
     if item.link_id is None:
         return None
     link = _get(session, OilDeliveryLink, item.link_id)
-    if link.state == 'done' or link.state == 'running' and not _expired(link):
+    source = session.get(OilInvoiceOriginal, link.original_id) if link.original_id else None
+    if (source and not _current_retry(session, item, source)) or (link.state == 'running' and not _expired(link)):
         return None
     link.state, link.attempt, link.claimed_at = 'running', str(uuid4()), datetime.now()
     link.message = ''; link.attempts += 1
@@ -111,12 +123,25 @@ def _claim(session, batch_id, item_id):
     return link.id, link.token, link.attempt
 
 
-def _complete(session, link_id, attempt, content, recognized):
+def _complete(session, link_id, attempt, content, recognized, *, item_id=None):
     _lock(session)
     link = _get(session, OilDeliveryLink, link_id)
     if link.state != 'running' or link.attempt != attempt:
         return False
-    received = invoices.receive_pdf(session, content, recognized)
+    item = session.get(OilDeliveryItem, item_id) if item_id is not None else None
+    batch = session.get(OilDeliveryBatch, item.batch_id) if item else None
+    if link.original_id is not None and item:
+        source = session.get(OilInvoiceOriginal, link.original_id)
+        if not _current_retry(session, item, source):
+            link.state = 'done'
+            return False
+        number = recognized['invoice_no']
+        if sha256(content).hexdigest() != source.sha256 and (not number or invoices.number_owner(session, number) != source.invoice_id):
+            link.state, link.message = 'failed', '本次下载的原件与该链接原票不一致，请上传PDF核对。'
+            return False
+        item.reused = False
+        item.deleted_version = None
+    received = invoices.receive_pdf(session, content, recognized, submitted_at=batch.created_at if batch else None)
     link.original_id, link.state = received.original_id, 'done'
     link.duplicate = received.duplicate
     link.message = ''; session.flush()
@@ -143,6 +168,6 @@ def run(batch_id, item_id):
             # Original archive, accounting and continuation receipt commit together.
             # A lost reply is recovered from this link, never by guessing/reposting.
             with session_scope() as session:
-                _complete(session, link_id, attempt, content, recognized)
+                _complete(session, link_id, attempt, content, recognized, item_id=item_id)
     with session_scope() as session:
         return read(session, batch_id)

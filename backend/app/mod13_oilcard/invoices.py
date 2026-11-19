@@ -6,12 +6,12 @@ import json
 import re
 from uuid import uuid4
 
-from sqlalchemy import cast, select
+from sqlalchemy import case, cast, select
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
-from app.core.money import sum_money
+from app.core.money import sum_money, to_money
 from app.mod01_projects import service as projects
 from .models import OilAccount, OilCard, OilContinuationSource, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
@@ -60,7 +60,7 @@ def invoice_data(session, row, *, continuation_notes=None):
     allocations = _allocations(session, row.id)
     if row.status == 'registered' and (row.amount is None or not allocations or sum_money(a.amount for a in allocations) != row.amount):
         raise MustReportError('发票分配合计未能核对，请核对票面和分配后再继续。')
-    originals = list(session.scalars(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == row.id).order_by(OilInvoiceOriginal.id)))
+    originals = list(session.scalars(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == row.id).order_by(_original_order())))
     change_note = row.change_note
     if change_note and row.kind == 'normal' and row.status != 'voided':
         notes = _continuation_invoice_notes(session) if continuation_notes is None else continuation_notes
@@ -95,7 +95,7 @@ class ReceivedOriginal:
     def upload_response(self, session):
         item = invoice_data(session, session.get(OilInvoice, self.invoice_id))
         return {'ok': True, 'original': next(o for o in item['originals'] if o['id'] == self.original_id),
-            'item': item, **receipt_outcome(session, self._source)}
+            'item': item, **receipt_outcome(session, self._source, repeated=self.repeated)}
 
 
 def _archive(session, content, recognized, invoice_id, outcome, reason):
@@ -104,6 +104,10 @@ def _archive(session, content, recognized, invoice_id, outcome, reason):
         recognized_json=json.dumps(recognized, ensure_ascii=False, sort_keys=True), received_by=current_operator())
     session.add(source); session.flush()
     return ReceivedOriginal(source)
+
+
+def _original_order():
+    return case((OilInvoiceOriginal.outcome == 'received', -OilInvoiceOriginal.id), else_=OilInvoiceOriginal.id)
 
 
 def _receipt_account(session, card_no):
@@ -126,7 +130,44 @@ def _receipt_account(session, card_no):
     return None, f'{label}{condition}，请确认归属。'
 
 
-def receive_pdf(session, content, recognized):
+def _apply_receipt(session, invoice, recognized):
+    from .invoice_adjustments import _replace_allocations, _touch
+
+    number = recognized['invoice_no']
+    if number and not session.scalar(select(OilInvoiceNumber.id).where(OilInvoiceNumber.number == number)):
+        session.add(OilInvoiceNumber(invoice_id=invoice.id, number=number))
+    invoice.invoice_no = number
+    invoice.invoice_date = date.fromisoformat(recognized['invoice_date']) if recognized['invoice_date'] else None
+    invoice.amount = to_money(recognized['amount']) if recognized['amount'] is not None else None
+    invoice.card_no = recognized['card_no']
+    account, reason = _receipt_account(session, invoice.card_no) if recognized['reliable'] else (None, recognized['reason'])
+    allocations = [{'account_id': account.id, 'project_id': account.project_id, 'amount': recognized['amount']}] if account else []
+    _replace_allocations(session, invoice, allocations, refresh_attribution=True)
+    invoice.reason = reason
+    _touch(invoice)
+
+
+def can_receive_deleted(session, invoice):
+    from .invoice_retirement import protected_invoice
+    return (invoice.deleted and invoice.kind == 'normal' and invoice.status != 'voided'
+            and not protected_invoice(session, invoice.id))
+
+
+def _reopen(session, invoice, recognized, submitted_at):
+    if not can_receive_deleted(session, invoice) or (submitted_at and invoice.updated_at > submitted_at):
+        return False
+    number = recognized['invoice_no']
+    if number and number_owner(session, number) not in (None, invoice.id):
+        raise DataConflictError('PDF识别票号已登记在另一张发票，请核对原件。')
+    invoice.deleted = False
+    invoice.remark, invoice.change_note, invoice.review_json = '', '', '{}'
+    invoice.manual_request_id = invoice.manual_date_text = invoice.manual_cutoff_ym = None
+    _apply_receipt(session, invoice, recognized)
+    session.flush()
+    return True
+
+
+def receive_pdf(session, content, recognized, *, submitted_at=None):
     """Caller extracts first. Hash + invoice number are cross-batch identities.
 
     Receipt evidence is immutable and deliberately not undoable. Later changes
@@ -136,30 +177,27 @@ def receive_pdf(session, content, recognized):
     digest = sha256(content).hexdigest()
     existing = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.sha256 == digest))
     if existing is not None:
+        invoice = _get(session, OilInvoice, existing.invoice_id)
+        if existing.outcome != 'conflict' and _reopen(session, invoice, recognized, submitted_at):
+            return ReceivedOriginal(existing)
         return ReceivedOriginal(existing, repeated=True)
     number = recognized['invoice_no']
     known = number_owner(session, number) if number else None
     invoice = session.get(OilInvoice, known) if known else None
     outcome, reason = 'received', recognized['reason']
     if invoice is not None:
-        first = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == invoice.id).order_by(OilInvoiceOriginal.id).limit(1))
+        if _reopen(session, invoice, recognized, submitted_at):
+            return _archive(session, content, recognized, invoice.id, outcome, reason)
+        first = session.scalar(select(OilInvoiceOriginal).where(OilInvoiceOriginal.invoice_id == invoice.id).order_by(_original_order()).limit(1))
         original_facts = json.loads(first.recognized_json) if first else {}
         same = bool(recognized.get('text_sha256') and recognized['text_sha256'] == original_facts.get('text_sha256')) and all(
             recognized[key] == original_facts.get(key) for key in ('invoice_no', 'invoice_date', 'amount', 'card_no'))
         outcome = 'duplicate' if same else 'conflict'
         reason = '同票号票面一致，原件已补档，未重复记金额。' if same else '同票号内容不同，原件已保留待核；原已确认金额保持。'
     else:
-        invoice = OilInvoice(invoice_no=number, invoice_date=date.fromisoformat(recognized['invoice_date']) if recognized['invoice_date'] else None,
-            amount=recognized['amount'], card_no=recognized['card_no'], reason=reason, updated_by=current_operator())
+        invoice = OilInvoice(updated_by=current_operator())
         session.add(invoice); session.flush()
-        if number:
-            session.add(OilInvoiceNumber(invoice_id=invoice.id, number=number))
-        if recognized['reliable']:
-            account, invoice.reason = _receipt_account(session, recognized['card_no'])
-            if account is not None:
-                invoice.status = 'registered'
-                session.add(OilInvoiceAllocation(invoice_id=invoice.id, account_id=account.id,
-                    project_id=account.project_id, card_id=account.card_id, amount=invoice.amount))
+        _apply_receipt(session, invoice, recognized)
     return _archive(session, content, recognized, invoice.id, outcome, reason)
 
 
@@ -196,20 +234,13 @@ def receipt(session, digest):
             **receipt_outcome(session, source, repeated=True)}
 
 
-def can_reimport(invoice, source):
-    return invoice.kind == 'normal' and invoice.status != 'voided' and source.outcome != 'conflict'
-
-
 def receipt_outcome(session, source, *, repeated=False):
     """A receipt is durable; its processing result follows the current invoice."""
     invoice = session.get(OilInvoice, source.invoice_id)
     review = json.loads(invoice.review_json).get(source.sha256)
     duplicate = repeated or source.outcome == 'duplicate'
     if invoice.deleted:
-        result = {'receipt_status': 'deleted', 'receipt_message': '已删除，原件保留。重复收票不会再次登记金额。'}
-        if can_reimport(invoice, source):
-            result['reimport'] = {'invoice_id': invoice.id, 'original_id': source.id, 'version': invoice.version}
-        return result
+        return {'receipt_status': 'deleted', 'receipt_message': '该次收票对应的登记已删除。'}
     if invoice.status == 'voided':
         return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': '该票已登记作废，原件保留，不计开票金额。'}
     if invoice.status == 'pending':
@@ -221,7 +252,7 @@ def receipt_outcome(session, source, *, repeated=False):
     elif invoice.kind == 'credit':
         message = '红票已登记并关联原票，未重复计金额。'
     else:
-        message = '原件已接收，未重复计金额。' if duplicate else '原件已接收并登记。'
+        message = '台账已存在。' if duplicate else '已入账。'
     return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': message}
 
 
@@ -290,7 +321,7 @@ def original_file(session, original_id):
         number = recognized['invoice_no'] or f'待核-{source.id}'
         project = '待确认'
     suffix = f" {'核对原件' if resolution else '待核原件'}-{source.id}" if source.outcome == 'conflict' else ''
-    filename = f'{_safe_name(tail)} {_safe_name(project)} {amount} {_safe_name(number)}{suffix}.pdf'
+    filename = f'{_safe_name(project)} {_safe_name(tail)} {amount} {_safe_name(number)}{suffix}.pdf'
     content = source.content
     if len(content) != source.byte_size or sha256(content).hexdigest() != source.sha256:
         raise MustReportError('发票原件完整性未能核对，请联系维护人员检查备份。')
@@ -301,7 +332,7 @@ def original_files(session, invoice_ids):
     for invoice_id in sorted(set(invoice_ids)):
         invoice = _get(session, OilInvoice, invoice_id)
         original_id = session.scalar(select(OilInvoiceOriginal.id).where(
-            OilInvoiceOriginal.invoice_id == invoice_id).order_by(OilInvoiceOriginal.id).limit(1))
+            OilInvoiceOriginal.invoice_id == invoice_id).order_by(_original_order()).limit(1))
         if invoice.deleted or original_id is None:
             raise MustReportError('所选发票有已删除或无原件的记录，请重读后重新选择。')
         yield original_file(session, original_id)

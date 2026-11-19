@@ -21,6 +21,15 @@
 .oilcard-archive-section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
 .oilcard-archive-section > .oilcard-toolbar { margin-bottom: 12px; }
 .oilcard-row-actions, .oilcard-opening-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.oilcard-original-preview { width: min(990px, calc(100dvw - 48px)); }
+.oilcard-preview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block-end: 12px; }
+.oilcard-preview-toolbar > span:first-child { margin-inline-end: auto; }
+.oilcard-preview-stage { height: min(72dvh, 850px); overflow: auto; padding: 12px; background: var(--surface-soft, #eef2f1); }
+.oilcard-preview-page { width: min(100%, 840px); margin: 0 auto 12px; }
+.oilcard-preview-stage[data-zoom="true"] .oilcard-preview-page { width: max(1120px, 100%); }
+.oilcard-preview-page canvas { display: block; width: 100%; height: auto; background: white; }
+.oilcard-preview-page canvas[data-ready="false"] { aspect-ratio: 1.414; }
+.oilcard-preview-page canvas[hidden] { display: none; }
 .oilcard-openings { margin-block: 6px 8px; }
 .oilcard-openings #oilcard-opening-details { max-height: 26dvh; overflow: auto; }
 .oilcard-opening-summary strong { font-variant-numeric: tabular-nums; }

@@ -96,7 +96,7 @@ export function OilInvoiceDialog(props: DialogAction & {
       </div>}</div></fieldset>}
       {manual && <label>备注<Input aria-label="手工登记备注" value={remark} disabled={disabled || busy} onChange={e => edit(() => setRemark(e.target.value))} /></label>}
       {!manual && mode !== 'delete' && <label>{mode === 'resolve' ? '核对结论' : '修改说明'}（必填）<Input.TextArea aria-label="发票处理说明" aria-required="true" placeholder={mode === 'edit' ? '请填写本次修改原因' : undefined} value={note} disabled={disabled || busy} onChange={e => edit(() => setNote(e.target.value))} autoSize={{ minRows: 2, maxRows: 4 }} /></label>}
-      {mode === 'delete' && <p>从台账删除此行并扣除对应开票金额。{row?.originals.length ? '原件保留。' : ''}可用顶部“撤销”恢复。</p>}
+      {mode === 'delete' && <p>从台账删除此行并扣除对应开票金额。可在最近 20 步内撤销。普通发票出了撤销窗口后清除发票和原件。红票或历史接续仍引用的记录随关联保管。</p>}
       {(localError || error) && <p className="notice" role="alert">{localError || error}</p>}
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button>{mode === 'edit' && row?.status === 'pending' && <Button disabled={disabled || busy || !note.trim()} onClick={() => void save(true)}>暂不分配</Button>}<Button type="primary" danger={mode === 'delete'} htmlType="submit" disabled={disabled || busy || !manual && mode !== 'delete' && !note.trim()}>{mode === 'delete' ? '删除' : mode === 'resolve' ? '确认保留原票' : manual && !row ? '登记已开金额' : '保存修改'}</Button></div>
     </form>

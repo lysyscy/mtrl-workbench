@@ -497,23 +497,6 @@ def delete_invoice(invoice_id: int, req: VersionedDelete):
         return {'ok': True, 'item': invoices.invoice_data(session, row)}
 
 
-class InvoiceReimportTarget(VersionedDelete):
-    invoice_id: int = Field(gt=0)
-    original_id: int = Field(gt=0)
-
-
-class InvoiceReimport(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    receipts: list[InvoiceReimportTarget] = Field(min_length=1, max_length=100)
-
-
-@router.post('/invoices/reimport')
-def reimport_invoices(req: InvoiceReimport):
-    with session_scope() as session:
-        rows = invoice_adjustments.reimport(session, req.model_dump(mode='json')['receipts'])
-        return {'ok': True, 'items': [invoices.invoice_data(session, row) for row in rows]}
-
-
 @router.put('/invoices/{invoice_id}/correct')
 def correct_invoice(invoice_id: int, req: InvoiceCorrection):
     with session_scope() as session:

@@ -11,7 +11,6 @@ import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-wid
 import { loadElementFonts } from './appearance-ready';
 import { useRetainedGridColumns } from './grid-layout';
 import { PageActivity } from './page-activity';
-import { manualGridColumns } from './grid-manual-widths';
 import { useFirstReadGrid } from './read-region';
 const businessTheme=gridTheme.withParams({autoHeightMinBodyHeight:36});
 const readColumnDefaults={sortable:false,resizable:true,suppressMovable:true,wrapText:true,autoHeight:true,wrapHeaderText:true,autoHeaderHeight:true};
@@ -22,7 +21,6 @@ type BusinessGridProps<T>={
   rowMinimum?: number;
   gridClassName?: string;
   singleLine?: boolean;
-  manualWidths?: boolean;
   measurement?: GridMeasurement<T>;
   grid?: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
 };
@@ -63,21 +61,18 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
 
 // Repeated small views use AG's native row/header auto height; inputs stay business-owned.
 // Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
-export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,manualWidths=false}:BusinessGridProps<T>) {
+export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false}:BusinessGridProps<T>) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
   const scale=suppliedScale??(Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1);
   const widths=useGridWidths(table,root,scale,active),[ready,setReady]=useState(false),[error,setError]=useState(''),[rendered,setRendered]=useState(0),[retry,setRetry]=useState(0);
   useFirstReadGrid(error ? 'error' : ready ? 'ready' : 'preparing');
   const totalRows=useMemo(()=>totals??[],[totals]);
-  const definitions=useMemo(()=>{
-    const native=businessColumns(columns,scale,singleLine);
-    return manualWidths ? manualGridColumns(native) : native;
-  },[columns,scale,singleLine,manualWidths]);
+  const definitions=useMemo(()=>businessColumns(columns,scale,singleLine),[columns,scale,singleLine]);
   const defaults=useMemo(()=>singleLine?{...readColumnDefaults,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false}:readColumnDefaults,[singleLine]);
-  const widthColumns=useGridWidthColumns(definitions);
-  const retained=useRetainedGridColumns(widthColumns,root,widths.layoutKey);
-  const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
+  const retained=useRetainedGridColumns(definitions,root,widths.layoutKey);
+  const activeWidths=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
+  const materialized=useGridWidthColumns(activeWidths,widths.savedWidths);
   useEffect(()=>{if(api&&!rows.length)setRendered(n=>n||1);},[api,rows.length]);
   useEffect(()=>{
     const node=root.current;if(!active||!node||!api||!rendered||ready)return;let cancelled=false,frame=0;

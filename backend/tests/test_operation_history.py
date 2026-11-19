@@ -684,8 +684,7 @@ def test_plan_methods_and_barrier_commit_atomically(committed_data,monkeypatch,c
         assert [s.get(PaymentNotice,i).planned_pay_method for i in d['notices']]==(['',''] if failed else ['承兑','承兑'])
         rows=list(s.scalars(select(history.OperationHistory).where(
             history.OperationHistory.actor==history.actor_key(actor))))
-        assert len(rows)==(1 if failed else 2)
-        assert [r.state for r in rows]==(['undone'] if failed else ['discarded','barrier'])
+        assert [r.state for r in rows]==(['undone'] if failed else ['barrier'])
     if failed:assert status(actor)==before
     else:assert status(actor)=={'undo':None,'redo':None,'notice':'上一步暂不支持撤销／重做'}
 

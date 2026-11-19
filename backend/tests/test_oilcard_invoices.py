@@ -46,7 +46,8 @@ def test_receipt_actual_pdf_reconciliation_repeat_and_original(scene):
     assert summary(client)['rows'][0]['total_amount'] == '10200.00'
     assert summary(client)['rows'][0]['invoiced_amount'] == '3000.00'
     assert summary(client)['rows'][0]['difference_amount'] == '7200.00'
-    assert receive(client, content) == first
+    same = receive(client, content)
+    assert same['item'] == row and same['original'] == original and same['receipt_status'] == 'duplicate'
     duplicate = receive(client, invoice_pdf(variant='重复输入合成测试'))
     assert duplicate['original']['outcome'] == 'duplicate'
     assert duplicate['original']['id'] != original['id']
@@ -60,7 +61,7 @@ def test_receipt_actual_pdf_reconciliation_repeat_and_original(scene):
     assert downloaded.content == content
     from urllib.parse import unquote
     filename = unquote(downloaded.headers['X-Export-Filename'])
-    assert filename == f'{CARD[-3:]} 甲 3000.00 {NUMBER}.pdf'
+    assert filename == f'甲 {CARD[-3:]} 3000.00 {NUMBER}.pdf'
     assert downloaded.headers['Content-Type'] == 'application/pdf'
     assert 'attachment' in downloaded.headers['Content-Disposition']
     assert 'inline' in client.get(f"/api/m13/invoices/originals/{original['id']}").headers['Content-Disposition']
@@ -91,8 +92,8 @@ def test_export_selected_originals_uses_current_attribution_and_exact_bytes(scen
     assert 'attachment' in response.headers['Content-Disposition']
     with ZipFile(BytesIO(response.content)) as archive:
         assert len(archive.infolist()) == 2
-        assert archive.read(f'{CARD[-3:]} 乙 3000.00 {NUMBER}.pdf') == first_pdf
-        assert archive.read(f'{CARD[-3:]} 甲 3000.00 {second_number}.pdf') == second_pdf
+        assert archive.read(f'乙 {CARD[-3:]} 3000.00 {NUMBER}.pdf') == first_pdf
+        assert archive.read(f'甲 {CARD[-3:]} 3000.00 {second_number}.pdf') == second_pdf
 
     deleted = client.post(f"/api/m13/invoices/{first['id']}/delete", json={'version': changed.json()['item']['version']})
     assert deleted.status_code == 200, deleted.text
@@ -131,7 +132,8 @@ def test_primary_card_receipt_requires_unique_active_account(
         allocation, = row['allocations']
         assert (allocation['card_id'], allocation['account_id'], allocation['project_id'], allocation['amount']) == (
             card['id'], linked[0]['id'], project, '3000.00')
-        assert receive(client, content) == result
+        again = receive(client, content)
+        assert again['item'] == row and again['receipt_status'] == 'duplicate'
         assert invoices(client)['total_amount'] == '3000.00'
     else:
         assert row['status'] == result['receipt_status'] == 'pending'
@@ -190,9 +192,9 @@ def test_invoice_number_conflict_keeps_both_originals_and_confirmed_money(scene)
         assert client.get(f"/api/m13/invoices/originals/{result['original']['id']}").content == content
     from urllib.parse import unquote
     conflict_name = unquote(client.get(f"/api/m13/invoices/originals/{conflict['original']['id']}?download=true").headers['X-Export-Filename'])
-    assert conflict_name == f"{CARD[-3:]} 待确认 3100.00 {NUMBER} 待核原件-{conflict['original']['id']}.pdf"
+    assert conflict_name == f"待确认 {CARD[-3:]} 3100.00 {NUMBER} 待核原件-{conflict['original']['id']}.pdf"
     main_name = unquote(client.get(f"/api/m13/invoices/originals/{first['original']['id']}?download=true").headers['X-Export-Filename'])
-    assert main_name == f'{CARD[-3:]} 甲 3000.00 {NUMBER}.pdf'
+    assert main_name == f'甲 {CARD[-3:]} 3000.00 {NUMBER}.pdf'
     assert receive(client, conflict_content) == conflict
 
 

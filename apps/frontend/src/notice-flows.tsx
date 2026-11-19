@@ -14,7 +14,7 @@ export function NoticeFlows({ notice, blocked, close }: { notice: NoticeRow; blo
   const query = useQuery({ queryKey: ['notice-flows', notice.notice_id], enabled: !blocked, refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => loadFlows(signal, notice.notice_id) });
   return <BusinessModal open={!blocked} className="project-dialog notice-flows-dialog" titleId="notice-flows-title" requestClose={closing.requestClose}><DialogContents title={`${notice.bill_no}，付款流水`} titleId="notice-flows-title" closing={closing}>
-    {query.isPending ? <p role="status">正在读取付款流水…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p> : !query.data.length ? <p role="status">暂无付款流水。</p> : <ReadGrid manualWidths table="notice-flows" className="notice-flows-table" label="付款流水明细" domLayout="autoHeight" rows={query.data} rowId={flow=>String(flow.id)} columns={[
+    {query.isPending ? <p role="status">正在读取付款流水…</p> : query.isError ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p> : !query.data.length ? <p role="status">暂无付款流水。</p> : <ReadGrid table="notice-flows" className="notice-flows-table" label="付款流水明细" domLayout="autoHeight" rows={query.data} rowId={flow=>String(flow.id)} columns={[
       {field:'flow_no',headerName:'流水号'},
       {field:'status_label',headerName:'状态',cellRenderer:({data:flow}:{data:NonNullable<typeof query.data>[number]})=><span className={'status-tag '+(flow.status==='revoked'?'status-neutral':'status-positive')}>{flow.status_label}</span>},
       {field:'pay_date',headerName:'付款日期'},

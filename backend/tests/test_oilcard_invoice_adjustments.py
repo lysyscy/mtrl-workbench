@@ -53,7 +53,7 @@ def test_pending_correction_whole_split_archived_account_undo_and_original(scene
     row = invoices(client)['invoices'][0]
     assert invoices(client)['total_amount'] == '10000.00'
     filename = unquote(client.get(f"/api/m13/invoices/originals/{row['originals'][0]['id']}").headers['X-Export-Filename'])
-    assert '多项目 10000.00 20261031000000000009.pdf' in filename
+    assert filename == f'多项目 {CARD[-3:]} 10000.00 20261031000000000009.pdf'
     # Both the historical recognized number and the corrected number resolve to
     # this invoice; no second accounting record can be created.
     old = receive(client, invoice_pdf(card='45678', amount='10000.00', subtotal='8849.56', tax='1150.44', variant='different metadata'))

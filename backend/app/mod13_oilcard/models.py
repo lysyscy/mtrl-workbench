@@ -236,6 +236,14 @@ class OilInvoiceNumber(Base):
     number: Mapped[str] = mapped_column(String(32), unique=True)
 
 
+class OilInvoiceRetirement(Base):
+    """Ordinary invoice deletions eligible for cleanup when their undo step expires."""
+    __tablename__ = 'oil_invoice_retirement'
+    # Undo can briefly remove the underlying row before redo restores its ID.
+    invoice_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    operation_id: Mapped[int] = mapped_column(Integer)
+
+
 class OilDeliveryLink(Base):
     """Private provider token and durable receipt identity; never returned to the UI."""
     __tablename__ = 'oil_delivery_link'
@@ -270,4 +278,5 @@ class OilDeliveryItem(Base):
     position: Mapped[int] = mapped_column(Integer)
     link_id: Mapped[int | None] = mapped_column(ForeignKey('oil_delivery_link.id'), nullable=True)
     reused: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_version: Mapped[str | None] = mapped_column(String(36), nullable=True)
     error: Mapped[str] = mapped_column(Text, default='')

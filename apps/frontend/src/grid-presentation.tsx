@@ -31,7 +31,7 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
   // through ordinary non-empty saves so existing editing widths stay untouched.
   const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`);
   const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
-  const widthColumns=useGridWidthColumns(materialized);
+  const widthColumns=useGridWidthColumns(materialized,widths.savedWidths);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);
   const prepared = useMemo(() => {
     if (Array.isArray(measurement)) return measurement;
