@@ -7,7 +7,6 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
 from zipfile import is_zipfile
 from io import BytesIO
 
@@ -22,14 +21,6 @@ from app.report_export.setl_export import build_zip
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 GUIDE = "请先在 i8 的项目选择窗口，将本月要报的项目加入「常用项目」。回到这里点「刷新常用项目」，核对名单后生成。"
-
-
-def site_address(text):
-    url = urlsplit(text.strip())
-    if (url.scheme not in ("http", "https") or not url.hostname or url.username is not None
-            or url.password is not None or url.query or url.fragment):
-        raise ValueError("请填写 i8 登录站点地址，例如 https://i8.example.com。")
-    return f"{url.scheme}://{url.netloc}"
 
 
 def connect(site, user, password):
