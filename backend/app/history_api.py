@@ -1,7 +1,7 @@
-"""全局撤销入口；只返回动作摘要，历史值留在服务端。"""
-from typing import Literal
+"""全局撤销及重做，查阅详情与执行分别校验预期操作。"""
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +10,7 @@ from app.core import history, session as SESS
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.history_bindings import configure
+from app.history_details import describe
 from app.mod15_user.service import active_account
 
 router = APIRouter(prefix='/api/history', tags=['history'])
@@ -29,6 +30,19 @@ def history_status(request: Request):
     with session_scope() as session:
         actor = actor_for(request, session)
         return JSONResponse(history.status(session, actor), headers={'Cache-Control': 'no-store'})
+
+
+@router.get('/{direction}/details')
+def history_details(direction: Literal['undo', 'redo'], operation_id: Annotated[int, Query(gt=0)], request: Request):
+    try:
+        with session_scope() as session:
+            actor = actor_for(request, session)
+            operation = history.expected_operation(session, actor, direction, operation_id)
+            result = describe(operation, direction)
+        return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+    except MustReportError as exc:
+        return JSONResponse({'ok': False, 'message': exc.message}, status_code=409,
+                            headers={'Cache-Control': 'no-store'})
 
 
 class ReplayIn(BaseModel):

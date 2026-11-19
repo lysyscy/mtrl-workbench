@@ -112,12 +112,18 @@ def test_real_history_confirmation_cancel_undo_redo_and_changed_head(server,brow
     original=current_remark();changed=original+'核验历史';write_remark(changed)
     head=get(api,'/api/history/status')['undo'];assert head
     login(page,server);sent=[];page.on('request',lambda r:sent.append(r) if r.url.endswith('/api/history/undo') else None)
-    page.get_by_role('button',name='撤销',exact=True).click();dialog=page.get_by_role('dialog',name='确认撤销？',exact=True)
-    expect(dialog).to_contain_text(head['label']);dialog.get_by_role('button',name='取消',exact=True).click();assert not sent
+    page.get_by_role('button',name='撤销',exact=True).click()
+    dialog=page.get_by_role('dialog',name=f"撤销 · {head['label']}",exact=True)
+    expect(dialog.get_by_role('row').filter(has_text='备注').get_by_role('cell').first).to_have_text(changed)
+    expect(dialog.get_by_role('row').filter(has_text='备注').get_by_role('cell').last).to_have_text(original or '未填写')
+    dialog.get_by_role('button',name='取消',exact=True).click();assert not sent
     page.get_by_role('button',name='撤销',exact=True).click();dialog.get_by_role('button',name='确认撤销',exact=True).click()
     expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert len(sent)==1
     assert current_remark()==original
-    page.get_by_role('button',name='重做',exact=True).click();redo=page.get_by_role('dialog',name='确认重做？',exact=True);expect(redo).to_contain_text(head['label']);redo.get_by_role('button',name='确认重做',exact=True).click()
+    page.get_by_role('button',name='重做',exact=True).click()
+    redo=page.get_by_role('dialog',name=f"重做 · {head['label']}",exact=True)
+    expect(redo.get_by_role('row').filter(has_text='备注').get_by_role('cell').last).to_have_text(changed)
+    redo.get_by_role('button',name='确认重做',exact=True).click()
     expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做')
     page.get_by_role('button',name='撤销',exact=True).click();write_remark(changed+'后续')
     dialog.get_by_role('button',name='确认撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('历史已变化');assert len(sent)==1

@@ -305,13 +305,18 @@ def status(session, actor):
     return result
 
 
-def replay(session, actor, direction, expected_id):
+def expected_operation(session, actor, direction, expected_id):
     if direction not in {'undo', 'redo'}:
         raise MustReportError('请选择撤销或重做')
-    lock_actor(session, actor)
     operation = _top(session, actor, direction)
     if operation is None or operation.id != expected_id:
         raise MustReportError('操作历史已变化，请刷新后再试；本次未修改数据')
+    return operation
+
+
+def replay(session, actor, direction, expected_id):
+    lock_actor(session, actor)
+    operation = expected_operation(session, actor, direction, expected_id)
     source, target = ('after', 'before') if direction == 'undo' else ('before', 'after')
     prepared = []
     recorded_changes = json.loads(json.dumps(operation.changes))

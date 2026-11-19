@@ -223,13 +223,26 @@ def test_http_transaction_receipt_auth_and_account_isolation(data, monkeypatch):
         assert summary.headers['Cache-Control'] == 'no-store'
         operation = summary.json()['undo']
         assert set(operation) == {'id', 'label', 'count'} and operation['count'] == 2
+        params = {'operation_id': operation['id']}
+        details = client.get('/api/history/undo/details', params=params)
+        assert details.headers['Cache-Control'] == 'no-store'
+        assert details.json()['id'] == operation['id']
+        rows = details.json()['records']
+        assert {row['name'] for row in rows} == {'UNDO-0', 'UNDO-1'}
+        assert all(set(row) == {'type', 'area', 'name', 'context', 'fields', 'removes'} for row in rows)
+        assert all({'label': '剔除状态', 'current': '已剔除', 'result': '未剔除'} in row['fields'] for row in rows)
+        assert flags(data['ids'][:2]) == [True, True]
         client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_b__'))
         assert client.get('/api/history/status').json() == {'undo': None, 'redo': None}
+        assert client.get('/api/history/undo/details', params=params).status_code == 409
         assert client.post('/api/history/undo', json={'operation_id': operation['id']}).status_code == 409
         client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_a__'))
         assert client.post('/api/history/undo', json={'operation_id': operation['id']}).json()['ok']
         assert flags(data['ids'][:2]) == [False, False]
         assert client.post('/api/history/undo', json={'operation_id': operation['id']}).status_code == 409
+        assert client.get('/api/history/undo/details', params=params).status_code == 409
+        rows = client.get('/api/history/redo/details', params=params).json()['records']
+        assert all({'label': '剔除状态', 'current': '未剔除', 'result': '已剔除'} in row['fields'] for row in rows)
         assert client.post('/api/history/redo', json={'operation_id': operation['id']}).json()['ok']
         monkeypatch.setattr(history_api, 'active_account', lambda s, identity: None)
         assert client.get('/api/history/status').status_code == 403
