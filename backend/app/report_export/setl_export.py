@@ -125,7 +125,7 @@ def fmt_num(x):
 
 
 def write_warehouse_file(df, path):
-    wb = xlsxwriter.Workbook(path)
+    wb = xlsxwriter.Workbook(path, {'strings_to_formulas': False, 'strings_to_urls': False})
     ws = wb.add_worksheet('Sheet1')
     header_fmt = wb.add_format({'bold': True, 'bg_color': '#ED7D31', 'font_color': '#1A1B1C',
                                 'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11})
@@ -149,8 +149,8 @@ def write_warehouse_file(df, path):
     wb.close()
 
 
-def update_sheet_data(df, out_path, show_order):
-    wb = openpyxl.load_workbook(TEMPLATE)
+def update_sheet_data(df, out_path, show_order, *, template=None):
+    wb = openpyxl.load_workbook(template or TEMPLATE)
     ws = wb['报表1']
     data = df.values.tolist()
     n = len(data)
@@ -162,18 +162,23 @@ def update_sheet_data(df, out_path, show_order):
                 tpl = ws.cell(row=ws.max_row, column=c)
                 cell._style = copy(tpl._style)
             cell.value = data[i][c - 1]
+            if isinstance(cell.value, str):
+                cell.data_type = 's'
     for r in range(2 + n, ws.max_row + 1):
         for c in range(1, 18):
             ws.cell(row=r, column=c).value = None
     # 删除尾部多余行（模板674数据行 vs 实际n行）
     if n < ws.max_row - 1:
         ws.delete_rows(2 + n, ws.max_row - (1 + n))
+    if ws.auto_filter.ref:
+        ws.auto_filter.ref = f'A1:Q{n + 1}'
     ws1 = wb['Sheet1']
     pv = df.groupby('仓库')[MONEY_FIELDS].sum()
     grand = pv.sum()
     for i, wh in enumerate(show_order):
         r = 4 + i
         ws1.cell(row=r, column=1).value = wh
+        ws1.cell(row=r, column=1).data_type = 's'
         for j, m in enumerate(MONEY_FIELDS):
             ws1.cell(row=r, column=2 + j).value = float(pv.loc[wh, m])
     r_grand = 4 + len(show_order)
@@ -193,9 +198,9 @@ def update_sheet_data(df, out_path, show_order):
     return pv, grand
 
 
-def patch_pivot(in_path, out_path, df, show_order):
+def patch_pivot(in_path, out_path, df, show_order, *, template=None):
     """基于8月模板patch：cacheDefinition + records + pivotTable1(动态适配仓库)"""
-    zt = zipfile.ZipFile(TEMPLATE)
+    zt = zipfile.ZipFile(template or TEMPLATE)
     cd = zt.read('xl/pivotCache/pivotCacheDefinition1.xml').decode('utf-8')
     pt_orig = zt.read('xl/pivotTables/pivotTable1.xml').decode('utf-8')
     zt.close()
@@ -383,7 +388,7 @@ def verify(out_path, df, pv, grand, show_order):
     return problems
 
 
-def build_zip(rows_or_df, out_dir, label):
+def build_zip(rows_or_df, out_dir, label, *, company="第四工程公司", template=SETL_TEMPLATE):
     """把一期的收发结存明细做成 **zip**（分仓库 xlsx ＋ 总表）→ 返回 zip 路径。
 
     - `rows_or_df`：`setl_detail` 明细行（**本仓主路径**）或已建好的 DataFrame
@@ -391,7 +396,7 @@ def build_zip(rows_or_df, out_dir, label):
       这是素材包原有行为，保留）
     - `label`：期间标签（如 `2026年9月`）；成品名 = `第四工程公司{label}收发结存表`（同素材包命名）
     """
-    require_template(SETL_TEMPLATE)      # ⭐ 本仓适配：模板缺失 / 损坏 ⇒ 显式报错
+    require_template(template)
     df = rows_or_df if isinstance(rows_or_df, pd.DataFrame) else frame_from_rows(rows_or_df)
     if df.empty:
         raise MustReportError(
@@ -419,9 +424,9 @@ def build_zip(rows_or_df, out_dir, label):
         logger.info("  分仓库 %s：%d 行", os.path.basename(fn), len(sub))
 
     work = os.path.join(out_dir, '_work.xlsx')
-    main_fn = os.path.join(out_dir, f'第四工程公司{label}收发结存表.xlsx')
-    pv, grand = update_sheet_data(df, work, show_order)
-    patch_pivot(work, main_fn, df, show_order)
+    main_fn = os.path.join(out_dir, f'{company}{label}收发结存表.xlsx')
+    pv, grand = update_sheet_data(df, work, show_order, template=template)
+    patch_pivot(work, main_fn, df, show_order, template=template)
     os.remove(work)
     files.append(main_fn)
 
@@ -437,7 +442,7 @@ def build_zip(rows_or_df, out_dir, label):
     logger.info("✓ 透视表对账全部通过 | 总计: 期初%.2f 收%.2f 发%.2f 结存%.2f",
                 grand["期初金额"], grand["收金额"], grand["发金额"], grand["结存金额"])
 
-    zip_fn = os.path.join(out_dir, f'第四工程公司{label}收发结存表.zip')
+    zip_fn = os.path.join(out_dir, f'{company}{label}收发结存表.zip')
     with zipfile.ZipFile(zip_fn, 'w', zipfile.ZIP_DEFLATED) as zf:
         for fn in files:
             zf.write(fn, os.path.basename(fn))

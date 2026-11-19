@@ -22,9 +22,13 @@ import httpx
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import NotConfiguredError, human_reason
 from app.core.logging import get_logger
-from app.mod02_i8.sm2_crypto import sm2_encrypt
 
 logger = get_logger()
+
+
+def sm2_encrypt(plain: str) -> str:
+    from app.mod02_i8.sm2_crypto import sm2_encrypt as encrypt
+    return encrypt(plain)
 
 LOGIN_PATH = "/SUP/Login/SupLogin"
 KICK_PATH = "/SUP/Login/KillOnlineUser"
@@ -98,14 +102,18 @@ def http_login(
     if not user:
         raise NotConfiguredError("I8_USER 未配置（见 .env.example）")
     password = settings.i8_password if password is None else password
+    return login_at(base, user, password, encrypt=sm2_encrypt, allow_kick=allow_kick)
 
+
+def login_at(base, user, password, *, encrypt, allow_kick=False, follow_redirects=True):
+    """用调用方选定的站点和凭据登录，供工作台和单机程序共用。"""
     sid = uuid.uuid4().hex
     session = httpx.Client(
-        base_url=base, timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True
+        base_url=base, timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=follow_redirects
     )
     try:
         # ① 探测（若在线冲突，响应里带 sessionID / ipAddress）
-        r1 = session.post(LOGIN_PATH, data={"body": sm2_encrypt(_build_plain(user, password, sid))})
+        r1 = session.post(LOGIN_PATH, data={"body": encrypt(_build_plain(user, password, sid))})
         conflict = _online_conflict(r1.text)
 
         kicked = False
@@ -134,7 +142,7 @@ def http_login(
 
         # ③ 正式登录（isOnlineCheck=1）
         r2 = session.post(
-            LOGIN_PATH, data={"body": sm2_encrypt(_build_plain(user, password, sid, "1"))}
+            LOGIN_PATH, data={"body": encrypt(_build_plain(user, password, sid, "1"))}
         )
         if "accesstoken" not in r2.text:
             return LoginResult(
