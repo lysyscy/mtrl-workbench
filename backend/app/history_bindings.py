@@ -98,4 +98,5 @@ def configure():
         ('POST', r'/api/m13/invoices/\d+/credit', '登记油卡发票红冲', [oil_invoice, oil_allocation, oil_number]),
         ('POST', r'/api/m13/invoices/\d+/void', '登记油卡发票作废', [oil_invoice]),
         ('POST', r'/api/m13/invoices/\d+/delete', '删除油卡本地发票登记', [oil_invoice]),
+        ('POST', '/api/m13/invoices/reimport', '重新导入已删除油卡发票', [oil_invoice, oil_allocation]),
     ])

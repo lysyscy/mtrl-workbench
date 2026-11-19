@@ -59,8 +59,11 @@ def _item_data(session, item):
     if link.state == 'done' and link.original_id is not None:
         source = session.get(OilInvoiceOriginal, link.original_id)
         outcome = invoices.receipt_outcome(session, source, repeated=item.reused or link.duplicate)
-        return {**base, 'invoice_id': source.invoice_id, 'original_id': source.id,
+        result = {**base, 'invoice_id': source.invoice_id, 'original_id': source.id,
             'status': outcome['receipt_status'], 'message': outcome['receipt_message'], 'can_run': False}
+        if 'reimport' in outcome:
+            result['reimport'] = outcome['reimport']
+        return result
     if link.state == 'running':
         expired = _expired(link)
         return {**base, 'status': 'uncertain' if expired else 'working',

@@ -1,12 +1,15 @@
 """油卡档案 API；写入身份与事务历史沿应用统一机制。"""
-from typing import Literal
+from tempfile import SpooledTemporaryFile
+from typing import Annotated, Literal
 from uuid import UUID
 from urllib.parse import quote
+from zipfile import ZIP_STORED, ZipFile
 
-from fastapi import APIRouter, File, UploadFile
-from fastapi.responses import Response
+from fastapi import APIRouter, File, Query, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from sqlalchemy.exc import IntegrityError
+from starlette.background import BackgroundTask
 
 from app.core.db import session_scope
 from app.core.errors import DataConflictError
@@ -381,6 +384,23 @@ def invoice_remark(invoice_id: int, req: InvoiceRemark):
         return {'ok': True, 'item': invoices.invoice_data(session, row)}
 
 
+@router.get('/invoices/originals/export')
+def export_invoice_originals(invoice_ids: Annotated[list[Annotated[int, Field(gt=0)]], Query(min_length=1, max_length=100)]):
+    output = SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    try:
+        with session_scope() as session, ZipFile(output, 'w', ZIP_STORED) as archive:
+            for content, filename in invoices.original_files(session, invoice_ids):
+                archive.writestr(filename, content)
+        output.seek(0)
+    except BaseException:
+        output.close()
+        raise
+    name = quote('油卡发票原件.zip')
+    return StreamingResponse(iter(lambda: output.read(64 * 1024), b''), media_type='application/zip',
+        headers={'X-Export-Filename': name, 'Content-Disposition': "attachment; filename*=UTF-8''" + name},
+        background=BackgroundTask(output.close))
+
+
 @router.get('/invoices/originals/{original_id}')
 def invoice_original(original_id: int, download: bool = False):
     with session_scope() as session:
@@ -475,6 +495,23 @@ def delete_invoice(invoice_id: int, req: VersionedDelete):
     with session_scope() as session:
         row = invoice_adjustments.delete(session, invoice_id, req.model_dump(mode='json'))
         return {'ok': True, 'item': invoices.invoice_data(session, row)}
+
+
+class InvoiceReimportTarget(VersionedDelete):
+    invoice_id: int = Field(gt=0)
+    original_id: int = Field(gt=0)
+
+
+class InvoiceReimport(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    receipts: list[InvoiceReimportTarget] = Field(min_length=1, max_length=100)
+
+
+@router.post('/invoices/reimport')
+def reimport_invoices(req: InvoiceReimport):
+    with session_scope() as session:
+        rows = invoice_adjustments.reimport(session, req.model_dump(mode='json')['receipts'])
+        return {'ok': True, 'items': [invoices.invoice_data(session, row) for row in rows]}
 
 
 @router.put('/invoices/{invoice_id}/correct')

@@ -1,6 +1,5 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
-import Select from 'antd/es/select';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
@@ -11,10 +10,10 @@ import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contentWidth } from './grid';
 import { randomUUID } from './random-id';
-import { createDeliveryBatch, deliveryLabels, findDeliveryBatch, getDeliveryBatch, getDeliveryBatches, runDeliveryItem } from './oilcard-batch-api';
+import { createDeliveryBatch, deliveryLabels, findDeliveryBatch, getDeliveryBatch, runDeliveryItem } from './oilcard-batch-api';
 import type { DeliveryBatch, DeliveryItem } from './oilcard-batch-api';
-import type { OilAccount, OilArchives } from './oilcard-api';
-import { confirmOilInvoiceAttribution } from './oilcard-invoice-api';
+import type { OilArchives } from './oilcard-api';
+import { confirmOilInvoiceAttribution, reimportOilInvoices } from './oilcard-invoice-api';
 import type { OilInvoice } from './oilcard-invoice-api';
 import { OilReceiveDetails } from './oilcard-receive-detail';
 import { useIsPresent } from 'motion/react';
@@ -32,20 +31,21 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
   const present = useIsPresent();
   const client = useQueryClient(), [links, setLinks] = useState(''), [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false), [unknown, setUnknown] = useState<'create' | 'run' | 'assign' | null>(null), [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [detailItem, setDetailItem] = useState<DeliveryItem | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const requestId = useRef(randomUUID()), request = useRef<AbortController | null>(null), alive = useRef(true), opening = useRef<DeliveryItem | null>(null);
   useEffect(() => { if (!present) return; alive.current = true; return () => { alive.current = false; request.current?.abort(); onLock(false); onUncertain(false); }; }, [present, onLock, onUncertain]);
   useEffect(() => { if (!active || disabled) request.current?.abort(); }, [active, disabled]);
   useEffect(() => { if (present) { onLock(busy || Boolean(unknown)); onUncertain(Boolean(unknown)); } }, [present, busy, unknown, onLock, onUncertain]);
-  const recent = useQuery({ queryKey: ['oilcard-delivery-batches'], enabled: present && active && !disabled, queryFn: ({ signal }) => getDeliveryBatches(signal) });
-  useEffect(() => { if (!selected && recent.data?.[0]) setSelected(recent.data[0].id); }, [selected, recent.data]);
   const query = useQuery({ queryKey: ['oilcard-delivery-batch', selected], enabled: present && active && !disabled && selected > 0, queryFn: ({ signal }) => getDeliveryBatch(selected, signal) });
   const current = useRef(query.data); current.current = query.data;
   const baseClosing = useDialogClose({ busy: busy || Boolean(unknown), dirty: Boolean(links.trim()), close: () => { close(); if (opening.current) onOpenInvoice(opening.current); } });
   const closing = { ...baseClosing, resume: () => { opening.current = null; baseClosing.resume(); } };
   const blocked = disabled || !active || busy || Boolean(unknown);
   const detail = detailItem && invoices.find(invoice => invoice.id === detailItem.invoice_id);
+  const reimports = [...new Map((query.data?.items ?? []).flatMap(item =>
+    item.reimport ? [[item.reimport.invoice_id, item.reimport] as const] : [])).values()];
   function publish(batch: DeliveryBatch) { current.current = batch; setSelected(batch.id); client.setQueryData(['oilcard-delivery-batch', batch.id], batch); }
   async function process(batch: DeliveryBatch, signal: AbortSignal) {
     const pending = batch.items.filter(item => item.can_run);
@@ -61,7 +61,7 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
   async function start(create: boolean) {
     if (blocked || create && !links.trim()) return;
     const controller = new AbortController(); request.current = controller;
-    setBusy(true); setError(''); let phase: 'create' | 'run' = create ? 'create' : 'run', acknowledged = false;
+    setBusy(true); setError(''); setNotice(''); let phase: 'create' | 'run' = create ? 'create' : 'run', acknowledged = false;
     try {
       let batch = current.current;
       if (create) { batch = await createDeliveryBatch(requestId.current, links, controller.signal); if (!alive.current) return; publish(batch); setLinks(''); requestId.current = randomUUID(); phase = 'run'; }
@@ -69,27 +69,28 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
       await process(batch, controller.signal);
       if (!alive.current || controller.signal.aborted) return;
       acknowledged = true;
-      await onUpdated(); await recent.refetch();
+      await onUpdated();
     } catch (failure) {
       if (!alive.current) return;
       if (uncertainWrite(failure)) setUnknown(phase);
       setError((acknowledged ? '本次条目已取得回执，台账重读失败。' : '') + (failure instanceof Error ? failure.message : '收票未完成，请重新读取核对。'));
     } finally { if (alive.current) { setBusy(false); setProgress(null); } }
   }
-  async function assign(invoice: OilInvoice, account: OilAccount) {
+  async function updateReceipt(write: (signal: AbortSignal) => Promise<unknown>, success = '') {
     if (blocked) return;
     const controller = new AbortController(); request.current = controller;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setNotice('');
     let acknowledged = false;
     try {
-      await confirmOilInvoiceAttribution(invoice, account, controller.signal);
+      await write(controller.signal);
       acknowledged = true;
       await onUpdated();
       await query.refetch({ throwOnError: true });
+      if (alive.current) setNotice(success);
     } catch (failure) {
       if (!alive.current) return;
       if (acknowledged || uncertainWrite(failure)) setUnknown('assign');
-      setError(failure instanceof Error ? failure.message : '归属未能核对，请重新读取。');
+      setError(failure instanceof Error ? failure.message : '发票结果未能核对，请重新读取。');
     } finally { if (alive.current) setBusy(false); }
   }
   async function reread() {
@@ -106,7 +107,7 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
         if (!alive.current || controller.signal.aborted) return;
         publish(batch);
       }
-      await onUpdated(); await recent.refetch();
+      await onUpdated();
       if (alive.current && !controller.signal.aborted) setUnknown(null);
     } catch (failure) { if (alive.current) setError(failure instanceof Error ? failure.message : '批次重读失败，请稍后重试。'); }
     finally { if (alive.current) setBusy(false); }
@@ -118,20 +119,26 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
     { field: 'invoice_id', headerName: '发票', ...contentWidth(120, 170, scale), cellRenderer: InvoiceAction },
   ], [scale]);
   return <BusinessModal open className="oilcard-receive-dialog" titleId="oilcard-receive-title" requestClose={closing.requestClose}><DialogContents title="交付链接收票" titleId="oilcard-receive-title" closing={closing}>
-    {(error || recent.isError || query.isError) && <p className="notice" role="alert">{error || recent.error?.message || query.error?.message}</p>}
+    {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}</p>}
+    {notice && <p role="status">{notice}</p>}
     {unknown && <p className="notice" role="alert">结果待核实，请先重新读取本批结果。</p>}
     {detail && detailItem ? <OilReceiveDetails key={detail.id} invoice={detail} archives={archives} projects={projects} disabled={blocked}
-      back={() => setDetailItem(null)} confirm={(invoice, account) => void assign(invoice, account)}
+      back={() => setDetailItem(null)} confirm={(invoice, account) => void updateReceipt(signal => confirmOilInvoiceAttribution(invoice, account, signal))}
       onInspect={() => { opening.current = detailItem; closing.requestClose(); }} /> : <>
     <label>交付链接<Input.TextArea aria-label="交付链接" value={links} disabled={blocked} onChange={e => setLinks(e.target.value)} autoSize={{ minRows: 3, maxRows: 6 }} placeholder="每行一条中石化交付链接或开票短信，最多100条" /></label>
-    <div className="oilcard-toolbar"><Button type="primary" disabled={blocked || !links.trim()} loading={busy} onClick={() => void start(true)}>下载并入账</Button>
-      <label>历史批次<Select aria-label="选择收票批次" disabled={blocked || recent.isPending || recent.isError} value={selected || null} showSearch={{ optionFilterProp: 'label' }} options={(recent.data ?? []).map(b => ({ value: b.id, label: `批次 #${b.id}  ${b.created_at.replace('T', ' ').slice(0, 19)}` }))} onChange={setSelected} /></label></div>
+    <div className="oilcard-toolbar"><Button type="primary" disabled={blocked || !links.trim()} loading={busy} onClick={() => void start(true)}>下载并入账</Button></div>
     {progress && <p role="status">已处理 {progress.done} / {progress.total} 项</p>}
-    {recent.isPending || selected > 0 && query.isPending ? <p role="status">正在读取收票批次…</p> : query.data ? <BatchActions.Provider value={{ disabled: blocked, open: item => {
+    {selected > 0 && query.isPending ? <p role="status">正在读取本次收票结果…</p> : query.data ? <BatchActions.Provider value={{ disabled: blocked, open: item => {
       if (invoices.some(invoice => invoice.id === item.invoice_id)) setDetailItem(item);
       else { opening.current = item; closing.requestClose(); }
-    } }}><BusinessGrid table="oilcard-delivery-items" label="逐项收票结果" rows={query.data.items} columns={columns} rowId={i => String(i.id)} scale={scale} domLayout="normal" style={{ height: '36dvh', minHeight: '200px' }} /></BatchActions.Provider> : <p className="state">粘贴交付链接后建立批次，逐项结果会保留，可随时回来核对续办。</p>}
+    } }}><BusinessGrid table="oilcard-delivery-items" label="逐项收票结果" rows={query.data.items} columns={columns} rowId={i => String(i.id)} scale={scale} domLayout="normal" style={{ height: '36dvh', minHeight: '200px' }} /></BatchActions.Provider> : null}
     </>}
-    <div className="dialog-actions"><Button disabled={busy || Boolean(unknown)} onClick={closing.requestClose}>关闭</Button><Button disabled={busy || disabled || !active} onClick={() => void reread()}>重新读取并核对</Button>{!detail && <Button disabled={blocked || !query.data?.items.some(i => i.can_run)} onClick={() => void start(false)}>续办未完成项</Button>}</div>
+    <div className="dialog-actions">
+      <Button disabled={busy || Boolean(unknown)} onClick={closing.requestClose}>关闭</Button>
+      {(selected > 0 || unknown) && <Button disabled={busy || disabled || !active} onClick={() => void reread()}>重新读取并核对</Button>}
+      {!detail && reimports.length > 0 && <Button disabled={blocked} onClick={() => void updateReceipt(
+        signal => reimportOilInvoices(reimports, signal), '已重新匹配所选发票。')}>重新导入 {reimports.length} 张已删除票</Button>}
+      {!detail && query.data?.items.some(item => item.can_run) && <Button disabled={blocked} onClick={() => void start(false)}>续办未完成项</Button>}
+    </div>
   </DialogContents></BusinessModal>;
 }

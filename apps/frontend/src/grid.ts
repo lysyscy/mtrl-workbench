@@ -2,7 +2,7 @@ import {
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule,
-  ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule, CustomFilterModule,
+  ModuleRegistry, provideGlobalGridOptions, themeQuartz, RowDragModule, CustomFilterModule, RowSelectionModule,
 } from 'ag-grid-community';
 import type { SuppressKeyboardEventParams } from 'ag-grid-community';
 
@@ -10,7 +10,7 @@ import type { SuppressKeyboardEventParams } from 'ag-grid-community';
 ModuleRegistry.registerModules([
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
-  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule, CustomFilterModule,
+  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule, ColumnAutoSizeModule, RowDragModule, CustomFilterModule, RowSelectionModule,
 ]);
 const editorKeys = new Set([
   'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown',

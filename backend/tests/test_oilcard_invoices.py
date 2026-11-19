@@ -1,6 +1,7 @@
 """Real receipt API, cross-upload identities, money and durable original recovery."""
 from hashlib import sha256
 from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from openpyxl import load_workbook
@@ -59,13 +60,43 @@ def test_receipt_actual_pdf_reconciliation_repeat_and_original(scene):
     assert downloaded.content == content
     from urllib.parse import unquote
     filename = unquote(downloaded.headers['X-Export-Filename'])
-    assert filename == f'{CARD[-5:]} 甲 3000.00 {NUMBER}.pdf'
+    assert filename == f'{CARD[-3:]} 甲 3000.00 {NUMBER}.pdf'
     assert downloaded.headers['Content-Type'] == 'application/pdf'
     assert 'attachment' in downloaded.headers['Content-Disposition']
     assert 'inline' in client.get(f"/api/m13/invoices/originals/{original['id']}").headers['Content-Disposition']
     client.cookies.clear()
     assert client.post('/api/m13/invoices/receive', files={'file': ('x.pdf', content)}).status_code == 401
     assert invoices(client)['total_amount'] == '3000.00'
+
+
+def test_export_selected_originals_uses_current_attribution_and_exact_bytes(scene):
+    client, (project, other) = scene
+    setup_account(client, project)
+    second_number = '20261031000000000002'
+    first_pdf, second_pdf = invoice_pdf(), invoice_pdf(number=second_number)
+    first = receive(client, first_pdf)['item']
+    second = receive(client, second_pdf)['item']
+    receive(client, invoice_pdf(number='20261031000000000003'))
+    account = create(client, 'accounts', project_id=other, name='导出归属更正')
+    changed = client.put(f"/api/m13/invoices/{first['id']}/allocations", json={
+        'version': first['version'],
+        'allocations': [{'project_id': other, 'account_id': account['id'], 'amount': first['amount']}],
+    })
+    assert changed.status_code == 200, changed.text
+
+    export = '/api/m13/invoices/originals/export'
+    response = client.get(export, params={'invoice_ids': [first['id'], second['id'], first['id']]})
+    assert response.status_code == 200, response.text
+    assert response.headers['Content-Type'] == 'application/zip'
+    assert 'attachment' in response.headers['Content-Disposition']
+    with ZipFile(BytesIO(response.content)) as archive:
+        assert len(archive.infolist()) == 2
+        assert archive.read(f'{CARD[-3:]} 乙 3000.00 {NUMBER}.pdf') == first_pdf
+        assert archive.read(f'{CARD[-3:]} 甲 3000.00 {second_number}.pdf') == second_pdf
+
+    deleted = client.post(f"/api/m13/invoices/{first['id']}/delete", json={'version': changed.json()['item']['version']})
+    assert deleted.status_code == 200, deleted.text
+    assert client.get(export, params={'invoice_ids': [first['id'], second['id']]}).status_code == 400
 
 
 @pytest.mark.parametrize(('card_status', 'other_account', 'accounts', 'auto_register'), [
@@ -159,9 +190,9 @@ def test_invoice_number_conflict_keeps_both_originals_and_confirmed_money(scene)
         assert client.get(f"/api/m13/invoices/originals/{result['original']['id']}").content == content
     from urllib.parse import unquote
     conflict_name = unquote(client.get(f"/api/m13/invoices/originals/{conflict['original']['id']}?download=true").headers['X-Export-Filename'])
-    assert conflict_name == f"{CARD[-5:]} 待确认 3100.00 {NUMBER} 待核原件-{conflict['original']['id']}.pdf"
+    assert conflict_name == f"{CARD[-3:]} 待确认 3100.00 {NUMBER} 待核原件-{conflict['original']['id']}.pdf"
     main_name = unquote(client.get(f"/api/m13/invoices/originals/{first['original']['id']}?download=true").headers['X-Export-Filename'])
-    assert main_name == f'{CARD[-5:]} 甲 3000.00 {NUMBER}.pdf'
+    assert main_name == f'{CARD[-3:]} 甲 3000.00 {NUMBER}.pdf'
     assert receive(client, conflict_content) == conflict
 
 

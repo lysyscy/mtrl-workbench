@@ -151,6 +151,40 @@ def test_delete_whole_invoice_excludes_totals_exports_keeps_original_aliases_and
     assert invoices(client)['total_amount'] == '0.00'
 
 
+def test_reimport_deleted_receipts_reuses_identity_and_matches_current_accounts(scene):
+    client, (project, _) = scene
+    previous = setup_account(client, project)
+    first_pdf = invoice_pdf()
+    second_pdf = invoice_pdf(number='20261031000000000002', card='1000111400099999999')
+    first = receive(client, first_pdf)['item']
+    second = receive(client, second_pdf)['item']
+    for row in (first, second):
+        assert remove(client, row).status_code == 200
+    edit(client, 'accounts', previous, status='archived')
+    current = create(client, 'accounts', name='现用账户', project_id=project, card_id=previous['card_id'])
+    receipts = [receive(client, pdf)['reimport'] for pdf in (first_pdf, second_pdf)]
+    assert [receipt['invoice_id'] for receipt in receipts] == [first['id'], second['id']]
+    assert invoices(client)['total_amount'] == '0.00'
+
+    path = '/api/m13/invoices/reimport'
+    stale = [receipts[0], {**receipts[1], 'version': str(uuid4())}]
+    assert client.post(path, json={'receipts': stale}).status_code == 409
+    assert invoices(client)['invoices'] == []
+    result = client.post(path, json={'receipts': receipts})
+    assert result.status_code == 200 and result.headers['X-Operation-History'] == 'recorded'
+    registered, pending = result.json()['items']
+    assert (registered['id'], registered['originals']) == (first['id'], first['originals'])
+    assert registered['status'] == 'registered' and registered['allocations'][0]['account_id'] == current['id']
+    assert pending['id'] == second['id'] and pending['status'] == 'pending' and not pending['allocations']
+    assert invoices(client)['total_amount'] == '3000.00'
+    operation = client.get('/api/history/status').json()['undo']
+    assert client.post(path, json={'receipts': receipts}).json()['items'] == [registered, pending]
+    assert invoices(client)['total_amount'] == '3000.00'
+    replay(client, 'undo', operation)
+    assert invoices(client)['invoices'] == []
+    assert client.get(f"/api/m13/invoices/originals/{first['originals'][0]['id']}").content == first_pdf
+
+
 def test_delete_credit_requires_order_restores_net_and_keeps_parent_conflict_guard(scene):
     client, (project, _) = scene
     account = setup_account(client, project)

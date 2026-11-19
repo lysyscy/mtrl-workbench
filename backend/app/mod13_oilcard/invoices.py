@@ -196,14 +196,20 @@ def receipt(session, digest):
             **receipt_outcome(session, source, repeated=True)}
 
 
+def can_reimport(invoice, source):
+    return invoice.kind == 'normal' and invoice.status != 'voided' and source.outcome != 'conflict'
+
+
 def receipt_outcome(session, source, *, repeated=False):
     """A receipt is durable; its processing result follows the current invoice."""
     invoice = session.get(OilInvoice, source.invoice_id)
     review = json.loads(invoice.review_json).get(source.sha256)
     duplicate = repeated or source.outcome == 'duplicate'
     if invoice.deleted:
-        return {'receipt_status': 'deleted',
-            'receipt_message': '该票已从本地台账删除，原件和票号身份保留；如需恢复请撤销删除，不会再次登记金额。'}
+        result = {'receipt_status': 'deleted', 'receipt_message': '已删除，原件保留。重复收票不会再次登记金额。'}
+        if can_reimport(invoice, source):
+            result['reimport'] = {'invoice_id': invoice.id, 'original_id': source.id, 'version': invoice.version}
+        return result
     if invoice.status == 'voided':
         return {'receipt_status': 'duplicate' if duplicate else 'success', 'receipt_message': '该票已登记作废，原件保留，不计开票金额。'}
     if invoice.status == 'pending':
@@ -271,7 +277,7 @@ def original_file(session, original_id):
     project_ids = {a.project_id for a in allocations}
     names = {p.id: p.disp.strip() or '未设置展示名' for p in projects.all_projects(session)}
     project = '多项目' if len(project_ids) > 1 else names.get(next(iter(project_ids)), '待确认') if project_ids else '待确认'
-    tail = invoice.card_no[-5:] if invoice.card_no else '卡号待核'
+    tail = invoice.card_no[-3:] if invoice.card_no else '卡号待核'
     amount = str(invoice.amount) if invoice.amount is not None else '金额待核'
     number = invoice.invoice_no or f'待核-{invoice.id}'
     resolution = json.loads(invoice.review_json).get(source.sha256)
@@ -279,7 +285,7 @@ def original_file(session, original_id):
         # A conflicting PDF is evidence awaiting confirmation, not the main
         # invoice's facts or attribution. Its filename must describe its bytes.
         recognized = json.loads(source.recognized_json)
-        tail = recognized['card_no'][-5:] if recognized['card_no'] else '卡号待核'
+        tail = recognized['card_no'][-3:] if recognized['card_no'] else '卡号待核'
         amount = recognized['amount'] or '金额待核'
         number = recognized['invoice_no'] or f'待核-{source.id}'
         project = '待确认'
@@ -289,6 +295,16 @@ def original_file(session, original_id):
     if len(content) != source.byte_size or sha256(content).hexdigest() != source.sha256:
         raise MustReportError('发票原件完整性未能核对，请联系维护人员检查备份。')
     return content, filename
+
+
+def original_files(session, invoice_ids):
+    for invoice_id in sorted(set(invoice_ids)):
+        invoice = _get(session, OilInvoice, invoice_id)
+        original_id = session.scalar(select(OilInvoiceOriginal.id).where(
+            OilInvoiceOriginal.invoice_id == invoice_id).order_by(OilInvoiceOriginal.id).limit(1))
+        if invoice.deleted or original_id is None:
+            raise MustReportError('所选发票有已删除或无原件的记录，请重读后重新选择。')
+        yield original_file(session, original_id)
 
 
 def export_snapshot(session):

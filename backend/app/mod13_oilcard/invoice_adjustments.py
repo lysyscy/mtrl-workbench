@@ -10,7 +10,7 @@ from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import ZERO, sum_money
 from .ledger import _amount, _attribution, _date
-from .invoices import _allocations, number_owner, require_editable
+from .invoices import _allocations, _receipt_account, can_reimport, number_owner, require_editable
 from .models import OilAccount, OilInvoice, OilInvoiceAllocation, OilInvoiceNumber, OilInvoiceOriginal
 from .service import _check_version, _get, _lock
 
@@ -74,7 +74,7 @@ def _facts(values, kind):
     return {'invoice_no': number, 'invoice_date': issued, 'amount': amount, 'card_no': card}
 
 
-def _replace_allocations(session, row, values):
+def _replace_allocations(session, row, values, *, refresh_attribution=False):
     existing = {a.account_id: a for a in session.scalars(select(OilInvoiceAllocation).where(OilInvoiceAllocation.invoice_id == row.id))}
     fields = []
     seen = set()
@@ -88,7 +88,7 @@ def _replace_allocations(session, row, values):
         amount = _amount(value['amount'])
         if amount == ZERO or row.amount is None or (amount > ZERO) != (row.amount > ZERO):
             raise MustReportError('每项分配须与票面金额同号且不为0。')
-        fields.append({**_attribution(session, value, current), 'amount': amount})
+        fields.append({**_attribution(session, value, None if refresh_attribution else current), 'amount': amount})
     if fields and (row.amount is None or sum_money(a['amount'] for a in fields) != row.amount):
         raise MustReportError('分配合计必须严格等于票面价税合计，请核对后整体保存。')
     for account_id, allocation in existing.items():
@@ -264,3 +264,37 @@ def delete(session, key, values):
     session.flush()
     validate_credits(session)
     return row
+
+
+def reimport(session, targets):
+    """Reuse the original invoice identity and match against current accounts."""
+    _lock(session)
+    ids = [target['invoice_id'] for target in targets]
+    if len(set(ids)) != len(ids):
+        raise MustReportError('同一张发票请只选一次。')
+    entries = []
+    for target in targets:
+        row = _get(session, OilInvoice, target['invoice_id'])
+        source = session.get(OilInvoiceOriginal, target['original_id'])
+        if source is None or source.invoice_id != row.id or not can_reimport(row, source):
+            raise MustReportError('该原件不能用于重新导入，请核对票据。')
+        if row.deleted:
+            _check_version(row, target['version'])
+        entries.append((row, source))
+    for row, source in entries:
+        if not row.deleted:
+            continue
+        recognized = json.loads(source.recognized_json)
+        facts = (row.invoice_no, row.invoice_date.isoformat() if row.invoice_date else None,
+                 str(row.amount) if row.amount is not None else None, row.card_no)
+        reliable = (recognized.get('reliable') and row.invoice_no and row.invoice_date and row.amount is not None
+            and row.amount > ZERO and facts == tuple(recognized.get(key) for key in ('invoice_no', 'invoice_date', 'amount', 'card_no')))
+        account, reason = _receipt_account(session, row.card_no) if reliable else (None, '请核对票面及归属。')
+        allocations = [{'account_id': account.id, 'project_id': account.project_id, 'amount': str(row.amount)}] if account else []
+        _replace_allocations(session, row, allocations, refresh_attribution=True)
+        row.deleted = False
+        row.reason = reason
+        _touch(row)
+    session.flush()
+    validate_credits(session)
+    return [row for row, _ in entries]

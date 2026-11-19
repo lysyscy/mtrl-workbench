@@ -5,7 +5,7 @@ import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ColDef, FilterChangedEvent, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, FilterChangedEvent, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, cents, decimal, money, projectLabel, requestFile, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { BusinessGrid } from './business-grid';
@@ -18,8 +18,8 @@ import { readHistory } from './history';
 import type { OilArchives } from './oilcard-api';
 import { getOilReconciliation } from './oilcard-ledger-api';
 import { getOilArchives } from './oilcard-api';
-import { changeOilInvoice, confirmOilInvoiceAttribution, getOilInvoices, readOilReceipt, receiveOilInvoice, saveOilInvoiceRemark } from './oilcard-invoice-api';
-import type { OilInvoice, OilInvoices } from './oilcard-invoice-api';
+import { changeOilInvoice, confirmOilInvoiceAttribution, getOilInvoices, readOilReceipt, receiveOilInvoice, reimportOilInvoices, saveOilInvoiceRemark } from './oilcard-invoice-api';
+import type { OilInvoice, OilInvoices, OilReimportTarget } from './oilcard-invoice-api';
 import { OilInvoiceDialog } from './oilcard-invoice-dialogs';
 import type { InvoiceAction } from './oilcard-invoice-dialogs';
 import { OilManualRegistration } from './oilcard-manual-registration';
@@ -35,9 +35,11 @@ type Row = OilInvoice & { project: string; account: string; total?: boolean };
 type Draft = { id: number; field: 'remark' | 'allocation'; original: string; value: string; project_id: number; account_id: number; error: string };
 const InvoiceCells = createContext<{ drafts: Record<string, Draft>; disabled: boolean; structuralDisabled: boolean; archives: OilArchives; projects: Project[]; change: (row: Row, field: 'remark' | 'project_id' | 'account_id', value: string) => void; save: (key: string) => void; act: (mode: 'edit' | 'delete', row: Row) => void } | null>(null);
 function InvoiceActions({ data: row, node }: ICellRendererParams<Row>) {
-  const { structuralDisabled, act } = useContext(InvoiceCells)!;
+  const { disabled, structuralDisabled, act } = useContext(InvoiceCells)!;
   if (!row || node.rowPinned) return null;
   return <div className="oilcard-row-actions">
+    {row.originals[0] && <Button size="small" href={'/api/m13/invoices/originals/' + row.originals[0].id}
+      target="_blank" rel="noopener" disabled={disabled}>查看原件</Button>}
     <Button size="small" disabled={structuralDisabled || row.status === 'voided'} onClick={() => act('edit', row)}>修改</Button>
     <Button size="small" danger disabled={structuralDisabled} onClick={() => act('delete', row)}>删除</Button>
   </div>;
@@ -76,6 +78,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
 }) {
   const client = useQueryClient();
   const [selected, setSelected] = useState(0), [originalId, setOriginalId] = useState(0), [preparing, setPreparing] = useState(false);
+  const [exportIds, setExportIds] = useState<number[]>([]);
   const [uploads, setUploads] = useState<OilPdfUpload[]>([]);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({}), [result, setResult] = useState('');
   const [downloadError, setDownloadError] = useState(''), [downloading, setDownloading] = useState(false);
@@ -123,7 +126,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       const invoice = data.invoices.find(row => row.originals.some(o => o.sha256 === digest));
       const original = invoice?.originals.find(o => o.sha256 === digest);
       if (received.deleted ? Boolean(original) : received.received !== Boolean(original)) throw new ApiError('收票回执与台账尚未一致，请重读核对。');
-      reportUpload(index, received.received ? original?.resolution || received.message || '原件已接收。' : '本次原件尚未登记，可再次收票。', invoice);
+      reportUpload(index, received.received ? original?.resolution || received.message || '原件已接收。' : '本次原件尚未登记，可再次收票。', invoice, received.reimport);
     }
     if (reconcile) await client.fetchQuery({ queryKey: ['oilcard-reconciliation'], staleTime: 0, queryFn: ({ signal }) => getOilReconciliation(signal) });
     if (me) { const queryKey = ['history', `${me.id}:${me.account}`]; await client.cancelQueries({ queryKey, exact: true }); await client.fetchQuery({ queryKey, staleTime: 0, queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) }); }
@@ -174,11 +177,17 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     { field: 'amount', headerName: '价税合计', cellClass: 'money', ...contentWidth(Math.max(130, amountWidth / scale), 200, scale), valueFormatter: p => p.value === null || p.value === undefined ? '待核' : money(p.value) },
     { field: 'remark', headerName: '备注', ...contentWidth(160, 360, scale, 1), valueGetter: p => p.data,
       valueFormatter: p => p.value?.remark || '', equals: (a: Row | undefined, b: Row | undefined) => a?.remark === b?.remark && a?.invoice_no === b?.invoice_no, cellRenderer: RemarkCell },
-    { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(118, 145, scale), cellRenderer: InvoiceActions },
+    { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(182, 200, scale), cellRenderer: InvoiceActions },
   ] satisfies ColDef<Row>[]).map(column => 'field' in column ? valueFilterColumn<Row>(column, filterOptions[column.field]!) : column), [scale, amountWidth, filterOptions]);
   const totals = useMemo<Row[]>(() => query.data ? [{ id: -1, invoice_no: null, invoice_date: null, amount: total, card_no: null, status: 'registered', deleted: false, kind: 'normal', related_invoice_id: null, void_date: null, change_note: '', reason: '', remark: '', version: '', manual_request_id: null, manual_date_text: null, manual_cutoff_ym: null, allocations: [], originals: [], project: '', account: '', total: true }] : [], [query.data, total]);
+  function readExportSelection(api: GridApi<Row>) {
+    const ids: number[] = [];
+    api.forEachNodeAfterFilter(node => { if (node.data?.originals.length && node.isSelected()) ids.push(node.data.id); });
+    setExportIds(ids);
+  }
   function filterChanged(event: FilterChangedEvent<Row>) {
     setFilters(event.api.getFilterModel() as Record<string, ValueFilterModel>);
+    readExportSelection(event.api);
     if (!selected) return;
     let visible = false;
     event.api.forEachNodeAfterFilter(node => { if (node.data?.id === selected) visible = true; });
@@ -200,9 +209,9 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     const draft = draftRef.current[key];
     if (kind === 'allocation' && draft?.project_id && draft.account_id) saves.save(key);
   }
-  function reportUpload(index: number, message: string, invoice?: OilInvoice) {
+  function reportUpload(index: number, message: string, invoice?: OilInvoice, reimport?: OilReimportTarget) {
     setUploads(items => items.map((item, position) => position === index ? {
-      ...item, message, invoiceId: invoice?.id ?? null, pending: invoice?.status === 'pending',
+      ...item, message, invoiceId: invoice?.id ?? reimport?.invoice_id ?? null, pending: invoice?.status === 'pending', reimport: reimport ?? null,
     } : item));
   }
 
@@ -256,6 +265,15 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   async function confirmReceipt(invoice: OilInvoice, account: OilAccount) {
     if (structuralDisabled) return;
     await saves.run(signal => confirmOilInvoiceAttribution(invoice, account, signal), () => '', '发票归属：');
+  }
+  async function reimportReceipts(receipts: OilReimportTarget[]) {
+    if (structuralDisabled) return;
+    await saves.run(async signal => { await reimportOilInvoices(receipts, signal); }, () => '', '重新导入：');
+  }
+  function exportOriginals() {
+    if (exportIds.length > 100) { setDownloadError('一次最多导出 100 张发票的原件，请减少勾选。'); return; }
+    const params = new URLSearchParams(exportIds.map(id => ['invoice_ids', String(id)]));
+    void download('/api/m13/invoices/originals/export?' + params);
   }
   async function download(path: string) {
     if (disabled || busy || downloading) return;
@@ -315,6 +333,9 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
       } }}><Button type="primary" disabled={structuralDisabled} loading={busy || preparing}>收票</Button></Dropdown>
       {pending > 0 && <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setPdfOpen('pending'); }}>核对归属（{pending}）</Button>}
       <Button disabled={structuralDisabled} onClick={openManual}>手动增行</Button>
+      <Button disabled={disabled || busy || !exportIds.length} loading={downloading} onClick={exportOriginals}>
+        {exportIds.length ? '导出原件（' + exportIds.length + '）' : '导出原件'}
+      </Button>
       </div></div>
     <ReadStatusLane phase={readState} announce="正在读取发票台账…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
@@ -332,6 +353,11 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     <FirstReadRegion className="oilcard-grid-slot" phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
     {query.data ? <InvoiceCells.Provider value={{ drafts, disabled, structuralDisabled, archives, projects, change, save: key => saves.save(key), act: (mode, target) => open(mode, null, target) }}><div className="oilcard-grid-frame" onContextMenuCapture={e => { if (e.target instanceof Element && e.target.closest('input,.ant-select')) e.stopPropagation(); }}><Dropdown trigger={['contextMenu']} menu={{ items: [{ key: 'view', label: '查看发票', disabled: disabled || !original }, { key: 'download', label: '下载原件', disabled: disabled || busy || downloading || !original }], onClick: ({ key }) => actOnInvoice(key) }}><div className="oilcard-grid-frame"><BusinessGrid table="oilcard-invoices" label="油卡发票台账" rows={rows} columns={columns} totals={totals} rowId={row => String(row.id)} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
       enableFilterHandlers: true, popupParent: document.body, alwaysShowHorizontalScroll: true, onFilterChanged: filterChanged,
+      rowSelection: { mode: 'multiRow', enableClickSelection: false, selectAll: 'filtered',
+        isRowSelectable: node => Boolean(node.data?.originals.length) },
+      selectionColumnDef: { pinned: 'left', lockPosition: 'left', width: Math.round(42 * scale) },
+      onSelectionChanged: event => readExportSelection(event.api),
+      onRowDataUpdated: event => readExportSelection(event.api),
       onRowClicked: e => { if (e.data && !e.node.rowPinned && e.data.id !== selected) { setSelected(e.data.id); setOriginalId(0); } },
       onCellContextMenu: e => { if (e.data && !e.node.rowPinned && e.data.id !== selected) { setSelected(e.data.id); setOriginalId(0); } },
       rowClassRules: { 'oilcard-selected': p => p.data?.id === selected },
@@ -347,9 +373,10 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     <DialogPresence>{pdfOpen && <OilPdfReceiveDialog mode={pdfOpen} archives={archives} projects={projects} invoices={query.data?.invoices ?? []}
       uploads={uploads} preparing={preparing} busy={busy} disabled={blocked || !active || !me || locked} error={error}
       uncertain={uncertain} verified={verified} close={() => setPdfOpen(null)}
-      receive={files => void receive(files.map(file => ({ file, message: '', invoiceId: null, pending: false })))}
+      receive={files => void receive(files.map(file => ({ file, message: '', invoiceId: null, pending: false, reimport: null })))}
       resume={() => void receive(uploads)} reread={() => void saves.reread()} acceptRead={confirmRead}
-      confirm={(invoice, account) => void confirmReceipt(invoice, account)} inspect={invoice => { setPdfOpen(null); open('edit', null, invoice); }} />}</DialogPresence>
+      confirm={(invoice, account) => void confirmReceipt(invoice, account)} reimport={receipts => void reimportReceipts(receipts)}
+      inspect={invoice => { setPdfOpen(null); open('edit', null, invoice); }} />}</DialogPresence>
     <DialogPresence>{receiveOpen && <OilReceiveDialog active={active} disabled={receiveDisabled || busy} scale={scale}
       archives={archives} projects={projects} invoices={query.data?.invoices ?? []}
       close={() => setReceiveOpen(false)} onUpdated={reloadAttribution} onLock={setBatchLocked} onUncertain={setBatchUncertain} onOpenInvoice={item => {

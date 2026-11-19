@@ -5,10 +5,15 @@ export interface OilInvoiceOriginal { id: number; sha256: string; invoice_id: nu
 export interface OilInvoiceAllocation { id: number; account_id: number; project_id: number; card_id: number | null; amount: string }
 export interface OilInvoice { id: number; invoice_no: string | null; invoice_date: string | null; card_no: string | null; amount: string | null; status: 'pending' | 'registered' | 'voided'; deleted: boolean; kind: 'normal' | 'credit'; related_invoice_id: number | null; void_date: string | null; change_note: string; reason: string; remark: string; version: string; manual_request_id: string | null; manual_date_text: string | null; manual_cutoff_ym: string | null; allocations: OilInvoiceAllocation[]; originals: OilInvoiceOriginal[] }
 export interface OilInvoices { invoices: OilInvoice[]; total_amount: string }
+export interface OilReimportTarget { invoice_id: number; original_id: number; version: string }
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const amount = (v: unknown): v is string => typeof v === 'string' && /^-?\d+\.\d{2}$/.test(v);
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(v);
 const nullableText = (v: unknown) => v === null || typeof v === 'string';
+export function isOilReimportTarget(value: unknown, invoiceId: unknown, originalId: unknown): value is OilReimportTarget {
+  return record(value) && id(value.invoice_id) && value.invoice_id === invoiceId &&
+    id(value.original_id) && value.original_id === originalId && uuid(value.version);
+}
 export function readOilOriginal(v: unknown): OilInvoiceOriginal {
   if (!record(v) || !id(v.id) || !id(v.invoice_id) || !id(v.byte_size) || typeof v.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(v.sha256) || !['received', 'duplicate', 'conflict'].includes(String(v.outcome)) || typeof v.reason !== 'string' || !nullableText(v.resolution) || !record(v.recognized) || !['invoice_no', 'invoice_date', 'card_no', 'amount'].every(key => nullableText((v.recognized as Record<string, unknown>)[key]))) throw new ApiError('发票原件回执不完整，请重读核对。');
   return v as unknown as OilInvoiceOriginal;
@@ -49,7 +54,24 @@ export async function readOilReceipt(digest: string, signal?: AbortSignal) {
   const result = await requestJson(`/api/m13/invoices/receipts/${digest}`, signal ? { signal } : {});
   if (!record(result) || typeof result.received !== 'boolean' || result.received && (!record(result.original) || readOilOriginal(result.original).sha256 !== digest) || !result.received && result.original !== null) throw new ApiError('收票结果未能核对，请重读。');
   if (result.receipt_status === 'deleted' && (!result.received || typeof result.receipt_message !== 'string')) throw new ApiError('已删除发票的收票回执不完整，请重读核对。');
-  return { received: result.received, deleted: result.receipt_status === 'deleted', message: typeof result.receipt_message === 'string' ? result.receipt_message : '' };
+  const deleted = result.receipt_status === 'deleted';
+  const original = result.received ? readOilOriginal(result.original) : null;
+  const reimport = result.reimport;
+  if (reimport !== undefined && (!deleted || !original || !isOilReimportTarget(reimport, original.invoice_id, original.id))) {
+    throw new ApiError('重导发票的原件身份未能核对，请重新读取。');
+  }
+  return { received: result.received, deleted, message: typeof result.receipt_message === 'string' ? result.receipt_message : '',
+    ...(reimport && isOilReimportTarget(reimport, original?.invoice_id, original?.id) ? { reimport } : {}) };
+}
+
+export async function reimportOilInvoices(receipts: OilReimportTarget[], signal: AbortSignal) {
+  const result = await requestJson('/api/m13/invoices/reimport', { method: 'POST', signal, ...body({ receipts }) });
+  confirmWrite(record(result) && result.ok === true && Array.isArray(result.items), '重导回执待核实，请重新读取。');
+  const items = ((result as Record<string, unknown>).items as unknown[]).map(readOilInvoice);
+  confirmWrite(items.length === receipts.length && new Set(items.map(item => item.id)).size === items.length &&
+    receipts.every(receipt => items.some(item => item.id === receipt.invoice_id && !item.deleted &&
+      item.originals.some(original => original.id === receipt.original_id))), '重导回执和选中的发票不一致，请重新读取。');
+  return items;
 }
 export async function saveOilInvoiceRemark(row: OilInvoice, remark: string, signal: AbortSignal) {
   const result = await requestJson(`/api/m13/invoices/${row.id}/remark`, { method: 'PUT', signal, ...body({ version: row.version, remark }) });
