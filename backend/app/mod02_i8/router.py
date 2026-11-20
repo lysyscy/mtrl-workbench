@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Callable
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 
 from app.core.db import session_scope
@@ -51,14 +51,24 @@ from app.mod02_i8.schemas import (
     FetchPreviewRequest,
     FetchRunOut,
     FetchRunRequest,
+    KickCancelRequest,
     RunRecordOut,
     SyncOut,
     SyncSessionRequest,
 )
-from app.mod02_i8.session_policy import unified_i8_session
+from app.mod02_i8.session_policy import revoke_kick_token, unified_i8_session
 from app.mod02_i8.sources import CommonProjectSource, WarehouseSource
 
 router = APIRouter(prefix="/api/m02", tags=["mod02"])
+
+
+@router.post("/session/kick-cancel")
+def cancel_session_kick(req: KickCancelRequest) -> dict[str, bool]:
+    owner = current_name()
+    if not owner:
+        raise HTTPException(401, "请先登录工作台。")
+    revoke_kick_token(req.kick_token, owner=owner)
+    return {"ok": True}
 
 
 # --------------------------------------------------------------- 依赖（可注入）

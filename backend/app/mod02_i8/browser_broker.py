@@ -272,7 +272,8 @@ class BrowserBroker:
 
     def enqueue(self, owner: str, device: str, *, method: str, url: str,
                 headers: dict[str, str], body: bytes,
-                timeout_seconds: float = RELAY_WAIT_SECONDS) -> PendingRequest:
+                timeout_seconds: float = RELAY_WAIT_SECONDS,
+                expected_generation: int | None = None) -> PendingRequest:
         """挂起一条请求（调用线程随后 `wait()` 阻塞，直到回帖或判停）。
 
         `timeout_seconds` 是**这条请求自己的**预算（调用方从 httpx 请求的 read 超时取），
@@ -285,6 +286,8 @@ class BrowserBroker:
                 raise BrowserRelayUnavailable(
                     "浏览器连接不在（可能已断开或页面已关闭），本次已停止；没有回退到登录方式。"
                 )
+            if expected_generation is not None and connection.generation != expected_generation:
+                raise BrowserRelayUnavailable("浏览器已重新连接，本次操作已停止，请重新确认后发起。")
             # 不透明唯一票：随机、不含时间戳/序号/对象地址（那些既会泄漏状态、又能被猜）。
             ticket = secrets.token_urlsafe(16)
             request = PendingRequest(

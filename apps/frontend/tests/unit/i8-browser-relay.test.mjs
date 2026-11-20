@@ -401,7 +401,7 @@ test('扩展没有应答时回终止信号（599），不让后端干等到超�
   assert.equal(posted[0].generation, 4);
 });
 
-for (const [code, category] of [['request-timeout', 'timeout'], ['opaque-response', 'redirect'], ['target-mismatch', 'target'], ['request-network', 'network'], ['malformed', 'malformed'], ['tab-paused', 'unavailable']]) {
+for (const [code, category] of [['request-timeout', 'timeout'], ['session-ended', 'session-ended'], ['opaque-response', 'redirect'], ['target-mismatch', 'target'], ['request-network', 'network'], ['malformed', 'malformed'], ['tab-paused', 'unavailable']]) {
   test(`扩展 ${code} 跨回帖保留固定停止类别，不重放`, async () => {
     const posted = [];
     let polls = 0, executes = 0;

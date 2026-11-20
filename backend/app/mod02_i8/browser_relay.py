@@ -44,7 +44,7 @@ from app.core.config import get_settings, i8_base_of
 from app.core.errors import ExternalServiceError, MustReportError, NotConfiguredError
 from app.core.logging import get_logger
 from app.mod02_i8 import browser_broker
-from app.mod02_i8.browser_broker import RELAY_WAIT_SECONDS, BrowserBroker, BrowserRelayUnavailable
+from app.mod02_i8.browser_broker import RELAY_WAIT_SECONDS, BrowserBroker, BrowserRelayUnavailable, ConnectionInfo
 from app.mod02_i8.browser_session import (
     _REDIRECT_STATUSES,
     _STOP_REDIRECT,
@@ -158,9 +158,10 @@ def is_signature_image_target(url: str) -> bool:
     )
 
 
-def require_signature_image(status: int, content_type: str) -> None:
+def require_signature_image(response: httpx.Response) -> None:
     """Reject login pages and non-image responses without exposing signed URLs."""
-    media_type = content_type.split(";", 1)[0].strip().lower()
+    status = response.status_code
+    media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if 300 <= status < 400:
         raise StrictRedirectStopped(_STOP_REDIRECT)
     if status in (401, 403) or (200 <= status < 300 and media_type == "text/html"):
@@ -168,6 +169,8 @@ def require_signature_image(status: int, content_type: str) -> None:
     if not 200 <= status < 300:
         raise ExternalServiceError(f"签名图下载失败（HTTP {status}）。")
     if not media_type.startswith("image/") or media_type == "image/":
+        if I8Client._is_session_invalid(response) or "no sessioninfo" in response.text.lower():
+            raise StrictSessionEnded("i8 会话已失效，本批已停止。请核对 i8 会话后重试。")
         raise ExternalServiceError("i8 签名图响应不是图片。")
 
 
@@ -232,6 +235,8 @@ def _decode_reply(status: object, raw_headers: object, body_b64: object,
     # A relay failure is not an HTTP response from i8. Keep it strict before
     # optional material/warehouse readers can turn ordinary errors into blanks.
     if relay_failure is not None:
+        if relay_failure == "session-ended":
+            raise StrictSessionEnded("i8 会话已失效，本批已停止。请核对 i8 会话后重试。")
         if relay_failure == "timeout":
             raise StrictSessionEnded("浏览器在这条请求的时间预算内没有回音，本次已停止（超时，未重试、未登录）。")
         if relay_failure == "redirect":
@@ -277,12 +282,14 @@ class BrowserRelayTransport(httpx.BaseTransport):
     """一条请求 ↔ 一次浏览器往返。`httpx.Client(transport=...)` 注入后，`I8Client` 完全无感。"""
 
     def __init__(self, *, owner: str, device: str, origin: str,
-                 broker: BrowserBroker | None = None) -> None:
+                 broker: BrowserBroker | None = None, expected_generation: int | None = None) -> None:
         self._owner = owner
         self._device = device
         #: 只允许同一个站点原点（规范化后比较，含端口）。
         self._origin = _origin_of(origin) or origin
         self._broker = broker
+        connection = self.broker.connection_of(owner, device) if expected_generation is None else None
+        self._generation = connection.generation if connection else expected_generation
 
     @property
     def broker(self) -> BrowserBroker:
@@ -298,6 +305,8 @@ class BrowserRelayTransport(httpx.BaseTransport):
         # ⛔ **只读端点白名单**：站点对了不代表能发 —— 登录/踢人/保存端点绝不能从这条通道走。
         assert_readonly(request.method, target)
         body = request.read() if request.method not in ("GET", "HEAD") else b""
+        if self._generation is None:
+            raise BrowserRelayUnavailable("浏览器连接不在，本次操作已停止，请重新确认后发起。")
         pending = self.broker.enqueue(
             self._owner, self._device,
             method=request.method, url=target,
@@ -305,6 +314,7 @@ class BrowserRelayTransport(httpx.BaseTransport):
             # ⚠️ 预算逐条透传（合同列表 200s / 详情 60s / 其余 30s）——
             #    ⛔ 别在这里统一成默认值，那就是拿 30s 截断 200s 的请求。
             timeout_seconds=_request_read_timeout(request) or RELAY_WAIT_SECONDS,
+            expected_generation=self._generation,
         )
         self.broker.wait(pending)
         status, headers, content = _decode_reply(
@@ -317,22 +327,24 @@ class BrowserRelayTransport(httpx.BaseTransport):
         )
         response = httpx.Response(status, headers=headers, content=content, request=request)
         if request.method == "GET" and is_signature_image_target(target):
-            require_signature_image(status, response.headers.get("content-type", ""))
+            require_signature_image(response)
         return response
 
 
-#: 当前请求的作用域：`(模式, 设备 nonce)`。未进入会话策略时模式为空。
+#: 当前请求的作用域包含模式、设备和确认的浏览器连接。
 #: ⚠️ 用 `ContextVar` 而不是全局变量：`uvicorn` 并发处理，全局量会串号（同 `core/session.py` 的教训）。
-_relay_scope: ContextVar[tuple[str, str]] = ContextVar("i8_relay_scope", default=("", ""))
+_relay_scope: ContextVar[tuple[str, str, ConnectionInfo | None]] = ContextVar(
+    "i8_relay_scope", default=("", "", None),
+)
 
 
 @contextmanager
-def relay_scope(mode: str, device_id: str = "") -> Iterator[None]:
-    """在**一次请求处理**内声明"这次取数走哪条通道"。退出即还原。"""
-    token = _relay_scope.set((
-        resolve_mode(mode),
-        str(device_id or ""),
-    ))
+def relay_scope(mode: str, device_id: str = "", *, owner: str | None = None) -> Iterator[None]:
+    """Hold the confirmed browser connection for the duration of an operation."""
+    mode = resolve_mode(mode)
+    device = str(device_id or "")
+    connection = _browser_connection(owner, device) if mode == MODE_BROWSER and owner is not None else None
+    token = _relay_scope.set((mode, device, connection))
     try:
         yield
     finally:
@@ -340,7 +352,8 @@ def relay_scope(mode: str, device_id: str = "") -> Iterator[None]:
 
 
 def current_scope() -> tuple[str, str]:
-    return _relay_scope.get()
+    mode, device, _ = _relay_scope.get()
+    return mode, device
 
 
 def resolve_mode(value: object) -> str:
@@ -350,15 +363,7 @@ def resolve_mode(value: object) -> str:
     return value
 
 
-def open_i8_client(*, owner: str) -> I8Client:
-    """为当前会话策略创建客户端。owner 取自服务端认证身份。"""
-    mode, device = current_scope()
-    if resolve_mode(mode) == MODE_HTTP:
-        policy = http_session_policy.get()
-        if policy is None:
-            raise MustReportError("工作台直连会话尚未建立，请重新发起 i8 操作。")
-        return I8Client(policy=policy)
-
+def _browser_connection(owner: str, device: str) -> ConnectionInfo:
     configured = _origin_of(i8_base_of(get_settings()))
     if not configured:
         raise NotConfiguredError("i8 服务地址未配置（见 .env 的 I8_BASE_URL，或到「设置」页填写）")
@@ -377,9 +382,28 @@ def open_i8_client(*, owner: str) -> I8Client:
             "浏览器的 i8 站点与工作台当前配置不一致，本次已停止（未发请求、未改任何配置）。"
             "请让工作台的 i8 服务器设置与浏览器里那个站点一致，或改用工作台直连模式。"
         )
+    return connection
+
+
+def open_i8_client(*, owner: str) -> I8Client:
+    """为当前会话策略创建客户端。owner 取自服务端认证身份。"""
+    mode, device, connection = _relay_scope.get()
+    if resolve_mode(mode) == MODE_HTTP:
+        policy = http_session_policy.get()
+        if policy is None:
+            raise MustReportError("工作台直连会话尚未建立，请重新发起 i8 操作。")
+        return I8Client(policy=policy)
+    current = _browser_connection(owner, device)
+    if connection is not None and (
+        connection.owner != owner or connection.generation != current.generation
+    ):
+        raise BrowserRelayUnavailable("浏览器已重新连接，本次操作已停止，请重新确认后发起。")
+    connection = connection or current
     reused = ReusedBrowserSession(
         base_url=connection.origin,
-        transport=BrowserRelayTransport(owner=owner, device=device, origin=connection.origin),
+        transport=BrowserRelayTransport(
+            owner=owner, device=device, origin=connection.origin, expected_generation=connection.generation,
+        ),
         declared_target=connection.origin,
     )
     return I8BrowserSessionClient(reused)

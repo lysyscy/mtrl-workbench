@@ -97,6 +97,10 @@ class BrowserPendingOut(BaseModel):
     request: dict | None = None
 
 
+class KickCancelRequest(BaseModel):
+    kick_token: str = Field(min_length=1, max_length=128)
+
+
 class BrowserCompleteRequest(BaseModel):
     """回帖：一次性票 + 响应原文（body 走 base64，二进制/文本都安全）。
 
@@ -111,7 +115,7 @@ class BrowserCompleteRequest(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     body_b64: str = ""
     declared_length: int | None = None
-    relay_failure: Literal["timeout", "redirect", "target", "network", "unavailable", "malformed"] | None = None
+    relay_failure: Literal["timeout", "redirect", "target", "network", "unavailable", "malformed", "session-ended"] | None = None
 
 
 class BrowserCompleteOut(BaseModel):

@@ -25,6 +25,7 @@ import httpx
 
 from app.core.config import I8_PATH_PAYMENT_NOTICE, get_settings, i8_base_of, i8_endpoint_of
 from app.core.errors import AppError, DataConflictError, ExternalServiceError, NotConfiguredError
+from app.mod02_i8.origin import _origin_of as _origin_of, _parse_url
 from app.mod02_i8.client import I8_TAKE_FAILED, I8Client
 from app.mod02_i8.notice_source import (
     EMPTY_RETRY,
@@ -109,38 +110,6 @@ class ReusedBrowserSession:
         object.__setattr__(self, "base_url", base)
         if not (self.cookie_header or "").strip() and self.transport is None:
             raise StrictSessionUnavailable(_STOP_NO_SESSION)
-
-
-def _parse_url(value: str) -> httpx.URL | None:
-    """解析成 `httpx.URL`；解析不出来（缺协议 / 缺主机）时返回 None。"""
-    text = (value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = httpx.URL(text)
-    except Exception:  # noqa: BLE001
-        return None
-    if not parsed.scheme or not parsed.host:
-        return None
-    return parsed
-
-
-def _origin_of(value: str) -> str:
-    """去敏的站点标识：只留 `协议://主机[:端口]`（去掉用户信息、路径、查询串与片段）。
-
-    解析不出来时返回空串 ⇒ 调用方据此判定"目标未通过核验"而停止（保守方向）。
-    默认端口（https:443 / http:80）由 httpx 归一成 None ⇒ 不写端口，与其他来源可直接比。
-    """
-    parsed = _parse_url(value)
-    if parsed is None:
-        return ""
-    scheme = parsed.scheme.lower()
-    host = parsed.host.lower()
-    try:
-        port = parsed.port
-    except ValueError:  # 端口写得不像端口 ⇒ 当作"核验不过"
-        return ""
-    return f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"
 
 
 class I8BrowserSessionClient(I8Client):

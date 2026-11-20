@@ -17,10 +17,10 @@ import pytest
 from app.core import app_settings
 from app.core.config import Settings, get_settings
 from app.core.errors import MustReportError
-from app.mod02_i8 import contract_source
+from app.mod02_i8 import browser_broker, contract_source
 from app.mod02_i8 import sources as i8_sources
 from app.mod02_i8.browser_broker import BrowserRelayUnavailable
-from app.mod02_i8.browser_relay import MODE_BROWSER, current_scope, relay_scope
+from app.mod02_i8.browser_relay import MODE_BROWSER, current_scope
 from app.mod02_i8.browser_session import (
     StrictSessionStopped,
     StrictSessionEnded,
@@ -39,8 +39,15 @@ def _isolated_settings(monkeypatch):
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     monkeypatch.setattr(app_settings, "_VALUES_LOADER", lambda: {"i8_base_url": BASE})
     monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": BASE})
+    broker = browser_broker.BrowserBroker()
+    broker.connect("fixture-owner", "dev-1", BASE)
+    monkeypatch.setattr(browser_broker, "_BROKER", broker)
+    from app.core.session import current_name, set_current_name
+    previous = current_name()
+    set_current_name("fixture-owner")
     get_settings.cache_clear()
     yield
+    set_current_name(previous)
     get_settings.cache_clear()
 
 
@@ -169,13 +176,10 @@ def test_浏览器方式缺连接时入口当场停而不是回登录(monkeypatc
     monkeypatch.setattr(wh_cache, "CACHE_DIR", tmp_path / "wh")
     wh_cache.save([{"warehouse_name": "沭阳仓库", "owner_full_name": "旧快照"}], source="自检")
 
-    def loader(allow_kick=False, client=None):  # noqa: ANN001, ARG001
-        with relay_scope(MODE_BROWSER, "dev-1"):
-            # 真实路径：工厂在没有连接时就是抛这个（这里显式构造同一类异常）
-            raise BrowserRelayUnavailable(
-                "已选择「用浏览器已有会话」，但工作台与浏览器的连接不在（可能未连接、已断开或页面已刷新）。"
-                "本次已停止；没有改用登录方式，也没有顶掉任何在线会话。"
-            )
+    browser_broker.broker().disconnect("fixture-owner", "dev-1")
+
+    def loader(*args):
+        pytest.fail("缺少浏览器连接时不应调用仓库读取")
 
     with pytest.raises(BrowserRelayUnavailable):
         m03r.warehouse_check(_wh_request(session_mode="browser", device_id="dev-1"), wh_loader=loader)

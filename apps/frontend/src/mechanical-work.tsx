@@ -81,7 +81,7 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
   }});
   const blocked=busy||working||fetchAction.busy;
   const fetchBlocked=!writable||blocked||fetchAction.unavailable;
-  function closeFetch(){fetchAction.cancelKick();setDialog(null);}
+  function closeFetch(){fetchAction.cancelWaiting();fetchAction.cancelKick();setDialog(null);}
   useHistoryGuard('mechanical-history-base',()=>working?'累计起点正在保存，请稍候。':historyDirty?'请先处理累计起点未保存的修改。':'');
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{setDialog(null);setPreview(null);setSelected([]);setFeedback('');},[scopeKey]);
@@ -121,22 +121,21 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
     if(fetchBlocked||fetchAction.kickMessage||lock.current)return;
     // Explicitly obtaining another preview does not adopt it or retry automatically.
     // A previous preview may still finish; domain revisions continue to guard adoption.
-    lock.current=true;setWorking(true);const scope=scopeKey;
+    const scope=scopeKey;
     setWarehouse(wh);setDialog('fetch');setPreview(null);setSelected([]);setAllowReduction(false);setReason('');
-    try {await operate(async()=>{
-      setFeedback('');
-      if(fetchAction.pending)fetchAction.acknowledge();
-      fetchRefreshed.current=false;
-      await fetchAction.run({
-        path:'/api/m06/workbench/i8-fetch',
-        payload:{request_id:randomUUID()},
-        parse:readI8Preview,
-        onSuccess: result => {
-          if(!fetchRefreshed.current||!mounted.current||currentScope.current!==scope)return;
-          setPreview(result);setSelected(result.projects.filter(p=>p.complete&&(!wh||p.warehouse===wh)).map(p=>p.warehouse));
-        },
-      });
-    });}finally{lock.current=false;if(mounted.current)setWorking(false);}
+    setFeedback('');
+    if(fetchAction.pending)fetchAction.acknowledge();
+    fetchRefreshed.current=false;
+    await fetchAction.run({
+      path:'/api/m06/workbench/i8-fetch',
+      payload:{request_id:randomUUID()},
+      parse:readI8Preview,
+      operate,
+      onSuccess: result => {
+        if(!fetchRefreshed.current||!mounted.current||currentScope.current!==scope)return;
+        setPreview(result);setSelected(result.projects.filter(p=>p.complete&&(!wh||p.warehouse===wh)).map(p=>p.warehouse));
+      },
+    });
   }
   function table(items:string[]) {
     type WorkRow={warehouse:string};
@@ -178,8 +177,10 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
     {feedback&&!dialog&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
     <DialogPresence>{dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='initialize'?'mechanical-history-base-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='initialize'?'补齐累计起点，'+label(warehouse):dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} dirty={historyDirty} paused={paused} close={dialog==='fetch'?closeFetch:()=>setDialog(null)}>{requestClose=><>
       {dialog==='fetch'&&(!preview?<>{fetchStatus}{fetchAction.kickMessage
-        ? <I8FetchActions action={{...fetchAction, confirmKick:()=>operate(fetchAction.confirmKick)}} close={closeFetch} canRun={!fetchBlocked} onRun={()=>void fetchPreview(warehouse)} />
-        : <>{!blocked&&<p>本次未取得可采用的预览。</p>}<footer><Button disabled={blocked} onClick={closeFetch}>关闭</Button>{!blocked&&<Button disabled={fetchBlocked} onClick={()=>void fetchPreview(warehouse)}>重新获取预览</Button>}</footer></>}</>:<>
+        ? <I8FetchActions action={fetchAction} close={closeFetch} canRun={!fetchBlocked} onRun={()=>void fetchPreview(warehouse)} />
+        : <>{!blocked&&!fetchAction.waiting&&<p>本次未取得可采用的预览。</p>}<footer><Button disabled={blocked} onClick={closeFetch}>关闭</Button>{fetchAction.waiting
+          ? <Button onClick={fetchAction.cancelWaiting}>取消等待</Button>
+          : !blocked&&<Button disabled={fetchBlocked} onClick={()=>void fetchPreview(warehouse)}>重新获取预览</Button>}</footer></>}</>:<>
         <p>已读取班组使用 {preview.counts.usage} 条、项目结算 {preview.counts.project} 条、班组消耗 {preview.counts.team} 条。确认只更新勾选项目。</p>
         <AdoptionSelection.Provider value={{selected,disabled:!writable||blocked,label,toggle:(warehouse,checked)=>setSelected(previous=>checked?[...new Set([...previous,warehouse])]:previous.filter(wh=>wh!==warehouse))}}><ReadGrid table="mechanical-i8-review" className="mechanical-work-table mechanical-i8-review" label="i8累计采用预览" domLayout="autoHeight" rows={reviewProjects} rowId={p=>p.warehouse} columns={[
       {colId:'pick',headerName:'采用',minWidth:60,maxWidth:80,cellRenderer:AdoptionCheckbox},

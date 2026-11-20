@@ -43,21 +43,22 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const [feedback, setFeedback] = useState('');
   const ruleLock = useRef(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts', scopeKey: JSON.stringify([all, since]) });
-  const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
+  const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all),
+    close: () => { action.cancelWaiting(); action.cancelKick(); close(); }, active: !blocked });
   const { read: pendingRead, omit } = useContractOwnershipPending(result?.id ?? 0, !blocked && Boolean(result?.unsettled.length));
   const pending = pendingRead.data ? readReceiptRows(pendingRead.data, false) : fallbackPending;
   useHistoryGuard('jc-fetch-rule', () => ruleLock.current ? '集采剔除规则正在保存，请稍候。' : '');
 
   async function run() {
-    const fetched = await action.run({
+    await action.run({
       path: '/api/m11/fetch',
       payload: { confirm: true, ...(all ? { since: '' } : since ? { since } : {}) },
       parse: readContractFetch,
+      onSuccess: fetched => {
+        setFallbackPending(fetched.unsettled);
+        setResult(fetched);
+      },
     });
-    if (fetched) {
-      setFallbackPending(fetched.unsettled);
-      setResult(fetched);
-    }
   }
 
   function selectRule(row: ReceiptRow, kind: 'project' | 'contract') {

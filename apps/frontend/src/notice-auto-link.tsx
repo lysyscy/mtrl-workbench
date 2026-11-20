@@ -21,9 +21,9 @@ export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[
   const [rows,setRows]=useState<AutoRow[]|null>(null),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('');
   const scopeKey = JSON.stringify([ids, rows !== null, session.mode, blocked]);
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(scopeKey);
-  const closing = useDialogClose({ busy, dirty: false, close: () => { cancelWaiting(); close(); } });
-  const ready=rows?.filter(r=>r.contract_id!==null).length??0;
   const kick = useI8KickConfirmation(scopeKey);
+  const closing = useDialogClose({ busy, dirty: false, close: () => { cancelWaiting(); kick.dismiss(); close(); } });
+  const ready=rows?.filter(r=>r.contract_id!==null).length??0;
   async function run(confirm:boolean, choice: SessionChoice, kickToken?:string){
     if(blocked||busy||done||lock.current||confirm&&!ready||!kickToken&&kick.message)return;
     lock.current=true;setBusy(true);setError('');let saved=false;

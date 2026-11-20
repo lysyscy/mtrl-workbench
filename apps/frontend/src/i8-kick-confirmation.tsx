@@ -1,9 +1,10 @@
 import Button from 'antd/es/button';
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { readI8KickConfirmation } from './i8-api';
+import { readI8KickConfirmation, revokeI8KickToken } from './i8-api';
 
 interface Confirmation {
   scope: object;
+  token: string;
   message: string;
   retry: () => Promise<void>;
 }
@@ -13,35 +14,48 @@ export function useI8KickConfirmation(scopeKey: string) {
   const active = useRef<object | null>(null);
   const pending = useRef<Confirmation | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  function discardPending() {
+    const next = pending.current;
+    pending.current = null;
+    if (next) revokeI8KickToken(next.token);
+  }
+
   useLayoutEffect(() => {
     active.current = scope;
-    return () => { active.current = null; pending.current = null; };
+    return () => { active.current = null; discardPending(); };
   }, [scope]);
 
   function offer(failure: unknown, retry: (token: string) => Promise<void>): boolean {
     const conflict = readI8KickConfirmation(failure);
     if (!conflict) return false;
     if (active.current === scope) {
-      const next = {scope, message: conflict.message, retry: () => retry(conflict.token)};
+      discardPending();
+      const next = {scope, ...conflict, retry: () => retry(conflict.token)};
       pending.current = next;
       setConfirmation(next);
-    }
+    } else revokeI8KickToken(conflict.token);
     return true;
   }
 
   function cancel() {
-    pending.current = null;
+    discardPending();
     setConfirmation(null);
+  }
+
+  function dismiss() {
+    active.current = null;
+    cancel();
   }
 
   function confirm() {
     const next = pending.current;
     if (!next || next.scope !== active.current) return;
-    cancel();
+    pending.current = null;
+    setConfirmation(null);
     void next.retry();
   }
 
-  return {message: confirmation?.scope === scope ? confirmation.message : '', offer, confirm, cancel};
+  return {message: confirmation?.scope === scope ? confirmation.message : '', offer, confirm, cancel, dismiss};
 }
 
 export function I8KickConfirmationActions({message, confirm, cancel, disabled}: {

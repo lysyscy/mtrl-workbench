@@ -2,18 +2,22 @@ import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { numberColumnWidth, fullTextWidth } from './grid';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ApiError, record, requestFile, requestJson } from './api';
 import { body, money } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
+import { readI8KickConfirmation, revokeI8KickToken } from './i8-api';
 import type { SessionChoice } from './i8-browser-relay';
 import { I8ConnectionWaitStatus, useI8ActionWait, useI8Session } from './i8-session';
 
 type BatchMode = 'pdf' | 'print';
-type BatchStage = 'connecting' | 'preparing' | 'dispatching';
+type BatchStage = 'connecting' | 'preparing' | 'dispatching' | 'done';
+type ScopeRow = Pick<NoticeRow, 'notice_id' | 'bill_no'> & Partial<Pick<NoticeRow, 'project_display' | 'amount_approved'>>;
+interface PrepareScope { ids: number[]; mode: BatchMode; expected_account: string }
+interface KickConfirmation { token: string; message: string; retry: () => Promise<void> }
 
 type DeliveryStatus = 'accepted' | 'failed' | 'unknown';
 interface Attempt {
@@ -24,7 +28,7 @@ interface Attempt {
 }
 
 interface Delivery {
-  delivery_status: DeliveryStatus | 'pending';
+  delivery_status: DeliveryStatus | 'pending' | 'in_flight';
   channel: string;
   job_id: number | null;
   attempts: Attempt[];
@@ -67,7 +71,7 @@ export interface BatchView {
 }
 
 const deliveryLabel = {
-  pending: '待投递', accepted: '打印机已接收', failed: '明确失败', unknown: '结果待核实',
+  pending: '待投递', in_flight: '正在投递', accepted: '打印机已接收', failed: '明确失败', unknown: '结果待核实',
 };
 const channelLabel: Record<string, string> = {ipp: 'IPP', driver: '系统驱动', raw: 'RAW 9100'};
 const nullableInteger = (value: unknown) => value === null || Number.isSafeInteger(value);
@@ -77,14 +81,14 @@ const validAttempt = (value: unknown) => record(value) && typeof value.channel =
 
 function readBatch(value: unknown, mode: BatchMode): BatchView {
   if (!record(value) || value.mode !== mode || typeof value.batch_id !== 'string' || !value.batch_id
-    || !['connecting', 'preparing', 'dispatching'].includes(String(value.stage))
+    || !['connecting', 'preparing', 'dispatching', 'done'].includes(String(value.stage))
     || !['running', 'ready', 'failed', 'complete'].includes(String(value.status))
     || ![value.total, value.prepared_count, value.dispatch_processed_count, value.dispatched_count].every(Number.isSafeInteger)
     || ![value.current_bill_no, value.failed_bill_no, value.reason, value.kick_token].every(x => typeof x === 'string')
     || (value.failed_notice_id !== null && !Number.isSafeInteger(value.failed_notice_id))
     || !Array.isArray(value.items) || !value.items.every(x => record(x) && Number.isSafeInteger(x.notice_id)
       && [x.bill_no, x.status, x.channel, x.reason].every(field => typeof field === 'string')
-      && ['pending', 'accepted', 'failed', 'unknown'].includes(String(x.delivery_status)) && nullableInteger(x.job_id)
+      && ['pending', 'in_flight', 'accepted', 'failed', 'unknown'].includes(String(x.delivery_status)) && nullableInteger(x.job_id)
       && Array.isArray(x.attempts) && x.attempts.every(validAttempt))) {
     throw new ApiError('批次状态不完整，请重查批次。');
   }
@@ -104,7 +108,7 @@ function readBatch(value: unknown, mode: BatchMode): BatchView {
 }
 
 const stageLabel: Record<BatchStage, string> = {
-  connecting: '连接 i8', preparing: '准备 PDF', dispatching: '投递打印机',
+  connecting: '连接 i8', preparing: '准备 PDF', dispatching: '投递打印机', done: '投递结束',
 };
 const batchPath = '/api/m03/print-batches';
 const pathOf = (id: string) => batchPath + '/' + encodeURIComponent(id);
@@ -128,6 +132,7 @@ export async function recoverNoticePrint(owner: string, signal?: AbortSignal): P
       return batch;
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      return null;
     }
   }
   const value = await requestJson(batchPath + '/active', {signal: signal ?? null});
@@ -139,7 +144,8 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
 }) {
   const session = useI8Session();
   const lock = useRef(false);
-  const [scope, setScope] = useState(() => [...rows]);
+  const [scope, setScope] = useState<ScopeRow[]>(() => rows.length || !resumed
+    ? [...rows] : resumed.items.map(({notice_id, bill_no}) => ({notice_id, bill_no})));
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(
     JSON.stringify([owner, mode, blocked, scope.map(row => row.notice_id)]),
   );
@@ -148,7 +154,9 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   const [error, setError] = useState('');
   const [readFailed, setReadFailed] = useState(false);
   const [printerUri, setPrinterUri] = useState('');
-  const [kick, setKick] = useState<{ token: string; message: string } | null>(null);
+  const [kick, setKick] = useState<KickConfirmation | null>(null);
+  const pendingKick = useRef<KickConfirmation | null>(null);
+  const handledTokens = useRef(new Set<string>());
   const [file, setFile] = useState<{ url: string; filename: string; pdf: boolean } | null>(null);
   const blobUrl = useRef('');
   const alive = useRef(true);
@@ -157,15 +165,25 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   blockedRef.current = blocked;
   const title = mode === 'print' ? '批量打印' : '只导出 PDF';
   const closeLocked = busy && batch?.stage !== 'dispatching';
-  const closing = useDialogClose({busy: closeLocked, dirty: false, close: () => { cancelWaiting(); close(); }});
+  const closing = useDialogClose({
+    busy: closeLocked, dirty: false, close: () => { cancelWaiting(); cancelKick(); close(); },
+  });
   const result = batch?.result;
-  const preparationFailed = batch?.status === 'failed' && batch.stage !== 'dispatching';
+  const deliveryStage = batch?.stage === 'dispatching' || batch?.stage === 'done';
+  const preparationFailed = batch?.status === 'failed' && !deliveryStage;
+  const recoveredItems = resumed && batch?.batch_id === resumed.batch_id ? batch.items : null;
+  const recoveredLabels = new Map(recoveredItems?.map(item => [item.notice_id, item.bill_no]));
+  const listedScope = scope.map(row => ({...row, bill_no: recoveredLabels.get(row.notice_id) ?? row.bill_no}));
+  const visibleScope = scope.length > 0 && (!recoveredItems || (
+    recoveredLabels.size === batch?.total && scope.length === batch.total
+    && scope.every(row => recoveredLabels.get(row.notice_id))
+  ));
   const failedIds = new Set(preparationFailed && batch.failed_notice_id !== null
     ? batch.items.filter(item => item.status === 'failed').map(item => item.notice_id) : []);
-  const remaining = scope.filter(row => !failedIds.has(row.notice_id));
+  const remaining = listedScope.filter(row => !failedIds.has(row.notice_id));
   const stage = batch?.stage ?? 'connecting';
   const a4Block = batch?.a4_blocked;
-  const completed = stage === 'dispatching' ? batch?.dispatch_processed_count : batch?.prepared_count;
+  const completed = deliveryStage ? batch?.dispatch_processed_count : batch?.prepared_count;
 
   useEffect(() => {
     alive.current = true;
@@ -174,15 +192,47 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
       if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
     };
   }, []);
-  useEffect(() => {
+  function discardKick() {
+    confirmationGeneration.current += 1;
+    const pending = pendingKick.current;
+    pendingKick.current = null;
+    if (pending) revokeI8KickToken(pending.token);
+  }
+
+  function cancelKick() {
+    discardKick();
     setKick(null);
-    return () => { confirmationGeneration.current += 1; };
-  }, [blocked, session.mode, owner]);
+  }
+
+  function offerKick(token: string, message: string, generation: number, retry: () => Promise<void>) {
+    if (!token || handledTokens.current.has(token)) return;
+    handledTokens.current.add(token);
+    if (!alive.current || blockedRef.current || generation !== confirmationGeneration.current) {
+      revokeI8KickToken(token);
+      return;
+    }
+    const next = {token, message, retry};
+    pendingKick.current = next;
+    setKick(next);
+  }
+
+  function confirmKick() {
+    const pending = pendingKick.current;
+    if (!pending || lock.current || blockedRef.current) return;
+    pendingKick.current = null;
+    setKick(null);
+    void pending.retry();
+  }
+
+  useLayoutEffect(() => {
+    setKick(null);
+    return discardKick;
+  }, [blocked, session.mode, owner, scope]);
 
   useEffect(() => {
     if (!resumed) return;
     const recovery = new AbortController();
-    void follow(resumed, confirmationGeneration.current, {signal: recovery.signal});
+    void follow(resumed, {signal: recovery.signal});
     return () => recovery.abort();
   }, [resumed, owner]);
 
@@ -210,8 +260,9 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     setFile(null);
   }
 
-  async function follow(handle: BatchView, generation: number, options: {
+  async function follow(handle: BatchView, options: {
     reread?: boolean; dispatchOnReady?: boolean; signal?: AbortSignal;
+    onKick?: (token: string, message: string) => void;
   } = {}) {
     const path = pathOf(handle.batch_id);
     try {
@@ -228,9 +279,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
           if (!alive.current || options.signal?.aborted) return;
           current = readBatch(await requestJson(path, {signal: options.signal ?? null}), mode);
         } else {
-          if (scope.length && generation === confirmationGeneration.current && session.mode !== SESSION_MODE_BROWSER && current.kick_token) {
-            setKick({ token: current.kick_token, message: current.reason });
-          }
+          if (current.kick_token) options.onKick?.(current.kick_token, current.reason);
           if (mode === 'pdf' && current.result?.success) {
             try { await loadFile(current.result.items.find(x => x.ok && x.download_url)?.download_url); }
             catch (failure) { setError(messageOf(failure, '下载失败，请重试下载。')); }
@@ -256,12 +305,12 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   }
 
   async function dispatch(choice?: 'ipp') {
-    if (batch?.status !== 'ready' || blocked || lock.current) return;
+    if (batch?.status !== 'ready' || !visibleScope || blocked || lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
     setReadFailed(false);
-    try { await follow(await requestDispatch(batch, choice), confirmationGeneration.current); }
+    try { await follow(await requestDispatch(batch, choice)); }
     catch (failure) {
       setReadFailed(true);
       setError(messageOf(failure, '无法核对投递状态，请重查原批次。'));
@@ -286,7 +335,9 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     } finally { lock.current = false; setBusy(false); }
   }
 
-  async function prepare(choice: SessionChoice, token = '') {
+  async function prepare(choice: SessionChoice, token = '', frozen: PrepareScope = {
+    ids: scope.map(row => row.notice_id), mode, expected_account: owner,
+  }) {
     if (!alive.current || blockedRef.current || lock.current || !scope.length) return;
     lock.current = true;
     setBusy(true);
@@ -296,19 +347,20 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     setReadFailed(false);
     clearFile();
     const generation = confirmationGeneration.current;
+    const onKick = (nextToken: string, message: string) => {
+      if (token || choice.mode === SESSION_MODE_BROWSER) {
+        revokeI8KickToken(nextToken);
+        if (alive.current) setError(message);
+      } else offerKick(nextToken, message, generation, () => prepare(choice, nextToken, frozen));
+    };
     try {
-      const payload = sessionPayload(choice, token ? { kick_token: token } : {}, {
-        ids: scope.map(row => row.notice_id), mode,
-      });
+      const payload = sessionPayload(choice, token ? { kick_token: token } : {}, {...frozen});
       const initial = readBatch(await requestJson(batchPath + '/prepare', { method: 'POST', ...body(payload) }), mode);
-      await follow(initial, generation, {dispatchOnReady: true});
+      await follow(initial, {dispatchOnReady: true, onKick});
     } catch (failure) {
-      if (generation === confirmationGeneration.current && !token
-        && session.mode !== SESSION_MODE_BROWSER && failure instanceof ApiError
-        && failure.status === 409 && failure.code === 'i8_online_conflict'
-        && record(failure.detail) && typeof failure.detail.kick_token === 'string' && failure.detail.kick_token) {
-        setKick({ token: failure.detail.kick_token, message: failure.message });
-      } else setError(messageOf(failure, '连接 i8 失败，请重试全批。'));
+      const conflict = readI8KickConfirmation(failure);
+      if (conflict) onKick(conflict.token, conflict.message);
+      else if (alive.current) setError(messageOf(failure, '连接 i8 失败，请重试全批。'));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -321,14 +373,14 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     setBusy(true);
     setError('');
     setReadFailed(false);
-    try { await follow(batch, confirmationGeneration.current, {reread: true}); }
+    try { await follow(batch, {reread: true}); }
     finally { lock.current = false; setBusy(false); }
   }
 
   function removeFailed() {
+    cancelKick();
     setScope(remaining);
     setBatch(null);
-    setKick(null);
     setError('');
     clearFile();
   }
@@ -345,11 +397,11 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
 
   return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="notice-print-title" closing={closing}>
-      <p>本批 {batch?.total ?? scope.length} 条通知书{scope.length > 0 && '（含搜索隐藏行）'}。</p>
-      {scope.length > 0 && <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={scope} rowId={row => String(row.notice_id)} columns={[
-        { field: 'bill_no', headerName: '单据编码', ...fullTextWidth(scope.map(row => row.bill_no || '—')), wrapText: false, valueFormatter: p => p.value || '—' },
+      <p>本批 {batch?.total ?? scope.length} 条通知书{rows.length > 0 && '（含搜索隐藏行）'}。</p>
+      {scope.length > 0 && <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={listedScope} rowId={row => String(row.notice_id)} columns={[
+        { field: 'bill_no', headerName: '单据编码', ...fullTextWidth(listedScope.map(row => row.bill_no || '—')), wrapText: false, valueFormatter: p => p.value || '—' },
         { field: 'project_display', headerName: '付款项目' },
-        { field: 'amount_approved', headerName: '审批金额（元）', ...numberColumnWidth(scope.map(row => money(row.amount_approved))), cellClass: 'money', valueFormatter: p => money(p.value) },
+        { field: 'amount_approved', headerName: '审批金额（元）', ...numberColumnWidth(scope.map(row => row.amount_approved ? money(row.amount_approved) : '—')), cellClass: 'money', valueFormatter: p => p.value ? money(p.value) : '—' },
       ]} />}
       {(waiting || busy || batch?.status === 'running') && <div>
         <p role="status">{stageLabel[stage]}{stage !== 'connecting' && <> {completed}/{batch?.total}</>}{batch?.current_bill_no && <> · {batch.current_bill_no}</>}</p>
@@ -365,7 +417,8 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
           placeholder="留空则沿用打印机设置" value={printerUri}
           disabled={busy || blocked} onChange={event => setPrinterUri(event.target.value)} /></label>}
       </>}
-      {batch?.stage === 'dispatching' && <section aria-label="逐张投递回执">
+      {batch && deliveryStage && <section aria-label="逐张投递回执">
+        {batch.reason && <p role="status">{batch.reason}</p>}
         {batch.status === 'complete' && <p role="status">
           打印机已接收 {batch.dispatched_count} / 共 {batch.total} 张。
         </p>}
@@ -373,7 +426,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
           {item.bill_no}：{deliveryLabel[item.delivery_status]}
           {item.channel && <> · {channelLabel[item.channel] ?? item.channel}</>}
           {item.job_id !== null && <> · 作业号 {item.job_id}</>}
-          {item.delivery_status === 'unknown' && <p>请先核对打印机作业和出纸情况，勿盲目重打。</p>}
+          {item.delivery_status === 'unknown' && <p>{item.reason || '请先核对打印机作业和出纸情况，勿盲目重打。'}</p>}
           {item.attempts.length > 0 && <ul>{item.attempts.map((attempt, index) => <li key={index}>
             {channelLabel[attempt.channel] ?? attempt.channel} · {deliveryLabel[attempt.status]}
             {attempt.job_id !== null && <> · 作业号 {attempt.job_id}</>} · {attempt.reason}
@@ -396,8 +449,8 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
         <Button htmlType="button" disabled={closeLocked} onClick={closing.requestClose}>关闭</Button>
         {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
         {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
-          <Button htmlType="button" onClick={() => setKick(null)}>取消下线确认</Button>
-          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void prepare(session, kick.token)}>让现有会话下线并继续</Button>
+          <Button htmlType="button" onClick={cancelKick}>取消下线确认</Button>
+          <Button htmlType="button" type="primary" disabled={blocked} onClick={confirmKick}>让现有会话下线并继续</Button>
         </>}
         {!busy && !waiting && !kick && scope.length > 0 && (!batch || preparationFailed) &&
           <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void runWhenReady(prepare)}>
@@ -406,10 +459,10 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
         {preparationFailed && failedIds.size > 0 && remaining.length > 0 &&
           <Button htmlType="button" disabled={busy || blocked} onClick={removeFailed}>移出异常单并重新确认剩余批次</Button>}
         {readFailed && <Button htmlType="button" disabled={busy || blocked} onClick={() => void recheck()}>重查原批次</Button>}
-        {batch?.status === 'ready' && !a4Block && !readFailed && !busy &&
+        {batch?.status === 'ready' && visibleScope && !a4Block && !readFailed && !busy &&
           <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void dispatch()}>投递原批</Button>}
         {a4Block && !readFailed && <>
-          {a4Block.can_switch_channel && <Button htmlType="button" disabled={busy || blocked}
+          {a4Block.can_switch_channel && <Button htmlType="button" disabled={busy || blocked || !visibleScope}
             onClick={() => void dispatch('ipp')}>切换支持 A4 的通道（IPP）</Button>}
           <Button htmlType="button" type="primary" disabled={busy || blocked}
             onClick={() => void exportPrepared()}>导出本批 PDF</Button>

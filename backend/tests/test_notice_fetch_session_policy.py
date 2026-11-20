@@ -42,7 +42,8 @@ def case(monkeypatch, rollback_db):
     monkeypatch.setattr(session_policy, "_tokens", {})
     monkeypatch.setattr(login, "sm2_encrypt", lambda plain: plain)
 
-    def load_cookie(user):
+    def load_cookie(user, origin):
+        assert origin == session_policy._origin_of(state.base)
         state.cache_reads.append(user)
         return state.cached
 
@@ -76,6 +77,8 @@ def case(monkeypatch, rollback_db):
     app = FastAPI()
     _install_error_handlers(app)
     app.include_router(router)
+    from app.mod02_i8.router import router as session_router
+    app.include_router(session_router)
 
     @app.middleware("http")
     async def bind_identity(request: Request, call_next):
@@ -87,6 +90,9 @@ def case(monkeypatch, rollback_db):
             return client.post("/api/m03/notices/fetch", json=PAYLOAD if payload is None else payload,
                                headers={"x-test-owner": owner})
         state.post = post
+        state.cancel = lambda token, owner=OWNER: client.post(
+            "/api/m02/session/kick-cancel", json={"kick_token": token}, headers={"x-test-owner": owner},
+        )
         yield state
 
 
@@ -226,4 +232,21 @@ def test_confirmation_cannot_kick_again_on_immediate_session_expiry(case):
     assert "detail" not in reply.json()
     assert paths(case).count(login.KICK_PATH) == 1
     assert case.post({**PAYLOAD, "kick_token": token}).status_code == 400
+    assert paths(case).count(login.KICK_PATH) == 1
+
+
+def test_kick_cancel_is_authenticated_owner_scoped_and_single_use(case):
+    conflict = {**PAYLOAD, "session_mode": "http"}
+    token = conflict_token(case.post(conflict))
+    assert case.cancel(token, owner="").status_code == 401
+    assert case.cancel(token, owner="different-account").status_code == 200
+    assert case.post({**conflict, "kick_token": token}).status_code == 200
+    assert paths(case).count(login.KICK_PATH) == 1
+    assert case.cancel(token).status_code == 200
+    assert case.post({**conflict, "kick_token": token}).status_code == 400
+
+    token = conflict_token(case.post(conflict))
+    assert case.cancel(token).status_code == 200
+    assert case.cancel(token).status_code == 200
+    assert case.post({**conflict, "kick_token": token}).status_code == 400
     assert paths(case).count(login.KICK_PATH) == 1

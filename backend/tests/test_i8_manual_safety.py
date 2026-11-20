@@ -87,6 +87,7 @@ def test_stale_account_is_rejected_before_any_execution(monkeypatch):
 
 def test_generic_client_default_stays_closed_and_explicit_opt_in_kicks(monkeypatch):
     calls, cookies = [], []
+    monkeypatch.setattr(clients, 'i8_base_of', lambda _: 'https://i8.example.test')
     monkeypatch.setattr(clients.I8Client, '_creds', lambda self: ('synthetic', 'synthetic-password'))
     def login(**kwargs):
         calls.append(kwargs['allow_kick'])
@@ -101,7 +102,7 @@ def test_generic_client_default_stays_closed_and_explicit_opt_in_kicks(monkeypat
     assert calls == [False, True] and cookies == ['fixed-cookie']
 
 
-def test_failed_zero_row_sync_is_not_recorded_as_success(rollback_db):
+def test_failed_zero_row_sync_is_not_recorded_as_success(rollback_db, monkeypatch):
     from sqlalchemy import select
     from app.core.errors import ExternalServiceError
     from app.mod02_i8.models import RunRecord
@@ -109,6 +110,14 @@ def test_failed_zero_row_sync_is_not_recorded_as_success(rollback_db):
     payload = fetch_record_payload(object_desc='仓库列表', success=0, fail=0, error_message='fixed failure')
     assert payload['status'] == 'failed'
     assert fetch_record_payload(object_desc='仓库列表', success=0, fail=0)['status'] == 'success'
+    from app.mod02_i8 import browser_broker
+    broker = browser_broker.BrowserBroker()
+    site = "https://i8.example.test"
+    broker.connect("fixture-owner", "test", site)
+    monkeypatch.setattr(browser_broker, "_BROKER", broker)
+    monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": site})
+    monkeypatch.setattr(router, "current_name", lambda: "fixture-owner")
+
     def unavailable(*args):
         raise ExternalServiceError('fixed failure')
     result = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=unavailable, expected_account=None)

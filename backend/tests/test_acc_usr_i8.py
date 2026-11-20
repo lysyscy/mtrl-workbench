@@ -102,10 +102,11 @@ def test_i8客户端用当前用户那份凭据且缓存按账号分(monkeypatch
 
     monkeypatch.setattr(C, "http_login", lambda **kw: (seen.update(kw), _Result())[1])
     monkeypatch.setattr(C.cookie_store, "load",
-                        lambda user=None: (seen.__setitem__("load_user", user), None)[1])
+                        lambda user, origin: (seen.__setitem__("load_user", user), None)[1])
     monkeypatch.setattr(C.cookie_store, "save",
-                        lambda cookie, source="", user=None: seen.__setitem__("save_user", user))
+                        lambda cookie, source="", user=None, **kw: seen.__setitem__("save_user", user))
     monkeypatch.setattr(C, "current_i8_credentials", lambda: ("i8acc-A", "i8pwd-A"))
+    monkeypatch.setattr(C, "i8_base_of", lambda _: "https://i8.example.test")
 
     c = C.I8Client(allow_kick=False)
     c._ensure_cookie()

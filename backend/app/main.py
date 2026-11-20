@@ -203,11 +203,12 @@ def _install_error_handlers(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    from app.mod03_notice.print_batch_store import prune_expired
     from app.mod13_oilcard.invoice_retirement import purge_expired
 
     stopping = asyncio.Event()
 
-    async def expire_deleted_invoices():
+    async def expire_runtime_data():
         while not stopping.is_set():
             try:
                 await asyncio.wait_for(stopping.wait(), timeout=30)
@@ -218,10 +219,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
                 await asyncio.to_thread(purge_expired)
             except Exception as error:
                 get_logger().error('油卡已删发票清理失败，将继续重试：{}', type(error).__name__)
+            try:
+                await asyncio.to_thread(prune_expired)
+            except OSError as error:
+                get_logger().error('打印批次状态清理失败，将继续重试：{}', type(error).__name__)
 
     setup_logging()
     get_logger().info("应用启动 env={}", get_settings().app_env)
-    cleanup = asyncio.create_task(expire_deleted_invoices())
+    cleanup = asyncio.create_task(expire_runtime_data())
     try:
         yield
     finally:

@@ -206,7 +206,9 @@ test('仓库名变化后原下线确认失效', async () => {
   label.props.children[1].props.onChange({ target: { value: '新建仓库B' } });
   assert.equal(walk(render('http', false), node => node.props?.children === '让现有会话下线并继续').length, 0);
   await click(confirm);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].url, '/api/m02/session/kick-cancel');
+  assert.deepEqual(calls[1].body, {kick_token: 'warehouse-confirmation'});
 });
 
 test('仓库名单：确认后等待浏览器就绪，就绪后提交原查询', async () => {

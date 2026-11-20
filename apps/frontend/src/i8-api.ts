@@ -1,10 +1,16 @@
-import { ApiError, record } from './api';
+import { ApiError, body, record, requestJson } from './api';
 
 export function readI8KickConfirmation(failure: unknown) {
   if (!(failure instanceof ApiError) || failure.status !== 409 || failure.code !== 'i8_online_conflict') return null;
   const detail = failure.detail;
   if (!record(detail) || typeof detail.kick_token !== 'string' || !detail.kick_token) return null;
   return { token: detail.kick_token, message: failure.message };
+}
+
+export function revokeI8KickToken(token: string) {
+  if (token) void requestJson('/api/m02/session/kick-cancel', {
+    method: 'POST', keepalive: true, ...body({kick_token: token}),
+  }).catch(() => {});
 }
 
 export const sourceNames = { notices: '付款通知书', settlement: '收发结存表', inventory: '库存单据明细表', contracts: '采购合同信息', warehouses: '仓库列表', 'common-projects': '常用项目列表' };

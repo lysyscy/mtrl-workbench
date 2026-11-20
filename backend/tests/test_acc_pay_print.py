@@ -353,7 +353,7 @@ def test_出纸失败须显式报出原因(monkeypatch):
 # ------------------------------------------------------------------ 001-09
 
 
-def test_系统内勾选_单选多选端到端():
+def test_系统内勾选_单选多选端到端(monkeypatch):
     """判据：待打印单据来自系统内勾选（不依赖外部文件或手输清单）；单选与多选均能端到端跑通。"""
     from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
@@ -381,14 +381,24 @@ def test_系统内勾选_单选多选端到端():
     app.dependency_overrides[get_notice_lister] = lambda: (
         lambda bill_type=None, limit=200: notices
     )
+    from app.core import app_settings
+    from app.core.session import COOKIE_NAME, make
+    from app.mod02_i8 import browser_broker
+
+    owner, device, origin = "fixture-print-owner", "fixture-print-device", "https://i8.example.test"
+    broker = browser_broker.BrowserBroker()
+    broker.connect(owner, device, origin)
+    monkeypatch.setattr(browser_broker, "_BROKER", broker)
+    monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": origin})
     client = TestClient(app)
+    client.cookies.set(COOKIE_NAME, make(owner))
 
     # 勾选来源 = 系统内 id 列表（非文件 / 手输清单）
-    single = client.post("/api/m03/batch", json={"ids": [1], "mode": "print", "session_mode": "browser"})
+    single = client.post("/api/m03/batch", json={"ids": [1], "mode": "print", "session_mode": "browser", "device_id": device})
     assert single.status_code == 200, single.text
     assert single.json()["total"] == 1 and single.json()["success"] == 1
 
-    multi = client.post("/api/m03/batch", json={"ids": [1, 2, 3], "mode": "print", "session_mode": "browser"})
+    multi = client.post("/api/m03/batch", json={"ids": [1, 2, 3], "mode": "print", "session_mode": "browser", "device_id": device})
     assert multi.status_code == 200, multi.text
     assert multi.json()["total"] == 3 and multi.json()["success"] == 3
 

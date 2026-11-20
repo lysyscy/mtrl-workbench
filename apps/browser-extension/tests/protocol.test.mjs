@@ -52,7 +52,7 @@ test('指定局域网工作台可以连接和取数，其他主机与端口不�
  * 最小 chrome 替身：只实现扩展真正用到的那几个口，别的一个不给。
  * ------------------------------------------------------------------ */
 
-function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = null } = {}) {
+function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = null, tabApi = {} } = {}) {
   const listeners = { action: null, external: null };
   const session = new Map();
   if (tab) session.set('i8RelayTab', { ...tab, selectedAt: 1 });
@@ -70,7 +70,9 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
     tabs: {
       get: async () => ({ status: 'complete', frozen: page.frozen }),
       onReplaced: { addListener() {} },
+      ...tabApi,
     },
+    permissions: { contains: async () => true },
     runtime: { onMessageExternal: { addListener: fn => { listeners.external = fn; } } },
     storage: {
       session: {
@@ -793,4 +795,44 @@ test('签名图只回传图片字节，登录页和跳转不能当图片', async
   assert.equal(redirect.ok, false);
   assert.equal(redirect.code, 'opaque-response');
   assert.equal(sent, 0);
+});
+
+
+test('completed auto-opened tab on a different site releases the next confirmed open', async () => {
+  const created = [];
+  const relay = boot({tab: null, tabApi: {
+    query: async () => [],
+    get: async () => ({status: 'complete'}), // Navigated outside the granted host permissions.
+    create: async options => { created.push(options); return {id: 8}; },
+  }});
+  const key = 'i8RelayOpened:' + I8;
+  relay.session.set(key, 7);
+  const request = {type: 'i8-relay:identity', device_id: DEVICE, origin: I8};
+  await relay.call(request);
+  assert.equal(relay.session.has(key), false);
+  const confirm = {...request, openIfMissing: true};
+  const answers = await Promise.all([relay.call(confirm), relay.call(confirm)]);
+  assert.deepEqual(answers.map(answer => answer.code), ['tab-opening', 'tab-opening']);
+  assert.deepEqual(created.map(tab => [tab.url, tab.active]), [[I8, false]]);
+  assert.equal(relay.session.get(key), 8);
+});
+
+test('signature 200 with an i8 expiry body returns a strict session-ended signal only', async () => {
+  let payload;
+  const relay = boot({fetchImpl: async () => ({
+    ...reply({headers: {'Content-Type': 'application/json'}}),
+    text: async () => payload,
+  })});
+  await relay.bind();
+  const request = exec({method: 'GET', url: I8 + '/sig/test.png?s=demo'});
+  for (payload of ['{"Code":"401"}', '{"Code":401}', 'No SessionInfo found']) {
+    const answer = await relay.call(request);
+    assert.equal(answer.ok, false);
+    assert.equal(answer.code, 'session-ended');
+    assert.equal(answer.body_b64, undefined);
+  }
+  payload = '{"Code":500}';
+  const answer = await relay.call(request);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.body_b64, '');
 });

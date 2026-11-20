@@ -51,7 +51,7 @@ def case(monkeypatch, rollback_db, tmp_path):
     monkeypatch.setattr(session_policy, "current_i8_credentials", lambda: ("isolated", ""))
     monkeypatch.setattr(session_policy, "_tokens", {})
     monkeypatch.setattr(login, "sm2_encrypt", lambda plain: plain)
-    monkeypatch.setattr(cookie_store, "load", lambda user: state.cookie)
+    monkeypatch.setattr(cookie_store, "load", lambda user, origin: state.cookie)
     monkeypatch.setattr(cookie_store, "save", lambda cookie, **kw: setattr(state, "cookie", cookie))
     monkeypatch.setattr(m02.wh_cache, "CACHE_DIR", tmp_path / "warehouse-cache")
     monkeypatch.setattr(inventory.source_cache, "DIR", tmp_path / "inventory-cache")

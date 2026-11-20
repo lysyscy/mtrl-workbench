@@ -29,7 +29,8 @@ from app.core.errors import ExternalServiceError, MustReportError, NotConfigured
 from app.core.identity import current_i8_credentials
 from app.core.logging import get_logger
 from app.mod02_i8 import cookie_store
-from app.mod02_i8.login import http_login
+from app.mod02_i8.login import AUTH_FAILED, I8AuthFailedError, http_login
+from app.mod02_i8.origin import _origin_of
 
 logger = get_logger()
 
@@ -88,6 +89,7 @@ class I8Client:
     def __init__(self, *, allow_kick: bool = False, policy: HttpSessionPolicy | None = None) -> None:
         self._allow_kick = allow_kick
         self._policy = policy
+        self._base = policy.base_url if policy else None
         self._cookie: str | None = None
         self._session: httpx.Client | None = None
         self._lock = threading.Lock()
@@ -111,13 +113,17 @@ class I8Client:
         return self._i8_creds
 
     # --- 内部 ---
+    def _base_url(self) -> str:
+        if self._base is None:
+            self._base = i8_base_of(get_settings())
+        if not _origin_of(self._base):
+            raise NotConfiguredError("i8 服务地址无效，请核对工作台设置。")
+        return self._base
+
     def _ensure_session(self) -> httpx.Client:
         if self._session is None:
-            base = self._policy.base_url if self._policy else i8_base_of(get_settings())
-            if not base:
-                raise NotConfiguredError("I8_BASE_URL 未配置（见 .env.example）")
             self._session = httpx.Client(
-                base_url=base,
+                base_url=self._base_url(),
                 timeout=httpx.Timeout(30.0, connect=10.0),
                 headers={
                     "User-Agent": "Mozilla/5.0",
@@ -133,7 +139,7 @@ class I8Client:
         ⚠️ 缓存命中时**根本不登录** ⇒ 自然不涉及强踢 —— 这是对的，与 `allow_kick` 的
            「须显式授权才踢人」授权语义**不冲突、也不绕过**（强踢只可能发生在真正登录那一步）。
         """
-        cached = cookie_store.load(self._creds()[0])          # ⭐ 缓存**按账号**分文件（§7.8 每人一份）
+        cached = cookie_store.load(self._creds()[0], _origin_of(self._base_url()))
         if cached:
             logger.info("i8 会话：命中磁盘缓存（不登录）")
             self._cookie = cached
@@ -142,18 +148,18 @@ class I8Client:
 
     def _login(self) -> None:
         user, password = self._creds()
-        if self._policy:
-            allow_kick = self._policy.take_kick_permission()
-            result = http_login(user=user, password=password, allow_kick=allow_kick, base_url=self._policy.base_url)
-        else:
-            allow_kick = self._allow_kick
-            result = http_login(user=user, password=password, allow_kick=allow_kick)
+        allow_kick = self._policy.take_kick_permission() if self._policy else self._allow_kick
+        base_url = self._base_url()
+        result = http_login(
+            user=user, password=password, allow_kick=allow_kick,
+            base_url=base_url, follow_redirects=self._policy is None,
+        )
         if not result.ok:
             if result.conflict and not allow_kick:
                 raise I8OnlineConflictError("该 i8 账号已有在线会话，本次未强踢。请先退出其他会话，或重新确认并允许强踢。")
-            raise ExternalServiceError(f"i8 登录失败：{result.detail}")
+            raise I8AuthFailedError(AUTH_FAILED)
         self._cookie = result.cookie
-        cookie_store.save(result.cookie, source="http_login", user=user)   # ⭐ 落盘复用（按账号）
+        cookie_store.save(result.cookie, source="http_login", user=user, origin=_origin_of(base_url))
 
     def _apply_cookie(self) -> None:
         if self._session is not None and self._cookie:
@@ -186,23 +192,18 @@ class I8Client:
         return "no sessioninfo" in str(body.get("Msg") or body.get("msg") or "").lower()
 
     # --- 公共请求 ---
-    def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """发请求；401 时重登一次重试；其余一律不重试。"""
+    def request(self, method: str, path: str, *, retry_expired: bool = True, **kwargs: Any) -> httpx.Response:
+        """发请求，默认允许会话失效后重登一次。"""
         with self._lock:
             session = self._ensure_session()
-            if self._policy is not None:
-                target = httpx.URL(path)
-                base = session.base_url
-                if target.is_absolute_url and (
-                    target.scheme, target.host, target.port
-                ) != (base.scheme, base.host, base.port):
-                    raise MustReportError("i8 站点已变化，请重新发起本次操作。")
+            if httpx.URL(path).is_absolute_url and _origin_of(path) != _origin_of(str(session.base_url)):
+                raise MustReportError("i8 站点已变化，请重新发起本次操作。")
             if self._cookie is None:
                 self._ensure_cookie()
             self._apply_cookie()
 
             resp = session.request(method, path, **kwargs)
-            if self._is_session_invalid(resp):
+            if retry_expired and self._is_session_invalid(resp):
                 # ⚠️ 仅重登一次（D9：不得自动重试登录循环）
                 logger.warning("i8 会话失效（401 或 body 报 No SessionInfo），尝试重登一次")
                 self._login()                       # 成功后已更新缓存
@@ -211,10 +212,9 @@ class I8Client:
                 if self._is_session_invalid(resp):
                     # 刚写入的 cookie 已知不可用 ⇒ 从缓存抹掉（否则下次进程启动会先拿它白撞一次 401）。
                     # ⚠️ 这不改判定：异常照旧抛，只是顺手清掉一个**已被证伪**的凭证。
-                    cookie_store.clear(self._creds()[0])
+                    cookie_store.clear(self._creds()[0], _origin_of(self._base_url()))
                     logger.warning("i8 会话重登后仍无效（401）")
-                    raise ExternalServiceError(
-                        "i8 登录没通过 —— 请核对「设置」页里该账号的 i8 凭据；仍不行请联系维护人")
+                    raise I8AuthFailedError(AUTH_FAILED)
             return resp
 
     def get_json(self, path: str, **kwargs: Any) -> Any:

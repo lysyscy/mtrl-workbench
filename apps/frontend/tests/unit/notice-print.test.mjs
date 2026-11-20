@@ -18,7 +18,8 @@ registerHooks({
       'const cell = () => h.cells[h.index++] ??= {};' +
       'export function useState(value) {const s = cell(); if (!("value" in s)) s.value = typeof value === "function" ? value() : value; return [s.value, next => s.value = next];}' +
       'export function useRef(current) {const s = cell(); return s.ref ??= {current};}' +
-      'export function useEffect(fn, deps) {const s = cell(); if (s.deps && deps.every((v, i) => Object.is(v, s.deps[i]))) return; s.deps = deps; h.effects.push(() => {s.cleanup?.(); s.cleanup = fn();});}',
+      'export function useEffect(fn, deps) {const s = cell(); if (s.deps && deps.every((v, i) => Object.is(v, s.deps[i]))) return; s.deps = deps; h.effects.push(() => {s.cleanup?.(); s.cleanup = fn();});}' +
+      'export const useLayoutEffect = useEffect;',
     );
     if (specifier === './i8-session') return data(
       'export const useI8Session = () => globalThis.__noticePrintHooks.session;' +
@@ -273,4 +274,97 @@ test('refresh finds the exact owner batch, resumes live progress and keeps the t
   assert.equal(recent.status, 'complete');
   dialog.remount(recent);
   assert.match(text(dialog.render()), /PN-3：结果待核实/);
+});
+
+
+test('print preparation binds the owner and kick retry preserves the entire request', async t => {
+  const conflict = {code: 'i8_online_conflict', message: '已有在线会话', detail: {kick_token: 'print-token'}};
+  let attempts = 0;
+  const dialog = mount(t, 'pdf', ({path}) => {
+    assert.equal(path, root + '/prepare');
+    return ++attempts === 1 ? Response.json(conflict, {status: 409}) : view('new', 'pdf', {status: 'complete'});
+  }, {mode: 'http', connected: false});
+  dialog.click('确认本批');
+  await until(() => text(dialog.render()).includes(conflict.message));
+  dialog.click('让现有会话下线并继续');
+  await until(() => dialog.calls.length === 2);
+  assert.deepEqual(dialog.calls[0].payload, {ids: [1, 2, 3], mode: 'pdf', expected_account: dialog.owner, session_mode: 'http'});
+  assert.deepEqual(dialog.calls[1].payload, {...dialog.calls[0].payload, kick_token: 'print-token'});
+});
+
+for (const label of ['取消下线确认', '关闭']) {
+  test('print revokes a pending kick when clicking ' + label, async t => {
+    const dialog = mount(t, 'pdf', ({path}) => path === root + '/prepare' ? Response.json({
+      code: 'i8_online_conflict', message: '已有在线会话', detail: {kick_token: 'print-cancel'},
+    }, {status: 409}) : {ok: true}, {mode: 'http', connected: false});
+    dialog.click('确认本批');
+    await until(() => text(dialog.render()).includes('已有在线会话'));
+    dialog.click(label);
+    assert.deepEqual(dialog.calls.at(-1), {
+      path: '/api/m02/session/kick-cancel', method: 'POST', payload: {kick_token: 'print-cancel'},
+    });
+    assert.equal(text(dialog.render()).includes('让现有会话下线并继续'), false);
+  });
+}
+
+test('recovered ready batch renders only its original bill numbers before allowing dispatch', async t => {
+  const ready = view('saved', 'print', {status: 'ready', stage: 'preparing', total: 2, prepared_count: 2,
+    items: [item(8), item(5)]});
+  const dialog = mount(t, 'print', ({path}) => {
+    assert.equal(path, root + '/saved/dispatch');
+    return {...ready, status: 'complete', stage: 'done'};
+  });
+  dialog.remount(ready);
+  const grid = walk(dialog.render()).find(node => node.type === 'grid');
+  assert.deepEqual(grid.props.rows, [{notice_id: 8, bill_no: 'PN-8'}, {notice_id: 5, bill_no: 'PN-5'}]);
+  assert.equal(dialog.calls.length, 0);
+  dialog.click('投递原批');
+  await until(() => dialog.calls.length === 1);
+  assert.equal(dialog.calls[0].method, 'POST');
+});
+
+for (const removeFailed of [false, true]) {
+  test('recovered failed preparation needs confirmation for ' + (removeFailed ? 'remaining scope' : 'original scope'), async t => {
+    const failed = view('saved', 'print', {status: 'failed', stage: 'preparing', failed_notice_id: 2,
+      items: [item(8), item(2, {status: 'failed'}), item(5, {status: 'skipped'})]});
+    const dialog = mount(t, 'print', ({path}) => {
+      assert.equal(path, root + '/prepare');
+      return view('new', 'print', {status: 'failed', stage: 'preparing'});
+    });
+    dialog.remount(failed);
+    if (removeFailed) dialog.click('移出异常单并重新确认剩余批次');
+    assert.equal(dialog.calls.length, 0);
+    dialog.click(removeFailed ? '确认本批' : '重试全批');
+    await until(() => dialog.calls.length === 1);
+    assert.deepEqual(dialog.calls[0].payload.ids, removeFailed ? [8, 5] : [8, 2, 5]);
+  });
+}
+
+test('missing remembered batch never falls back to another active batch', async t => {
+  globalThis.window = {sessionStorage: {getItem: () => 'missing'}};
+  t.after(() => { delete globalThis.window; });
+  const dialog = mount(t, 'print', ({path}) => {
+    assert.equal(path, root + '/missing');
+    return Response.json({detail: 'not found'}, {status: 404});
+  });
+  assert.equal(await recoverNoticePrint(dialog.owner), null);
+  assert.deepEqual(dialog.calls.map(call => call.path), [root + '/missing']);
+});
+
+
+test('a recovered in-progress batch updates numeric placeholders to bill numbers before dispatch', async t => {
+  const preparing = view('saved', 'print', {stage: 'connecting', total: 2,
+    items: [item(8, {bill_no: '8'}), item(5, {bill_no: '5'})]});
+  const ready = {...preparing, stage: 'preparing', status: 'ready', prepared_count: 2, items: [item(8), item(5)]};
+  const dialog = mount(t, 'print', ({path, method}) => {
+    assert.equal(path, root + '/saved');
+    assert.equal(method, 'GET');
+    return ready;
+  });
+  dialog.remount(preparing);
+  assert.equal(text(dialog.render()).includes('投递原批'), false);
+  await until(() => text(dialog.render()).includes('投递原批'));
+  const grid = walk(dialog.render()).find(node => node.type === 'grid');
+  assert.deepEqual(grid.props.rows.map(row => row.bill_no), ['PN-8', 'PN-5']);
+  assert.equal(dialog.calls.length, 1);
 });

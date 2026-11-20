@@ -66,6 +66,7 @@ class BatchResponse(BaseModel):
 
 
 class PreparationItemOut(DeliveryFields):
+    delivery_status: Literal["pending", "in_flight", "accepted", "failed", "unknown"] = "pending"
     notice_id: int
     bill_no: str
     status: Literal["pending", "preparing", "prepared", "failed", "skipped"]
@@ -94,7 +95,7 @@ class PrintBatchOut(BaseModel):
     batch_id: str
     mode: Literal["print", "pdf"]
     ids: tuple[int, ...]
-    stage: Literal["connecting", "preparing", "dispatching"]
+    stage: Literal["connecting", "preparing", "dispatching", "done"]
     status: Literal["running", "ready", "failed", "complete"]
     total: int
     prepared_count: int

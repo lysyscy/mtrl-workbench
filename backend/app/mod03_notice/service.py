@@ -28,6 +28,7 @@ from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.client import I8OnlineConflictError
+from app.mod02_i8.login import I8AuthFailedError
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.print.dispatch import DispatchOutcome, DispatchPlan
 from app.mod03_notice.print.fields import build_detail_rows, build_values
@@ -175,7 +176,7 @@ def prepare_batch(
             name = _unique_name(bill_no, used_names)
             prepared = PreparedPdf(notice.id, bill_no, name, pdf)
             outcome = ItemOutcome(notice.id, bill_no, True, pdf_path=name)
-        except (StrictSessionStopped, I8OnlineConflictError):
+        except (StrictSessionStopped, I8OnlineConflictError, I8AuthFailedError):
             raise
         except Exception as exc:  # noqa: BLE001
             reason = _reason(exc)
@@ -317,7 +318,7 @@ def _get_design(cache: dict[str, object], fetcher: DesignLike, bill_type: str):
     if bill_type not in cache:
         try:
             cache[bill_type] = fetcher.fetch(bill_type)
-        except (StrictSessionStopped, I8OnlineConflictError):
+        except (StrictSessionStopped, I8OnlineConflictError, I8AuthFailedError):
             raise
         except Exception as exc:  # noqa: BLE001
             cache[bill_type] = exc

@@ -124,7 +124,7 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(scopeKey);
   const closing = useDialogClose({
     busy: busy || readback !== null, dirty: Boolean(value || newName || keyword),
-    close: () => { cancelWaiting(); close(); }, active: !blocked,
+    close: () => { cancelWaiting(); kick.dismiss(); close(); }, active: !blocked,
   });
   const word = keyword.trim();
   const keywordMatches = Boolean(word) && document.name.includes(word);

@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 import app.mod02_i8.notice_source as ns
+from app.core.errors import ExternalServiceError
 from app.mod02_i8.notice_source import NoticeDetailFetcher
 
 
@@ -22,6 +25,8 @@ class _StubClient:
     def post_json(self, path: str, **kwargs: object) -> object:
         self.calls += 1
         return self._payloads.pop(0)
+
+    get_json = post_json
 
 
 def test_明细回空会再确认一次_重试取到就用(monkeypatch):
@@ -48,3 +53,28 @@ def test_明细正常回包不触发重试(monkeypatch):
     rows = NoticeDetailFetcher(stub).fetch_detail("ph")
     assert [r.get("RecAccNo") for r in rows] == ["102902"]
     assert stub.calls == 1
+
+
+@pytest.mark.parametrize("method,label,key", [
+    ("fetch_detail", "通知书明细", "Record"),
+    ("fetch_flow", "通知书审批流程", "Data"),
+])
+@pytest.mark.parametrize("envelope", ["unrecognized", "failure_upper", "failure_lower", "missing"])
+def test_print_source_rejects_error_envelopes_without_empty_retry(method, label, key, envelope):
+    response = {
+        "unrecognized": {"Unexpected": []},
+        "failure_upper": {"Success": False, key: []},
+        "failure_lower": {"success": False, key: []},
+        "missing": {"Success": True},
+    }[envelope]
+    stub = _StubClient([response])
+    with pytest.raises(ExternalServiceError, match=label):
+        getattr(NoticeDetailFetcher(stub), method)("ph")
+    assert stub.calls == 1
+
+
+def test_recognized_empty_flow_is_confirmed_once(monkeypatch):
+    monkeypatch.setattr(ns.time, "sleep", lambda *_: None)
+    stub = _StubClient([{"Success": True, "Data": []}, {"data": []}])
+    assert NoticeDetailFetcher(stub).fetch_flow("ph") == []
+    assert stub.calls == 2

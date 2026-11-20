@@ -120,3 +120,40 @@ def test_已核实与真失败两态不受影响(monkeypatch):
     o2 = _run(monkeypatch, _boom).outcomes[0]
     assert o2.ok is False and o2.unverified is False, "失败就是失败，⛔ 别混进『未核实』"
     assert "出纸失败" in o2.reason
+
+
+def test_probe_prints_successful_rows_and_preserves_original_exit_codes(monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+
+    from tools.probe import print_bills as cli
+
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path)
+    monkeypatch.setattr(cli, "get_settings", lambda: SimpleNamespace(printer_ipp_url="ipp://fixture"))
+    for dependency in ("I8Client", "PdfRenderer", "NoticeDetailFetcher", "SignatureStore"):
+        monkeypatch.setattr(cli, dependency, lambda *a, **kw: SimpleNamespace(close=lambda: None))
+
+    def render(_client, bill_no, *args):
+        if bill_no == "missing":
+            return {"bill_no": bill_no, "ok": False, "reason": "not found"}
+        pdf = tmp_path / f"{bill_no}.pdf"
+        pdf.write_bytes(bill_no.encode())
+        return dict(bill_no=bill_no, ok=True, reason="", bill_type="material", type_raw="material",
+                    print_name="sample", print_id=1, detail=1, flow=0, slots=0, filled=0,
+                    blank=[], missing=[], unresolved=0, pdf=pdf)
+
+    sent = []
+    def send(pdf, uri):
+        sent.append((pdf, uri))
+        return ipp.IppOutcome("failed" if pdf == b"reject" else "accepted", "fixture receipt")
+
+    monkeypatch.setattr(cli, "one_bill", render)
+    monkeypatch.setattr(cli, "send_pdf", send)
+    monkeypatch.setattr(sys, "argv", ["print_bills", "missing", "reject", "ok"])
+    assert cli.main() == 0
+    assert sent == [(b"reject", "ipp://fixture"), (b"ok", "ipp://fixture")]
+    sent.clear()
+    monkeypatch.setattr(sys, "argv", ["print_bills", "--expect", "material=2", "ok"])
+    assert cli.main() == 2 and sent == []
+    monkeypatch.setattr(sys, "argv", ["print_bills", "--no-print", "ok"])
+    assert cli.main() == 0 and sent == []

@@ -37,6 +37,7 @@ from app.core.errors import MustReportError
 from app.mod02_i8.browser_relay import is_signature_image_target, require_signature_image
 from app.mod02_i8.browser_session import StrictSessionStopped, StrictTargetMismatch, _origin_of
 from app.mod02_i8.client import I8OnlineConflictError
+from app.mod02_i8.login import I8AuthFailedError
 from app.core.logging import get_logger
 
 logger = get_logger()
@@ -242,9 +243,9 @@ class SignatureStore:
     # --- 内部 ---
     def _download(self, url: str) -> bytes:
         try:
-            resp = self._client.request("GET", url, follow_redirects=False)
-            require_signature_image(resp.status_code, resp.headers.get("content-type", ""))
-        except (StrictSessionStopped, I8OnlineConflictError):
+            resp = self._client.request("GET", url, follow_redirects=False, retry_expired=False)
+            require_signature_image(resp)
+        except (StrictSessionStopped, I8OnlineConflictError, I8AuthFailedError):
             raise
         except Exception as exc:  # noqa: BLE001
             logger.warning("签名图下载失败（{}）", type(exc).__name__)

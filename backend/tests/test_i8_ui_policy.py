@@ -44,8 +44,9 @@ def test_failed_ui_login_stops_without_retry_or_business_write(monkeypatch, logi
     monkeypatch.setattr(api, 'session_scope', forbidden)
     payload = api.AutoLinkIn(notice_ids=[1], session_mode="http", allow_kick=True, selections=[
         api.AutoLinkSelection(notice_id=1, contract_id=2, amount='1.00', payable_codes=['P1'])])
-    with pytest.raises(AppError, match='isolated authentication failure'):
+    with pytest.raises(AppError, match="i8 登录未成功") as failure:
         (api.api_auto_link_preview if route.endswith('preview') else api.api_auto_link)(payload)
+    assert failure.value.code == "i8_auth_failed" and "isolated authentication failure" not in str(failure.value)
     assert calls == [False]
 
 
@@ -61,7 +62,9 @@ def test_http_online_conflict_kicks_only_when_opted_in_without_failure_loop(monk
                 {'sessionID': 'isolated-session', 'userId': 'isolated'})})
         if request.url.path == http_login.KICK_PATH:
             return httpx.Response(200, json={'success': True})
-        return httpx.Response(200, json={'accesstoken': 'isolated'} if authenticated else {'success': False})
+        if authenticated:
+            return httpx.Response(200, json={'accesstoken': 'isolated'}, headers={'set-cookie': 'session=isolated'})
+        return httpx.Response(200, json={'msg': 'upstream-only-fixture-detail'})
     monkeypatch.setattr(http_login, 'get_settings', lambda: SimpleNamespace())
     monkeypatch.setattr(http_login, 'i8_base_of', lambda settings: 'https://i8.invalid')
     monkeypatch.setattr(http_login, 'sm2_encrypt', lambda plain: plain)
@@ -69,6 +72,7 @@ def test_http_online_conflict_kicks_only_when_opted_in_without_failure_loop(monk
                         client_type(**kw, transport=httpx.MockTransport(respond)))
     result = http_login.http_login(user='isolated', password='', **({'allow_kick': True} if allow_kick else {}))
     assert result.ok is authenticated
+    assert "upstream-only-fixture-detail" not in result.detail
     assert result.conflict and result.kicked_online is allow_kick
     assert calls == ([http_login.LOGIN_PATH, http_login.KICK_PATH, http_login.LOGIN_PATH]
                      if allow_kick else [http_login.LOGIN_PATH])

@@ -30,19 +30,22 @@ export interface ReportFetchProps {
 export function I8ReportFetch({source, month: initial, me, paused, close, refresh, pending, onPending}: ReportFetchProps & {source: ReportSource}) {
   const [month, setMonth] = useState(initial), [result, setResult] = useState<FetchReceipt | null>(null);
   const action = useI8FetchAction({source, me, paused, refresh, pending, scopeKey: month, onPending: value => onPending(value ? month : null)});
-  const closing = useDialogClose({busy: action.busy || action.refreshing, dirty: !action.sent && month !== initial, close, active: !paused});
+  const closing = useDialogClose({busy: action.busy || action.refreshing, dirty: !action.sent && month !== initial,
+    close: () => { action.cancelWaiting(); action.cancelKick(); close(); }, active: !paused});
   const spec = reportFetch[source], titleId = `${source}-fetch-title`;
   async function run() {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return;
-    const value = await action.run({path: spec.path, payload: {month, confirm: true}, parse: value => readReportFetchResult(source, month, value)});
-    if (value) setResult(value);
+    await action.run({
+      path: spec.path, payload: {month, confirm: true},
+      parse: value => readReportFetchResult(source, month, value), onSuccess: setResult,
+    });
   }
   return <BusinessModal open={!paused} requestClose={closing.requestClose} className="inventory-dialog" titleId={titleId}>
     <DialogContents title={`按月抓取${spec.title}`} titleId={titleId} closing={closing}>
       {!action.sent && <><label className="inventory-fields">抓取月份<TimePicker label={`${spec.title}抓取月份`} value={month} modes={['月']} onChange={setMonth} disabled={action.busy || paused} /></label><p>{spec.scope}</p></>}
       <I8FetchStatus action={action} me={me}/>
       {result && <I8FetchReceiptContents data={result} />}
-      <I8FetchRecovery action={action} source={source} scope={month} onAcknowledged={close}/>
+      <I8FetchRecovery action={action} source={source} scope={month} onAcknowledged={closing.requestClose}/>
       <I8FetchActions action={action} close={closing.requestClose} canRun={/^\d{4}-(0[1-9]|1[0-2])$/.test(month)} onRun={() => void run()} label={`确认按 ${month} 抓取`}/>
     </DialogContents>
   </BusinessModal>;

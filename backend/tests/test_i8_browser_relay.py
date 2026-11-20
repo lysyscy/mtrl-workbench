@@ -909,3 +909,29 @@ def test_空闲清理不会误杀在途请求(store, monkeypatch):
                               generation=pending.generation)
     now += 2.0
     assert store.connection_of(OWNER, DEVICE) is None         # 重复回帖不续期
+
+
+def test_confirmed_operation_stops_if_browser_reconnects_between_clients(guards, store):
+    from app.mod02_i8.session_policy import unified_i8_session
+
+    first = store.connect(OWNER, DEVICE, BASE)
+    with unified_i8_session({"session_mode": MODE_BROWSER, "device_id": DEVICE},
+                            owner=OWNER, operation="test", scope={}):
+        from contextlib import closing
+        with closing(open_i8_client(owner=OWNER)) as client:
+            def reply():
+                pending = store.take_pending(OWNER, DEVICE, timeout=2)
+                if pending:
+                    store.complete(OWNER, DEVICE, pending.ticket, status=200, headers={},
+                                   body=b'{"Record":[]}', generation=pending.generation)
+            thread = threading.Thread(target=reply, daemon=True)
+            thread.start()
+            assert client.get_json(BASE + "/SUP/RichHelp/GetCommonUseList") == {"Record": []}
+            thread.join(timeout=2)
+            assert store.connect(OWNER, DEVICE, BASE).generation != first.generation
+            with pytest.raises(StrictSessionUnavailable, match="重新连接"):
+                client.get_json(BASE + "/SUP/RichHelp/GetCommonUseList")
+            with pytest.raises(StrictSessionUnavailable, match="重新连接"):
+                open_i8_client(owner=OWNER)
+    assert store.take_pending(OWNER, DEVICE, timeout=0) is None
+    assert guards == {"login": 0, "cache": []}

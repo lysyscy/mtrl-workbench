@@ -20,7 +20,7 @@ import time
 from typing import Any
 
 from app.core.config import I8_PATH_PAYMENT_NOTICE, get_settings, i8_base_of, i8_endpoint_of
-from app.core.errors import NotConfiguredError
+from app.core.errors import ExternalServiceError, NotConfiguredError
 from app.core.logging import get_logger
 from app.mod02_i8.client import I8Client, serialize_fetch
 
@@ -159,7 +159,7 @@ class NoticeDetailFetcher:
         """
         for attempt in range(EMPTY_RETRY + 1):
             resp = self._client.post_json(DETAIL_PATH, data={"id": str(ph_id)})
-            rows = _extract_records(resp)
+            rows = _require_notice_records(resp, ("Record", "records", "Data", "data", "list"), "通知书明细")
             if rows or attempt >= EMPTY_RETRY:
                 if not rows:
                     logger.warning("明细为空（已确认一次）—— 收款账号/银行/明细表会全部留空，请复核单据 {}", ph_id)
@@ -184,15 +184,19 @@ class NoticeDetailFetcher:
 
 
 def _extract_flow_nodes(resp: Any) -> list[dict]:
-    """流程历史响应 → 节点列表（兼容 `data` / `Data` / `Record`）。"""
+    return _require_notice_records(resp, ("data", "Data", "Record", "records"), "通知书审批流程")
+
+
+def _require_notice_records(resp: Any, keys: tuple[str, ...], label: str) -> list[dict]:
     if isinstance(resp, dict):
-        for key in ("data", "Data", "Record", "records"):
-            val = resp.get(key)
-            if isinstance(val, list):
-                return [r for r in val if isinstance(r, dict)]
-    if isinstance(resp, list):
-        return [r for r in resp if isinstance(r, dict)]
-    return []
+        if resp.get("Success") is False or resp.get("success") is False:
+            raise ExternalServiceError(f"i8 返回{label}读取失败，请核对后重试。")
+        rows = next((resp[key] for key in keys if isinstance(resp.get(key), list)), None)
+    else:
+        rows = resp
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ExternalServiceError(f"i8 返回的{label}格式无效，请核对后重试。")
+    return rows
 
 
 # ============================================================

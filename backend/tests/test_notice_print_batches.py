@@ -6,6 +6,7 @@ import io
 import json
 import struct
 import zipfile
+from concurrent.futures import Future
 from threading import Event, Thread
 from time import monotonic, sleep
 from types import SimpleNamespace
@@ -13,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
+from fastapi import HTTPException
 from pypdf import PdfReader, PdfWriter
 
 from app.core import app_settings
@@ -26,6 +28,7 @@ from app.mod02_i8.browser_session import StrictTargetMismatch
 from app.mod03_notice import notice_executors, print_batch_store
 from tests._auth import TestClient
 from app.mod03_notice.print import dispatch as channels, ipp
+from app.mod03_notice.schemas import BatchRequest
 from app.mod03_notice.print.signatures import check_signature_coverage
 from tests.m03_helpers import make_notice, sign_cell, template, text_cell
 
@@ -36,7 +39,7 @@ IMAGE = b"\x89PNG\r\n\x1a\n" + b"data" * 30
 
 
 @pytest.fixture
-def setup_batch(monkeypatch):
+def setup_batch(monkeypatch, tmp_path):
     values = {"i8_base_url": BASE, "i8_print_id_material": "design-material"}
     monkeypatch.setenv("PRINTER_IPP_URL", "ipp://configured-printer.example.test:631/ipp/print")
     monkeypatch.setitem(Settings.model_config, "env_file", None)
@@ -46,6 +49,8 @@ def setup_batch(monkeypatch):
     broker = browser_broker.BrowserBroker()
     monkeypatch.setattr(browser_broker, "_BROKER", broker)
     monkeypatch.setattr(print_batch_store, "_batches", {})
+    monkeypatch.setattr(print_batch_store, "_pending_preparations", set())
+    monkeypatch.setattr(print_batch_store, "STATE_DIR", tmp_path / "print-batches")
     local_rows = [make_notice(i, f"PN-{i}") for i in range(1, 4)]
     def load(ids):
         by_id = {row.id: row for row in local_rows}
@@ -90,7 +95,7 @@ def setup_batch(monkeypatch):
     api.cookies.set(COOKIE_NAME, make("notice-test-user"))
     broker.connect("notice-test-user", DEVICE, BASE)
     yield SimpleNamespace(api=api, broker=broker, sent=sent, rendered=rendered, logins=logins,
-                          operations=operations, printer=printer, records=records)
+                          operations=operations, printer=printer, records=records, notices=local_rows)
     get_settings.cache_clear()
 
 
@@ -162,6 +167,7 @@ def pump(broker, *, second_image=None):
                     continue
                 path = urlsplit(pending.url).path
                 requests.append((pending.method, path))
+                relay_failure = None
                 if path.startswith("/sig/"):
                     status, content_type, content = 200, "image/png", IMAGE
                     if path == "/sig/ph-2.png" and second_image:
@@ -169,6 +175,11 @@ def pump(broker, *, second_image=None):
                         assert release_second.wait(5)
                         if second_image == "session":
                             status, content_type, content = 200, "text/html", b"<html>login</html>"
+                        elif second_image == "relay_expired":
+                            status, content_type, content = 599, "", b""
+                            relay_failure = "session-ended"
+                        elif second_image == "json_expired":
+                            status, content_type, content = 200, "application/json", b'{"Code":"401"}'
                         else:
                             status, content_type, content = 200, "text/plain", b"not an image"
                 else:
@@ -176,7 +187,7 @@ def pump(broker, *, second_image=None):
                 broker.complete(
                     "notice-test-user", DEVICE, pending.ticket, status=status,
                     headers={"content-type": content_type}, body=content, declared_length=len(content),
-                    generation=pending.generation,
+                    generation=pending.generation, relay_failure=relay_failure,
                 )
         except Exception as exc:
             errors.append(exc)
@@ -205,7 +216,7 @@ def wait_batch(api, batch_id):
     pytest.fail(f"batch not finished: {value}")
 
 
-@pytest.mark.parametrize("second_image", ["not_image", "session"])
+@pytest.mark.parametrize("second_image", ["not_image", "session", "relay_expired", "json_expired"])
 def test_print_stops_mid_batch_then_only_dispatches_reconfirmed_scope(setup_batch, second_image):
     env = setup_batch
     relay = pump(env.broker, second_image=second_image)
@@ -231,10 +242,10 @@ def test_print_stops_mid_batch_then_only_dispatches_reconfirmed_scope(setup_batc
         assert failed["items"][2]["status"] == "skipped"
         assert env.api.post(f"{PATH}/{handle}/dispatch").status_code == 409
         assert ("GET", "/sig/ph-3.png") not in relay.requests
-        if second_image == "session":
+        if second_image != "not_image":
             assert failed["session_stopped"] is True
             assert failed["failed_notice_id"] is None
-            assert "会话异常页面" in failed["reason"]
+            assert ("会话异常页面" if second_image == "session" else "会话已失效") in failed["reason"]
             return
         assert failed["session_stopped"] is False
         assert failed["failed_notice_id"] == 2 and "签名" in failed["reason"]
@@ -277,9 +288,9 @@ def test_explicit_mode_and_http_conflict_token_are_scoped(setup_batch, path, mod
     if confirmed.status_code == 202:
         assert wait_batch(env.api, confirmed.json()["batch_id"])["status"] == "failed"
     else:
-        assert confirmed.status_code == 200
-        assert confirmed.json()["success"] == 0
-        assert "i8 登录失败" in confirmed.json()["items"][0]["reason"]
+        assert confirmed.status_code == 502
+        assert confirmed.json()["code"] == "i8_auth_failed"
+        assert "i8 登录未成功" in confirmed.json()["message"]
     assert env.logins == [False, True]
     replay = env.api.post(url, json=body(mode=mode, session_mode="http", kick_token=ticket))
     if replay.status_code == 202:
@@ -463,7 +474,7 @@ def test_refresh_reads_original_progress_and_three_delivery_states(setup_batch, 
         assert progress == refreshed.get(path).json()
         assert progress["batch_id"] == batch_id and progress["dispatch_processed_count"] == 1
         assert [(row["delivery_status"], row["job_id"]) for row in progress["items"]] == [
-            ("accepted", 1), ("pending", None), ("pending", None),
+            ("accepted", 1), ("in_flight", None), ("pending", None),
         ]
         other = TestClient(create_app())
         other.cookies.set(COOKIE_NAME, make("different-user"))
@@ -491,3 +502,155 @@ def test_refresh_reads_original_progress_and_three_delivery_states(setup_batch, 
     finally:
         release.set()
         relay.done()
+
+
+@pytest.mark.parametrize("path", ["/batch", "/print-batches/prepare"])
+def test_pdf_auth_failure_stops_before_trying_a_second_bill_type(setup_batch, monkeypatch, path):
+    env = setup_batch
+    env.notices[1].bill_type = "mechanical"
+    values = {"i8_base_url": BASE, "i8_print_id_material": "design-material",
+              "i8_print_id_mechanical": "design-mechanical"}
+    monkeypatch.setattr(app_settings, "_CACHE", values)
+    calls = []
+    def reject(**kwargs):
+        calls.append(kwargs["allow_kick"])
+        return SimpleNamespace(ok=False, conflict=False, detail="upstream-only-auth-fixture")
+    monkeypatch.setattr(i8_client, "http_login", reject)
+
+    response = env.api.post("/api/m03" + path, json=body((1, 2), mode="pdf", session_mode="http"))
+    if path == "/batch":
+        assert response.status_code == 502
+        assert response.json()["code"] == "i8_auth_failed"
+    else:
+        assert response.status_code == 202
+        failed = wait_batch(env.api, response.json()["batch_id"])
+        assert failed["session_stopped"] is True
+        assert failed["items"][1]["status"] == "skipped"
+    assert "i8 登录未成功" in response.text
+    assert "upstream-only-auth-fixture" not in response.text
+    assert calls == [False] and not env.rendered and not env.sent
+
+
+class _DeferredWorker:
+    def __init__(self):
+        self.jobs = []
+
+    def submit(self, run, *args):
+        future = Future()
+        self.jobs.append((future, run, args))
+        return future
+
+
+def test_restart_recovers_ready_scope_and_interrupted_dispatch_receipts(setup_batch, monkeypatch):
+    env = setup_batch
+    relay = pump(env.broker)
+    try:
+        original = env.api.post(f"{PATH}/prepare", json=body()).json()["batch_id"]
+        assert wait_batch(env.api, original)["status"] == "ready"
+        with print_batch_store._index_lock:
+            print_batch_store._batches.clear()
+        restored = env.api.get(f"{PATH}/active").json()
+        assert (restored["batch_id"], restored["status"], restored["ids"]) == (original, "failed", [1, 2, 3])
+        assert [item["bill_no"] for item in restored["items"]] == ["PN-1", "PN-2", "PN-3"]
+        assert "重新确认" in restored["reason"]
+        assert env.api.post(f"{PATH}/{original}/dispatch").status_code == 409
+        handle = env.api.post(f"{PATH}/prepare", json=body(restored["ids"])).json()["batch_id"]
+        assert wait_batch(env.api, handle)["status"] == "ready"
+    finally:
+        relay.done()
+
+    class SimulatedProcessStop(BaseException):
+        pass
+
+    state_path = print_batch_store.STATE_DIR / f"{handle}.json"
+    def persisted():
+        return json.loads(state_path.read_text(encoding="utf-8"))
+    sends = []
+
+    def send(content):
+        sends.append(content)
+        disk = persisted()
+        assert disk["owner"] == "notice-test-user" and disk["channels"] == ["ipp"]
+        assert disk["snapshot"]["stage"] == "dispatching"
+        items = disk["snapshot"]["items"]
+        statuses = [item["delivery_status"] for item in items]
+        assert content.startswith(b"%PDF-")
+        if len(sends) == 1:
+            assert statuses == ["in_flight", "pending", "pending"]
+            return ipp.IppOutcome("accepted", "accepted receipt", job_id=17)
+        assert statuses == ["accepted", "in_flight", "pending"]
+        assert items[0]["job_id"] == 17 and items[0]["attempts"][0]["reason"] == "accepted receipt"
+        raise SimulatedProcessStop
+
+    worker = _DeferredWorker()
+    monkeypatch.setattr(print_batch_store, "_workers", worker)
+    monkeypatch.setattr(print_batch_store, "lock_a4_channel",
+                        lambda **_: channels.DispatchPlan("ipp", "ipp://fixture", "", (("ipp", send),)))
+    assert env.api.post(f"{PATH}/{handle}/dispatch").status_code == 202
+    assert persisted()["snapshot"]["stage"] == "dispatching" and not sends
+    _, run, args = worker.jobs[0]
+    with pytest.raises(SimulatedProcessStop):
+        run(*args)
+
+    with print_batch_store._index_lock:
+        print_batch_store._batches.clear()
+    with pytest.raises(HTTPException) as foreign:
+        print_batch_store.read_batch("different-owner", handle)
+    assert foreign.value.status_code == 404
+    recovered = env.api.get(f"{PATH}/{handle}").json()
+    assert (recovered["batch_id"], recovered["stage"], recovered["status"]) == (handle, "done", "complete")
+    assert [item["delivery_status"] for item in recovered["items"]] == ["accepted", "unknown", "pending"]
+    assert recovered["items"][0]["job_id"] == 17
+    assert "勿盲目重打" in recovered["items"][1]["reason"]
+    assert env.api.post(f"{PATH}/{handle}/dispatch").status_code == 200
+    assert len(worker.jobs) == 1 and len(sends) == 2
+    assert all(path.suffix == ".json" for path in print_batch_store.STATE_DIR.iterdir())
+
+    record = persisted()
+    record["expires_at"] = 1
+    state_path.write_text(json.dumps(record), encoding="utf-8")
+    print_batch_store._batches.clear()
+    print_batch_store.prune_expired()
+    assert not state_path.exists()
+    assert env.api.get(f"{PATH}/{handle}").status_code == 404
+
+
+def test_prepare_admission_releases_capacity_on_completion_and_submit_failure(setup_batch, monkeypatch):
+    store = print_batch_store
+    monkeypatch.setattr(store, "MAX_PENDING_PREPARE_BATCHES", 1)
+    worker = _DeferredWorker()
+    monkeypatch.setattr(store, "_workers", worker)
+    request = BatchRequest(ids=[1], session_mode="browser", device_id=DEVICE)
+    owner = "notice-test-user"
+    started = store.start_batch(owner, request)
+    with pytest.raises(MustReportError, match="稍候重试"):
+        store.start_batch(owner, request)
+    assert list(store._batches) == [started.batch_id]
+    assert len(worker.jobs) == 1
+    worker.jobs[0][0].set_result(None)
+    assert not store._pending_preparations
+
+    def reject(*args):
+        raise RuntimeError("mock rejected queue submission")
+    monkeypatch.setattr(worker, "submit", reject)
+    with pytest.raises(MustReportError, match="稍候重试"):
+        store.start_batch(owner, request)
+    assert not store._pending_preparations
+    assert list(store._batches) == [started.batch_id]
+    assert list(store.STATE_DIR.glob("*.json")) == [store.STATE_DIR / f"{started.batch_id}.json"]
+
+
+def test_queued_browser_batch_never_switches_to_a_new_connection(setup_batch, monkeypatch):
+    env = setup_batch
+    worker = _DeferredWorker()
+    monkeypatch.setattr(print_batch_store, "_workers", worker)
+    start = env.api.post(f"{PATH}/prepare", json=body((1, 2)))
+    assert start.status_code == 202
+    env.broker.connect("notice-test-user", DEVICE, BASE)
+    future, run, args = worker.jobs[0]
+    future.set_result(run(*args))
+    failed = env.api.get(f"{PATH}/{start.json()['batch_id']}").json()
+    assert failed["status"] == "failed" and failed["session_stopped"] is True
+    assert "重新连接" in failed["reason"]
+    assert env.broker.take_pending("notice-test-user", DEVICE, timeout=0) is None
+    assert not env.sent and not env.rendered

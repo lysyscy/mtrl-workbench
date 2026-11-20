@@ -7,7 +7,7 @@
 3. **无缓存 ⇒ 登录一次，且 cookie 被写进缓存**；
 4. **401 ⇒ 重登一次（计数 = 1）且缓存被更新**；
 5. **重登后仍 401 ⇒ 清掉已知不可用的缓存**（异常照旧抛）；
-6. **旧纯文本格式兼容**（素材包有先例：旧文件就是一行 cookie）；
+6. **缺少正确站点绑定的旧格式一律不复用**；
 7. **缓存文件不进 git**（`.gitignore` 里有那条显式规则）。
 
 ⚠️ 本片**不新增判据点** ⇒ 全部用 `@acc()` 显式声明不绑定，避免被"未绑定测试体检"误报。
@@ -17,8 +17,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.core.config import get_settings
@@ -80,6 +82,8 @@ def env(monkeypatch, tmp_path):  # noqa: ANN001
     """缓存目录 → 临时目录 · 账号 → 固定值 · 会话与登录全打桩。返回 `(假会话, spy)`。"""
     monkeypatch.setattr(CS, "CACHE_DIR", tmp_path / "i8_cookie")
     monkeypatch.setenv("I8_USER", TEST_ACCOUNT)
+    monkeypatch.setattr(CS, "i8_base_of", lambda _: "https://i8-a.example.test")
+    monkeypatch.setattr(C, "i8_base_of", CS.i8_base_of)
     get_settings.cache_clear()
     session = _FakeSession()
 
@@ -149,19 +153,55 @@ def test_重登后仍401则清掉已知不可用的缓存(env):  # noqa: ANN001
     assert CS.load() is None, "已知不可用的 cookie 不该留在盘上（下次进程启动会先白撞一次 401）"
 
 
-def test_旧纯文本格式兼容(env):  # noqa: ANN001
-    """素材包有先例：旧缓存文件是**一行纯 cookie**（无 JSON 元数据）⇒ 仍要认，且能直接用上。"""
-    _session, spy = env
+@pytest.mark.parametrize("legacy", [
+    "LEGACY-COOKIE", '{"cookie":"NO-ORIGIN"}', '{"cookie":"WRONG-SITE","origin":"https://wrong.test"}',
+])
+def test_cache_requires_matching_origin(env, legacy):
+    session, spy = env
     path = CS.cookie_path(TEST_ACCOUNT)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("LEGACY-COOKIE", encoding="utf-8")
-
-    cookie, fetched_at, source = CS.load_meta(TEST_ACCOUNT)
-    assert cookie == "LEGACY-COOKIE"
-    assert source == "legacy" and fetched_at == "", "旧格式应标 legacy、无 fetched_at"
-    # 且 I8Client 能把它当缓存命中（不登录）
+    path.write_text(legacy, encoding="utf-8")
+    assert CS.load_meta(TEST_ACCOUNT) == (None, "", "")
     C.I8Client().request("GET", "/x")
-    assert spy.count == 0, "旧纯文本格式没被当缓存命中"
+    assert spy.count == 1
+    assert session.headers["Cookie"] == spy.cookie
+
+
+def test_switching_site_never_sends_the_other_sites_cookie(monkeypatch, tmp_path):
+    site_a = "https://i8-a.example.test"
+    site_b = "https://i8-b.example.test"
+    monkeypatch.setattr(CS, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(C, "current_i8_credentials", lambda: (TEST_ACCOUNT, ""))
+    normalized_a = CS.save("sid=old", user=TEST_ACCOUNT, origin="https://I8-A.example.test:443/login")
+    assert normalized_a == CS.cookie_path(TEST_ACCOUNT, site_a)
+    assert json.loads(normalized_a.read_text(encoding="utf-8"))["origin"] == site_a
+    assert CS.load(TEST_ACCOUNT, site_b) is None
+
+    login, requests = [], []
+    client_type = httpx.Client
+    def authenticate(**kwargs):
+        login.append(kwargs["base_url"])
+        return LoginResult(ok=True, cookie="sid=fresh-on-b")
+    def respond(request):
+        requests.append((str(request.url), request.headers.get("cookie")))
+        return httpx.Response(200, json={})
+    monkeypatch.setattr(C, "http_login", authenticate)
+    monkeypatch.setattr(C.httpx, "Client", lambda **kw: client_type(**kw, transport=httpx.MockTransport(respond)))
+    for origin in (site_a, site_b, site_b):
+        monkeypatch.setattr(C, "i8_base_of", lambda _, current=origin: current)
+        client = C.I8Client()
+        try:
+            client.request("GET", "/sample")
+        finally:
+            client.close()
+    assert requests == [
+        (site_a + "/sample", "sid=old"),
+        (site_b + "/sample", "sid=fresh-on-b"),
+        (site_b + "/sample", "sid=fresh-on-b"),
+    ]
+    assert login == [site_b]
+    assert CS.clear(TEST_ACCOUNT, site_b)
+    assert CS.load(TEST_ACCOUNT, site_a) == "sid=old"
 
 
 def test_缓存文件不进git():

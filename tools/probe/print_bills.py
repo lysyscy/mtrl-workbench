@@ -34,7 +34,7 @@ from app.mod02_i8.notice_source import (  # noqa: E402
     EMPTY_RETRY, EMPTY_RETRY_SLEEP, LIST_FORM, NoticeDetailFetcher, _map_record,
 )
 from app.mod03_notice.print.design import DesignFetcher  # noqa: E402
-from app.mod03_notice.print.dispatch import lock_a4_channel  # noqa: E402
+from app.mod03_notice.print.ipp import send_pdf  # noqa: E402
 from app.mod03_notice.print.render import PdfRenderer  # noqa: E402
 from app.mod03_notice.print.signatures import (  # noqa: E402
     SignatureStore, bind_signatures, check_signature_coverage, signature_slots,
@@ -205,19 +205,24 @@ def main() -> int:
             print("\n（--no-print）已跳过出纸。PDF 在：%s" % outdir)
             return 0
 
-        if any(not r["ok"] for r in rows):
-            print("整批 PDF 尚未准备完成，已投递 0 张。")
-            return 1
+        printed = 0
+        for row in (item for item in rows if item["ok"]):
+            try:
+                receipt = send_pdf(row["pdf"].read_bytes(), settings.printer_ipp_url)
+                if receipt.status == "accepted":
+                    printed += 1
+                    print("  ✅ %s → 已投递打印机" % row["bill_no"])
+                else:
+                    row["reason"] = receipt.reason
+                    print("  %s → %s" % (row["bill_no"], receipt.reason))
+            except Exception as exc:  # noqa: BLE001
+                row["reason"] = "%s: %s" % (type(exc).__name__, exc)
+                print("  ❌ %s → 出纸失败：%s" % (row["bill_no"], row["reason"]))
 
-        plan = lock_a4_channel(mode="ipp", printer_uri=settings.printer_ipp_url)
-        counts = {"accepted": 0, "failed": 0, "unknown": 0}
-        for r in rows:
-            receipt = plan.send(r["pdf"].read_bytes()).last
-            counts[receipt.status] += 1
-            print("  %s → %s" % (r["bill_no"], receipt.reason))
-        print("打印机已接收 %(accepted)d 张，明确失败 %(failed)d 张，结果待核实 %(unknown)d 张。" % counts)
+        unprinted = [row["bill_no"] for row in rows if not row["ok"] or row.get("reason")]
+        print("已投递 %d 张 · 未出 %s" % (printed, unprinted or "无"))
         print("PDF 全在：%s" % outdir)
-        return int(bool(counts["failed"] or counts["unknown"]))
+        return 0
     finally:
         try:
             renderer.close()

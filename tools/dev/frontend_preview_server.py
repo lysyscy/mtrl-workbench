@@ -187,6 +187,8 @@ def application(args, run, env, owner, version, browser_notice_check=None):
         bind_preview_account(engine, owner, browser_notice_check)
         enforce_browser_transport()
     from app.mod02_i8 import cookie_store, source_cache, wh_cache
+    from app.mod03_notice import print_batch_store
+    print_batch_store.STATE_DIR = private / 'print-batches'
     cookie_store.CACHE_DIR = private / 'i8_cookie'
     source_cache.DIR = settings().artifacts_path / 'i8_source'
     wh_cache.CACHE_DIR = settings().artifacts_path / 'i8_warehouse'

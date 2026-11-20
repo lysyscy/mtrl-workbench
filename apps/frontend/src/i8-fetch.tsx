@@ -1,12 +1,12 @@
 import Button from 'antd/es/button';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, body, record, requestJson } from './api';
 import type { Identity } from './api';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
 import type { SessionChoice } from './i8-browser-relay';
 import { I8ConnectionWaitStatus, useI8ActionWait, useI8Session } from './i8-session';
-import { readI8KickConfirmation, readRecords, recordSource } from './i8-api';
+import { readI8KickConfirmation, readRecords, recordSource, revokeI8KickToken } from './i8-api';
 import type { sourceNames } from './i8-api';
 import { useHistoryGuard } from './history';
 
@@ -15,6 +15,7 @@ interface FetchRequest<T> {
   payload: Record<string, unknown>;
   parse: (value: unknown) => T;
   onSuccess?: (result: T) => void;
+  operate?: (issue: () => Promise<void>) => Promise<void>;
 }
 interface Options {
   source?: keyof typeof sourceNames | 'mechanical';
@@ -28,6 +29,7 @@ interface Options {
 }
 
 interface KickConfirmation {
+  token: string;
   message: string;
   key: string;
   submit: () => Promise<unknown>;
@@ -65,20 +67,26 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(confirmationKey);
   const unavailable = paused || !enabled || busy || !me || config.isFetching || config.isError
     || !config.data?.ready || config.data.account !== me.account || waiting;
-  useEffect(() => {
+  function discardKick() {
+    kickGeneration.current += 1;
+    const confirmation = kickRef.current;
+    kickRef.current = null;
+    if (confirmation) revokeI8KickToken(confirmation.token);
+  }
+  useLayoutEffect(() => {
     setKickConfirmation(null);
-    return () => {kickGeneration.current += 1; kickRef.current = null;};
+    return discardKick;
   }, [confirmationKey]);
 
   function cancelKick() {
-    kickGeneration.current += 1;
-    kickRef.current = null;
+    discardKick();
     setKickConfirmation(null);
   }
   async function confirmKick() {
     const confirmation = kickRef.current;
     if (unavailable || lock.current || pendingRef.current || !confirmation || confirmation.key !== confirmationKey) return;
-    cancelKick();
+    kickRef.current = null;
+    setKickConfirmation(null);
     await confirmation.submit();
   }
   function markPending(value: boolean) {
@@ -117,7 +125,19 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   async function run<T>(request: FetchRequest<T>): Promise<T | undefined> {
     if (unavailable || lock.current || pendingRef.current || kickRef.current) return undefined;
     return runWhenReady(choice => alive.current && !lock.current && !pendingRef.current
-      ? submit(request, choice) : undefined);
+      ? issue(request, choice) : undefined);
+  }
+
+  async function issue<T>(request: FetchRequest<T>, choice: SessionChoice, retry?: ReturnType<typeof body>, token = '') {
+    if (!request.operate) return submit(request, choice, retry);
+    let result: T | undefined;
+    let issued = false;
+    await request.operate(async () => {
+      issued = true;
+      result = await submit(request, choice, retry);
+    });
+    if (!issued) revokeI8KickToken(token);
+    return result;
   }
 
   async function submit<T>(request: FetchRequest<T>, choice: SessionChoice, retry?: ReturnType<typeof body>): Promise<T | undefined> {
@@ -135,19 +155,21 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
     } catch (failure) {
       confirmed = !issued || failure instanceof ApiError && failure.status > 0 && failure.status < 500 && failure.code !== 'invalid_response';
       const conflict = readI8KickConfirmation(failure);
-      if (!retry && snapshot && session.mode !== SESSION_MODE_BROWSER && conflict) {
+      if (conflict) {
         awaitingKick = true;
-        if (alive.current) {
-          setSent(false);
-          if (generation === kickGeneration.current) {
-            const confirmedBody = body({...JSON.parse(snapshot.body), kick_token: conflict.token});
-            const confirmation = {
-              message: conflict.message, key: confirmationKey,
-              submit: () => submit(request, choice, confirmedBody),
-            };
-            kickRef.current = confirmation;
-            setKickConfirmation(confirmation);
-          }
+        if (alive.current && !retry) setSent(false);
+        if (!retry && snapshot && session.mode !== SESSION_MODE_BROWSER
+          && alive.current && generation === kickGeneration.current) {
+          const confirmedBody = body({...JSON.parse(snapshot.body), kick_token: conflict.token});
+          const confirmation = {
+            ...conflict, key: confirmationKey,
+            submit: () => issue(request, choice, confirmedBody, conflict.token),
+          };
+          kickRef.current = confirmation;
+          setKickConfirmation(confirmation);
+        } else {
+          revokeI8KickToken(conflict.token);
+          if (retry && alive.current) setError(conflict.message);
         }
       } else if (alive.current) setError(failure instanceof Error ? failure.message : '抓取未完成。');
     } finally {

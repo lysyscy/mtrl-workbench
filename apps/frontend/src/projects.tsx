@@ -277,7 +277,7 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(scopeKey);
   const title = state.kind === 'sync' ? `同步${state.source === 'warehouses' ? '仓库名单' : '常用项目列表'}` : ({ create: '手工建档，无仓库项目', delete: '删除项目档案', promote: '人工指认，扶正', archive: '选择仓库建档' } as const)[state.kind];
   const initial = useRef(JSON.stringify([full,disp,choice]));
-  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,choice]) !== initial.current, close: () => { cancelWaiting(); close(); } });
+  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,choice]) !== initial.current, close: () => { cancelWaiting(); kick.dismiss(); close(); } });
   const cannot = blocked || !me || busy || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
   async function save(kickToken?: string, sessionChoice: SessionChoice = session) {
     if (cannot || lock.current || (!kickToken && kick.message)) return;

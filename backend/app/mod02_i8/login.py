@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import get_settings, i8_base_of
-from app.core.errors import NotConfiguredError, human_reason
+from app.core.errors import ExternalServiceError, NotConfiguredError
 from app.core.logging import get_logger
 
 logger = get_logger()
@@ -39,6 +39,13 @@ _HEADERS = {
     "X-Requested-With": "XMLHttpRequest",
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 }
+
+
+AUTH_FAILED = "i8 登录未成功，请核对「设置」页的 i8 凭据与网络后重试。"
+
+
+class I8AuthFailedError(ExternalServiceError):
+    code = "i8_auth_failed"
 
 
 @dataclass
@@ -74,13 +81,13 @@ def _online_conflict(text: str) -> dict | None:
         resp = json.loads(text)
     except Exception:  # noqa: BLE001
         return None
-    if resp.get("success") or not resp.get("msg"):
+    if not isinstance(resp, dict) or resp.get("success") or not resp.get("msg"):
         return None
     try:
         inner = json.loads(resp["msg"])
     except Exception:  # noqa: BLE001
         return None
-    return inner if inner.get("sessionID") else None
+    return inner if isinstance(inner, dict) and inner.get("sessionID") else None
 
 
 def http_login(
@@ -89,6 +96,7 @@ def http_login(
     password: str | None = None,
     allow_kick: bool = False,
     base_url: str | None = None,
+    follow_redirects: bool | None = None,
 ) -> LoginResult:
     """登录 i8，返回 `LoginResult`（**成功时** `cookie` 可用）。
 
@@ -105,7 +113,7 @@ def http_login(
     password = settings.i8_password if password is None else password
     return login_at(
         base, user, password, encrypt=sm2_encrypt, allow_kick=allow_kick,
-        follow_redirects=base_url is None,
+        follow_redirects=(base_url is None if follow_redirects is None else follow_redirects),
     )
 
 
@@ -148,15 +156,10 @@ def login_at(base, user, password, *, encrypt, allow_kick=False, follow_redirect
         r2 = session.post(
             LOGIN_PATH, data={"body": encrypt(_build_plain(user, password, sid, "1"))}
         )
-        if "accesstoken" not in r2.text:
-            return LoginResult(
-                ok=False,
-                conflict=bool(conflict),
-                kicked_online=kicked,
-                detail=f"登录失败（HTTP {r2.status_code}）：{r2.text[:200]}",
-            )
-
         cookie = "; ".join(f"{k}={v}" for k, v in session.cookies.items())
+        if not r2.is_success or "accesstoken" not in r2.text or not cookie:
+            logger.warning("i8 登录失败（HTTP {}）：{}", r2.status_code, r2.text[:200])
+            return LoginResult(ok=False, conflict=bool(conflict), kicked_online=kicked, detail=AUTH_FAILED)
         return LoginResult(
             ok=True,
             cookie=cookie,
@@ -166,7 +169,7 @@ def login_at(base, user, password, *, encrypt, allow_kick=False, follow_redirect
         )
     except httpx.HTTPError as exc:
         # ⚠️ 只报错、不重试（D9）
-        return LoginResult(ok=False, detail=human_reason(
-            "连不上 i8", exc, next_step="请核对「设置」页里的 i8 地址与网络，稍后重试"))
+        logger.warning("i8 登录请求失败：{}", exc)
+        return LoginResult(ok=False, detail=AUTH_FAILED)
     finally:
         session.close()

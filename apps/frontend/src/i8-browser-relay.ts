@@ -83,7 +83,7 @@ export interface RelayReply {
   body_b64: string;
   /** 扩展自己数出来的字节数；后端会拿它和实际解码长度核对（截断即停）。 */
   declared_length: number;
-  relay_failure?: 'timeout' | 'redirect' | 'target' | 'network' | 'unavailable' | 'malformed';
+  relay_failure?: 'timeout' | 'redirect' | 'target' | 'network' | 'unavailable' | 'malformed' | 'session-ended';
 }
 
 /** 扩展从选中标签读取的站点；不再读取账号菜单。 */
@@ -408,6 +408,7 @@ export function isTransientRelayError(error: unknown): boolean {
 function relayFailure(error: unknown): NonNullable<RelayReply['relay_failure']> {
   const code = error instanceof ApiError ? error.code : '';
   if (code === 'request-timeout') return 'timeout';
+  if (code === 'session-ended') return 'session-ended';
   if (code === 'opaque-response') return 'redirect';
   if (code === 'target-mismatch') return 'target';
   if (code === 'request-network') return 'network';

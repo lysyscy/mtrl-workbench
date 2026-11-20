@@ -49,7 +49,15 @@ registerHooks({
           slot.deps = deps;
           slot.cleanup = effect();
         }
-        export function useMemo(factory) { return factory(); }
+        export function useMemo(factory, deps) {
+          const slot = cell();
+          if (!slot.deps || !deps.every((dep, index) => Object.is(dep, slot.deps[index]))) {
+            slot.deps = deps;
+            slot.value = factory();
+          }
+          return slot.value;
+        }
+        export function useId() { return 'fixture-id'; }
         export const useLayoutEffect = useEffect;
         export function useCallback(fn) { return fn; }
       `);
@@ -76,8 +84,19 @@ registerHooks({
       return stub('export function ReadFailure() {}');
     }
     if (specifier === './time-picker') {
-      return stub("export function TimePicker(p) { return { type: 'time-picker', props: p }; }");
+      return stub("export const TimePicker = 'time-picker'; export const BusinessDate = 'business-date';");
     }
+    if (specifier === './workspace-motion') return stub("export const DialogPresence = 'presence';");
+    if (specifier === './business-grid') return stub("export const ReadGrid = 'grid';");
+    if (specifier === './ownership') return stub(
+      "export const OwnershipDialog = 'ownership'; export const OwnershipProjectLink = 'project-link';" +
+      "export function useContractOwnershipPending() {return {read: {}, omit() {}};}",
+    );
+    if (specifier === 'react-router') return stub("export const Link = 'link';");
+    if (specifier === './grid') return stub("export const numberColumnWidth = () => ({}); export const textWidth = numberColumnWidth;");
+    if (specifier === './grid-text') return stub("export const EllipsisText = 'ellipsis';");
+    if (specifier === './mechanical-details') return stub("export const MechanicalDialog = 'mechanical-dialog';");
+    if (specifier === 'antd') return stub("export const Button = 'button'; export const Checkbox = 'checkbox'; export const Input = {}; export const Select = 'select';");
     if (specifier.startsWith('antd/es/')) {
       return stub('export default function Stub(p) { return { type: "antd", props: p }; }');
     }
@@ -86,6 +105,11 @@ registerHooks({
 });
 
 const { NoticeFetch } = await import('../../src/notice-fetch.tsx');
+const { I8ReportFetch } = await import('../../src/i8-report-fetch.tsx');
+const { ContractFetch } = await import('../../src/contract-tools.tsx');
+const { MechanicalWork } = await import('../../src/mechanical-work.tsx');
+const { useI8KickConfirmation } = await import('../../src/i8-kick-confirmation.tsx');
+const { ApiError } = await import('../../src/api.ts');
 const { I8FetchActions, useI8FetchAction } = await import('../../src/i8-fetch.tsx');
 const { readReportFetchResult } = await import('../../src/i8-report-fetch-api.ts');
 
@@ -332,6 +356,7 @@ function conflictRecorder({ repeat = false, topLevel = false } = {}) {
   const calls = [];
   globalThis.fetch = async (path, init) => {
     calls.push({path, body: JSON.parse(init.body)});
+    if (path === '/api/m02/session/kick-cancel') return response({ok: true});
     if (calls.length === 1 || repeat) {
       const message = '该 i8 账号已有在线会话。请确认是否让现有会话下线并继续本次操作。';
       const token = {kick_token: 'one-time-confirmation'};
@@ -380,7 +405,8 @@ test('已确认请求再次冲突时显示错误，原确认不能重复提交',
   assert.equal(action.kickMessage, '');
   assert.equal(action.pending, false);
   assert.match(action.error, /在线会话/);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.filter(call => call.path === '/api/m03/notices/fetch').length, 2);
+  assert.equal(calls.at(-1).path, '/api/m02/session/kick-cancel');
 });
 
 for (const invalidation of ['cancel', 'month', 'mode', 'close']) {
@@ -401,6 +427,115 @@ for (const invalidation of ['cancel', 'month', 'mode', 'close']) {
     assert.equal(actionsOf(render()).action.kickMessage, '');
     staleConfirm.props.onClick();
     await settle();
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1], {path: '/api/m02/session/kick-cancel', body: {kick_token: 'one-time-confirmation'}});
   });
 }
+
+
+test('a late kick offer is revoked after scope change or dismissal', async () => {
+  const calls = recorder();
+  cells.month = null;
+  function renderKick(scope) {
+    cells.index = 0;
+    return useI8KickConfirmation(scope);
+  }
+  const failure = token => new ApiError('已有在线会话', 409, 'i8_online_conflict', {kick_token: token});
+  const forbidden = () => assert.fail('cancelled confirmation submitted');
+  const old = renderKick('first');
+  old.offer(failure('first-token'), forbidden);
+  const changed = renderKick('second');
+  old.offer(failure('late-token'), forbidden);
+  changed.offer(failure('second-token'), forbidden);
+  changed.dismiss();
+  changed.confirm();
+  await settle();
+  assert.deepEqual(calls.map(call => call.body.kick_token), ['first-token', 'late-token', 'second-token']);
+  assert.ok(calls.every(call => call.path === '/api/m02/session/kick-cancel'));
+});
+
+const fetchSurfaces = [
+  ['monthly report', I8ReportFetch, {source: 'settlement', month: '2026-10', paused: false, pending: false, onPending() {}},
+    '/api/m07/fetch', reportResponse, p => p.data?.summary?.total === 4 && p.data?.summary?.kept_manual === 3],
+  ['contract tools', ContractFetch, {blocked: false}, '/api/m11/fetch',
+    {ok: true, receipt: {id: 13, matched: 2, started_at: '2026-11-20', status: 'success',
+      unsettled: [{contract_no: 'CT-3', project_name: '项目甲', kind: 'needs_keyword'}]}},
+    p => p.data?.id === 13 && p.pending?.[0]?.contract === 'CT-3'],
+];
+for (const [name, component, props, path, result, hasReceipt] of fetchSurfaces) {
+  function surface(close = () => {}) {
+    cells.index = 0;
+    cells.month = null;
+    return component({...props, me, close, refresh: async () => {}});
+  }
+
+  test(name + ' keeps the received result from a confirmed kick retry', async () => {
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push([url, JSON.parse(init.body)]);
+      return calls.length === 1
+        ? {ok: false, status: 409, json: async () => ({code: 'i8_online_conflict', message: '已有在线会话', detail: {kick_token: 'fixture'}})}
+        : response(result);
+    };
+    actionsOf(surface()).onRun();
+    await settle();
+    kickButton(surface()).props.onClick();
+    await settle();
+    assert.deepEqual(calls.map(([url]) => url), [path, path]);
+    assert.deepEqual(calls[1][1], {...calls[0][1], kick_token: 'fixture'});
+    assert.ok(walk(surface(), node => node.props && hasReceipt(node.props)).length);
+  });
+
+  test(name + ' closes synchronously before a ready event can submit', async () => {
+    const calls = recorder();
+    const ready = Promise.withResolvers();
+    let signal;
+    globalThis.__relaySession = {...globalThis.__relaySession, mode: 'browser', waitForBrowser(value) {
+      signal = value;
+      return ready.promise;
+    }};
+    const close = () => assert.equal(signal.aborted, true);
+    actionsOf(surface(close)).onRun();
+    assert.equal(actionsOf(surface(close)).action.waiting, true);
+    const modal = walk(surface(close), node => typeof node.props?.requestClose === 'function')[0];
+    modal.props.requestClose();
+    ready.resolve(true);
+    await settle();
+    assert.deepEqual(calls, []);
+  });
+}
+
+test('mechanical wait keeps writes unlocked and can be closed before readiness', async t => {
+  t.mock.method(globalThis, 'fetch', async () => { assert.fail('a closed dialog submitted'); });
+  Object.defineProperty(globalThis, 'document', {configurable: true, value: {documentElement: {}}});
+  Object.defineProperty(globalThis, 'getComputedStyle', {configurable: true, value: () => ({getPropertyValue: () => '1'})});
+  t.after(() => {delete globalThis.document; delete globalThis.getComputedStyle;});
+  const ready = Promise.withResolvers();
+  let signal, locks = 0;
+  globalThis.__relaySession = {...globalThis.__relaySession, mode: 'browser', waitForBrowser(value) {
+    signal = value;
+    return ready.promise;
+  }};
+  function surface() {
+    cells.index = 0;
+    cells.month = null;
+    return MechanicalWork({
+      me, data: {discoveries: [], warehouses: [], history_bases: []}, warehouses: [],
+      label: String, writable: true, busy: false, paused: false,
+      operate: async issue => {locks += 1; await issue();}, refresh: async () => true, added() {},
+    });
+  }
+  const start = walk(surface(), node => node.props?.children === '抓取i8')[0];
+  assert.equal(start.props.disabled, false);
+  start.props.onClick();
+  const modal = walk(surface(), node => node.type === 'mechanical-dialog')[0];
+  assert.equal(modal.props.busy, false);
+  const contents = modal.props.children(modal.props.close);
+  assert.ok(walk(contents, node => node.props?.children === '取消等待').length);
+  assert.equal(locks, 0);
+  modal.props.close();
+  assert.ok(signal.aborted);
+  ready.resolve(true);
+  await settle();
+  assert.equal(locks, 0);
+});

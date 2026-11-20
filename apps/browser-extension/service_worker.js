@@ -334,7 +334,11 @@ async function discoverTab(origin, openIfMissing) {
   const stored = await chrome.storage.session.get(key);
   if (typeof stored[key] === 'number') {
     const opened = await chrome.tabs.get(stored[key]).catch(() => null);
-    if (opened) return opened.status === 'loading' ? TAB_OPENING : SITE_CHANGED;
+    if (opened) {
+      if (opened.status !== 'complete') return TAB_OPENING;
+      if (originOf(opened.url || '') === origin) return tabStatus(opened) || probeTab({tabId: stored[key], origin}, true);
+      // A completed tab outside granted host permissions may no longer expose its URL.
+    }
     await chrome.storage.session.remove(key);
   }
   if (!openIfMissing()) return {ok: false, code: 'need-tab', message: '请打开配置的 i8 站点，工作台会自动继续连接。'};
@@ -411,7 +415,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
     body = bytes;
   }
-  let response;
+  let response, mediaType = '';
   // 预算由后端按**这条请求自己的** read 超时给（合同列表 200s / 详情 60s / 默认 30s），
   // ⛔ 不要在这里另设固定值：拿 30s 去截 200s 的列表就是凭空判死一条正常请求。
   const budget = Number(payload.timeout_ms) > 0 ? Number(payload.timeout_ms) : 0;
@@ -430,6 +434,17 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
       cache: 'no-store',
       ...(controller ? { signal: controller.signal } : {}),
     });
+    if (signatureImage) {
+      mediaType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+      if (response.status === 200 && mediaType !== 'text/html' && !/^image\/.+/.test(mediaType)) {
+        const text = await response.text();
+        let code;
+        try { code = JSON.parse(text)?.Code; } catch { /* The server may also return plain text. */ }
+        if (String(code) === '401' || /no sessioninfo/i.test(text)) {
+          return { failed: 'i8 会话已失效，本批已停止。', code: 'session-ended' };
+        }
+      }
+    }
   } catch (error) {
     // 超时是**超时**：⛔ 不许说成会话/身份失效（那会把用户推向重登，反而顶号）。
     if (error && error.name === 'AbortError') {
@@ -444,7 +459,6 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
     return { failed: '浏览器返回了不透明响应（无法核对结果）', code: 'opaque-response' };
   }
   if (signatureImage) {
-    const mediaType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
     if (response.status < 200 || response.status >= 300 || !/^image\/.+/.test(mediaType)) {
       // Relay status and media type for a precise stop reason, without returning a login page.
       return { status: response.status, headers: { 'content-type': mediaType }, body_b64: '', declared_length: 0 };

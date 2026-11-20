@@ -43,6 +43,14 @@ def _consume_token(token: str, binding: _TokenBinding) -> None:
     raise MustReportError("本次 i8 下线确认已失效，请重新发起原操作。")
 
 
+def revoke_kick_token(token: str, *, owner: str) -> None:
+    """Discard a pending confirmation owned by the authenticated account."""
+    with _token_lock:
+        stored = _tokens.get(token)
+        if stored and stored[0][0] == owner:
+            del _tokens[token]
+
+
 @contextmanager
 def unified_i8_session(
     payload: object, *, owner: str, operation: str, scope: dict,
@@ -60,7 +68,7 @@ def unified_i8_session(
     if mode == MODE_BROWSER:
         if token:
             raise MustReportError("请重新发起操作。浏览器会话无需确认其他会话下线。")
-        with relay_scope(mode, get("device_id")):
+        with relay_scope(mode, get("device_id"), owner=owner):
             yield
         return
 
