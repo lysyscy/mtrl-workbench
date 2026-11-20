@@ -20,8 +20,11 @@ from app.mod02_i8.client import I8OnlineConflictError
 from app.mod02_i8.session_policy import unified_i8_session
 from app.mod03_notice import pdf_cache
 from app.mod03_notice.notice_executors import batch_resources, load_batch_notices, persist_batch_run
-from app.mod03_notice.print.dispatch import dispatch_pdf
-from app.mod03_notice.schemas import BatchRequest, BatchResponse, ItemOutcomeOut, PreparationItemOut, PrintBatchOut
+from app.mod03_notice.print.dispatch import A4BlockedError, DispatchPlan, lock_a4_channel
+from app.mod03_notice.schemas import (
+    A4BlockOut, BatchRequest, BatchResponse, ItemOutcomeOut, PreparationItemOut,
+    PrintBatchExportOut, PrintBatchOut, PrintDispatchRequest,
+)
 from app.mod03_notice.service import (
     MODE_PDF, MODE_PRINT, BatchResult, ItemOutcome, PreparedPdf, complete_preparation,
     dispatch_prepared, prepare_batch,
@@ -49,7 +52,7 @@ def batch_response(result: BatchResult) -> BatchResponse:
     batch_name = Path(result.batch_dir).name if result.batch_dir else ""
     return BatchResponse(
         mode=result.mode, total=result.total, success=len(result.success), failed=len(result.failed),
-        unprinted_bill_nos=result.unprinted_bill_nos, batch_dir=result.batch_dir,
+        unknown=len(result.unknown), unprinted_bill_nos=result.unprinted_bill_nos, batch_dir=result.batch_dir,
         items=[
             ItemOutcomeOut(
                 notice_id=item.notice_id, bill_no=item.bill_no, ok=item.ok,
@@ -59,6 +62,7 @@ def batch_response(result: BatchResult) -> BatchResponse:
                     else f"/api/m03/pdf/{batch_name}/{Path(item.pdf_path).name}"
                     if item.pdf_path and batch_name else ""
                 ),
+                **item.receipt_fields(),
             )
             for item in result.outcomes
         ],
@@ -73,6 +77,7 @@ class _PrintBatch:
     ids: tuple[int, ...]
     started: datetime = field(default_factory=datetime.now)
     lock: Lock = field(default_factory=Lock)
+    dispatch_lock: Lock = field(default_factory=Lock)
     stage: str = "connecting"
     status: str = "running"
     current_id: int | None = None
@@ -84,7 +89,9 @@ class _PrintBatch:
     preparation: dict[int, ItemOutcome] = field(default_factory=dict)
     prepared: list[PreparedPdf] = field(default_factory=list)
     prepared_count: int = 0
-    dispatch_outcomes: list[ItemOutcome] = field(default_factory=list)
+    dispatch_outcomes: dict[int, ItemOutcome] = field(default_factory=dict)
+    a4_blocked: A4BlockOut | None = None
+    export_token: str = ""
     dispatched_count: int = 0
     result: BatchResponse | None = None
     expires_at: float = float("inf")
@@ -103,9 +110,12 @@ class _PrintBatch:
                 status = "preparing" if notice_id == self.current_id else "pending"
             else:
                 status = "skipped"
+            delivery = self.dispatch_outcomes.get(notice_id)
+            report = delivery or outcome
             items.append(PreparationItemOut(
                 notice_id=notice_id, bill_no=self.bill_nos.get(notice_id, str(notice_id)),
-                status=status, reason=outcome.reason if outcome else "",
+                status=status, reason=report.reason if report else "",
+                **(delivery.receipt_fields() if delivery else {}),
             ))
         return PrintBatchOut(
             batch_id=self.batch_id, mode=self.mode, ids=self.ids,
@@ -116,7 +126,7 @@ class _PrintBatch:
             failed_notice_id=None if self.session_stopped else self.failed_id,
             failed_bill_no=self.bill_nos.get(self.failed_id, ""),
             reason=self.reason, session_stopped=self.session_stopped, kick_token=self.kick_token,
-            items=items, result=self.result,
+            items=items, result=self.result, a4_blocked=self.a4_blocked,
         )
 
     def begin_item(self, notice_id: int, bill_no: str) -> None:
@@ -241,31 +251,76 @@ def read_batch(owner: str, batch_id: str) -> PrintBatchOut:
     return _find(owner, batch_id).snapshot()
 
 
-def start_dispatch(owner: str, batch_id: str) -> PrintBatchOut:
+def read_active_batch(owner: str) -> PrintBatchOut | None:
+    with _index_lock:
+        _sweep()
+        batches = [batch for batch in reversed(_batches.values()) if batch.owner == owner and batch.mode == MODE_PRINT]
+    recent = None
+    for batch in batches:
+        snapshot = batch.snapshot()
+        if snapshot.status == "running" and snapshot.stage == "dispatching":
+            return snapshot
+        if recent is None:
+            recent = snapshot
+    return recent
+
+
+def _require_ready(batch: _PrintBatch) -> None:
+    if batch.expires_at <= time.monotonic():
+        raise HTTPException(404, "批次不存在或已过期。")
+    if batch.mode != MODE_PRINT or batch.status != "ready" or len(batch.prepared) != len(batch.ids):
+        raise HTTPException(409, "只有已准备好全部 PDF 的打印批次可以执行此操作。")
+
+
+def start_dispatch(owner: str, batch_id: str, req: PrintDispatchRequest | None = None) -> PrintBatchOut:
+    batch = _find(owner, batch_id)
+    with batch.dispatch_lock:
+        with batch.lock:
+            if batch.stage == "dispatching":
+                return batch._snapshot()
+            _require_ready(batch)
+
+        # Capability checks can take time. Leave status reads and export available during the probe.
+        plan = None
+        block = None
+        try:
+            plan = lock_a4_channel(**(req.model_dump(exclude_none=True) if req else {}))
+        except A4BlockedError as exc:
+            block = A4BlockOut(
+                reason=exc.message, attempts=exc.detail["attempts"],
+                export_action=f"/api/m03/print-batches/{batch_id}/export-pdf",
+            )
+        with batch.lock:
+            _require_ready(batch)
+            batch.a4_blocked = block
+            if plan is not None:
+                _workers.submit(copy_context().run, _dispatch, batch, tuple(batch.prepared), plan)
+                batch.stage, batch.status = "dispatching", "running"
+                batch.expires_at = float("inf")
+            return batch._snapshot()
+
+
+def export_prepared(owner: str, batch_id: str) -> PrintBatchExportOut:
     batch = _find(owner, batch_id)
     with batch.lock:
-        if batch.stage == "dispatching":
-            return batch._snapshot()
-        if batch.mode != MODE_PRINT or batch.status != "ready" or batch.expires_at <= time.monotonic():
-            raise HTTPException(409, "只有已准备好全部 PDF 的打印批次可以投递。")
-        batch.stage, batch.status = "dispatching", "running"
-        batch.expires_at = float("inf")
-        _workers.submit(copy_context().run, _dispatch, batch, tuple(batch.prepared))
-        return batch._snapshot()
+        _require_ready(batch)
+        if not batch.export_token or not pdf_cache.get(batch.export_token):
+            batch.export_token = pdf_cache.put([(pdf.filename, pdf.content) for pdf in batch.prepared])
+        return PrintBatchExportOut(download_url=f"/api/m03/pdf/{batch.export_token}")
 
 
-def _dispatch(batch: _PrintBatch, prepared: tuple[PreparedPdf, ...]) -> None:
+def _dispatch(batch: _PrintBatch, prepared: tuple[PreparedPdf, ...], plan: DispatchPlan) -> None:
     for pdf in prepared:
         batch.begin_item(pdf.notice_id, pdf.bill_no)
-        outcome = dispatch_prepared(pdf, dispatch_pdf)
+        outcome = dispatch_prepared(pdf, plan.send)
         with batch.lock:
-            batch.dispatch_outcomes.append(outcome)
+            batch.dispatch_outcomes[pdf.notice_id] = outcome
             batch.dispatched_count += int(outcome.ok)
-    result = BatchResult(mode=MODE_PRINT, outcomes=batch.dispatch_outcomes)
+            batch.current_id = None
+    result = BatchResult(mode=MODE_PRINT, outcomes=list(batch.dispatch_outcomes.values()))
+    _persist(batch, result)
     with batch.lock:
         batch.result = batch_response(result)
-        batch.current_id = None
         batch.status = "complete"
         batch.prepared.clear()
         batch.expires_at = time.monotonic() + _TTL_SECONDS
-    _persist(batch, result)

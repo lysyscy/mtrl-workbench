@@ -34,7 +34,7 @@ from app.mod02_i8.notice_source import (  # noqa: E402
     EMPTY_RETRY, EMPTY_RETRY_SLEEP, LIST_FORM, NoticeDetailFetcher, _map_record,
 )
 from app.mod03_notice.print.design import DesignFetcher  # noqa: E402
-from app.mod03_notice.print.ipp import send_pdf  # noqa: E402
+from app.mod03_notice.print.dispatch import lock_a4_channel  # noqa: E402
 from app.mod03_notice.print.render import PdfRenderer  # noqa: E402
 from app.mod03_notice.print.signatures import (  # noqa: E402
     SignatureStore, bind_signatures, check_signature_coverage, signature_slots,
@@ -205,23 +205,19 @@ def main() -> int:
             print("\n（--no-print）已跳过出纸。PDF 在：%s" % outdir)
             return 0
 
-        ok_rows = [r for r in rows if r["ok"]]
-        print("\n" + "=" * 78)
-        print("开始出纸（IPP 直投 %s）" % settings.printer_ipp_url)
-        print("-" * 78)
-        for r in ok_rows:
-            try:
-                send_pdf(r["pdf"].read_bytes(), settings.printer_ipp_url)
-                print("  ✅ %s → 已投递打印机" % r["bill_no"])
-            except Exception as exc:                      # noqa: BLE001
-                r["reason"] = "%s: %s" % (type(exc).__name__, exc)
-                print("  ❌ %s → 出纸失败：%s" % (r["bill_no"], r["reason"]))
+        if any(not r["ok"] for r in rows):
+            print("整批 PDF 尚未准备完成，已投递 0 张。")
+            return 1
 
-        unprinted = [r["bill_no"] for r in rows if not r["ok"] or r.get("reason")]
-        print("-" * 78)
-        print("已投递 %d 张 · 未出 %s" % (len(ok_rows) - len(unprinted), unprinted or "无"))
+        plan = lock_a4_channel(mode="ipp", printer_uri=settings.printer_ipp_url)
+        counts = {"accepted": 0, "failed": 0, "unknown": 0}
+        for r in rows:
+            receipt = plan.send(r["pdf"].read_bytes()).last
+            counts[receipt.status] += 1
+            print("  %s → %s" % (r["bill_no"], receipt.reason))
+        print("打印机已接收 %(accepted)d 张，明确失败 %(failed)d 张，结果待核实 %(unknown)d 张。" % counts)
         print("PDF 全在：%s" % outdir)
-        return 0
+        return int(bool(counts["failed"] or counts["unknown"]))
     finally:
         try:
             renderer.close()

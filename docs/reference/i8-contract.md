@@ -220,8 +220,8 @@
 
 | 通路 | 地址 | 应答 | 说明 |
 |---|---|---|---|
-| **`ipp`（默认）** | **`ipp://<ip>:631/ipp/print`**（`IPP_PATHS = ["/ipp/print", "/ipp"]`，先试前者） | ✅ status + job-id + job-state | 可确认投递接收；纸面完成须另有证据 |
-| `raw`（兜底） | `<ip>:9100`（JetDirect） | ❌ 无应答 | 实测 Ricoh PDF 直打有效 |
+| `ipp` | 配置的 IPP URI，例如 `ipp://<ip>:631/ipp/print` | IPP 状态及设备返回的作业号、作业状态 | 批量打印先用 Validate-Job 核对显式 A4 |
+| `driver` / `raw` | Windows 文件关联打印 / `<ip>:9100` | 无设备作业回执 | 当前实现无法指定作业纸型，批量打印会拦截 |
 
 - **默认 IP** = `192.168.5.248`（**用户已确认无误**，工具与原型一致）
 - **实测机型** = **RICOH IM 3000 PS3**（`printer-info` 自报；`printer-state = Idle`）
@@ -232,7 +232,9 @@
 
 ### IPP报文与排障边界
 
-`document-format` 为 `mimeMediaType`，值标签使用 `0x49`，不能误用 `keyword` 的 `0x44` 或以删除该属性作正式修法。错误文本保留服务器 `status-message`。排障优先使用不出纸的属性读取/Validate-Job，一次隔离一个变量；真实投递仍需本次相应授权。历史首次出纸及已作废试法进入项目经验，不证明当前端点、设备或会话可用。`raw` 9100只证明字节发送，不提供纸面完成回执。
+整批 PDF 就绪后，先用 Validate-Job 验证显式 A4。Validate-Job 和每个 Print-Job 均在操作属性组 `0x01` 发送 `document-format=application/pdf`（`mimeMediaType`，`0x49`）及 `ipp-attribute-fidelity=true`，在作业属性组 `0x02` 发送 `media=iso_a4_210x297mm`（`keyword`，`0x44`）。自动选择通道也受 A4 校验约束。校验未通过时，可切换通道或导出同一批已生成的 PDF。
+
+IPP 成功表示打印机已接收。回执保留设备返回的作业号、作业状态及 `status-message`。设备拒绝或发送前连接失败记为明确失败。请求可能已送达但回执中断时记为结果待核实，同批不会自动重投。排障优先使用不出纸的属性读取或 Validate-Job。
 
 ---
 

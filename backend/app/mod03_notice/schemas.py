@@ -25,7 +25,23 @@ class BatchRequest(BaseModel):
     expected_account: str | None = None
 
 
-class ItemOutcomeOut(BaseModel):
+class DeliveryAttemptOut(BaseModel):
+    channel: str
+    status: Literal["accepted", "failed", "unknown"]
+    job_id: int | None = None
+    job_state: int | None = None
+    reason: str
+
+
+class DeliveryFields(BaseModel):
+    delivery_status: Literal["pending", "accepted", "failed", "unknown"] = "pending"
+    channel: str = ""
+    job_id: int | None = None
+    job_state: int | None = None
+    attempts: list[DeliveryAttemptOut] = Field(default_factory=list)
+
+
+class ItemOutcomeOut(DeliveryFields):
     notice_id: int
     bill_no: str
     ok: bool
@@ -43,16 +59,35 @@ class BatchResponse(BaseModel):
     total: int
     success: int
     failed: int
+    unknown: int = 0
     unprinted_bill_nos: list[str] = Field(default_factory=list, description="未产出单据的单号（001-07 / PDF-001-06）")
     batch_dir: str = ""
     items: list[ItemOutcomeOut] = Field(default_factory=list)
 
 
-class PreparationItemOut(BaseModel):
+class PreparationItemOut(DeliveryFields):
     notice_id: int
     bill_no: str
     status: Literal["pending", "preparing", "prepared", "failed", "skipped"]
     reason: str = ""
+
+
+class PrintDispatchRequest(BaseModel):
+    mode: Literal["auto", "ipp", "driver", "raw"] | None = None
+    printer_uri: str | None = None
+    printer_name: str | None = None
+
+
+class A4BlockOut(BaseModel):
+    code: Literal["a4_blocked"] = "a4_blocked"
+    reason: str
+    can_switch_channel: bool = True
+    export_action: str
+    attempts: list[DeliveryAttemptOut]
+
+
+class PrintBatchExportOut(BaseModel):
+    download_url: str
 
 
 class PrintBatchOut(BaseModel):
@@ -73,6 +108,7 @@ class PrintBatchOut(BaseModel):
     kick_token: str = ""
     items: list[PreparationItemOut]
     result: BatchResponse | None = None
+    a4_blocked: A4BlockOut | None = None
 
 
 class FetchRequest(BaseModel):

@@ -30,7 +30,8 @@ import { ContractDialog } from './notice-contract';
 import type { Draft } from './notice-maintenance';
 import { NoticePayment, PayAmountCell, paymentValue, amount } from './notice-payment';
 import type { PayOverride } from './notice-payment';
-import { NoticePrint, PrinterSettings } from './notice-print';
+import { NoticePrint, PrinterSettings, recoverNoticePrint } from './notice-print';
+import type { BatchView } from './notice-print';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { NoticeFlows } from './notice-flows';
 import { TimePicker, timeMatches, timeRange } from './time-picker';
@@ -68,7 +69,34 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   }
   const printLock = useRef(false);
   const [flowNotice,setFlowNotice] = useState<NoticeRow|null>(null);
-  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[]}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
+  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[];resumed?:BatchView}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
+  const printOwner = me?.account ?? '';
+  const recoveredPrintOwner = useRef('');
+  useEffect(() => {
+    if (!active || blocked || !printOwner || recoveredPrintOwner.current === printOwner) return;
+    const attempt = new AbortController();
+    void recoverPrint(attempt.signal);
+    return () => attempt.abort();
+  }, [active, blocked, printOwner]);
+
+  async function recoverPrint(signal?: AbortSignal) {
+    if (!printOwner || printLock.current) return;
+    try {
+      const resumed = await recoverNoticePrint(printOwner, signal);
+      if (signal?.aborted || !mounted.current) return;
+      recoveredPrintOwner.current = printOwner;
+      if (!resumed) {
+        if (!signal) void message.info('当前没有可查看的打印批次。');
+        return;
+      }
+      if (printLock.current) return;
+      printLock.current = true;
+      setPrint({mode: 'print', rows: [], resumed});
+    } catch (failure) {
+      if (signal?.aborted || !mounted.current || (failure instanceof DOMException && failure.name === 'AbortError')) return;
+      if (!signal) void message.error(failure instanceof Error ? failure.message : '无法读取原打印批次，请重试。');
+    }
+  }
   const [params] = useSearchParams();
   const [payIds,setPayIds] = useState<number[]|null>(null), [payOverrides,setPayOverrides] = useState<Record<number,PayOverride>>({});
   const payDrafts = useRef<Record<number,PayOverride>>({});
@@ -268,7 +296,8 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     finally { lock.current = false; setBusy(false); }
   }
   return <NoticeCells.Provider value={cellSaves.cells}><NoticeSelectionContext.Provider value={current.current}><div className="notices-page" ref={pageRoot}>
-    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{money(total(selectedPay, 'amount_approved'))}</b> 元</span><span>本次应付 <b>{money(total(selectedPay, 'pay_amount'))}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={() => setPicked(new Set())}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
+    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{money(total(selectedPay, 'amount_approved'))}</b> 元</span><span>本次应付 <b>{money(total(selectedPay, 'pay_amount'))}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={() => setPicked(new Set())}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)}
+      onClick={() => void recoverPrint()}>查看打印批次</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
     {payError && <p className="notice" role="alert">{payError}</p>}
     <section className="notice-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={unavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={unavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
@@ -292,7 +321,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
         : maintenance?.kind === 'ownership' ? <OwnershipDialog document={maintenance.document} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh('ownership')} announce={announce} />
         : maintenance && <NoticeDeleteDialog row={maintenance.row} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh()} announce={announce} />}</DialogPresence>
     </section>
-    <DialogPresence>{print && <NoticePrint rows={print.rows} mode={print.mode} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
+    <DialogPresence>{print && <NoticePrint key={printOwner} rows={print.rows} mode={print.mode} owner={printOwner} resumed={print.resumed} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
     <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
     <DialogPresence>{printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}</DialogPresence>
     <DialogPresence>{payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>

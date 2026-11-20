@@ -29,6 +29,7 @@ from app.core.logging import get_logger
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.client import I8OnlineConflictError
 from app.mod03_notice.models import PaymentNotice
+from app.mod03_notice.print.dispatch import DispatchOutcome, DispatchPlan
 from app.mod03_notice.print.fields import build_detail_rows, build_values
 from app.mod03_notice.print.signatures import bind_signatures, check_signature_coverage
 from app.mod03_notice.print.template import render_html
@@ -88,6 +89,10 @@ class ItemOutcome:
     ⚠️ 它**不是失败** —— 用户 2026-09-18 实测教训：「假失败比假成功更危险」（报失败 ⇒ 人重复打印白浪费纸）。"""
     reason: str = ""
     pdf_path: str = ""
+    delivery: DispatchOutcome | None = None
+
+    def receipt_fields(self) -> dict:
+        return self.delivery.receipt_fields() if self.delivery else {}
 
 
 @dataclass
@@ -116,12 +121,16 @@ class BatchResult:
 
     @property
     def failed(self) -> list[ItemOutcome]:
-        return [o for o in self.outcomes if not o.ok]
+        return [o for o in self.outcomes if not o.ok and (not o.delivery or o.delivery.last.status == "failed")]
+
+    @property
+    def unknown(self) -> list[ItemOutcome]:
+        return [o for o in self.outcomes if o.delivery and o.delivery.last.status == "unknown"]
 
     @property
     def unprinted_bill_nos(self) -> list[str]:
         """未产出（未出）单据的单号 —— 结束时必须显式列明（001-07 / PDF-001-06）。"""
-        return [o.bill_no for o in self.outcomes if not o.ok]
+        return [o.bill_no for o in self.failed]
 
 
 @dataclass(frozen=True)
@@ -179,7 +188,14 @@ def prepare_batch(
 
 def dispatch_prepared(pdf: PreparedPdf, dispatch_pdf: Callable[[bytes], object]) -> ItemOutcome:
     try:
-        note = str(dispatch_pdf(pdf.content) or "")
+        reply = dispatch_pdf(pdf.content)
+        if isinstance(reply, DispatchOutcome):
+            status = reply.last.status
+            return ItemOutcome(
+                pdf.notice_id, pdf.bill_no, status == "accepted",
+                unverified=status != "failed", reason=reply.last.reason, delivery=reply,
+            )
+        note = str(reply or "")
         return ItemOutcome(pdf.notice_id, pdf.bill_no, True, unverified=bool(note), reason=note)
     except Exception as exc:  # noqa: BLE001
         reason = _reason(exc)
@@ -219,11 +235,12 @@ def run_batch(
     render_pdf: Callable[[str], bytes],
     dispatch_pdf: Callable[[bytes], object] | None = None,
     batch_dir: Path | None = None,
+    lock_channel: Callable[[], DispatchPlan] | None = None,
 ) -> BatchResult:
     """Synchronous adapter for the existing endpoint and offline tools."""
     if mode not in _MODES:
         raise ValueError(f"未知模式：{mode}（应为 {' / '.join(_MODES)}）")
-    if mode == MODE_PRINT and dispatch_pdf is None:
+    if mode == MODE_PRINT and dispatch_pdf is None and lock_channel is None:
         raise MustReportError("打印模式缺少投递实现（内部错误）")
 
     outcomes: dict[int, ItemOutcome] = {}
@@ -239,8 +256,10 @@ def run_batch(
         signature_store=signature_store, render_pdf=render_pdf, on_start=lambda *_: None,
         on_item=on_item,
     )
-    if mode == MODE_PRINT and len(prepared) == len(notices) and dispatch_pdf is not None:
-        return BatchResult(mode=mode, outcomes=[dispatch_prepared(pdf, dispatch_pdf) for pdf in prepared])
+    if mode == MODE_PRINT and prepared and len(prepared) == len(notices):
+        sender = lock_channel().send if lock_channel else dispatch_pdf
+        assert sender is not None
+        return BatchResult(mode=mode, outcomes=[dispatch_prepared(pdf, sender) for pdf in prepared])
 
     result = complete_preparation(
         mode, tuple(notice.id for notice in notices), outcomes, prepared,

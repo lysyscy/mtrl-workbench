@@ -1,22 +1,4 @@
-"""出纸**通道分流**（`TAIL-46`-②）—— 打印投递的**唯一出口**。
-
-口径照用户调好的 `i8一键打印_新版`（2026-09-18 用户亲测）：
-
-| 通道 | 怎么出纸 | 什么时候用 |
-|---|---|---|
-| `auto` | 依次试 **IPP → 系统驱动 → RAW 9100** | 默认；换打印机不用先知道它的脾气 |
-| `ipp` | 标准方式（`ipp://`，走 HTTP 传输） | 打印机自己能解释 PDF（Ricoh IM 3000 走这条） |
-| `driver` | 交 **Windows 打印驱动** | **最稳**；有的打印机没有 PDF 解释器，只认位图格式 |
-| `raw` | 整卷发到 `host:9100` | ⚠️ 只对"自己能读 PDF"的打印机有意义；多数小型机会打出**乱码** |
-
-⭐⭐ 两条硬规矩（都是实测教训换来的）：
-1. **绝不重复出纸**：某一档回了「已投递（未核实）」就**停住** —— 那句话的意思是"**可能已经打了**"，
-   ⛔ 不许再往下试一档（否则同一张纸打两遍）。往下试**只允许**发生在"**明确报错**"时。
-2. **失败要带全每一档的理由**（`001-08`）：全失败时逐档列出原因 —— 只给一句"打印失败"，
-   现场无从下手（2026-09-16 实测：只看到 `0x0400` 时完全不知道是 document-format 被拒）。
-
-⚠️ 本模块**不碰浏览器内核对、不碰排版**（那是 `render.py` 的活）；只负责"这本 PDF 怎么送到打印机那儿"。
-"""
+"""Select an explicitly A4-capable delivery channel and preserve each attempt."""
 
 from __future__ import annotations
 
@@ -27,15 +9,17 @@ import socket
 import tempfile
 import threading
 import time
+from dataclasses import asdict, dataclass
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
 from app.core.config import get_settings
 from app.core.errors import MustReportError, log_exc
-from app.mod03_notice.print.ipp import send_pdf
-from app.mod03_notice.settings_store import MODE_LABEL, validate_print_mode
+from app.mod03_notice.print.ipp import IppOutcome, send_pdf, validate_a4
+from app.mod03_notice.settings_store import MODE_LABEL, PRINT_MODES, validate_print_mode
 
-#: ⭐ `auto` 的试法顺序 —— 口径照 `i8一键打印_新版`（⛔ 别改顺序：先标准、再驱动、最后 RAW）
+# Auto considers channels in this order, filtered by their explicit A4 capability.
 AUTO_ORDER: tuple[str, ...] = ("ipp", "driver", "raw")
 
 _RAW_PORT = 9100  # ⚠️ RAW 的标准端口；地址里那个端口（如 631）是 **IPP** 用的，两者不是一回事
@@ -187,53 +171,84 @@ def send_driver(pdf: bytes, printer_name: str = "") -> str:
     return "已投递（未核实）—— 已交系统默认打印机（`pywin32` 未装，走文件关联的打印动词）"
 
 
-def dispatch_pdf(
-    pdf: bytes,
-    *,
-    mode: str | None = None,
-    printer_uri: str | None = None,
-    printer_name: str | None = None,
-    ipp: Callable[[bytes, str | None], str] | None = None,
-    driver: Callable[[bytes, str], str] | None = None,
-    raw: Callable[[bytes, str], str] | None = None,
-) -> str:
-    """投递一本 PDF（**唯一出口**）→ 返回"投递说明"（空串 = 已核实；非空 = 已投递但无法核实）。
+@dataclass(frozen=True)
+class DispatchAttempt(IppOutcome):
+    channel: str = ""
 
-    - 三个通道**可注入**（测试用桩 ⇒ ⛔ 自检不许碰真实打印机）。
-    - `mode` / `printer_uri` / `printer_name` 留空 ⇒ 取**当前设置**（设置改完即生效，无需重启）。
-    - ⭐ 见模块头那两条硬规矩（**绝不重复出纸** / **失败带全每一档的理由**）。
-    """
-    s = get_settings()
-    name = str(printer_name if printer_name is not None else s.printer_name or "").strip()
-    m = validate_print_mode(mode if mode is not None else (s.print_mode or "auto"), name)
-    # ⚠️ 打印机地址**只读 `.env`**（同 `ipp.py` 那条注释：单一入口 ＋ 单一存储，
-    #   2026-09-21 用户裁定）—— ⛔ 别再改回 `effective_of`（"库优先"会重现"改了不生效"）。
-    uri = printer_uri if printer_uri is not None else s.printer_ipp_url
 
-    chans: dict[str, Callable[[], str]] = {
-        "ipp": lambda: (ipp or send_pdf)(pdf, uri or None),
-        "driver": lambda: (driver or send_driver)(pdf, name),
-        "raw": lambda: (raw or send_raw)(pdf, uri),
-    }
+@dataclass(frozen=True)
+class DispatchOutcome:
+    attempts: tuple[DispatchAttempt, ...]
 
-    order = list(AUTO_ORDER) if m == "auto" else [m]
-    fails: list[tuple[str, str]] = []
-    for ch in order:
-        label = MODE_LABEL.get(ch, ch)
-        try:
-            note = str(chans[ch]() or "")
-        except MustReportError as exc:
-            fails.append((label, str(exc)))  # 真失败 ⇒ 记下理由，继续试下一档
+    @property
+    def last(self) -> DispatchAttempt:
+        return self.attempts[-1]
+
+    def receipt_fields(self) -> dict:
+        return {
+            "delivery_status": self.last.status,
+            "channel": self.last.channel,
+            "job_id": self.last.job_id,
+            "job_state": self.last.job_state,
+            "attempts": [asdict(attempt) for attempt in self.attempts],
+        }
+
+
+class A4BlockedError(MustReportError):
+    code = "a4_blocked"
+    http_status = 409
+
+    def __init__(self, attempts: list[DispatchAttempt]):
+        super().__init__(
+            "；".join(f"{MODE_LABEL[attempt.channel]}：{attempt.reason}" for attempt in attempts),
+            detail={"attempts": [asdict(attempt) for attempt in attempts]},
+        )
+
+
+@dataclass(frozen=True)
+class DispatchPlan:
+    mode: str
+    printer_uri: str
+    printer_name: str
+    channels: tuple[tuple[str, Callable[[bytes], IppOutcome]], ...]
+
+    def send(self, pdf: bytes) -> DispatchOutcome:
+        attempts = []
+        for channel, submit in self.channels:
+            try:
+                reply = submit(pdf)
+            except Exception as exc:  # noqa: BLE001
+                # A sender can fail after submission. Without proof, do not try another channel.
+                log_exc("投递打印机后未取得有效回执", exc)
+                reply = IppOutcome("unknown", "请先核对打印机作业和出纸情况，勿重复打印。")
+            attempts.append(DispatchAttempt(reply.status, reply.reason, reply.job_id, reply.job_state, channel))
+            if reply.status != "failed":
+                break
+        return DispatchOutcome(tuple(attempts))
+
+
+def lock_a4_channel(
+    *, mode: str | None = None, printer_uri: str | None = None, printer_name: str | None = None,
+) -> DispatchPlan:
+    settings = get_settings()
+    name = (settings.printer_name if printer_name is None else printer_name).strip()
+    mode = (settings.print_mode if mode is None else mode).strip().lower() or "auto"
+    if mode not in PRINT_MODES:
+        validate_print_mode(mode, name)
+    uri = (settings.printer_ipp_url if printer_uri is None else printer_uri).strip()
+
+    blocks = []
+    channels = []
+    for channel in AUTO_ORDER if mode == "auto" else (mode,):
+        if channel != "ipp":
+            blocks.append(DispatchAttempt("failed", "此通道无法在打印作业中指定 A4。", channel=channel))
             continue
-        if not note:
-            return f"自动选「{label}」：已投递（打印机已接收）" if m == "auto" else note
-        # ⭐ **停住**：这句话的意思是"可能已经打了" ⇒ ⛔ 再试下一档会重复出纸
-        return f"自动选「{label}」：{note}" if m == "auto" else note
-
-    if len(order) == 1:
-        raise MustReportError(f"出纸失败（{fails[0][0]} 通道）：{fails[0][1]}")
-    raise MustReportError(
-        "三种出纸方式都没能投递：\n"
-        + "\n".join(f"· {label}：{why}" for label, why in fails)
-        + "\n（可先用「只导出 PDF」确认制单本身没问题；再按上面各档的原因处理）"
-    )
+        try:
+            validate_a4(uri)
+        except MustReportError as exc:
+            blocks.append(DispatchAttempt("failed", exc.message, channel=channel))
+        else:
+            channels.append((channel, partial(send_pdf, printer_uri=uri)))
+    if not channels:
+        raise A4BlockedError(blocks)
+    return DispatchPlan(mode, uri, name, tuple(channels))

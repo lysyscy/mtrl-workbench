@@ -1,147 +1,165 @@
-"""IPP 直投（出纸）。
-
-依据（《说明书》§4.6 / 技术栈 §2.4）：付款通知书 PDF 经 **IPP 直投**打印机，不依赖打印驱动与桌面会话。
-- 001-08：**出纸失败须显式报出原因**，禁止把整批静默丢弃。
-
-实现：最小 IPP 1.1 `Print-Job`（operation 0x0002）二进制包，经 HTTP POST 投到打印机 IPP URI。
-⚠️ 打印机地址 / URI 形态属于**本机部署事实**（默认 `192.168.5.248`，可改），从 `.env` 读，不写死。
-⚠️ 真实投递需打印机在网可达；切片 1 把"失败显式报错"做成硬约束，真机验证留待本机联调。
-"""
+"""IPP A4 capability check and Print-Job submission."""
 
 from __future__ import annotations
 
 import struct
+from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
-from app.core.config import get_settings
-from app.core.errors import MustReportError, NotConfiguredError, log_exc
+from app.core.errors import MustReportError, log_exc
+from app.mod03_notice.settings_store import validate_printer_uri
+
+_MEDIA_A4 = b"iso_a4_210x297mm"
+_PRINT_JOB = 0x0002
+_VALIDATE_JOB = 0x0004
+_REQUEST_ID = 1
+_STATUS_NAME = {
+    0x0400: "报文被拒",
+    0x0401: "打印机拒绝访问",
+    0x0402: "打印机需要身份验证",
+    0x0403: "打印机拒绝授权",
+    0x0405: "打印机处理超时",
+    0x0406: "打印机找不到请求的资源",
+    0x040A: "打印机不支持此文档格式",
+    0x040B: "打印机不支持请求的属性或属性值",
+    0x0500: "打印机内部错误",
+    0x0501: "打印机不支持此操作",
+    0x0503: "打印服务不可用",
+}
+DeliveryStatus = Literal["accepted", "failed", "unknown"]
+
+
+@dataclass(frozen=True)
+class IppOutcome:
+    status: DeliveryStatus
+    reason: str
+    job_id: int | None = None
+    job_state: int | None = None
 
 
 def _attr(tag: int, name: str, value: bytes) -> bytes:
-    name_b = name.encode("utf-8")
-    return struct.pack(">B", tag) + struct.pack(">H", len(name_b)) + name_b + struct.pack(">H", len(value)) + value
+    name_bytes = name.encode("ascii")
+    return struct.pack(">BH", tag, len(name_bytes)) + name_bytes + struct.pack(">H", len(value)) + value
 
 
-def _build_print_job(printer_uri: str, pdf: bytes) -> bytes:
-    """IPP 1.1 `Print-Job`（0x0002）报文。
-
-    ⚠️⭐ **值标签（value tag）必须与属性的语义类型一致** —— 这是本模块唯一踩过的坑
-    （2026-09-16 真机：4 张全回 `0x0400 client-error-bad-request`，响应仅 115 字节、
-    `status-message` 只说 `client-error-bad-request`，**不告诉你是哪个属性错了**）：
-    **`document-format` 的类型是 `mimeMediaType` ⇒ 标签必须是 `0x49`**。
-    曾误用 `0x44`（那是 `keyword`）⇒ 被这台 **RICOH IM 3000 PS3** 直接判为非法报文。
-    ℹ️ 排障时曾用"**整个删掉 `document-format`**"绕过（那也能出纸），但那是**把报文改成非标准形态**；
-    正解是**把标签改对**（`0x49`）。
-
-    常用值标签（RFC 8010 §3.5，**别记混**）：
-    `0x42` nameWithoutLanguage · `0x44` keyword · `0x45` uri · `0x47` charset ·
-    `0x48` naturalLanguage · **`0x49` mimeMediaType**。
-    ⚠️ `printer-uri` 用 `0x45`；`attributes-charset` / `attributes-natural-language` 用 `0x47` / `0x48`。
-    """
-    out = bytearray()
-    out += bytes([0x01, 0x01])          # IPP version 1.1
-    out += struct.pack(">H", 0x0002)    # Print-Job
-    out += struct.pack(">I", 1)         # request-id
-    out += bytes([0x01])                # operation-attributes group start
-    out += _attr(0x47, "attributes-charset", b"utf-8")
-    out += _attr(0x48, "attributes-natural-language", b"en")
-    out += _attr(0x45, "printer-uri", printer_uri.encode("utf-8"))
-    out += _attr(0x42, "requesting-user-name", b"mtrl")
-    out += _attr(0x49, "document-format", b"application/pdf")   # ⭐ 0x49 = mimeMediaType（不是 0x44）
-    out += bytes([0x03])                # end-of-attributes
-    out += pdf
-    return bytes(out)
+def _build_request(operation: int, printer_uri: str, pdf: bytes = b"") -> bytes:
+    return b"".join((
+        struct.pack(">BBHI", 1, 1, operation, _REQUEST_ID),
+        b"\x01",  # operation attributes
+        _attr(0x47, "attributes-charset", b"utf-8"),
+        _attr(0x48, "attributes-natural-language", b"en"),
+        _attr(0x45, "printer-uri", printer_uri.encode("utf-8")),
+        _attr(0x42, "requesting-user-name", b"mtrl"),
+        _attr(0x49, "document-format", b"application/pdf"),  # mimeMediaType
+        _attr(0x22, "ipp-attribute-fidelity", b"\x01"),  # Reject unsupported job attributes.
+        b"\x02",  # job attributes
+        _attr(0x44, "media", _MEDIA_A4),  # keyword
+        b"\x03",
+        pdf,
+    ))
 
 
-def _to_http_uri(ipp_uri: str) -> str:
-    """`ipp://host/...` → `http://host:631/...`（IPP 走 HTTP 传输）。"""
-    if ipp_uri.startswith("ipp://"):
-        return "http://" + ipp_uri[len("ipp://"):]
-    if ipp_uri.startswith("ipps://"):
-        return "https://" + ipp_uri[len("ipps://"):]
-    return ipp_uri
+def _to_http_uri(printer_uri: str) -> httpx.URL:
+    url = httpx.URL(validate_printer_uri(printer_uri))
+    if not url.host or url.userinfo:
+        raise MustReportError("请填写有效的打印机地址，地址中不能包含登录凭据。")
+    if url.scheme in ("ipp", "ipps"):
+        return url.copy_with(scheme={"ipp": "http", "ipps": "https"}[url.scheme], port=url.port or 631)
+    return url
 
 
-def send_pdf(pdf: bytes, printer_uri: str | None = None) -> str:
-    """把 PDF 经 IPP 投到打印机 → **返回一句"投递说明"**（空串 = 已核实；非空 = 已投递但无法核实）。
+@dataclass(frozen=True)
+class _Response:
+    status: int
+    message: str = ""
+    job_id: int | None = None
+    job_state: int | None = None
 
-    ⚠️ **失败一律显式报错（001-08），不静默丢弃**；但「**说不清**」≠「失败」：
-    - IPP成功状态 ⇒ **作业已被打印机接收** —— 但本实现**不去轮询作业状态** ⇒ 无法核实"到底打完没有"
-      ⇒ 返回一句说明（⛔ 不谎报"打完"，也⛔ **不算失败**）。
-    - 真失败（连不上 / 非 IPP 响应 / IPP 报 4xx-5xx 状态）⇒ 抛 `MustReportError`（原样不变）。
-    ⭐ 依据 = 用户 2026-09-18 实测教训：「**假失败比假成功更危险**」—— 读不到队列就报失败 ⇒
-      人会以为没打、**重复再打，白浪费纸**。⇒ 只有明确错误才算失败；"说不清"一律按"已投递（无法核实）"。
-    """
-    # ⚠️ 打印机地址**只读 `.env`**（2026-09-21 用户裁定：单一入口 = m03「打印机设置」弹窗、单一存储 = `.env`）
-    #   —— ⛔ 不再走 `effective_of`（那是"库优先"）:库里若残留旧值，就出现「弹窗改了不生效、回执却说即时生效」。
-    uri = printer_uri or get_settings().printer_ipp_url
-    if not uri:
-        raise NotConfiguredError("PRINTER_IPP_URL 未配置（见 .env；用户确认默认 192.168.5.248）")
 
-    body = _build_print_job(uri, pdf)
-    http_uri = _to_http_uri(uri)
+def _parse_response(data: bytes) -> _Response:
+    if len(data) < 9 or data[0] not in (1, 2):
+        raise ValueError("Invalid IPP response header")
+    status, request_id = struct.unpack_from(">HI", data, 2)
+    if request_id != _REQUEST_ID:
+        raise ValueError("Wrong IPP request ID")
+    pos = 8
+    group = 0
+    message = ""
+    job: dict[bytes, int] = {}
+    while pos < len(data):
+        tag = data[pos]
+        pos += 1
+        if tag == 0x03:
+            return _Response(status, message, job.get(b"job-id"), job.get(b"job-state"))
+        if tag < 0x10:
+            group = tag
+            continue
+        name_len = struct.unpack_from(">H", data, pos)[0]
+        pos += 2
+        name = data[pos:pos + name_len]
+        pos += name_len
+        value_len = struct.unpack_from(">H", data, pos)[0]
+        pos += 2
+        value = data[pos:pos + value_len]
+        pos += value_len
+        if group == 0x01 and name == b"status-message":
+            message = value.decode("utf-8", "replace").strip()
+        if group == 0x02 and name in (b"job-id", b"job-state") and tag in (0x21, 0x23) and len(value) == 4:
+            job[name] = int.from_bytes(value, "big", signed=True)
+    raise ValueError("Incomplete IPP response")
+
+
+def _post(url: httpx.URL, body: bytes) -> _Response:
+    response = httpx.post(
+        url, content=body, headers={"Content-Type": "application/ipp"},
+        timeout=httpx.Timeout(20.0, connect=10.0),
+    )
+    return _parse_response(response.content)
+
+
+def _reply_reason(reply: _Response) -> str:
+    reason = f"打印机返回 IPP 状态码 0x{reply.status:04X}"
+    label = _STATUS_NAME.get(reply.status)
+    if label:
+        reason += f"（{label}）"
+    return reason + (f"。打印机说明：{reply.message}" if reply.message else "")
+
+
+def validate_a4(printer_uri: str) -> None:
+    """Validate the same PDF + A4 attributes as Print-Job, without creating a job."""
     try:
-        resp = httpx.post(
-            http_uri,
-            content=body,
-            headers={"Content-Type": "application/ipp"},
-            timeout=httpx.Timeout(20.0, connect=10.0),
-        )
-    except httpx.HTTPError as exc:
-        # ⚠️ **打印机地址仍要上屏**（`test_acc_pay_print` 的 `001-08`② 钉着"失败要**带出地址**"）——
-        #    ⇒ 这里只收**异常的类名与原文**（地址是**用户要去核对的东西**，不是技术串）。
-        log_exc(f"出纸失败：无法连接打印机（{uri}）", exc)
-        raise MustReportError(
-            f"出纸失败：无法连接打印机（{uri}）—— 请核对打印机地址、电源与网络，稍后重试"
-        ) from exc
-
-    data = resp.content
-    if len(data) < 4:
-        raise MustReportError(f"出纸失败：打印机响应异常（长度 {len(data)}，非 IPP 响应）")
-    status = struct.unpack(">H", data[2:4])[0]
-    if status >> 8 != 0:  # RFC 8011：0x00xx 为成功类，属性替换仍是已接收。
-        # ⚠️ 必须把打印机自报的 `status-message` **带出来**（001-08「显式报出原因」）——
-        #    只给一个十六进制码，现场根本无从下手（2026-09-16 实测踩过：`0x0400` 背后是
-        #    "带了 document-format 就被拒"，而这条线索**只**在那段文本里）。
-        detail = _status_message(data)
-        raise MustReportError(
-            f"出纸失败：打印机返回 IPP 状态码 0x{status:04X}"
-            f"（{_STATUS_NAME.get(status, '未知')}；HTTP {resp.status_code}）"
-            + (f"—— 打印机说明：「{detail}」" if detail else "")
-            + "。单据未投递，请检查打印机状态/地址。"
-        )
-    # ⭐ 成功状态（作业被接收）⇒ **已投递**；但本实现不轮询作业状态 ⇒ **无法核实"打完没有"**。
-    #    ⛔ 不许把它说成"已完成"（那是假成功），⛔ 更不许说成"失败"（那是假失败，会让人重复打印）。
-    return "已投递（打印机已接收作业；本进程未核实是否打印完成 —— 请看打印机出纸，⛔ 别重打）" + (
-        "；打印机调整或忽略了部分属性，请核对出纸效果" if status else "")
+        response = _post(_to_http_uri(printer_uri), _build_request(_VALIDATE_JOB, printer_uri))
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError, struct.error) as exc:
+        log_exc("IPP A4 校验未取得有效响应", exc)
+        raise MustReportError("未能确认打印机接受 A4，请核对 IPP 地址、电源与网络。") from exc
+    if response.status != 0:
+        raise MustReportError(f"打印机未确认接受显式 A4。{_reply_reason(response)}")
 
 
-_STATUS_NAME = {
-    0x0400: "client-error-bad-request（报文被拒）",
-    0x0401: "client-error-forbidden",
-    0x0402: "client-error-not-authenticated",
-    0x0403: "client-error-not-authorized",
-    0x0404: "client-error-not-possible",
-    0x0405: "client-error-timeout",
-    0x0406: "client-error-not-found",
-    0x0407: "client-error-gone",
-    0x040A: "client-error-document-format-not-supported",
-    0x0500: "server-error-internal-error",
-    0x0501: "server-error-operation-not-supported",
-    0x0503: "server-error-service-unavailable",
-}
+def send_pdf(pdf: bytes, printer_uri: str) -> IppOutcome:
+    """Submit a job to a target whose A4 capability has already been checked."""
+    try:
+        url = _to_http_uri(printer_uri)
+        body = _build_request(_PRINT_JOB, printer_uri, pdf)
+    except (MustReportError, httpx.InvalidURL, ValueError, struct.error) as exc:
+        log_exc("IPP 打印地址或请求无效", exc)
+        return IppOutcome("failed", "打印地址或请求格式无效，请核对 IPP 设置。")
 
-
-def _status_message(data: bytes) -> str:
-    """从 IPP 响应里取出 `status-message` 文本（取不到 ⇒ 空串，**不抛**）。"""
-    needle = b"status-message"
-    i = data.find(needle)
-    if i < 0:
-        return ""
-    p = i + len(needle)
-    if p + 2 > len(data):
-        return ""
-    size = struct.unpack(">H", data[p:p + 2])[0]
-    p += 2
-    return data[p:p + size].decode("utf-8", "replace").strip()
+    try:
+        reply = _post(url, body)
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+        log_exc("IPP 请求发送前连接失败", exc)
+        return IppOutcome("failed", f"出纸失败：无法连接打印机（{printer_uri}），请核对地址、电源与网络。")
+    except (httpx.HTTPError, ValueError, struct.error) as exc:
+        log_exc("IPP 作业结果待核实", exc)
+        return IppOutcome("unknown", "未取得有效的打印机回执，请先核对打印机作业和出纸情况，勿重复打印。")
+    if reply.status >> 8:
+        return IppOutcome("failed", f"出纸失败：{_reply_reason(reply)}", reply.job_id, reply.job_state)
+    reason = "打印机已接收作业。"
+    if reply.status:
+        reason += f"请核对打印机属性和出纸情况。{_reply_reason(reply)}"
+    elif reply.message:
+        reason += f"打印机说明：{reply.message}"
+    return IppOutcome("accepted", reason, reply.job_id, reply.job_state)

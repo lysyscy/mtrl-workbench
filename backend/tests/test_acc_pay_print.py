@@ -341,14 +341,13 @@ def test_出纸失败须显式报出原因(monkeypatch):
     assert [o.bill_no for o in result.failed] == ["PN-2"]
     assert "出纸" in result.failed[0].reason
 
-    # ② 投递层：连不上打印机 ⇒ MustReportError 且带出地址（不静默丢弃整批）
+    # ② 投递层：发送前连不上打印机，回执记录明确失败及地址。
     def _boom(*a, **kw):
         raise httpx.ConnectError("no route to host")
 
     monkeypatch.setattr(ipp.httpx, "post", _boom)
-    with pytest.raises(MustReportError) as ei:
-        ipp.send_pdf(b"%PDF", printer_uri="ipp://192.168.5.248")
-    assert "192.168.5.248" in str(ei.value)
+    receipt = ipp.send_pdf(b"%PDF", printer_uri="ipp://192.168.5.248")
+    assert receipt.status == "failed" and "192.168.5.248" in receipt.reason
 
 
 # ------------------------------------------------------------------ 001-09
@@ -483,7 +482,7 @@ def test_IPP报文的值标签必须与属性类型一致():
     误用 `0x44`（那是 `keyword`）⇒ 这台 **RICOH IM 3000 PS3** 直接回 `0x0400 client-error-bad-request`
     （响应仅 115 字节、`status-message` **不指明是哪个属性错了** —— 真机排障耗时就在这）。
     """
-    body = ipp._build_print_job("ipp://192.168.5.248:631/ipp/print", b"%PDF-1.4-x")
+    body = ipp._build_request(0x0002, "ipp://192.168.5.248:631/ipp/print", b"%PDF-1.4-x")
     # ① document-format：标签 0x49 = mimeMediaType
     assert b"\x49\x00\x0fdocument-format\x00\x0fapplication/pdf" in body
     assert b"\x44\x00\x0fdocument-format" not in body          # ← 曾经的坏写法（0x44 = keyword）
@@ -500,14 +499,13 @@ def test_出纸失败要带出打印机自报的原因(monkeypatch):
     """001-08 的加强：错误文本必须含打印机自报的 `status-message` —— 只给十六进制码现场无从下手。"""
     def _bad_post(url, **kw):  # noqa: ARG001
         payload = (bytes([0x01, 0x01]) + bytes([0x04, 0x00]) + bytes([0, 0, 0, 1]) + bytes([0x01])
-                   + b"\x41\x0estatus-message\x18client-error-bad-request" + bytes([0x03]))
+                   + b"\x41\x00\x0estatus-message\x00\x18client-error-bad-request" + bytes([0x03]))
         return httpx.Response(200, content=payload)
 
     monkeypatch.setattr(ipp.httpx, "post", _bad_post)
-    with pytest.raises(MustReportError) as ei:
-        ipp.send_pdf(b"%PDF-1.4", printer_uri="ipp://192.168.5.248:631/ipp/print")
-    msg = str(ei.value)
-    assert "0x0400" in msg and "client-error-bad-request" in msg and "报文被拒" in msg
+    receipt = ipp.send_pdf(b"%PDF-1.4", printer_uri="ipp://192.168.5.248:631/ipp/print")
+    assert receipt.status == "failed"
+    assert "0x0400" in receipt.reason and "client-error-bad-request" in receipt.reason and "报文被拒" in receipt.reason
 
 
 def test_打印不在本机留文件(monkeypatch):

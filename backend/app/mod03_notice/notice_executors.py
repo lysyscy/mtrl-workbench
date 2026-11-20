@@ -58,7 +58,7 @@ from app.mod03_notice.rules_repository import effective_rules
 from app.mod03_notice.schemas import FetchResponse
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
-from app.mod03_notice.print.dispatch import dispatch_pdf as print_dispatch
+from app.mod03_notice.print.dispatch import lock_a4_channel
 from app.mod03_notice.print.render import PdfRenderer
 from app.mod03_notice.print.signatures import SignatureStore
 
@@ -108,7 +108,7 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
         with batch_resources(current_name()) as resources:
             result = run_batch(
                 notices, mode=mode, **resources,
-                dispatch_pdf=print_dispatch if mode == MODE_PRINT else None,
+                lock_channel=lock_a4_channel if mode == MODE_PRINT else None,
             )
         persist_batch_run(result, started)
         return result
@@ -338,12 +338,20 @@ def _persist_run(*, run_type: str, target: str, result: BatchResult,
                 "unverified": o.unverified,
                 "reason": o.reason,
                 "pdf_path": o.pdf_path,
+                **o.receipt_fields(),
             }
             for o in result.outcomes
         ]
     }
-    status = "success" if not result.failed else ("failed" if not result.success else "partial")
-    error_message = "" if not result.failed else "未产出单号：" + "、".join(result.unprinted_bill_nos)
+    status = "partial" if result.unknown else (
+        "success" if not result.failed else ("partial" if result.success else "failed")
+    )
+    messages = []
+    if result.failed:
+        messages.append("未产出单号：" + "、".join(result.unprinted_bill_nos))
+    if result.unknown:
+        messages.append("结果待核实：" + "、".join(item.bill_no for item in result.unknown))
+    error_message = "；".join(messages)
     with session_scope() as session:
         rec = create_run_record(session, run_type=run_type, target=target, total=result.total,
                                 started_at=started)

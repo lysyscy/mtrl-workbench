@@ -54,7 +54,9 @@ from app.mod03_notice.schemas import (
     BatchResponse,
     FetchRequest,
     FetchResponse,
+    PrintBatchExportOut,
     PrintBatchOut,
+    PrintDispatchRequest,
     PrinterSettingRequest,
     PrinterSettingResponse,
     UnresolvedResponse,
@@ -308,14 +310,29 @@ def prepare_print_batch(req: BatchRequest) -> PrintBatchOut:
     return print_batch_store.start_batch(current_name(), req)
 
 
+@router.get("/print-batches/active", response_model=PrintBatchOut | None)
+def read_active_print_batch() -> PrintBatchOut | None:
+    return print_batch_store.read_active_batch(current_name())
+
+
 @router.get("/print-batches/{batch_id}", response_model=PrintBatchOut)
 def read_print_batch(batch_id: str) -> PrintBatchOut:
     return print_batch_store.read_batch(current_name(), batch_id)
 
 
 @router.post("/print-batches/{batch_id}/dispatch", response_model=PrintBatchOut, status_code=202)
-def dispatch_print_batch(batch_id: str) -> PrintBatchOut:
-    return print_batch_store.start_dispatch(current_name(), batch_id)
+def dispatch_print_batch(
+    batch_id: str, response: Response, req: PrintDispatchRequest | None = None,
+) -> PrintBatchOut:
+    batch = print_batch_store.start_dispatch(current_name(), batch_id, req)
+    if batch.a4_blocked or batch.status == "complete":
+        response.status_code = 200
+    return batch
+
+
+@router.post("/print-batches/{batch_id}/export-pdf", response_model=PrintBatchExportOut)
+def export_print_batch(batch_id: str) -> PrintBatchExportOut:
+    return print_batch_store.export_prepared(current_name(), batch_id)
 
 
 @router.get("/pdf/{batch}/{name}")

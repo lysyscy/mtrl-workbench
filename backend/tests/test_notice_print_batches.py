@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import io
 import json
+import struct
+import zipfile
 from threading import Event, Thread
 from time import monotonic, sleep
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 import pytest
+from pypdf import PdfReader, PdfWriter
 
 from app.core import app_settings
 from app.core.errors import MustReportError
@@ -20,6 +25,7 @@ from app.mod02_i8.browser_relay import assert_readonly
 from app.mod02_i8.browser_session import StrictTargetMismatch
 from app.mod03_notice import notice_executors, print_batch_store
 from tests._auth import TestClient
+from app.mod03_notice.print import dispatch as channels, ipp
 from app.mod03_notice.print.signatures import check_signature_coverage
 from tests.m03_helpers import make_notice, sign_cell, template, text_cell
 
@@ -32,6 +38,7 @@ IMAGE = b"\x89PNG\r\n\x1a\n" + b"data" * 30
 @pytest.fixture
 def setup_batch(monkeypatch):
     values = {"i8_base_url": BASE, "i8_print_id_material": "design-material"}
+    monkeypatch.setenv("PRINTER_IPP_URL", "ipp://configured-printer.example.test:631/ipp/print")
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     monkeypatch.setattr(app_settings, "_VALUES_LOADER", lambda: values)
     monkeypatch.setattr(app_settings, "_CACHE", values)
@@ -45,7 +52,8 @@ def setup_batch(monkeypatch):
         return [by_id[notice_id] for notice_id in ids]
     monkeypatch.setattr(print_batch_store, "load_batch_notices", load)
     monkeypatch.setattr(notice_executors, "load_batch_notices", load)
-    monkeypatch.setattr(print_batch_store, "persist_batch_run", lambda *args: None)
+    records = []
+    monkeypatch.setattr(print_batch_store, "persist_batch_run", lambda result, _started: records.append(result))
     monkeypatch.setattr(notice_executors, "persist_batch_run", lambda *args: None)
     rendered = []
     sent = []
@@ -55,8 +63,16 @@ def setup_batch(monkeypatch):
         rendered.append(html)
         return b"%PDF-1.4\n" + html.encode("utf-8")
 
-    def dispatch(pdf):
-        sent.append(pdf)
+    operations = []
+    def printer(url, *, content, **kwargs):
+        operation, attributes, pdf = decode_request(content)
+        operations.append((str(url), operation, attributes))
+        if operation == 0x0004:
+            assert not pdf
+        else:
+            assert operation == 0x0002
+            sent.append(pdf)
+        return ipp_response(job_id=len(sent) or None)
 
     def login(**kwargs):
         logins.append(kwargs["allow_kick"])
@@ -64,8 +80,7 @@ def setup_batch(monkeypatch):
 
     monkeypatch.setattr(notice_executors, "PdfRenderer",
                         lambda: SimpleNamespace(render_html_to_pdf=render, close=lambda: None))
-    monkeypatch.setattr(print_batch_store, "dispatch_pdf", dispatch)
-    monkeypatch.setattr(notice_executors, "print_dispatch", dispatch)
+    monkeypatch.setattr(ipp.httpx, "post", printer)
     monkeypatch.setattr(i8_client, "http_login", login)
     monkeypatch.setattr(i8_client.cookie_store, "load", lambda *_: None)
     monkeypatch.setattr(session_policy, "current_i8_credentials", lambda: ("i8-test", "unused"))
@@ -74,8 +89,38 @@ def setup_batch(monkeypatch):
     api.cookies.clear()
     api.cookies.set(COOKIE_NAME, make("notice-test-user"))
     broker.connect("notice-test-user", DEVICE, BASE)
-    yield SimpleNamespace(api=api, broker=broker, sent=sent, rendered=rendered, logins=logins)
+    yield SimpleNamespace(api=api, broker=broker, sent=sent, rendered=rendered, logins=logins,
+                          operations=operations, printer=printer, records=records)
     get_settings.cache_clear()
+
+
+def decode_request(content):
+    _, _, operation, _ = struct.unpack_from(">BBHI", content)
+    cursor, group = 8, 0
+    attributes = {}
+    while (tag := content[cursor]) != 3:
+        cursor += 1
+        if tag < 0x10:
+            group = tag
+            continue
+        size = int.from_bytes(content[cursor:cursor + 2], "big")
+        name = content[cursor + 2:cursor + 2 + size]
+        cursor += 2 + size
+        size = int.from_bytes(content[cursor:cursor + 2], "big")
+        attributes[name] = (group, tag, content[cursor + 2:cursor + 2 + size])
+        cursor += 2 + size
+    return operation, attributes, content[cursor + 1:]
+
+
+def ipp_response(status=0, *, job_id=None, message=""):
+    response = struct.pack(">BBHI", 1, 1, status, 1)
+    if message:
+        value = message.encode()
+        response += b"\x01\x41\x00\x0estatus-message" + len(value).to_bytes(2, "big") + value
+    if job_id is not None:
+        response += b"\x02\x21\x00\x06job-id\x00\x04" + job_id.to_bytes(4, "big")
+        response += b"\x23\x00\x09job-state\x00\x04\x00\x00\x00\x03"
+    return httpx.Response(200, content=response + b"\x03", headers={"Content-Type": "application/ipp"})
 
 
 def body(ids=(1, 2, 3), mode="print", session_mode="browser", **extra):
@@ -173,7 +218,7 @@ def test_print_stops_mid_batch_then_only_dispatches_reconfirmed_scope(setup_batc
         progress = env.api.get(f"{PATH}/{handle}").json()
         assert (progress["stage"], progress["prepared_count"], progress["current_bill_no"]) == ("preparing", 1, "PN-2")
         assert [item["status"] for item in progress["items"]] == ["prepared", "preparing", "pending"]
-        assert progress["dispatched_count"] == 0 and env.sent == []
+        assert progress["dispatched_count"] == 0 and env.operations == []
         assert env.api.post(f"{PATH}/{handle}/dispatch").status_code == 409
 
         relay.release_second.set()
@@ -199,7 +244,7 @@ def test_print_stops_mid_batch_then_only_dispatches_reconfirmed_scope(setup_batc
         assert ready["status"] == "ready" and ready["prepared_count"] == 2 and env.sent == []
         assert [item["notice_id"] for item in ready["items"]] == [3, 1]
         assert env.api.post(f"{PATH}/{next_id}/dispatch").status_code == 202
-        assert env.api.post(f"{PATH}/{next_id}/dispatch").status_code == 202
+        assert env.api.post(f"{PATH}/{next_id}/dispatch").status_code in (200, 202)
         dispatched = wait_batch(env.api, next_id)
         assert dispatched["dispatched_count"] == 2 and len(env.sent) == 2
         assert [item["notice_id"] for item in dispatched["result"]["items"]] == [3, 1]
@@ -310,3 +355,139 @@ def test_missing_reached_signature_is_an_error_even_with_another_slot_filled():
         check_signature_coverage(tpl, flow, {"项目经理": "data:image/png;base64,AA"})
     coverage = check_signature_coverage(tpl, flow[:1], {"项目经理": "data:image/png;base64,AA"})
     assert coverage.blank_by_design == ["财务审核", "未到达节点"]
+
+
+@pytest.mark.parametrize("blocked_mode", ["driver", "raw", "ipp", "auto"])
+def test_blocked_channel_exports_or_switches_same_prepared_batch(setup_batch, monkeypatch, blocked_mode):
+    env = setup_batch
+    relay = pump(env.broker)
+    address = "ipp://a4-printer.example.test:631/ipp/print"
+    output = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=595.28, height=841.89)
+    writer.write(output)
+    a4_pdf = output.getvalue()
+
+    def render_a4(html):
+        env.rendered.append(html)
+        return a4_pdf
+
+    monkeypatch.setattr(notice_executors, "PdfRenderer",
+                        lambda: SimpleNamespace(render_html_to_pdf=render_a4, close=lambda: None))
+
+    def printer(url, *, content, **kwargs):
+        if "a4-printer.example.test" in str(url):
+            return env.printer(url, content=content, **kwargs)
+        operation, attributes, document = decode_request(content)
+        env.operations.append((str(url), operation, attributes))
+        assert operation == 0x0004 and not document
+        # The device defaults to A4 but rejects the explicit media constraint.
+        return ipp_response(0x040B, message="default is A4 but explicit A4 is unsupported")
+
+    def must_not_send(*args):
+        pytest.fail("A channel without explicit A4 was invoked")
+
+    monkeypatch.setattr(ipp.httpx, "post", printer)
+    monkeypatch.setattr(channels, "send_driver", must_not_send)
+    monkeypatch.setattr(channels, "send_raw", must_not_send)
+    try:
+        batch_id = env.api.post(f"{PATH}/prepare", json=body()).json()["batch_id"]
+        ready = wait_batch(env.api, batch_id)
+        request_total = len(relay.requests)
+        assert ready["status"] == "ready" and ready["prepared_count"] == 3
+        response = env.api.post(f"{PATH}/{batch_id}/dispatch", json={"mode": blocked_mode, "printer_name": "Driver"})
+        assert response.status_code == 200, response.text
+        blocked = response.json()
+        block = blocked["a4_blocked"]
+        assert blocked["batch_id"] == batch_id and blocked["status"] == "ready"
+        assert block["code"] == "a4_blocked" and block["can_switch_channel"]
+        assert env.api.get(f"{PATH}/{batch_id}").json()["a4_blocked"] == block
+        assert len(env.operations) == (1 if blocked_mode in ("ipp", "auto") else 0)
+        if blocked_mode == "auto":
+            assert [item["channel"] for item in block["attempts"]] == ["ipp", "driver", "raw"]
+            assert "explicit A4 is unsupported" in block["attempts"][0]["reason"]
+        assert env.sent == []
+
+        export = env.api.post(block["export_action"])
+        assert export.status_code == 200, export.text
+        download = env.api.get(export.json()["download_url"])
+        with zipfile.ZipFile(io.BytesIO(download.content)) as zipped:
+            assert zipped.namelist() == ["PN-1.pdf", "PN-2.pdf", "PN-3.pdf"]
+            for name in zipped.namelist():
+                assert zipped.read(name) == a4_pdf
+                page = PdfReader(io.BytesIO(zipped.read(name))).pages[0]
+                assert (float(page.mediabox.width), float(page.mediabox.height)) == (595.28, 841.89)
+        assert len(relay.requests) == request_total and env.sent == []
+
+        switched = env.api.post(f"{PATH}/{batch_id}/dispatch", json={"mode": "ipp", "printer_uri": address})
+        assert switched.status_code == 202 and switched.json()["a4_blocked"] is None
+        finished = wait_batch(env.api, batch_id)
+        assert finished["batch_id"] == batch_id and finished["dispatched_count"] == 3
+        assert len(relay.requests) == request_total and len(env.rendered) == 3
+        valid_ops = [(operation, attrs) for url, operation, attrs in env.operations if "a4-printer" in url]
+        assert [operation for operation, _ in valid_ops] == [4, 2, 2, 2]
+        for _, attrs in valid_ops:
+            assert attrs[b"media"] == (2, 0x44, b"iso_a4_210x297mm")
+            assert attrs[b"document-format"] == (1, 0x49, b"application/pdf")
+            assert attrs[b"ipp-attribute-fidelity"] == (1, 0x22, b"\x01")
+    finally:
+        relay.done()
+
+
+def test_refresh_reads_original_progress_and_three_delivery_states(setup_batch, monkeypatch):
+    env = setup_batch
+    relay = pump(env.broker)
+    second_started, release = Event(), Event()
+
+    def printer(url, *, content, **kwargs):
+        response = env.printer(url, content=content, **kwargs)
+        if len(env.sent) == 2:
+            second_started.set()
+            assert release.wait(5)
+            return ipp_response(0x0400, message="queue disabled")
+        if len(env.sent) == 3:
+            raise httpx.ReadError("connection dropped after receiving PDF")
+        return response
+
+    monkeypatch.setattr(ipp.httpx, "post", printer)
+    try:
+        batch_id = env.api.post(f"{PATH}/prepare", json=body()).json()["batch_id"]
+        assert wait_batch(env.api, batch_id)["status"] == "ready"
+        path = f"{PATH}/{batch_id}"
+        response = env.api.post(path + "/dispatch", json={"mode": "auto"})
+        assert response.status_code == 202 and response.json()["stage"] == "dispatching"
+        assert second_started.wait(5)
+        refreshed = TestClient(create_app())
+        refreshed.cookies.set(COOKIE_NAME, make("notice-test-user"))
+        progress = refreshed.get(PATH + "/active").json()
+        assert progress == refreshed.get(path).json()
+        assert progress["batch_id"] == batch_id and progress["dispatch_processed_count"] == 1
+        assert [(row["delivery_status"], row["job_id"]) for row in progress["items"]] == [
+            ("accepted", 1), ("pending", None), ("pending", None),
+        ]
+        other = TestClient(create_app())
+        other.cookies.set(COOKIE_NAME, make("different-user"))
+        assert other.get(PATH + "/active").json() is None
+        assert other.get(path).status_code == 404
+        assert other.post(path + "/dispatch").status_code == 404
+        assert other.post(path + "/export-pdf").status_code == 404
+        assert refreshed.post(path + "/dispatch", json={"mode": "raw"}).json() == progress
+
+        release.set()
+        done = wait_batch(refreshed, batch_id)
+        assert refreshed.get(PATH + "/active").json() == done
+        assert refreshed.post(path + "/dispatch").json() == done
+        assert len(env.sent) == 3 and [operation for _, operation, _ in env.operations] == [4, 2, 2, 2]
+        assert done["dispatch_processed_count"] == 3 and done["dispatched_count"] == 1
+        items = done["result"]["items"]
+        assert [item["delivery_status"] for item in items] == ["accepted", "failed", "unknown"]
+        assert done["result"]["success"] == done["result"]["failed"] == done["result"]["unknown"] == 1
+        assert done["result"]["unprinted_bill_nos"] == ["PN-2"]
+        assert items[0]["job_id"] == 1 and items[0]["job_state"] == 3
+        assert "queue disabled" in items[1]["attempts"][0]["reason"]
+        assert items[2]["attempts"][0]["status"] == "unknown"
+        assert len(env.records) == 1
+        assert [item.delivery.last.status for item in env.records[0].outcomes] == ["accepted", "failed", "unknown"]
+    finally:
+        release.set()
+        relay.done()
