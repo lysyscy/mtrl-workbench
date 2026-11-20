@@ -1,16 +1,19 @@
 import { ApiError } from './api';
-import { bindBrowserIdentity, connectBrowser, isTransientRelayError, readBrowserIdentity, runBrowserRelay } from './i8-browser-relay';
+import { bindBrowserIdentity, connectBrowser, isTransientRelayError, readBrowserIdentity, readBrowserState, runBrowserRelay } from './i8-browser-relay';
 import type { BrowserRelayState } from './i8-browser-relay';
 
 export type RelayConnectionUpdate =
-  | {phase: 'connecting' | 'retrying' | 'stopped'; message: string}
+  | {phase: 'connecting' | 'retrying' | 'stopped'; message: string; code?: string; origin?: string}
   | {phase: 'connected'; state: BrowserRelayState; message: string};
 
-const defaults = {read: readBrowserIdentity, connect: connectBrowser, bind: bindBrowserIdentity, run: runBrowserRelay, wait: waitForRecovery};
+const defaults = {state: readBrowserState, read: readBrowserIdentity, connect: connectBrowser, bind: bindBrowserIdentity, run: runBrowserRelay, wait: waitForRecovery};
 type Dependencies = typeof defaults;
+interface OpenIntent {
+  requested: () => boolean;
+  checked: () => void;
+}
 
-/** Network recovery only: actual site, authentication and protocol errors remain visible stops. */
-function recoverable(error: unknown): boolean {
+export function recoverable(error: unknown): boolean {
   return isTransientRelayError(error) || error instanceof ApiError && error.code !== 'invalid_response' && error.code !== 'malformed' && (
     error.code === 'identity_unverified'
     || error.status >= 500 || !error.code && error.status === 0);
@@ -38,27 +41,43 @@ function waitForRecovery(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** Own a single connect → poll → recover lifecycle. This has no business-fetch retry path. */
-export async function maintainBrowserRelay(signal: AbortSignal, update: (value: RelayConnectionUpdate) => void, deps: Dependencies = defaults): Promise<void> {
+export async function maintainBrowserRelay(signal: AbortSignal, update: (value: RelayConnectionUpdate) => void,
+  open?: OpenIntent, deps: Dependencies = defaults): Promise<void> {
   let faults = 0;
   while (!signal.aborted) {
-    update({phase: 'connecting', message: faults ? '正在恢复浏览器连接…' : '正在连接浏览器会话…'});
+    if (!faults) update({phase: 'connecting', message: '正在连接 i8…'});
     let state: BrowserRelayState;
+    let origin = '';
     try {
-      const identity = await deps.read();
+      origin = (await deps.state(signal)).origin;
+      if (signal.aborted) return;
+      if (!origin) throw new ApiError('请先在工作台设置 i8 服务器地址。', 0, 'i8-unconfigured');
+      const shouldOpen = open?.requested() === true;
+      const identity = await deps.read(origin, shouldOpen).then(result => {
+        if (shouldOpen) open?.checked();
+        return result;
+      }, failure => {
+        if (shouldOpen && failure instanceof ApiError && ['tab-opening', 'tab-paused', 'login-required'].includes(failure.code ?? '')) open?.checked();
+        throw failure;
+      });
       if (signal.aborted) return;
       state = await deps.connect(identity, signal);
       if (signal.aborted) return;
+      if (state.origin !== identity.origin) throw new ApiError('i8 站点已变化，正在重新核对。', 0, 'site-changed');
+      if (!state.connected) throw new ApiError('工作台未确认浏览器连接。', 0, 'invalid_response');
       await deps.bind(identity, state.generation);
       if (signal.aborted) return;
     } catch (failure) {
       if (signal.aborted) return;
       if (!recoverable(failure)) {
-        update({phase: 'stopped', message: failure instanceof Error ? failure.message : '无法连接浏览器，请重新选择 i8 标签后连接。'});
+        update({phase: 'stopped', message: failure instanceof Error ? failure.message : '无法连接浏览器，请重新连接。'});
         return;
       }
-      update({phase: 'retrying', message: failure instanceof ApiError && isTransientRelayError(failure)
+      const code = failure instanceof ApiError ? failure.code : undefined;
+      update({phase: 'retrying', origin, ...(code ? {code} : {}), message: failure instanceof ApiError && isTransientRelayError(failure)
         ? failure.message : '连接暂时中断，正在自动恢复；不会重新登录或重做抓取。'});
-      await deps.wait(Math.min(30_000, 1000 * 2 ** Math.min(faults++, 5)), signal);
+      const limit = isTransientRelayError(failure) ? 2000 : 30_000;
+      await deps.wait(Math.min(limit, 1000 * 2 ** Math.min(faults++, 5)), signal);
       continue;
     }
     update({phase: 'connected', state, message: ''});

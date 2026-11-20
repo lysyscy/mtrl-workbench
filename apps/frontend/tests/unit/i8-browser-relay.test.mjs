@@ -163,13 +163,15 @@ test('连接只提交扩展读取的站点，不依赖菜单账号与组织', as
 
 test('只需扩展的站点结果即可连接；读取失败如实抛出', async () => {
   const seen = [];
-  const good = await readBrowserIdentity(async message => { seen.push(message); return { ok: true, ...identity }; });
+  const good = await readBrowserIdentity(identity.origin, true, async message => { seen.push(message); return { ok: true, ...identity, sessionReady: true }; });
   assert.deepEqual(good, identity);
   assert.equal(seen[0].type, 'i8-relay:identity');
   assert.equal(seen[0].device_id, deviceId(), '待核身份必须按本条连接缓存，别的页面不能替换它');
-  assert.deepEqual(await readBrowserIdentity(async () => ({ ok: true, origin: identity.origin })), identity);
-  await assert.rejects(readBrowserIdentity(async () => ({ ok: false, message: '请先选中 i8 标签' })), error => /选中 i8 标签/.test(error.message));
-  await assert.rejects(readBrowserIdentity(async () => ({ ok: true, origin: 1 })), error => /i8 标签/.test(error.message));
+  assert.equal(seen[0].origin, identity.origin);
+  assert.equal(seen[0].openIfMissing, true);
+  await assert.rejects(readBrowserIdentity(identity.origin, false, async () => ({ ok: false, code: 'need-action-click' })), {code: 'need-action-click'});
+  await assert.rejects(readBrowserIdentity(identity.origin, false, async () => ({ ok: true, origin: 1, sessionReady: true })), {code: 'site-changed'});
+  await assert.rejects(readBrowserIdentity(identity.origin, false, async () => ({ ok: true, origin: identity.origin })), {code: 'extension-outdated'});
 });
 
 test('连接建立后把服务端刚校验过的身份与代号交给扩展；断开时让它忘掉（扩展没应答不阻塞断开）', async () => {

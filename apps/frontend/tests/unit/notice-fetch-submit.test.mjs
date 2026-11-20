@@ -31,6 +31,8 @@ registerHooks({
     if (specifier === 'react') {
       return stub(`
         export const Fragment = 'fragment';
+        export function createContext() { return {}; }
+        export function useContext() { return globalThis.__relaySession; }
         const cell = () => { const at = globalThis.__relayCells.index++; return globalThis.__relayCells.list[at] ??= { value: undefined, set: false }; };
         export function useState(initial) {
           const slot = cell();
@@ -48,6 +50,7 @@ registerHooks({
           slot.cleanup = effect();
         }
         export function useMemo(factory) { return factory(); }
+        export const useLayoutEffect = useEffect;
         export function useCallback(fn) { return fn; }
       `);
     }
@@ -74,9 +77,6 @@ registerHooks({
     }
     if (specifier === './time-picker') {
       return stub("export function TimePicker(p) { return { type: 'time-picker', props: p }; }");
-    }
-    if (specifier === './i8-session') {
-      return stub("export function useI8Session() { return globalThis.__relaySession; }");
     }
     if (specifier.startsWith('antd/es/')) {
       return stub('export default function Stub(p) { return { type: "antd", props: p }; }');
@@ -202,9 +202,10 @@ function walk(node, hit, found = []) {
 }
 
 /** 渲染一次（不含 ReactDOM）并返回元素树；每次渲染都从头取 hook 格子。 */
-function render({ mode = 'http', connected = false } = {}) {
+function render({ mode = 'http', connected = false, owner = 'tester001', waitForBrowser = async () => connected } = {}) {
   cells.index = 0;
-  globalThis.__relaySession = { mode, connected, state: null, busy: false, notice: '', extensionReady: true };
+  globalThis.__relaySession = { mode, connected, state: null, busy: false, notice: '',
+    actionKey: JSON.stringify([owner, mode]), extensionReady: true, waitForBrowser };
   return NoticeFetch({ me, blocked: false, close() {}, refresh: async () => {} });
 }
 
@@ -263,13 +264,59 @@ test('选浏览器方式且已连接：同一按钮改走浏览器通道，且�
   assert.equal('allow_kick' in calls[0].body, false, '浏览器方式不得请求强踢');
 });
 
-test('选了浏览器方式但连接不在：一个字都不发（不许悄悄改用登录）', async () => {
+test('浏览器连接就绪前零提交，就绪后只发送确认过的月份一次', async () => {
   const calls = recorder();
-  const tree = render({ mode: 'browser', connected: false });
+  const ready = Promise.withResolvers();
+  let waits = 0;
+  const options = {mode: 'browser', waitForBrowser: () => {waits += 1; return ready.promise;}};
+  const tree = render(options);
   const submitButton = confirmButton(tree);
-  assert.equal(submitButton.props.disabled, true, '没连接时按钮必须是禁用状态');
-  await submit(tree);
-  assert.equal(calls.length, 0, '⛔ 连接不在时绝不能退回登录再抓');
+  assert.equal(submitButton.props.disabled, false);
+  submitButton.props.onClick();
+  submitButton.props.onClick();
+  assert.equal(waits, 1);
+  assert.equal(actionsOf(render(options)).action.waiting, true);
+  assert.equal(calls.length, 0);
+  ready.resolve(true);
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.session_mode, 'browser');
+  assert.equal(calls[0].body.year_month, '2026-11');
+});
+
+for (const invalidation of ['cancel', 'close', 'scope', 'mode', 'owner']) {
+  test(`${invalidation} 解除连接等待，迟到的就绪事件不能提交`, async () => {
+    const calls = recorder();
+    const ready = Promise.withResolvers();
+    let signal;
+    const options = {mode: 'browser', waitForBrowser: value => {signal = value; return ready.promise;}};
+    confirmButton(render(options)).props.onClick();
+    const waiting = render(options);
+    if (invalidation === 'cancel') kickButton(waiting, '取消等待').props.onClick();
+    if (invalidation === 'close') waiting.props.requestClose();
+    if (invalidation === 'scope') {cells.month = '2026-10'; render(options);}
+    if (invalidation === 'mode') render({mode: 'http'});
+    if (invalidation === 'owner') render({...options, owner: 'another'});
+    assert.equal(signal.aborted, true);
+    ready.resolve(true);
+    await settle();
+    assert.equal(calls.length, 0);
+  });
+}
+
+test('已发出的通知书请求失联，重开及连接就绪后仍只允许核对原结果', async () => {
+  let posts = 0;
+  globalThis.fetch = async () => {posts += 1; throw new TypeError('network interrupted');};
+  confirmButton(render({mode: 'browser', connected: true})).props.onClick();
+  await settle();
+  assert.equal(posts, 1);
+  assert.equal(actionsOf(render({mode: 'browser'})).action.pending, true);
+  cells.list = [];
+  const reopened = render({mode: 'browser', connected: true});
+  assert.equal(actionsOf(reopened).action.pending, true);
+  assert.equal(kickButton(reopened, '确认抓取'), undefined);
+  await settle();
+  assert.equal(posts, 1);
 });
 
 test('月份不合法时不发请求（原来的正则回归守卫）', async () => {

@@ -11,7 +11,6 @@ import { ApiError, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
 import { duration, readRecords, recordLabel, recordScope, recordSource, sourceNames } from './i8-api';
 import type { RunRecord } from './i8-api';
-import { relayAvailable } from './i8-browser-relay';
 import type { SessionMode } from './i8-browser-relay';
 import { useI8Session } from './i8-session';
 import { JcFetchReceipt } from './jc-fetch-receipt';
@@ -47,6 +46,7 @@ function readAddress(value: unknown) {
 }
 function I8Server({blocked, me}: {blocked: boolean; me: Identity | null}) {
   const client = useQueryClient(), lock = useRef(false);
+  const session = useI8Session();
   const [selected, setSelected] = useState<string | null>(null), [saving, setSaving] = useState(false), [error, setError] = useState(''), [needsRead, setNeedsRead] = useState(false);
   const config = useQuery({queryKey: ['i8-server'], enabled: !blocked, retry: false, queryFn: async ({signal}) => readAddress(await requestJson('/api/m14/settings', {signal}))});
   const value = selected ?? config.data?.address;
@@ -60,6 +60,7 @@ function I8Server({blocked, me}: {blocked: boolean; me: Identity | null}) {
       const result = readAddress(await requestJson('/api/m14/settings?' + query, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({i8_base_url: value})}));
       if (result.address !== value) throw new ApiError('服务器保存结果待核实，请重读配置。');
       client.setQueryData(['i8-server'], result); setSelected(null); await client.invalidateQueries({queryKey: ['i8-config']});
+      if (session.mode === 'browser' && session.maintaining) void session.connect(false);
     } catch (failure) { setNeedsRead(uncertainWrite(failure) || failure instanceof ApiError && failure.status === 409); setError(failure instanceof Error ? failure.message : '保存失败，请重读配置。'); }
     finally { lock.current = false; setSaving(false); }
   }
@@ -68,16 +69,13 @@ function I8Server({blocked, me}: {blocked: boolean; me: Identity | null}) {
 /**
  * 「i8 接入」：浏览器会话通道的连接区（`TAIL-476`）。
  *
- * 这里是**唯一**能建立/断开浏览器连接、并且唯一能选「取数方式」的地方：
- *   状态与生命周期来自 `I8SessionProvider`（挂在账号工作区上），不在本页另起一套。
- * ⛔ 不是全局开关：连接属于 `(当前登录账号, 本页面)`，换账号/关页面即失效；
- *    选过「浏览器已有会话」之后，断开或失效都**停在**该方式，要改回直连必须用户自己切。
+ * 连接与各业务弹窗共用账号工作区的 I8SessionProvider。
  */
 function I8BrowserRelay() {
   const session = useI8Session();
   const connected = session.connected;
   const state = session.state;
-  const extensionReady = relayAvailable();
+  const extensionReady = session.extensionReady;
   const modeOptions: { value: SessionMode; label: string }[] = [
     { value: 'http', label: '工作台直连' },
     { value: 'browser', label: '浏览器已有会话' },
@@ -85,8 +83,7 @@ function I8BrowserRelay() {
   return <div className="i8-relay">
     <h2>i8 接入 · 浏览器会话</h2>
     <p className="i8-relay-note">
-      连上以后，本页的抓取与同步可以改由你浏览器里那个已登录的 i8 标签发出：不登录、不顶号、不把会话材料带出浏览器。
-      打印与导出 PDF 不受这条通道影响，仍按原来的方式走。没连、或者仍选「工作台直连」时，一切与以前一样。
+      工作台自动查找已授权站点的 i8 标签，复用浏览器当前登录态。
     </p>
     <div className="i8-relay-row">
       <label>取数方式
@@ -105,10 +102,10 @@ function I8BrowserRelay() {
         ? <Button onClick={() => void session.disconnect()}>{connected ? '断开' : '停止连接'}</Button>
         : <Button htmlType="button" onClick={() => void session.connect()} loading={session.busy} disabled={!extensionReady}>连接浏览器会话</Button>}
     </div>
-    {session.mode === 'browser' && <p className="i8-relay-note">在已登录的 i8 标签页点一下扩展图标，再连接即可。无需展开账号菜单，取数使用该标签的当前会话。</p>}
+    {session.mode === 'browser' && session.connectionCode === 'permission-required' &&
+      <Button htmlType="button" onClick={() => void session.requestPermission()}>授权 i8 站点</Button>}
     {!extensionReady && !connected && <p className="i8-relay-note">没检测到浏览器扩展：请按安装说明装好「工作台 i8 会话桥」（装一次即可，扩展 ID 是固定的），刷新本页后再点连接。</p>}
-    {session.mode === 'browser' && !connected && !session.maintaining && <p className="i8-relay-note">浏览器连接未建立，抓取不会改用登录方式。请连接浏览器会话，或切换取数方式。</p>}
-    {session.maintaining && <p className="i8-relay-note">刷新页面或短暂断网后会自动恢复连接；主动断开后停止恢复。已发出的抓取不会重做，i8 登录失效仍需你在浏览器中处理。</p>}
+    {session.maintaining && <p className="i8-relay-note">短暂断网后会自动恢复连接。请在 i8 标签页处理登录，已发出的抓取可在执行记录中核对。</p>}
     {session.notice && <p role="status" className="i8-relay-note">{session.notice}</p>}
   </div>;
 }
