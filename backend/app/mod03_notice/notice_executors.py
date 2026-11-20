@@ -16,12 +16,13 @@
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import ExitStack, closing, contextmanager
 from datetime import datetime
 from typing import Callable
 
 from app.core.config import PROJECT_ROOT, get_settings
 from app.core.db import session_scope
+from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.core.session import current_name
 from app.mod01_projects.domain import (
@@ -57,63 +58,70 @@ from app.mod03_notice.rules_repository import effective_rules
 from app.mod03_notice.schemas import FetchResponse
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
-from app.mod03_notice.print.dispatch import dispatch_pdf as print_dispatch, list_printers
+from app.mod03_notice.print.dispatch import dispatch_pdf as print_dispatch
 from app.mod03_notice.print.render import PdfRenderer
 from app.mod03_notice.print.signatures import SignatureStore
 
 logger = get_logger()
 
 
-def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
-    """批量执行器：真实实现（连库 + i8 + 浏览器 + 打印机）。测试可覆盖。"""
+class _PrintDetails(NoticeDetailFetcher):
+    def fetch_info(self, ph_id: str) -> dict:
+        info = super().fetch_info(ph_id)
+        if not info:
+            raise MustReportError("i8 未返回通知书单头。")
+        return info
 
-    def _exec(ids: list[int], mode: str) -> BatchResult:
-        # ⚠️ 耗时的**起点**：必须在`I8Client` / 浏览器起来**之前**（见 `create_run_record` 那段
-        #    —— 记录是"做完才建"的 ⇒ 不显式给起点，耗时恒 0，用户 2026-09-20 实测报的）。
-        t0 = datetime.now()
-        with session_scope() as session:
-            notices = list(get_notices_by_ids(session, ids))
-        target = ",".join((n.bill_no or str(n.id)) for n in notices)[:512]
-        run_type = "print" if mode == MODE_PRINT else "export_pdf"
 
-        # ⭐ 2026-09-18 **用户口述授权**：「打印你设置的不能强踢？不要设置这个，**强踢就强踢**，
-        #    我打印的时候会看着的，不会受损失」⇒ 打印这条链路**允许强踢**（`allow_kick=True`）。
-        #    ⚠️ `D9` 的原意是"**不许悄悄踢**"（要有人在场、要显式授权）—— 打印**本来就是人工点击、
-        #    人就在机器旁** ⇒ 这里就是那次显式授权；⛔ 抓取那条链路仍按各自入参（默认不踢）。
-        client = I8Client(allow_kick=True)
-        # ⚠️⚠️ `PdfRenderer()` **必须在 `try` 之内**（2026-09-20 修）：它要起 Playwright 浏览器，
-        #    起不来时会**抛**。原先它写在 `try` **之外** ⇒ 它抛 ⇒ `finally` 里的 `client.close()`
-        #    **不会执行** ⇒ **i8 会话就那样挂在那儿**（连接泄漏；且下一次还会撞同一个会话）。
-        #    ⇒ 用 `renderer=None` 打底 + `finally` 里判空关闭。
+def load_batch_notices(ids: tuple[int, ...]) -> list[PaymentNotice]:
+    with session_scope() as session:
+        found = {notice.id: notice for notice in get_notices_by_ids(session, list(ids))}
+    return [found.get(notice_id) or PaymentNotice(id=notice_id, bill_no=str(notice_id)) for notice_id in ids]
+
+
+@contextmanager
+def batch_resources(owner: str):
+    """Keep the client, reads and Playwright renderer in the caller's thread and i8 scope."""
+    with ExitStack() as stack:
+        client = stack.enter_context(closing(open_i8_client(owner=owner)))
         renderer = None
-        try:
-            renderer = PdfRenderer()
-            result = run_batch(
-                notices,
-                mode=mode,
-                design_fetcher=DesignFetcher(client),
-                # 单张详情的三个来源（主表 / 明细 / 流程=签名）—— 渲染必需，漏传会印出空白件
-                detail_fetcher=NoticeDetailFetcher(client),
-                # 签名图缓存落 `var/cache/signatures`（与 `tools/render_preview.py` 同一处）
-                signature_store=SignatureStore(
-                    client, cache_dir=PROJECT_ROOT / "var" / "cache" / "signatures"
-                ),
-                render_pdf=renderer.render_html_to_pdf,
-                # ⭐ 2026-09-18（`TAIL-46`-②）：投递走**通道分流**（`auto` = IPP → 系统驱动 → RAW 9100；
-                #    设置里选的通道**当场生效** —— 分流器每次都现读设置）。⛔ 这里不再是裸 `send_pdf`。
-                dispatch_pdf=(print_dispatch if mode == MODE_PRINT else None),
-            )
-        finally:
-            # ⚠️ 判空：`PdfRenderer()` 自己抛时它还是 `None`（见上）—— ⛔ 别在这里 NPE，
-            #    那会把**真因**（浏览器起不来）盖成"AttributeError: NoneType"（更难查）。
-            if renderer is not None:
-                renderer.close()
-            client.close()
 
-        _persist_run(run_type=run_type, target=target, result=result, started=t0)
+        def render(html: str) -> bytes:
+            nonlocal renderer
+            if renderer is None:
+                renderer = stack.enter_context(closing(PdfRenderer()))
+            return renderer.render_html_to_pdf(html)
+
+        yield {
+            "design_fetcher": DesignFetcher(client),
+            "detail_fetcher": _PrintDetails(client),
+            "signature_store": SignatureStore(client),
+            "render_pdf": render,
+        }
+
+
+def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
+    """Synchronous compatibility entry point. The route owns the unified session."""
+    def execute(ids: list[int], mode: str) -> BatchResult:
+        started = datetime.now()
+        notices = load_batch_notices(tuple(ids))
+        with batch_resources(current_name()) as resources:
+            result = run_batch(
+                notices, mode=mode, **resources,
+                dispatch_pdf=print_dispatch if mode == MODE_PRINT else None,
+            )
+        persist_batch_run(result, started)
         return result
 
-    return _exec
+    return execute
+
+
+def persist_batch_run(result: BatchResult, started: datetime) -> None:
+    _persist_run(
+        run_type="print" if result.mode == MODE_PRINT else "export_pdf",
+        target=",".join(item.bill_no for item in result.outcomes)[:512],
+        result=result, started=started,
+    )
 
 
 def apply_fetched_row(session, row: dict, *,

@@ -75,8 +75,8 @@ def test_与批量打印共用同一次勾选():
     client = TestClient(app)
 
     selection = [1, 2]  # 同一次勾选
-    printed = client.post("/api/m03/batch", json={"ids": selection, "mode": "print"})
-    exported = client.post("/api/m03/batch", json={"ids": selection, "mode": "pdf"})
+    printed = client.post("/api/m03/batch", json={"ids": selection, "mode": "print", "session_mode": "browser"})
+    exported = client.post("/api/m03/batch", json={"ids": selection, "mode": "pdf", "session_mode": "browser"})
     assert printed.status_code == 200 and exported.status_code == 200
     # 两条入口吃同一份勾选（无需重新选一遍）
     assert printed.json()["total"] == exported.json()["total"] == 2
@@ -153,7 +153,7 @@ def test_产物提供访问入口():
     client = TestClient(app)
 
     try:
-        res = client.post("/api/m03/batch", json={"ids": [1], "mode": "pdf"})
+        res = client.post("/api/m03/batch", json={"ids": [1], "mode": "pdf", "session_mode": "browser"})
         assert res.status_code == 200, res.text
         body = res.json()
         url = body["items"][0]["download_url"]

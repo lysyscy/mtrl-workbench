@@ -30,7 +30,9 @@ from fastapi.responses import FileResponse, Response
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.core.errors import MustReportError, human_reason, log_exc
+from app.core.errors import AppError, MustReportError, human_reason, log_exc
+from app.core.identity import require_expected_account
+from app.core.session import current_name
 from app.core.logging import get_logger
 from app.mod01_projects import service as P1S
 from app.mod01_projects.domain import (
@@ -41,7 +43,7 @@ from app.mod01_projects.domain import (
 )
 from app.mod01_projects.models import TYPE_SMALL
 from app.mod02_i8 import wh_cache
-from app.mod03_notice import pdf_cache
+from app.mod03_notice import pdf_cache, print_batch_store
 from app.mod03_notice.domain import still_unsettled
 from app.mod03_notice.print.dispatch import list_printers
 from app.mod03_notice.repository import latest_unresolved
@@ -52,7 +54,7 @@ from app.mod03_notice.schemas import (
     BatchResponse,
     FetchRequest,
     FetchResponse,
-    ItemOutcomeOut,
+    PrintBatchOut,
     PrinterSettingRequest,
     PrinterSettingResponse,
     UnresolvedResponse,
@@ -287,72 +289,38 @@ def warehouse_check(
     )
 
 
-@router.post("/batch", response_model=None)
+@router.post("/batch", response_model=BatchResponse)
 def batch(
     req: BatchRequest,
     executor: Callable[[list[int], str], BatchResult] = Depends(get_batch_executor),
-):  # type: ignore[no-untyped-def]
-    """批量打印 / 仅导出 PDF（共用同一次勾选，由 `mode` 分流）。
-
-    ⚠️⚠️ **2026-09-20 加异常兜底**（用户实测踩到）：原先这里是
-    `result = executor(...)` **裸调、不兜异常** ⇒ 链路里**任何一步抛**（i8 登录 / `PdfRenderer`
-    起浏览器 / 取数 / 渲染 / 投递）都会变成 **HTTP 500** ⇒ 界面上只显示"500"，
-    **真因只在服务端 stderr 里**（用户点「只导出 PDF」看到的就是这个，只能来问我"是不是登录的问题"）。
-    ⇒ 现在把**可预期的**失败（`MustReportError`）与**未预期的**异常**都兜住**，
-      按本项目一贯口径回「**200 ＋ `ok:false` ＋ 一句中文**」，并把**类型名**一并带出
-      —— ⛔ 界面上**不许只显示一个状态码**：那样用户既报不准、我也查不动。
-
-    ⚠️ 为什么 `response_model` 从 `BatchResponse` 改成 `None`：兜底分支要回 `JSONResponse`，
-       而 `response_model` 会**按模型校验并改写**返回体 ⇒ 失败分支会被它改成 500。
-       （成功分支**仍然回 `BatchResponse`**，形状一字未变 ⇒ 前端不受影响。）
-    """
-    from fastapi.responses import JSONResponse
-
+):
+    """Synchronous compatibility entry point for printing or exporting PDFs."""
+    require_expected_account(req.expected_account)
+    ids = print_batch_store.confirmed_ids(req)
     try:
-        result = executor(req.ids, req.mode)
-    except MustReportError as exc:
-        return JSONResponse(status_code=200, content={"ok": False, "message": exc.message})
-    except Exception as exc:                      # noqa: BLE001 —— 见 docstring：一律兜住、带回真因
-        logger.exception("批量%s 失败（未预期异常）", req.mode)
-        return JSONResponse(status_code=200, content={
-            "ok": False,
-            "message": human_reason("批量执行失败", exc),
-        })
-    # ⭐⭐ **导出不再落盘**（用户 2026-09-20：「导出换成浏览器下载」）⇒ 把这一批的字节交给
-    #    `pdf_cache` 拿一个 token；前端凭下面这个 `download_url` 取一次
-    #    （单张 = PDF / 多张 = 打包 zip），**取完就在浏览器里，本机不留文件**。
-    token = pdf_cache.put(result.files) if result.files else ""
-    batch_name = Path(result.batch_dir).name if result.batch_dir else ""
-    items = [
-        ItemOutcomeOut(
-            notice_id=o.notice_id,
-            bill_no=o.bill_no,
-            ok=o.ok,
-            unverified=o.unverified,
-            reason=o.reason,
-            pdf_path=o.pdf_path,
-            download_url=(
-                f"/api/m03/pdf/{token}" if token
-                # ⚠️ 兜底：**显式给了目录**（工具 / 自检）那种走旧路径 —— 生产路径已不落盘
-                else (f"/api/m03/pdf/{batch_name}/{Path(o.pdf_path).name}"
-                      if o.pdf_path and batch_name else "")
-            ),
-        )
-        for o in result.outcomes
-    ]
-    resp = BatchResponse(
-        mode=result.mode,
-        total=result.total,
-        success=len(result.success),
-        failed=len(result.failed),
-        unprinted_bill_nos=result.unprinted_bill_nos,
-        batch_dir=result.batch_dir,
-        items=items,
-    )
-    # 001-08 / 001-03 / PDF-001-05：批内存在未产出 ⇒ 随响应显式带出（前端必须展示，不得静默）
-    if resp.failed:
-        logger.warning("批量{} 未产出 {} 张：{}", result.mode, resp.failed, resp.unprinted_bill_nos)
-    return resp
+        with print_batch_store.batch_i8_session(req, current_name(), ids):
+            result = executor(list(ids), req.mode)
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise MustReportError(human_reason("批量执行失败", exc)) from exc
+    return print_batch_store.batch_response(result)
+
+
+@router.post("/print-batches/prepare", response_model=PrintBatchOut, status_code=202)
+def prepare_print_batch(req: BatchRequest) -> PrintBatchOut:
+    require_expected_account(req.expected_account)
+    return print_batch_store.start_batch(current_name(), req)
+
+
+@router.get("/print-batches/{batch_id}", response_model=PrintBatchOut)
+def read_print_batch(batch_id: str) -> PrintBatchOut:
+    return print_batch_store.read_batch(current_name(), batch_id)
+
+
+@router.post("/print-batches/{batch_id}/dispatch", response_model=PrintBatchOut, status_code=202)
+def dispatch_print_batch(batch_id: str) -> PrintBatchOut:
+    return print_batch_store.start_dispatch(current_name(), batch_id)
 
 
 @router.get("/pdf/{batch}/{name}")

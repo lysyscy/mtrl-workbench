@@ -309,16 +309,18 @@ def test_批内未产出须列明未出单号():
         make_notice(2, "PN-BAD", "material"),
         make_notice(3, "PN-OK2", "mechanical"),
     ]
+    dispatch = DispatchSpy()
     result = _run(
         notices,
         MODE_PRINT,
         {"mechanical": _simple_design()},
         fail_on=fail,
         render=RenderSpy(),
-        dispatch=DispatchSpy(),
+        dispatch=dispatch,
     )
-    assert result.unprinted_bill_nos == ["PN-BAD"]
-    assert len(result.success) == 2
+    assert result.unprinted_bill_nos == ["PN-OK1", "PN-BAD", "PN-OK2"]
+    assert "取不到单据类型" in result.failed[1].reason
+    assert not result.success and not dispatch.calls
 
 
 # ------------------------------------------------------------------ 001-08
@@ -383,11 +385,11 @@ def test_系统内勾选_单选多选端到端():
     client = TestClient(app)
 
     # 勾选来源 = 系统内 id 列表（非文件 / 手输清单）
-    single = client.post("/api/m03/batch", json={"ids": [1], "mode": "print"})
+    single = client.post("/api/m03/batch", json={"ids": [1], "mode": "print", "session_mode": "browser"})
     assert single.status_code == 200, single.text
     assert single.json()["total"] == 1 and single.json()["success"] == 1
 
-    multi = client.post("/api/m03/batch", json={"ids": [1, 2, 3], "mode": "print"})
+    multi = client.post("/api/m03/batch", json={"ids": [1, 2, 3], "mode": "print", "session_mode": "browser"})
     assert multi.status_code == 200, multi.text
     assert multi.json()["total"] == 3 and multi.json()["success"] == 3
 
