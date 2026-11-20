@@ -646,7 +646,20 @@ def test_只提供站点即可登记连接并断开(route):
     after = browser_disconnect(DEVICE)
     assert after.connected is False
     assert after.mode == MODE_HTTP
+    assert after.origin == BASE
     assert browser_state(DEVICE).connected is False
+
+
+def test_浏览器状态返回当前配置站点并排除旧站点连接(route, monkeypatch):
+    from app.core import config as config_module
+    from app.mod02_i8.router import browser_state
+
+    assert browser_state(DEVICE).origin == BASE
+    assert _connect().connected
+    new_origin = "https://new-i8.example.test:1234"
+    monkeypatch.setattr(config_module, "i8_base_of", lambda settings: new_origin + "/portal?ref=hidden")
+    state = browser_state(DEVICE)
+    assert (state.connected, state.generation, state.origin) == (False, 0, new_origin)
 
 
 def test_同一身份的不同设备各自独立连接(route):

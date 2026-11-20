@@ -260,11 +260,11 @@ test('没有选中 i8 标签时明确拒绝，不猜也不执行', async () => {
   const page = boot({ tab: null });
   const answer = await page.call(exec());
   assert.equal(answer.ok, false);
-  assert.match(answer.message, /还没有选中 i8 标签/);
+  assert.equal(answer.code, 'binding-lost');
   assert.deepEqual(page.scriptCalls, []);
 });
 
-test('点扩展图标会记下当前标签，并把所有连接的身份基准作废', async () => {
+test('点扩展图标会记下当前标签，临时授权建立的旧连接不能换标签执行', async () => {
   const page = boot();
   await page.bind();
   assert.deepEqual(page.boundKeys(), [`i8RelayBound:${DEVICE}`], 'bind 之后应当有身份基准');
@@ -273,11 +273,10 @@ test('点扩展图标会记下当前标签，并把所有连接的身份基准�
   const tab = page.session.get('i8RelayTab');
   assert.equal(tab.tabId, 9);
   assert.equal(tab.origin, I8);
-  assert.deepEqual(page.boundKeys(), [], '换了标签就不再有"已核身份"（所有连接一起失效）');
-
-  const stale = await page.call({ type: 'i8-relay:bind', device_id: DEVICE, generation: GENERATION });
+  const stale = await page.call(exec());
   assert.equal(stale.ok, false);
   assert.equal(stale.code, 'binding-lost');
+  assert.deepEqual(page.executed(), []);
 });
 
 /* ------------------------------------------------------------------ *

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ApiError, body, record, requestJson } from './api';
 import type { Identity } from './api';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
-import { useI8Session } from './i8-session';
+import { useI8ActionWait, useI8Session } from './i8-session';
 import { readI8KickConfirmation, readRecords, recordSource } from './i8-api';
 import type { sourceNames } from './i8-api';
 import { useHistoryGuard } from './history';
@@ -60,9 +60,12 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
     },
   });
   const browserBlocked = session.mode === SESSION_MODE_BROWSER && !session.connected;
+  // Callers supply the confirmed scope when their UI supports waiting and cancellation.
+  const autoConnect = scopeKey !== undefined;
+  const confirmationKey = JSON.stringify([scopeKey, session.mode, me?.id, me?.account, config.data?.i8_user, config.data?.ready, paused, enabled]);
+  const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(confirmationKey);
   const unavailable = paused || !enabled || busy || !me || config.isFetching || config.isError
-    || !config.data?.ready || config.data.account !== me.account || browserBlocked;
-  const confirmationKey = JSON.stringify([scopeKey, session.mode, me?.id, me?.account, config.data?.i8_user, paused, enabled]);
+    || !config.data?.ready || config.data.account !== me.account || waiting || (!autoConnect && browserBlocked);
   useEffect(() => {
     setKickConfirmation(null);
     return () => {kickGeneration.current += 1; kickRef.current = null;};
@@ -94,6 +97,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
     setError('');
   }
   function reset() {
+    cancelWaiting();
     cancelKick();
     if (lock.current || pendingRef.current) return;
     setSent(false); setError(''); setRefreshError('');
@@ -113,17 +117,21 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   }
   async function run<T>(request: FetchRequest<T>): Promise<T | undefined> {
     if (unavailable || lock.current || pendingRef.current || kickRef.current) return undefined;
+    if (autoConnect && session.mode === SESSION_MODE_BROWSER) {
+      return runWhenReady(() => alive.current && !lock.current && !pendingRef.current
+        ? submit(request, undefined, true) : undefined);
+    }
     return submit(request);
   }
 
-  async function submit<T>(request: FetchRequest<T>, retry?: ReturnType<typeof body>): Promise<T | undefined> {
+  async function submit<T>(request: FetchRequest<T>, retry?: ReturnType<typeof body>, browserReady = session.connected): Promise<T | undefined> {
     const {path, payload, parse, onSuccess} = request;
     lock.current = true; setBusy(true); setError(''); setRefreshError('');
     const generation = kickGeneration.current;
     let confirmed = false, issued = false, awaitingKick = false, parsed: T | undefined;
     let snapshot: ReturnType<typeof body> | undefined;
     try {
-      snapshot = retry ?? body(sessionPayload(session, {}, payload));
+      snapshot = retry ?? body(sessionPayload({mode: session.mode, connected: browserReady}, {}, payload));
       markPending(true); setSent(true); issued = true;
       const value = await requestJson(path, {method: 'POST', ...snapshot});
       parsed = parse(value);
@@ -169,6 +177,8 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   const browserRecovery = browserBlocked && session.maintaining ? session.notice || '正在自动连接浏览器会话，请稍候。' : '';
   const kickMessage = kickConfirmation?.key === confirmationKey ? kickConfirmation.message : '';
   return {busy, sent, pending, error, storageError, refreshError, refreshing, unavailable, browserBlocked, browserRecovery, config,
+    autoConnect, waiting, cancelWaiting, connectionNotice: session.notice, connectionCode: session.connectionCode,
+    requestPermission: session.requestPermission,
     mode: session.mode, kickMessage, confirmKick, cancelKick, run, reset, acknowledge, reread};
 }
 
@@ -185,9 +195,15 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
       : <p>当前账号：{me?.name || me?.account}，i8 绑定：{config.data.i8_user || '未绑定'}</p>)}
     {config.data && (!config.data.ready || config.data.account !== me?.account) && <p className="notice" role="alert">{config.data.message || '账号已变化，请关闭后重新打开。'}</p>}
     {(!action.sent || alwaysShowMode) && <p className="i8-fetch-mode">{action.mode === SESSION_MODE_BROWSER
-      ? '使用浏览器已有会话，不登录、不顶号；会话失效时停止。'
+      ? '使用浏览器已有会话。需要登录时，请在 i8 标签页完成。'
       : '使用工作台直连。遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>}
-    {action.browserBlocked && (action.browserRecovery
+    {action.waiting ? <div className="notice">
+      <p role="status">{action.connectionNotice || '正在连接 i8…'}</p>
+      {action.connectionCode === 'permission-required' &&
+        <Button htmlType="button" onClick={() => void action.requestPermission()}>授权 i8 站点</Button>}
+    </div> : action.browserBlocked && (action.autoConnect
+      ? <p role="status">{action.connectionNotice || '确认抓取后将自动连接 i8。'}</p>
+      : action.browserRecovery
       ? <p className="notice" role="status">{action.browserRecovery}</p>
       : <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>)}
     {action.busy && <p role="status">正在抓取，请稍候…</p>}
@@ -227,6 +243,9 @@ export function I8FetchActions({action, close, canRun = true, onRun, label = '�
     <Button htmlType="button" onClick={action.cancelKick}>取消</Button>
     <Button htmlType="button" type="primary" danger disabled={action.unavailable || !canRun}
       onClick={() => void action.confirmKick()}>让现有会话下线并继续</Button>
+  </div>;
+  if (action.waiting) return <div className="dialog-actions">
+    <Button htmlType="button" onClick={action.cancelWaiting}>取消等待</Button>
   </div>;
   return <div className="dialog-actions">
     <Button htmlType="button" disabled={action.busy || action.refreshing} onClick={close}>{action.sent ? '关闭' : '取消'}</Button>

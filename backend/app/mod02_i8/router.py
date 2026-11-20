@@ -171,14 +171,19 @@ def connection_config(device_id: str = Query("", description="本页面标识；
 
 
 def _browser_state(device_id: str) -> BrowserStateOut:
+    from app.core.config import get_settings, i8_base_of
     from app.core.session import current_name
+    from app.mod02_i8.browser_session import _origin_of
 
     owner = str(current_name())
+    configured = _origin_of(i8_base_of(get_settings())) if owner else ""
     connection = browser_broker.broker().connection_of(owner, device_id) if owner and device_id else None
+    if connection is not None and connection.origin != configured:
+        connection = None
     return BrowserStateOut(
         connected=connection is not None,
         mode=MODE_BROWSER if connection is not None else MODE_HTTP,
-        origin=connection.origin if connection is not None else "",
+        origin=configured,
         expected_org=expected_org_id(),
         generation=connection.generation if connection is not None else 0,
     )

@@ -37,6 +37,7 @@ const ticket = {
 };
 
 const browserDeps = {
+  state: async () => state,
   read: readBrowserIdentity,
   connect: connectBrowser,
   bind: bindBrowserIdentity,
@@ -102,7 +103,7 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
     browser(t, message => {
       assert.equal(message.device_id, deviceId());
       steps.push(message.type);
-      if (message.type === 'i8-relay:identity') return { ok: true, ...identity };
+      if (message.type === 'i8-relay:identity') return { ok: true, ...identity, sessionReady: true };
       if (message.type === 'i8-relay:bind') {
         assert.equal(message.generation, generation);
         assert.deepEqual(message.identity, identity);
@@ -146,7 +147,7 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
       }
     });
 
-    await maintainBrowserRelay(controller.signal, update => updates.push(update), {
+    await maintainBrowserRelay(controller.signal, update => updates.push(update), undefined, {
       ...browserDeps,
       wait: async () => { steps.push('wait'); },
     });
@@ -156,7 +157,7 @@ for (const failure of ['reconnect', 'network', 'extension-unavailable', 'tab-pau
       ...(failure === 'reconnect' ? ['/api/m02/browser/pending'] : []),
       'wait', 'i8-relay:identity', '/api/m02/browser/connect', 'i8-relay:bind', '/api/m02/browser/pending',
     ]);
-    assert.deepEqual(updates.map(update => update.phase), ['connecting', 'connected', 'retrying', 'connecting', 'connected']);
+    assert.deepEqual(updates.map(update => update.phase), ['connecting', 'connected', 'retrying', 'connected']);
     assert.deepEqual(updates.flatMap(update => update.state ? [update.state.generation] : []), [1, 2]);
   });
 }
@@ -169,7 +170,7 @@ test('空闲时只向工作台等取数票，不周期访问 i8 标签', async t
   t.mock.method(Date, 'now', () => now);
   browser(t, message => {
     messages.push(message.type);
-    if (message.type === 'i8-relay:identity') return {ok: true, ...identity};
+    if (message.type === 'i8-relay:identity') return {ok: true, ...identity, sessionReady: true};
     assert.equal(message.type, 'i8-relay:bind');
     return {ok: true};
   }, async path => {
@@ -180,7 +181,7 @@ test('空闲时只向工作台等取数票，不周期访问 i8 标签', async t
     return Response.json({request: null});
   });
 
-  await maintainBrowserRelay(controller.signal, ({phase}) => phases.push(phase), {
+  await maintainBrowserRelay(controller.signal, ({phase}) => phases.push(phase), undefined, {
     ...browserDeps,
     wait: never,
   });
@@ -192,13 +193,13 @@ test('连接接口返回畸形状态时停止，不绑定、不轮询、不重�
   const phases = [];
   browser(t, message => {
     assert.equal(message.type, 'i8-relay:identity');
-    return { ok: true, ...identity };
+    return { ok: true, ...identity, sessionReady: true };
   }, async path => {
     assert.equal(path, '/api/m02/browser/connect');
     return Response.json({ ...state, generation: 'invalid' });
   });
 
-  await maintainBrowserRelay(new AbortController().signal, ({ phase }) => phases.push(phase), {
+  await maintainBrowserRelay(new AbortController().signal, ({ phase }) => phases.push(phase), undefined, {
     ...browserDeps,
     wait: never,
   });
@@ -210,13 +211,13 @@ test('连接接口报告未配置或未绑定时停止，等待用户处理', as
   const message = '请先配置并绑定 i8 站点。';
   browser(t, request => {
     assert.equal(request.type, 'i8-relay:identity');
-    return { ok: true, ...identity };
+    return { ok: true, ...identity, sessionReady: true };
   }, async path => {
     assert.equal(path, '/api/m02/browser/connect');
     return Response.json({ code: 'i8_browser_relay_unavailable', message }, { status: 400 });
   });
 
-  await maintainBrowserRelay(new AbortController().signal, update => updates.push(update), {
+  await maintainBrowserRelay(new AbortController().signal, update => updates.push(update), undefined, {
     ...browserDeps,
     wait: never,
   });
@@ -249,7 +250,7 @@ for (const blockedPhase of ['connecting', 'connected']) {
     const sent = [];
     const phases = [];
     browser(t, message => {
-      if (message.type === 'i8-relay:identity') return { ok: true, ...identity };
+      if (message.type === 'i8-relay:identity') return { ok: true, ...identity, sessionReady: true };
       assert.equal(message.type, 'i8-relay:bind');
       return { ok: true };
     }, async path => {
@@ -268,13 +269,13 @@ for (const blockedPhase of ['connecting', 'connected']) {
         beginIdentityVerification()('身份核验暂未完成。');
       }
       phases.push(phase);
-    }, {
+    }, undefined, {
       ...browserDeps,
       wait: async () => { refreshVerification(); },
     });
     const connectedBeforeRetry = blockedPhase === 'connected';
     assert.deepEqual(phases, [
-      'connecting', ...(connectedBeforeRetry ? ['connected'] : []), 'retrying', 'connecting', 'connected',
+      'connecting', ...(connectedBeforeRetry ? ['connected'] : []), 'retrying', 'connected',
     ]);
     assert.deepEqual(sent, [
       ...(connectedBeforeRetry ? ['/api/m02/browser/connect'] : []),
@@ -289,7 +290,7 @@ test('身份核验期间取消后，核验完成也不会发送旧业务票的�
   const phases = [];
   let finishVerification;
   browser(t, message => {
-    if (message.type === 'i8-relay:identity') return { ok: true, ...identity };
+    if (message.type === 'i8-relay:identity') return { ok: true, ...identity, sessionReady: true };
     if (message.type === 'i8-relay:bind') return { ok: true };
     assert.equal(message.type, 'i8-relay:execute');
     assert.deepEqual(message.request, ticket);
@@ -303,7 +304,7 @@ test('身份核验期间取消后，核验完成也不会发送旧业务票的�
     return Response.json({ accepted: true });
   });
 
-  const lifecycle = maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), {
+  const lifecycle = maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), undefined, {
     ...browserDeps,
     wait: never,
   });
@@ -326,7 +327,8 @@ test('握手响应迟到时，已取消的页面不绑定也不轮询', async ()
   const phases = [];
   const connecting = Promise.withResolvers();
   const response = Promise.withResolvers();
-  const lifecycle = maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), {
+  const lifecycle = maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), undefined, {
+    state: async () => state,
     read: async () => identity,
     connect: async (_identity, signal) => {
       assert.equal(signal, controller.signal);
@@ -348,7 +350,8 @@ test('网络故障的退避上限为 30 秒，退避中取消后不再发起连�
   const controller = new AbortController();
   const delays = [];
   const phases = [];
-  await maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), {
+  await maintainBrowserRelay(controller.signal, ({ phase }) => phases.push(phase), undefined, {
+    state: async () => state,
     read: async () => identity,
     connect: async () => { throw new ApiError('网络暂时中断'); },
     bind: never,
@@ -360,5 +363,38 @@ test('网络故障的退避上限为 30 秒，退避中取消后不再发起连�
     },
   });
   assert.deepEqual(delays, [1000, 2000, 4000, 8000, 16000, 30000, 30000]);
-  assert.deepEqual(phases, delays.flatMap(() => ['connecting', 'retrying']));
+  assert.deepEqual(phases, ['connecting', ...delays.map(() => 'retrying')]);
+});
+
+test('权限和登录等待自动跟随配置站点，同一确认只打开一次', async () => {
+  const controller = new AbortController();
+  const attempts = [];
+  const updates = [];
+  const newOrigin = 'https://new-i8.example.test:1234';
+  let open = true;
+  const failures = ['permission-required', 'permission-required', 'tab-opening', 'login-required'];
+  await maintainBrowserRelay(controller.signal, update => updates.push(update), {
+    requested: () => open,
+    checked: () => {open = false;},
+  }, {
+    state: async () => ({...state, origin: attempts.length ? newOrigin : state.origin}),
+    read: async (origin, openIfMissing) => {
+      attempts.push({origin, openIfMissing});
+      const code = failures.shift();
+      if (code) throw new ApiError(code, 0, code);
+      return {origin};
+    },
+    connect: async value => ({...state, ...value}),
+    bind: async () => {},
+    wait: async () => {},
+    run: async () => controller.abort(),
+  });
+  assert.deepEqual(attempts, [
+    {origin: state.origin, openIfMissing: true},
+    ...[true, true, false, false].map(openIfMissing => ({origin: newOrigin, openIfMissing})),
+  ]);
+  assert.deepEqual(updates.flatMap(update => update.code || []), [
+    'permission-required', 'permission-required', 'tab-opening', 'login-required',
+  ]);
+  assert.equal(updates.at(-1).state.origin, newOrigin);
 });

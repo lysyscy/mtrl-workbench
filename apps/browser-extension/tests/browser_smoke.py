@@ -22,10 +22,7 @@
   不能证明（⛔ 别拿它当验收）：
     - 不是 Edge：这里是 Chromium（`ms-playwright/chromium-1248`），Edge 上的实际行为未验；
     - 不是真实 i8：所有地址都是本机假页面与假接口，无真实业务数据；
-    - 不是 activeTab 的真实授权路径：`chrome.action.onClicked` 无法被程序化触发。样机用
-      **临时副本**把本机样机 origin 加进 `host_permissions` 才能跑通注入；副本不改 `key`，
-      所以扩展 ID 不变。原样包（只有 `activeTab`）在没有人点图标时被浏览器拒绝注入 ——
-      这正是设计的正确表现，样机会把它作为**期望**断言。
+    - activeTab 的浏览器工具栏点击仍需现场验证。样机使用交付清单中的可选站点权限。
     - 不碰用户 profile、不连真实 i8、不装新依赖、不改系统设置。
 
 用法（只用仓库里已有的运行时）：
@@ -40,13 +37,17 @@ from __future__ import annotations
 
 import base64
 import json
+import mimetypes
+import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[3]
 EXT_DIR = ROOT / "apps" / "browser-extension"
@@ -70,6 +71,11 @@ FORGED_COOKIE = "forged-by-page-should-be-dropped"
 
 # 服务器收到过的每一条请求（用来证明"被拦的请求一个字节都没出去"）。
 RECEIVED: list[dict] = []
+NOTICE_POSTS: list[dict] = []
+CONNECTIONS: dict[str, dict] = {}
+TICKETS: dict[str, dict] = {}
+COMPLETED = threading.Event()
+FRONTEND: Path
 
 WORKBENCH_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>工作台（样机）</title></head>
@@ -109,10 +115,41 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
+        url = urlsplit(self.path)
+        i8 = self.headers.get("Host") == urlsplit(I8_ORIGIN).netloc
+        if i8 and url.path == "/":
+            self._send(200, I8_HTML.encode("utf-8"), "text/html;charset=utf-8")
+            return
+        if url.path.startswith("/app/"):
+            relative = url.path.removeprefix("/app/")
+            file = FRONTEND / (relative if relative.startswith("assets/") else "index.html")
+            self._send(200, file.read_bytes(), mimetypes.guess_type(file)[0] or "text/javascript")
+            return
+        if url.path == "/static/theme.css":
+            self._send(200, b"", "text/css")
+            return
+        if url.path == "/api/m15/users":
+            self._json({"me": {"id": 1, "account": "smoke", "name": "烟测", "role": "admin", "ui_scale_css": "1"}})
+            return
+        if url.path == "/api/m02/config":
+            self._json({"ready": True, "account": "smoke", "i8_user": "i8-smoke", "message": ""})
+            return
+        if url.path == "/api/m03/notice-list":
+            self._json({"items": []})
+            return
+        if url.path.startswith("/api/"):
+            device = parse_qs(url.query).get("device_id", [""])[0]
+            if url.path == "/api/m02/browser/state":
+                self._json(CONNECTIONS.get(device, self._browser_state(0)))
+            elif url.path == "/api/m02/browser/pending":
+                self._json({"request": TICKETS.pop(device, None)})
+            else:
+                self._json([])
+            return
         if self.path == "/workbench":
             self._send(200, WORKBENCH_HTML.encode("utf-8"), "text/html;charset=utf-8")
             return
-        if self.path == "/i8/business":
+        if url.path == "/i8/business":
             # 种一个 **HttpOnly** 会话 Cookie：真 i8 的会话就是这种形态。
             # 页面脚本读不到它，但浏览器会在同源 fetch 上自动带上 —— 本通道复用会话靠的就是这个。
             body = I8_HTML.encode("utf-8")
@@ -125,10 +162,24 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if url.path == "/SUP/RichHelp/GetCommonUseList" and url.query:
+            if HTTPONLY_VALUE in self.headers.get("Cookie", ""):
+                self._json({"Record": []})
+            elif f"{HTTPONLY_NAME}=expired" in self.headers.get("Cookie", ""):
+                self._json({"Code": "200", "Success": False, "Msg": "No SessionInfo found"})
+            else:
+                self.send_response(302)
+                self.send_header("Location", f"{I8_ORIGIN}/login")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            return
+        if url.path == "/login":
+            self._send(200, b"<title>Login</title>", "text/html;charset=utf-8")
+            return
         if self.path == "/SUP/RichHelp/GetCommonUseList":
             RECEIVED.append({"method": "GET", "path": self.path, "headers": dict(self.headers)})
             self.send_response(302)
-            self.send_header("Location", f"{ORIGIN}/i8/business")
+            self.send_header("Location", f"{I8_ORIGIN}/i8/business")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -137,6 +188,41 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b""
+        if self.path == "/api/m02/browser/connect":
+            request = json.loads(body)
+            if request["i8_origin"] != I8_ORIGIN:
+                self._send(409, b"{}")
+                return
+            device = request["device_id"]
+            state = self._browser_state(CONNECTIONS.get(device, {}).get("generation", 0) + 1)
+            CONNECTIONS[device] = state
+            self._json(state)
+            return
+        if self.path == "/api/m02/browser/complete":
+            reply = json.loads(body)
+            accepted = reply["status"] == 200 and base64.b64decode(reply["body_b64"]) == FAKE_BODY
+            if accepted:
+                COMPLETED.set()
+            self._json({"accepted": accepted})
+            return
+        if self.path == "/api/m03/notices/fetch":
+            request = json.loads(body)
+            NOTICE_POSTS.append(request)
+            device = request.get("device_id")
+            state = CONNECTIONS.get(device)
+            if not state or request.get("session_mode") != "browser":
+                self._send(400, b"{}")
+                return
+            COMPLETED.clear()
+            TICKETS[device] = {
+                "ticket": "test-notice", "generation": state["generation"], "method": "POST",
+                "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList", "headers": {}, "body_b64": "", "timeout_ms": 3000,
+            }
+            if not COMPLETED.wait(8):
+                self._send(502, b"{}")
+                return
+            self._json({"year_month": request["year_month"], "fetched": 1, "upserted": 1, "ignored": []})
+            return
         RECEIVED.append({
             "method": "POST",
             "path": self.path,
@@ -147,6 +233,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, FAKE_BODY)
             return
         self._send(404, b"{}")
+
+    def _json(self, value):
+        self._send(200, json.dumps(value).encode("utf-8"))
+
+    @staticmethod
+    def _browser_state(generation):
+        return {
+            "connected": generation > 0, "mode": "browser" if generation else "http", "origin": I8_ORIGIN,
+            "generation": generation, "i8_user": "i8-smoke", "expected_org": "",
+            "expected_org_code": "", "expected_org_name": "", "message": "",
+        }
 
 
 def free_port(start: int = 8071) -> int:
@@ -163,7 +260,8 @@ def free_port(start: int = 8071) -> int:
 
 PORT = free_port()
 ORIGIN = f"http://127.0.0.1:{PORT}"
-OTHER_ORIGIN = f"http://localhost:{PORT}"
+I8_ORIGIN = f"http://localhost:{PORT}"
+OTHER_ORIGIN = f"http://127.0.0.1:{PORT + 1}"
 
 
 FAILURES: list[str] = []
@@ -181,45 +279,29 @@ def check(name: str, ok: bool, detail: object = "") -> None:
         FAILURES.append(name)
 
 
-def make_copy(
-    target: Path,
-    *,
-    matches: list[str] | None,
-    host_permissions: list[str] | None,
-    workbench_origins: list[str] | None = None,
-    extra_permissions: list[str] | None = None,
-) -> None:
-    """复制一份扩展用于样机。
-
-    ⚠️ 副本必须原样保留 `key`：扩展 ID 由它决定。
-    ⚠️ 样机端口不可能正好是 8000/8065（那两个被别人占着，不能动），而
-       `service_worker.js` 的 `WORKBENCH_ORIGINS` 与 manifest 的
-       `externally_connectable.matches` 是**两份手工同步的常量**，
-       所以副本里要一起改。这个"两份必须一起改"本身就是维护风险，
-       样机之所以要把两边都改，正是因为它证明了这份耦合真实存在。
-    ⚠️ `extra_permissions=["tabs"]` 只在样机副本里出现，用途只有一个：
-       替身"用户点扩展图标"这一步需要一个**数字型 tab.id**（真包由浏览器在点击时给出）。
-       真包**不申请** `tabs`。
-    """
+def make_copy(target: Path) -> None:
+    """Only replace the workbench allowlist for the isolated server."""
     shutil.copytree(EXT_DIR, target, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     manifest_path = target / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if matches is not None:
-        manifest["externally_connectable"]["matches"] = matches
-    if host_permissions is not None:
-        manifest["host_permissions"] = host_permissions
-    if extra_permissions:
-        manifest["permissions"] = list(dict.fromkeys([*manifest["permissions"], *extra_permissions]))
+    assert set(manifest["permissions"]) == {"activeTab", "scripting", "storage"}
+    assert "host_permissions" not in manifest and "<all_urls>" not in manifest["optional_host_permissions"]
+    manifest["externally_connectable"]["matches"] = [f"{ORIGIN}/*"]
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    if workbench_origins is not None:
-        worker_path = target / "service_worker.js"
-        source = worker_path.read_text(encoding="utf-8")
-        start = source.index("const WORKBENCH_ORIGINS = [")
-        end = source.index("];", start) + 2
-        replacement = "const WORKBENCH_ORIGINS = [\n" + "".join(
-            f"  '{item}',\n" for item in workbench_origins
-        ) + "];"
-        worker_path.write_text(source[:start] + replacement + source[end:], encoding="utf-8")
+    worker_path = target / "service_worker.js"
+    source = worker_path.read_text(encoding="utf-8")
+    start = source.index("const WORKBENCH_ORIGINS = [")
+    end = source.index("];", start) + 2
+    worker_path.write_text(source[:start] + f"const WORKBENCH_ORIGINS = ['{ORIGIN}'];" + source[end:], encoding="utf-8")
+
+
+def build_frontend(target: Path) -> None:
+    frontend = ROOT / "apps" / "frontend"
+    subprocess.run(
+        ["node", "node_modules/vite/bin/vite.js", "build", "--configLoader", "runner", "--outDir", str(target)],
+        cwd=frontend, env={**os.environ, "MTRL_FRONTEND_BASE": "/app/"},
+        check=True, capture_output=True, encoding="utf-8",
+    )
 
 
 def worker_ids(context) -> list[str]:
@@ -231,32 +313,98 @@ def page_message(page, message: dict):
     return page.evaluate("message => window.__relay(message)", message)
 
 
-def tab_id_of(context, page) -> str:
-    cdp = context.new_cdp_session(page)
-    return cdp.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+def identity_message(device=DEVICE, **extra):
+    return {"type": "i8-relay:identity", "device_id": device, "origin": I8_ORIGIN, **extra}
 
 
-def select_tab(context, page) -> None:
-    """替代"用户点扩展图标"：把 i8 标签写进扩展的标签基准。
+def notice_flow(context, protocol_page):
+    app = context.new_page()
+    app.goto(f"{ORIGIN}/app/notices")
+    app.get_by_role("button", name="按月抓取 i8", exact=True).click()
+    app.get_by_role("button", name="确认抓取", exact=True).click()
+    app.get_by_text("请授权工作台扩展访问当前 i8 站点", exact=False).wait_for()
+    check("确认后缺权限时等待，当前没有 i8 标签或业务提交", app.get_by_role("button", name="取消等待").is_visible()
+          and len([tab for tab in context.pages if tab.url.startswith(I8_ORIGIN)]) == 0 and not NOTICE_POSTS)
 
-    真包这一步由 `chrome.action.onClicked` 完成 —— 点击时浏览器给出**数字型 tab.id**，
-    并同时授予 activeTab。样机无法程序化点击，所以在**副本**里临时申请 `tabs` 权限，
-    用 `chrome.tabs.query` 拿到同一个数字 id（CDP 给的是 targetId 字符串，两者不同）。
-    ⛔ 真包不申请 `tabs`。
-    """
+    with context.expect_page() as opened:
+        app.get_by_role("button", name="授权 i8 站点").click()
+    permission = opened.value
+    permission.get_by_role("button", name="授权此站点").wait_for()
+    permission.wait_for_function("() => !document.querySelector('button').disabled")
+    check("授权页只显示工作台当前配置站点", permission.locator("#origin").inner_text() == I8_ORIGIN)
+    # Headless Playwright cannot accept browser-chrome dialogs. Exercise the same
+    # site consent through Chromium's settings before clicking the real request button.
+    settings = context.new_page()
+    settings.goto("chrome://extensions/")
+    settings.evaluate("""async ({id, origin}) => {
+        await chrome.developerPrivate.addHostPermission(id, origin + '/*');
+    }""", {"id": EXT_ID, "origin": I8_ORIGIN})
+    settings.close()
+    permission.bring_to_front()
+    with permission.expect_event("close", timeout=5000):
+        permission.get_by_role("button", name="授权此站点").click()
+    app.bring_to_front()
     worker = context.service_workers[0]
-    result = worker.evaluate(
-        """async (origin) => {
-          const tabs = await chrome.tabs.query({});
-          const hit = tabs.find(tab => (tab.url || '').startsWith(origin + '/i8/business'));
-          if (!hit) return { ok: false, seen: tabs.map(tab => tab.url) };
-          await chrome.storage.session.set({ i8RelayTab: { tabId: hit.id, origin, selectedAt: Date.now() } });
-          return { ok: true, tabId: hit.id };
-        }""",
-        ORIGIN,
+    origins = worker.evaluate("async () => (await chrome.permissions.getAll()).origins")
+    check("使用交付清单的可选站点权限完成授权", origins == [I8_ORIGIN + "/*"], origins)
+
+    # Two additional callers race the actual dialog's retry with the same configured site.
+    protocol_page.evaluate(
+        "messages => Promise.all(messages.map(window.__relay))",
+        [identity_message(f"dev-concurrent-{index}", openIfMissing=True) for index in range(3)],
     )
-    if not result.get("ok"):
-        raise RuntimeError(f"样机没能选中 i8 标签：{result}")
+    app.get_by_text("请在 i8 标签页登录", exact=False).first.wait_for()
+    i8_tabs = [tab for tab in context.pages if tab.url.startswith(I8_ORIGIN)]
+    check("并发尝试只后台打开一张 i8 页，工作台仍有焦点", len(i8_tabs) == 1
+          and app.evaluate("() => document.hasFocus()"), [tab.url for tab in i8_tabs])
+    check("探测遇到未登录跳转时没有提交或跟随登录跳转", not NOTICE_POSTS and i8_tabs[0].url == I8_ORIGIN + "/")
+    i8 = i8_tabs[0]
+    i8.goto(f"{I8_ORIGIN}/i8/business")
+    app.get_by_role("button", name="关闭", exact=True).wait_for()
+    notice_hits = [hit for hit in RECEIVED if hit["path"] == "/FC/FM/PaymentBill/getList"]
+    check("登录后无需再次确认，通知书入口及 i8 请求各发一次", len(NOTICE_POSTS) == len(notice_hits) == 1
+          and NOTICE_POSTS[0]["expected_account"] == "smoke" and COMPLETED.is_set())
+    app.get_by_role("button", name="关闭", exact=True).click()
+    app.get_by_role("button", name="按月抓取 i8", exact=True).click()
+    app.get_by_role("button", name="确认抓取", exact=True).wait_for()
+
+    # A login page and a healthy page share the origin. Only the healthy page can satisfy the probe.
+    login_tab = context.new_page()
+    login_tab.goto(f"{I8_ORIGIN}/login")
+    i8.bring_to_front()
+    app.bring_to_front()
+    multi = page_message(protocol_page, identity_message())
+    check("两个同站标签自动选可用会话，未点扩展图标", multi.get("sessionReady") is True, multi)
+
+    # Discard the currently bound tab and leave a usable tab on the configured origin.
+    replacement = context.new_page()
+    replacement.goto(f"{I8_ORIGIN}/i8/business?replacement=1")
+    app.bring_to_front()
+    device = NOTICE_POSTS[0]["device_id"]
+    discarded = worker.evaluate("""async (device) => {
+        const key = 'i8RelayBound:' + device;
+        const {[key]: binding} = await chrome.storage.session.get(key);
+        return (await chrome.tabs.discard(binding.tabId))?.discarded;
+    }""", device)
+    check("真实 Chromium 已释放原绑定标签", discarded)
+    app.get_by_role("button", name="确认抓取", exact=True).click()
+    app.get_by_role("button", name="关闭", exact=True).wait_for()
+    check("标签释放后自动改用健康标签，仅提交本次确认", len(NOTICE_POSTS) == 2
+          and CONNECTIONS[device]["generation"] == 2 and COMPLETED.is_set())
+    app.get_by_role("button", name="关闭", exact=True).click()
+    app.get_by_role("button", name="按月抓取 i8", exact=True).click()
+
+    # The next confirmation probes the existing binding. Simulate i8's JSON expiry response.
+    context.add_cookies([{"name": HTTPONLY_NAME, "value": "expired", "url": I8_ORIGIN, "httpOnly": True}])
+    app.get_by_role("button", name="确认抓取", exact=True).click()
+    app.get_by_text("请在 i8 标签页登录", exact=False).first.wait_for()
+    app.get_by_role("button", name="取消等待", exact=True).click()
+    replacement.goto(f"{I8_ORIGIN}/i8/business")
+    app.get_by_text("请在 i8 标签页登录", exact=False).first.wait_for(state="hidden")
+    check("取消等待后，迟到的登录恢复没有再次提交", len(NOTICE_POSTS) == 2)
+    app.close()
+    login_tab.close()
+    return replacement
 
 
 def boot(p, extension_dir: Path):
@@ -285,9 +433,19 @@ def main() -> int:
         print(f"没有可用的 playwright：{type(exc).__name__}")
         return 1
 
+    global FRONTEND
+    build_dir = tempfile.mkdtemp(prefix="i8-smoke-frontend-")
+    FRONTEND = Path(build_dir) / "dist"
+    try:
+        build_frontend(FRONTEND)
+    except subprocess.CalledProcessError as exc:
+        print(exc.stderr)
+        shutil.rmtree(build_dir, ignore_errors=True)
+        return 1
+
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    tempdirs: list[str] = []
+    tempdirs = [build_dir]
     print(f"样机端口 {ORIGIN}（不使用 8000/8065）")
     try:
         with sync_playwright() as p:
@@ -309,58 +467,13 @@ def main() -> int:
             finally:
                 ctx_a.close()
 
-            # ---------- B 段：只把样机 origin 列进 externally_connectable，不加 host_permissions ----------
-            ext_b = Path(tempfile.mkdtemp(prefix="i8-smoke-extb-")) / "ext"
-            tempdirs.append(str(ext_b.parent))
-            make_copy(
-                ext_b,
-                matches=[f"{ORIGIN}/*"],
-                host_permissions=None,
-                workbench_origins=[ORIGIN],
-                extra_permissions=["tabs"],
-            )
-            profile_b, ctx_b, page_b = boot(p, ext_b)
-            tempdirs.append(profile_b)
-            try:
-                check(
-                    "副本仍以同一固定 ID 加载（`key` 原样保留）",
-                    worker_ids(ctx_b)[:1] == [EXT_ID],
-                    [w.url for w in ctx_b.service_workers],
-                )
-                reply = page_message(page_b, {"type": "i8-relay:identity", "device_id": DEVICE})
-                check(
-                    "列进去的 origin 能进扩展（未选标签 ⇒ need-tab）",
-                    isinstance(reply, dict) and reply.get("code") == "need-tab",
-                    reply,
-                )
-                i8_b = ctx_b.new_page()
-                i8_b.goto(f"{ORIGIN}/i8/business", wait_until="load")
-                select_tab(ctx_b, i8_b)
-                reply = page_message(page_b, {"type": "i8-relay:identity", "device_id": DEVICE})
-                check(
-                    "没有 activeTab/host 授权时注入被浏览器拒绝（activeTab 需用户点图标，无法程序化授予）",
-                    isinstance(reply, dict) and reply.get("ok") is False,
-                    reply,
-                )
-            finally:
-                ctx_b.close()
-
-            # ---------- C 段：临时副本加 host_permissions，跑通注入 + 取数 ----------
-            ext_c = Path(tempfile.mkdtemp(prefix="i8-smoke-extc-")) / "ext"
+            ext_c = Path(tempfile.mkdtemp(prefix="i8-smoke-ext-")) / "ext"
             tempdirs.append(str(ext_c.parent))
-            make_copy(
-                ext_c,
-                matches=[f"{ORIGIN}/*"],
-                host_permissions=[f"{ORIGIN}/*"],
-                workbench_origins=[ORIGIN],
-                extra_permissions=["tabs"],
-            )
+            make_copy(ext_c)
             profile_c, ctx_c, page_c = boot(p, ext_c)
             tempdirs.append(profile_c)
             try:
-                i8 = ctx_c.new_page()
-                i8.goto(f"{ORIGIN}/i8/business", wait_until="load")
-                select_tab(ctx_c, i8)
+                i8 = notice_flow(ctx_c, page_c)
 
                 # ---------- 站点与代号的协议 ----------
                 device = DEVICE
@@ -374,10 +487,10 @@ def main() -> int:
                     no_device,
                 )
 
-                identity = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
+                identity = page_message(page_c, identity_message(device))
                 check(
                     "i8 业务页没有账号菜单时仍能读到站点来源",
-                    identity == {"ok": True, "origin": ORIGIN},
+                    identity == {"ok": True, "origin": I8_ORIGIN, "sessionReady": True},
                     identity,
                 )
                 pending = {"origin": identity.get("origin")}
@@ -400,33 +513,6 @@ def main() -> int:
                     bound,
                 )
 
-                page_c.bring_to_front()
-                discarded = ctx_c.service_workers[0].evaluate("""async () => {
-                    const {i8RelayTab} = await chrome.storage.session.get('i8RelayTab');
-                    const result = await chrome.tabs.discard(i8RelayTab.tabId);
-                    return {tabId: result?.id, discarded: result?.discarded};
-                }""")
-                paused = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
-                check("浏览器释放后台标签时报告可恢复的暂停",
-                      discarded.get("discarded") and paused.get("code") == "tab-paused", paused)
-                old_ticket = page_message(page_c, {
-                    "type": "i8-relay:execute", "device_id": device,
-                    "request": {"ticket": "t-before-discard", "generation": generation,
-                                "method": "POST", "url": f"{ORIGIN}/FC/FM/PaymentBill/getList"},
-                })
-                check("替换标签后旧票被拒并提示重连", old_ticket.get("code") == "binding-lost", old_ticket)
-                with ctx_c.expect_page() as restored:
-                    ctx_c.service_workers[0].evaluate("(id) => chrome.tabs.update(id, {active: true})", discarded["tabId"])
-                i8 = restored.value
-                i8.wait_for_function("() => document.wasDiscarded && document.readyState === 'complete'", timeout=5000)
-                resumed = page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
-                generation += 1
-                rebound = page_message(page_c, {
-                    "type": "i8-relay:bind", "device_id": device,
-                    "generation": generation, "identity": pending,
-                })
-                check("后台标签恢复后可以重新绑定原会话", resumed.get("ok") and rebound.get("ok"), (resumed, rebound))
-
                 # ---------- HttpOnly 会话：本通道复用会话的真实机制 ----------
                 RECEIVED.clear()
                 cookie_reply = page_message(page_c, {
@@ -437,7 +523,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 30_000,
                         "method": "POST",
-                        "url": f"{ORIGIN}/FC/FM/PaymentBill/getList",
+                        "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList",
                         "headers": {"Content-Type": "application/json"},
                         "body_b64": base64.b64encode(b'{"limit":"5"}').decode("ascii"),
                     },
@@ -469,7 +555,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 30_000,
                         "method": "POST",
-                        "url": f"{ORIGIN}/FC/FM/PaymentBill/getList",
+                        "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList",
                         "headers": {
                             "Content-Type": "application/json",
                             "Cookie": f"{HTTPONLY_NAME}={FORGED_COOKIE}",
@@ -499,7 +585,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 30_000,
                         "method": "POST",
-                        "url": f"{ORIGIN}/FC/FM/PaymentBill/getList",
+                        "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList",
                         "headers": {"Content-Type": "application/json", "Cookie": "sentinel-should-not-leak"},
                         "body_b64": base64.b64encode(b'{"limit":"5"}').decode("ascii"),
                     },
@@ -531,7 +617,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 30_000,
                         "method": "GET",
-                        "url": f"{ORIGIN}/SUP/RichHelp/GetCommonUseList",
+                        "url": f"{I8_ORIGIN}/SUP/RichHelp/GetCommonUseList",
                         "headers": {},
                         "body_b64": "",
                     },
@@ -546,12 +632,12 @@ def main() -> int:
 
                 RECEIVED.clear()
                 blocked_cases = [
-                    ("登录", {"method": "POST", "url": f"{ORIGIN}/SUP/Login/SupLogin"}),
-                    ("强踢", {"method": "POST", "url": f"{ORIGIN}/SUP/Login/KillOnlineUser"}),
-                    ("保存", {"method": "POST", "url": f"{ORIGIN}/FC/FM/PaymentBill/save"}),
-                    ("伪装 ..", {"method": "GET", "url": f"{ORIGIN}/SUP/RichHelp/../Login/SupLogin"}),
+                    ("登录", {"method": "POST", "url": f"{I8_ORIGIN}/SUP/Login/SupLogin"}),
+                    ("强踢", {"method": "POST", "url": f"{I8_ORIGIN}/SUP/Login/KillOnlineUser"}),
+                    ("保存", {"method": "POST", "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/save"}),
+                    ("伪装 ..", {"method": "GET", "url": f"{I8_ORIGIN}/SUP/RichHelp/../Login/SupLogin"}),
                     ("跨站", {"method": "GET", "url": "http://127.0.0.1:1/SUP/RichHelp/GetCommonUseList"}),
-                    ("删除方法", {"method": "DELETE", "url": f"{ORIGIN}/FC/FM/PaymentBill/getList"}),
+                    ("删除方法", {"method": "DELETE", "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList"}),
                 ]
                 for name, request in blocked_cases:
                     blocked = page_message(page_c, {
@@ -575,7 +661,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 200_000,
                         "method": "POST",
-                        "url": f"{ORIGIN}/PMS/PCM/Contract/GetCntMList",
+                        "url": f"{I8_ORIGIN}/PMS/PCM/Contract/GetCntMList",
                         "headers": {"Content-Type": "application/json"},
                         "body_b64": base64.b64encode(b"{}").decode("ascii"),
                     },
@@ -601,7 +687,7 @@ def main() -> int:
                         "generation": generation,
                         "timeout_ms": 30_000,
                         "method": "GET",
-                        "url": f"{ORIGIN}/SUP/RichHelp/GetCommonUseList",
+                        "url": f"{I8_ORIGIN}/SUP/RichHelp/GetCommonUseList",
                         "headers": {},
                         "body_b64": "",
                     },
@@ -610,7 +696,7 @@ def main() -> int:
 
                 # ---------- 代号、站点与发送页面归属 ----------
                 # 断开时清除了待绑定站点，重新连接前先读取站点。
-                page_message(page_c, {"type": "i8-relay:identity", "device_id": device})
+                page_message(page_c, identity_message(device))
                 re_bound = page_message(page_c, {
                     "type": "i8-relay:bind",
                     "device_id": device,
@@ -635,7 +721,7 @@ def main() -> int:
                             "ticket": "t-gen",
                             "timeout_ms": 30_000,
                             "method": "GET",
-                            "url": f"{ORIGIN}/SUP/RichHelp/GetCommonUseList",
+                            "url": f"{I8_ORIGIN}/SUP/RichHelp/GetCommonUseList",
                             "headers": {},
                             "body_b64": "",
                         },
@@ -662,7 +748,7 @@ def main() -> int:
                         "generation": generation,
                     }
                     # 先让这个连接有待绑定站点，再验证请求里的站点字段。
-                    page_message(page_c, {"type": "i8-relay:identity", "device_id": "dev-incomplete"})
+                    page_message(page_c, identity_message("dev-incomplete"))
                     if identity_value is not None:
                         message["identity"] = identity_value
                     answer = page_message(page_c, message)
@@ -674,7 +760,7 @@ def main() -> int:
                             "device_id": "dev-incomplete",
                             "request": {
                                 "ticket": "t-inc", "generation": generation, "timeout_ms": 30_000,
-                                "method": "GET", "url": f"{ORIGIN}/SUP/RichHelp/GetCommonUseList",
+                                "method": "GET", "url": f"{I8_ORIGIN}/SUP/RichHelp/GetCommonUseList",
                                 "headers": {}, "body_b64": "",
                             },
                         }).get("ok") is False,
@@ -691,7 +777,7 @@ def main() -> int:
                     "device_id": device,
                     "request": {
                         "ticket": "t-steal", "generation": generation, "timeout_ms": 30_000,
-                        "method": "GET", "url": f"{ORIGIN}/SUP/RichHelp/GetCommonUseList",
+                        "method": "GET", "url": f"{I8_ORIGIN}/SUP/RichHelp/GetCommonUseList",
                         "headers": {}, "body_b64": "",
                     },
                 })
@@ -700,7 +786,7 @@ def main() -> int:
                     stolen_exec.get("ok") is False and RECEIVED == [],
                     {"reply": stolen_exec, "received": RECEIVED},
                 )
-                stolen_read = page_message(page_c2, {"type": "i8-relay:identity", "device_id": device})
+                stolen_read = page_message(page_c2, identity_message(device))
                 stolen_bind = page_message(page_c2, {
                     "type": "i8-relay:bind",
                     "device_id": device,
@@ -721,7 +807,7 @@ def main() -> int:
                     "device_id": device,
                     "request": {
                         "ticket": "t-own", "generation": generation, "timeout_ms": 30_000,
-                        "method": "POST", "url": f"{ORIGIN}/FC/FM/PaymentBill/getList",
+                        "method": "POST", "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList",
                         "headers": {"Content-Type": "application/json"},
                         "body_b64": base64.b64encode(b"{}").decode("ascii"),
                     },

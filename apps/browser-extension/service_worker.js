@@ -2,7 +2,7 @@
  * 工作台 i8 会话桥 —— MV3 service worker。
  *
  * 定位：**无状态搬运工**。它只做三件事：
- *   1. 报告用户选中的 i8 标签站点，不读取账号菜单；
+ *   1. 在工作台配置的站点查找可用标签并探测会话；
  *   2. 在**那个标签**里执行后端**已经构造好**的那一条请求，把响应原样带回去；
  *   3. 核对连接代号、发送页面与目标站点。
  *
@@ -14,8 +14,7 @@
  *     ——`opaqueredirect`、status 0、读不到 Location——所以一律**停下**，不假装能判出跳转目标）；
  *   - 不登录、不顶号、不改页面 DOM、不猜 DOM 结构。
  *
- * 权限：`activeTab`（用户点扩展图标才临时授予当前标签）+ `scripting` + `storage`。
- *   ⇒ 页面地址与标签都由**用户点击**决定，不靠通配 host 权限。
+ * 持久访问需要用户授权配置站点；点扩展图标可临时授权当前标签。
  *
  * 注入函数必须自包含：executeScript 不携带模块作用域。
  */
@@ -71,7 +70,7 @@ const TAB_PROBE_TIMEOUT_MS = 2500;
 const TAB_PAUSED = {
   ok: false,
   code: 'tab-paused',
-  message: 'i8 标签暂时没有响应，可能正在加载或已被浏览器休眠。工作台会自动恢复连接。',
+  message: 'i8 标签暂时没有响应，工作台会自动重试。标签休眠时可以切到 i8 标签页唤醒。',
 };
 
 /**
@@ -79,7 +78,7 @@ const TAB_PAUSED = {
  *
  * ⛔ 不能用一份全局绑定：工作台可能开着两个页面（两个 `device_id`），后一个的连接
  * 会悄悄替换前一个的基准，前一个页面还以为自己连着 —— 那样"绑定"就形同虚设。
- * 选中另一个 i8 标签仍然会让**所有**旧绑定失效（标签是用户对扩展的单次动作）。
+ * 每条连接固定到完成握手的标签，发现或选择其他标签不会转移旧业务票。
  */
 const BOUND_PREFIX = 'i8RelayBound';
 
@@ -138,31 +137,18 @@ function sameIdentity(left, right) {
     && originOf(left.origin) === originOf(right.origin);
 }
 
-/** 清掉**所有**连接的绑定与待核身份（换标签时用）。 */
-async function clearAllBindings() {
-  pendingIdentities.clear();
-  let stored;
-  try {
-    stored = await chrome.storage.session.get(null);
-  } catch {
-    return;
-  }
-  const keys = Object.keys(stored || {}).filter(key => key === BOUND_PREFIX || key.startsWith(`${BOUND_PREFIX}:`));
-  if (keys.length) await chrome.storage.session.remove(keys);
-}
-
 function originOf(value) {
   try {
     const url = new URL(value);
-    return `${url.protocol}//${url.host}`;
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.origin : '';
   } catch {
     return '';
   }
 }
 
 function isWorkbenchSender(sender) {
-  const origin = sender && (sender.origin || originOf(sender.url || ''));
-  return WORKBENCH_ORIGINS.includes(originOf(origin) || origin);
+  const origin = sender && originOf(sender.origin ?? sender.url);
+  return WORKBENCH_ORIGINS.includes(origin) && (sender.frameId ?? 0) === 0;
 }
 
 /**
@@ -194,6 +180,20 @@ function checkEndpoint(method, rawUrl) {
 }
 
 let tabSelectionUpdate = Promise.resolve();
+const discoveries = new Map();
+const LOGIN_REQUIRED = {ok: false, code: 'login-required', message: '请在 i8 标签页登录。登录后，工作台会自动继续连接。'};
+const TAB_OPENING = {ok: false, code: 'tab-opening', message: 'i8 标签页正在加载，工作台会自动继续连接。'};
+const SITE_CHANGED = {ok: false, code: 'site-changed', message: 'i8 标签的站点已变化，工作台会按当前配置重新核对。'};
+const PERMISSION_REQUIRED = {
+  ok: false,
+  code: 'permission-required',
+  message: '请授权工作台扩展访问当前 i8 站点，或在 i8 标签页点一下扩展图标。',
+};
+const NEED_ACTION_CLICK = {
+  ok: false,
+  code: 'need-action-click',
+  message: '请在已登录的 i8 标签页点一下扩展图标，工作台会自动继续连接。',
+};
 
 async function readSelectedTab() {
   const stored = await chrome.storage.session.get(TAB_KEY);
@@ -222,7 +222,6 @@ chrome.action.onClicked.addListener(tab => {
   //    （样机的 vm 替身原先按 (key, value) 实现，把这处错盖住了 —— 真浏览器样机抓到）。
   return updateTabSelection(async () => {
     await chrome.storage.session.set({ [TAB_KEY]: { tabId: tab.id, origin, selectedAt: Date.now() } });
-    await clearAllBindings();
   });
 });
 
@@ -232,67 +231,128 @@ chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
   return updateTabSelection(async () => {
     const entry = await readSelectedTab();
     if (entry?.tabId !== removedTabId) return;
-    await chrome.storage.session.set({ [TAB_KEY]: { ...entry, tabId: addedTabId, replaced: true } });
-    await clearAllBindings();
+    await chrome.storage.session.set({ [TAB_KEY]: { ...entry, tabId: addedTabId } });
   });
 });
 
 /** 等一个页面任务，避免把只能执行注入代码的冻结标签误判为可取数。 */
-async function readIdentityInPage() {
+async function readIdentityInPage(origin, probePath) {
   await new Promise(resolve => setTimeout(resolve, 0));
-  return { ok: true, origin: `${location.protocol}//${location.host}` };
+  if (location.origin !== origin) return {code: 'site-changed'};
+  if (!probePath) return {ok: true, origin};
+  if (/(?:^|\/)login(?:[./]|$)/i.test(location.pathname)) return {code: 'login-required'};
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
+  try {
+    const response = await fetch(origin + probePath, {
+      credentials: 'same-origin',
+      redirect: 'manual',
+      cache: 'no-store',
+      headers: {accept: 'application/json', 'x-requested-with': 'XMLHttpRequest'},
+      signal: controller.signal,
+    });
+    if (response.type === 'opaqueredirect' || response.status === 401) return {code: 'login-required'};
+    if (!response.ok) return {code: 'tab-paused'};
+    const result = await response.json();
+    if (String(result?.Code) === '401' || /no sessioninfo/i.test(String(result?.Msg || result?.msg || ''))) {
+      return {code: 'login-required'};
+    }
+    return Array.isArray(result?.Record ?? result?.record) ? {ok: true, origin} : {code: 'tab-paused'};
+  } catch {
+    return {code: 'tab-paused'};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function tabStatus(tab) {
+  if (tab.frozen || tab.discarded) return TAB_PAUSED;
+  if (tab.status === 'loading') return TAB_OPENING;
+  return null;
 }
 
 async function tabPaused(tabId) {
-  const tab = await chrome.tabs.get(tabId);
-  return tab.frozen || tab.discarded || tab.status === 'loading';
+  return Boolean(tabStatus(await chrome.tabs.get(tabId)));
 }
 
-async function readIdentity() {
-  const entry = await selectedTab();
-  if (!entry) {
-    return {
-      ok: false,
-      code: 'need-tab',
-      message: '还没有选中 i8 标签：请开到已登录的 i8 业务页，点一下扩展图标选中它，再回工作台点连接。',
-    };
-  }
+async function probeTab(entry, checkSession) {
   let results, timer;
+  const probePath = '/SUP/RichHelp/GetCommonUseList?helpid=project_table_pchelp&ORMMode=true&skipInfoAuth=1';
+  if (checkSession && checkEndpoint('GET', entry.origin + probePath)) return SITE_CHANGED;
   try {
-    if (await tabPaused(entry.tabId)) return TAB_PAUSED;
+    const tab = await chrome.tabs.get(entry.tabId);
+    const status = tabStatus(tab);
+    if (status) return status;
+    if (tab.url && originOf(tab.url) !== entry.origin) return SITE_CHANGED;
     results = await Promise.race([
       chrome.scripting.executeScript({
         target: { tabId: entry.tabId },
         world: 'ISOLATED',
         func: readIdentityInPage,
         injectImmediately: true,
+        args: [entry.origin, checkSession ? probePath : ''],
       }),
       new Promise(resolve => { timer = setTimeout(() => resolve(null), TAB_PROBE_TIMEOUT_MS); }),
     ]);
   } catch {
-    return {
-      ok: false,
-      code: 'need-tab',
-      message: '读不到那个 i8 标签（可能已关闭、已跳到别的站点或权限已失效）。请重新点扩展图标选中标签。',
-    };
+    return entry.selectedAt ? NEED_ACTION_CLICK : TAB_PAUSED;
   } finally { clearTimeout(timer); }
   if (results === null) return TAB_PAUSED;
   const first = Array.isArray(results) ? results[0] : null;
   const value = first && first.result ? first.result : null;
-  if (!value || value.ok !== true || !nonEmptyString(value.origin)) {
-    return { ok: false, code: 'need-tab', message: '读不到那个 i8 标签的站点，请重新选中标签后再试。' };
+  if (value?.code === 'login-required') return LOGIN_REQUIRED;
+  if (value?.code === 'site-changed') return SITE_CHANGED;
+  if (value?.ok !== true || value.origin !== entry.origin) return TAB_PAUSED;
+  return {ok: true, ...entry};
+}
+
+async function discoverTab(origin, openIfMissing) {
+  const hasHost = await chrome.permissions.contains({origins: [origin + '/*']});
+  const selected = await selectedTab();
+  if (!hasHost) {
+    if (selected?.origin !== origin) return PERMISSION_REQUIRED;
+    return probeTab(selected, true);
   }
-  if (originOf(value.origin) !== entry.origin) {
-    return { ok: false, code: 'need-tab', message: '那个标签已经跳到别的站点，请重新选中当前 i8 业务页。' };
+  const tabs = (await chrome.tabs.query({url: origin + '/*'}))
+    .filter(tab => typeof tab.id === 'number' && originOf(tab.pendingUrl || tab.url) === origin);
+  const ready = tabs.filter(tab => !tabStatus(tab));
+  if (ready.length) {
+    // Probe in parallel so a frozen renderer or login tab cannot hold up a healthy alternative.
+    const probes = await Promise.all(ready.map(tab => probeTab({tabId: tab.id, origin}, true)));
+    return probes.find(result => result.ok) || probes.find(result => result.code === 'login-required') || probes[0];
   }
-  const current = await selectedTab();
-  if (current?.tabId !== entry.tabId || current.selectedAt !== entry.selectedAt) {
-    return { ok: false, code: 'binding-lost', message: '选中的 i8 标签已变化，工作台会重新核对并连接。' };
+  if (tabs.length) return tabs.some(tab => tabStatus(tab) === TAB_OPENING) ? TAB_OPENING : TAB_PAUSED;
+  const key = `i8RelayOpened:${origin}`;
+  const stored = await chrome.storage.session.get(key);
+  if (typeof stored[key] === 'number') {
+    const opened = await chrome.tabs.get(stored[key]).catch(() => null);
+    if (opened) return opened.status === 'loading' ? TAB_OPENING : SITE_CHANGED;
+    await chrome.storage.session.remove(key);
   }
-  return {
-    ok: true,
-    origin: value.origin,
-  };
+  if (!openIfMissing()) return {ok: false, code: 'need-tab', message: '请打开配置的 i8 站点，工作台会自动继续连接。'};
+  const opened = await chrome.tabs.create({url: origin, active: false});
+  await chrome.storage.session.set({[key]: opened.id});
+  return TAB_OPENING;
+}
+
+async function readIdentity(message) {
+  // Older workbenches can still use a tab explicitly selected by the user.
+  if (message.origin === undefined) {
+    const selected = await selectedTab();
+    return selected ? probeTab(selected, false) : NEED_ACTION_CLICK;
+  }
+  const origin = originOf(message.origin);
+  if (!origin || message.origin !== origin) return SITE_CHANGED;
+  // Only one tab search/open can be in flight per configured site, even across workbench documents.
+  const current = discoveries.get(origin);
+  if (current) {
+    current.openIfMissing ||= message.openIfMissing === true;
+    return current.result;
+  }
+  const attempt = {openIfMissing: message.openIfMissing === true};
+  attempt.result = discoverTab(origin, () => attempt.openIfMissing).finally(() => discoveries.delete(origin));
+  discoveries.set(origin, attempt);
+  return attempt.result;
 }
 
 /**
@@ -398,7 +458,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
  * 先核代号（本地读，不碰标签），再执行请求。
  * 代号不对时**一个字节都不该发出去**，也不该去读用户的 i8 页面。
  */
-async function identityStillBound(deviceId, generation, senderKey, entry) {
+async function identityStillBound(deviceId, generation, senderKey) {
   if (!deviceId) {
     return { ok: false, message: '这条请求没有连接标识，本次已停止。请回「i8 接入」页重新连接。' };
   }
@@ -411,9 +471,7 @@ async function identityStillBound(deviceId, generation, senderKey, entry) {
   const stored = await chrome.storage.session.get(boundKeyOf(deviceId));
   const bound = stored && stored[boundKeyOf(deviceId)];
   if (!bound) {
-    return entry?.replaced
-      ? { ok: false, code: 'binding-lost', message: '浏览器替换了原标签，工作台会自动重新连接。' }
-      : { ok: false, message: '这条连接没有登记过身份，请回「i8 接入」页重新连接。' };
+    return { ok: false, code: 'binding-lost', message: '这条连接没有登记过身份，工作台会自动重新连接。' };
   }
   if (bound.sender !== senderKey) {
     return {
@@ -429,7 +487,12 @@ async function identityStillBound(deviceId, generation, senderKey, entry) {
       message: '这条请求属于上一次连接（代号已过期），本次已停止，没有发出任何请求。请回「i8 接入」页重新连接后再抓取。',
     };
   }
-  return { ok: true };
+  const selected = bound.selectedAt ? await selectedTab() : null;
+  if (typeof bound.tabId !== 'number' || bound.selectedAt &&
+      (selected?.tabId !== bound.tabId || selected.selectedAt !== bound.selectedAt)) {
+    return {ok: false, code: 'binding-lost', message: '临时选中的 i8 标签已变化，工作台会重新连接。'};
+  }
+  return bound;
 }
 
 async function execute(message, senderKey) {
@@ -447,13 +510,6 @@ async function execute(message, senderKey) {
   if (!request || typeof request.url !== 'string' || typeof request.ticket !== 'string') {
     return { ok: false, message: '请求不完整，已忽略。' };
   }
-  const entry = await selectedTab();
-  if (!entry) {
-    return { ok: false, message: '还没有选中 i8 标签：请点一下扩展图标选中那个已登录的 i8 业务页。' };
-  }
-  if (originOf(request.url) !== entry.origin) {
-    return { ok: false, code: 'target-mismatch', message: '请求目标与选中的 i8 标签不是同一个站点，已拒绝执行。' };
-  }
   // 方法与端点都在**注入脚本之前**拒掉：不该为一条越界的请求去碰用户标签。
   if (!ALLOWED_METHODS.includes(String(request.method || '').toUpperCase())) {
     return { ok: false, message: '这个方法不在只读白名单里，已拒绝执行（未触碰标签）。' };
@@ -462,8 +518,11 @@ async function execute(message, senderKey) {
   if (endpointProblem) return { ok: false, message: endpointProblem };
 
   // 先核连接归属与代号；页面中的执行函数再核实际站点。
-  const identity = await identityStillBound(deviceId, generation, senderKey, entry);
-  if (!identity.ok) return { ok: false, message: identity.message, code: identity.code };
+  const entry = await identityStillBound(deviceId, generation, senderKey);
+  if (!entry.ok) return entry;
+  if (originOf(request.url) !== entry.origin) {
+    return { ok: false, code: 'target-mismatch', message: '请求目标与绑定的 i8 标签不是同一个站点，已拒绝执行。' };
+  }
 
   let results;
   try {
@@ -482,7 +541,7 @@ async function execute(message, senderKey) {
       }, ALLOWED_HEADERS, ALLOWED_METHODS, READONLY_ENDPOINTS],
     });
   } catch {
-    return { ok: false, message: '那个 i8 标签已经不可用（关闭、跳站或权限失效），请重新选中标签。' };
+    return { ok: false, code: 'binding-lost', message: '绑定的 i8 标签已不可用，工作台会自动重新连接。' };
   }
   const first = Array.isArray(results) ? results[0] : null;
   const value = first && first.result ? first.result : null;
@@ -522,7 +581,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       sendResponse({ ok: false, message: '认不出这个工作台页面，本次已停止。请刷新页面后重新连接。' });
       return false;
     }
-    readIdentity().then(
+    readIdentity(message).then(
       result => {
         // 只记住**这个连接的这个页面**刚读到的这一份；工作台确认连接成功后才会经 `bind` 提升为基准。
         // ⛔ 键里带发送页面：另一个本地页面用同一个 `device_id` 读身份，只会写到它自己那格，
@@ -530,10 +589,31 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         const key = pendingKeyOf(deviceId, senderKey);
         if (result.ok) pendingIdentities.set(key, result);
         else pendingIdentities.delete(key);
-        sendResponse(result);
+        sendResponse(result.ok ? {ok: true, origin: result.origin, ...(message.origin ? {sessionReady: true} : {})} : result);
       },
       () => sendResponse({ ok: false, message: '读取身份时出错，本次已停止。' }),
     );
+    return true;
+  }
+  if (type === 'i8-relay:health') {
+    identityStillBound(deviceId, positiveGeneration(message.generation), senderKey).then(
+      async bound => {
+        const status = bound.ok ? (bound.origin === message.origin ? await probeTab(bound, true) : SITE_CHANGED) : bound;
+        sendResponse(status.ok ? {ok: true} : status);
+      },
+    ).catch(() => sendResponse(TAB_PAUSED));
+    return true;
+  }
+  if (type === 'i8-relay:permission') {
+    const origin = originOf(message.origin);
+    if (!senderKey || !deviceId || !origin || origin !== message.origin) {
+      sendResponse(SITE_CHANGED);
+      return false;
+    }
+    const key = `i8RelayPermission:${senderKey}`;
+    chrome.storage.session.set({[key]: origin}).then(() =>
+      chrome.tabs.create({url: chrome.runtime.getURL('permission.html') + '#' + encodeURIComponent(key)}),
+    ).then(() => sendResponse({ok: true}), () => sendResponse(NEED_ACTION_CLICK));
     return true;
   }
   if (type === 'i8-relay:bind') {

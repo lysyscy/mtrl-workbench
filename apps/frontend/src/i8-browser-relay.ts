@@ -311,7 +311,7 @@ function sendToExtension(message: unknown): Promise<unknown> {
     }
     runtime.sendMessage(extensionId, message, (response: unknown) => {
       if (runtime.lastError) {
-        reject(new ApiError('浏览器扩展暂未应答，正在等待恢复。', 0, 'extension-unavailable'));
+        reject(new ApiError('浏览器扩展暂未应答。请确认已安装并启用「工作台 i8 会话桥」。', 0, 'extension-unavailable'));
         return;
       }
       resolve(response);
@@ -319,22 +319,42 @@ function sendToExtension(message: unknown): Promise<unknown> {
   });
 }
 
-const IDENTITY_HINT = '没能读取选中的 i8 标签：请在已登录的 i8 页面点一下扩展图标，再回来连接。';
+const IDENTITY_HINT = '没能核对 i8 标签，请检查扩展版本和站点设置。';
 
 /**
  * 让扩展报告用户选中的 i8 标签站点，不读取账号或组织菜单。
  *
  * 带 `device_id`：扩展按连接缓存这份待核身份，另一个工作台页面的预检不会把它换掉。
  */
-export async function readBrowserIdentity(send: Send = sendToExtension): Promise<VisibleIdentity> {
-  const value = await send({ type: 'i8-relay:identity', device_id: deviceId() });
+export async function readBrowserIdentity(origin: string, openIfMissing = false, send: Send = sendToExtension): Promise<VisibleIdentity> {
+  const value = await send({ type: 'i8-relay:identity', device_id: deviceId(), origin, openIfMissing });
   if (!record(value) || value.ok !== true) {
     const message = record(value) ? readString(value, 'message') : '';
     throw new ApiError(message || IDENTITY_HINT, 0, record(value) ? readString(value, 'code') || 'need-tab' : 'malformed');
   }
-  const origin = readString(value, 'origin');
-  if (!origin) throw new ApiError(IDENTITY_HINT, 0, 'malformed');
+  if (value.sessionReady !== true) throw new ApiError('请将「工作台 i8 会话桥」更新到 0.1.5 后再连接。', 0, 'extension-outdated');
+  if (value.origin !== origin) throw new ApiError('i8 站点已变化，正在重新核对。', 0, 'site-changed');
   return { origin };
+}
+
+/** A confirmed operation checks the existing generation without interrupting in-flight tickets. */
+export async function checkBrowserReadiness(state: BrowserRelayState, signal: AbortSignal, send: Send = sendToExtension): Promise<void> {
+  const current = await readBrowserState(signal);
+  signal.throwIfAborted();
+  if (current.origin !== state.origin) throw new ApiError('i8 站点已变化，正在重新核对。', 0, 'site-changed');
+  if (!current.connected || current.generation !== state.generation) throw new ApiError('浏览器连接已失效，正在重新连接。', 0, 'binding-lost');
+  const response = await send({type: 'i8-relay:health', device_id: deviceId(), generation: state.generation, origin: state.origin});
+  if (!record(response) || response.ok !== true) {
+    throw new ApiError(record(response) ? readString(response, 'message') || IDENTITY_HINT : IDENTITY_HINT, 0,
+      record(response) ? readString(response, 'code') || 'malformed' : 'malformed');
+  }
+}
+
+export async function requestBrowserPermission(origin: string): Promise<void> {
+  const result = await sendToExtension({type: 'i8-relay:permission', device_id: deviceId(), origin});
+  if (!record(result) || result.ok !== true) {
+    throw new ApiError('请在 i8 标签页点一下扩展图标，工作台会自动继续连接。', 0, 'need-action-click');
+  }
 }
 
 /**
@@ -379,7 +399,9 @@ export interface RelayRunHooks {
 
 export function isTransientRelayError(error: unknown): boolean {
   return error instanceof ApiError
-    && ['extension-unavailable', 'tab-paused', 'binding-lost'].includes(error.code ?? '');
+    && ['extension-missing', 'extension-unavailable', 'tab-paused', 'tab-opening', 'binding-lost', 'need-tab',
+      'need-action-click', 'permission-required', 'login-required', 'site-changed', 'target-mismatch',
+      'i8_strict_target_mismatch', 'opaque-response', 'request-network'].includes(error.code ?? '');
 }
 
 /** Fixed categories only: upstream HTTP errors remain ordinary replies. */
@@ -511,6 +533,10 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       return;
     }
     await postReply(reply, request, signal);
+    if (reply.status === 401) {
+      stopped('reconnect');
+      return;
+    }
   }
   stopped('idle');
 }

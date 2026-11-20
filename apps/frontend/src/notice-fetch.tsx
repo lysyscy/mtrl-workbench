@@ -33,8 +33,8 @@ export function NoticeFetch({ me, blocked, close, refresh }: { me: Identity | nu
   const initialMonth = useRef(month);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'notices', scopeKey: month });
   const closing = useDialogClose({
-    busy: action.busy || action.refreshing, dirty: !action.sent && month !== initialMonth.current,
-    close: () => { action.cancelKick(); close(); }, active: !blocked,
+    busy: action.busy || action.refreshing, dirty: !action.waiting && !action.sent && month !== initialMonth.current,
+    close: () => { action.cancelWaiting(); action.cancelKick(); close(); }, active: !blocked,
   });
   const validMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
 
