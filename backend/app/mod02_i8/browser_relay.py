@@ -55,7 +55,7 @@ from app.mod02_i8.browser_session import (
     StrictTargetMismatch,
     _origin_of,
 )
-from app.mod02_i8.client import I8Client
+from app.mod02_i8.client import I8Client, http_session_policy
 from app.mod02_i8.contract_source import DETAIL_PATH as CONTRACT_DETAIL_PATH, LIST_PATH as CONTRACT_LIST_PATH
 from app.mod02_i8.sources import WH_PARAMS
 
@@ -305,14 +305,14 @@ def current_scope() -> tuple[str, str]:
     return (mode or MODE_HTTP), (device or "")
 
 
-def resolve_mode(value: object) -> str:
+def resolve_mode(value: object, *, require_explicit: bool = False) -> str:
     """把入参里的取数方式收敛成两个受控值。
 
     空 / 没传 ⇒ `http`（＝产品原行为，旧调用点一行不用改）。
     ⛔ 认不出来的值**直接拒**：绝不能把"用户明明选了浏览器方式"当成直连去登录。
     """
-    text = str(value or "").strip().lower()
-    if not text:
+    text = str(value or "") if require_explicit else str(value or "").strip().lower()
+    if not text and not require_explicit:
         return MODE_HTTP
     if text not in (MODE_HTTP, MODE_BROWSER):
         raise MustReportError("取数方式无法识别，请刷新页面后重新选择。")
@@ -343,6 +343,9 @@ def open_i8_client(*, allow_kick: bool = False, owner: str = "") -> I8Client:
     """
     mode, device = current_scope()
     if mode != MODE_BROWSER:
+        policy = http_session_policy.get()
+        if policy is not None:
+            return I8Client(policy=policy)
         return I8Client(allow_kick=allow_kick)
 
     configured = _origin_of(i8_base_of(get_settings()))

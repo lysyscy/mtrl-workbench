@@ -49,19 +49,10 @@ class FetchRequest(BaseModel):
 
     year_month: str = Field(..., description="核算年月，形如 2026-08")
     expected_account: str | None = None
-    allow_kick: bool = Field(
-        False,
-        description="界面主动抓取传 true；省略时不强踢在线会话",
-    )
-    # ---------------------------------------------------------------- 会话来源（`TAIL-476`）
-    # ⚠️ 缺省 / `http` ⇒ **产品原有直连**（Cookie 缓存 → 单次重登 → 强踢授权）完全不变；
-    #    只有用户在「i8 接入」页显式连上浏览器并在这儿传 `browser` 才改走浏览器通道。
-    # ⛔ 已选 `browser` 但连接不在时**失败**，不会悄悄退回登录。
-    session_mode: Literal["http", "browser"] = Field(
-        "http",
-        description="http = 工作台直连（默认，行为不变）；browser = 复用已连接的浏览器 i8 会话",
-    )
+    allow_kick: bool = False
+    session_mode: str = Field("", description="必选：工作台直连 http 或浏览器已有会话 browser")
     device_id: str = Field("", description="浏览器模式必传：本页面的连接标识（不是账号，不是凭据）")
+    kick_token: str = ""
 
 
 # --------------------------------------------------------------- 链路 C 弹窗（`TAIL-29`-② ④）

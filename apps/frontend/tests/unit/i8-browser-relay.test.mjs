@@ -100,18 +100,15 @@ test('连接标识每文档一份且可被身份事件换掉（不是凭据、�
 test('取数方式按账号记住：同账号失效后仍是浏览器，换号不串，只有用户能改', () => {
   const alice = '1:alice';
   const bob = '2:bob';
-  assert.equal(relayMode(alice), SESSION_MODE_HTTP, '没选过＝产品原有的直连行为');
+  assert.equal(relayMode(alice), SESSION_MODE_BROWSER);
+  setRelayMode(SESSION_MODE_HTTP, alice);
+  assert.equal(globalThis.sessionStorage.getItem(`mtrl.i8.relay.mode.${alice}`), SESSION_MODE_HTTP);
+  assert.equal(relayMode(bob), SESSION_MODE_BROWSER);
+  resetBrowserRelay();
+  assert.equal(relayMode(alice), SESSION_MODE_HTTP);
+  assert.equal(relayMode(bob), SESSION_MODE_BROWSER);
   setRelayMode(SESSION_MODE_BROWSER, alice);
   assert.equal(relayMode(alice), SESSION_MODE_BROWSER);
-  assert.equal(globalThis.sessionStorage.getItem(`mtrl.i8.relay.mode.${alice}`), SESSION_MODE_BROWSER);
-  assert.equal(relayMode(bob), SESSION_MODE_HTTP, '另一个账号不受影响');
-  // 身份事件（退出登录/401 重登）只换设备标识：⛔ 不许把用户选过的浏览器方式清掉。
-  resetBrowserRelay();
-  assert.equal(relayMode(alice), SESSION_MODE_BROWSER, '⛔ 同账号重新登录后不许悄悄回落到直连');
-  assert.equal(relayMode(bob), SESSION_MODE_HTTP, '⛔ 换号不许继承别人的选择');
-  setRelayMode(SESSION_MODE_HTTP, alice);
-  assert.equal(relayMode(alice), SESSION_MODE_HTTP);
-  assert.equal(globalThis.sessionStorage.getItem(`mtrl.i8.relay.mode.${alice}`), null, '切回直连不留下痕迹');
 });
 
 test('扩展 ID 是固定的：装好扩展即可用，不需要用户填；没装扩展一律不可用', () => {
@@ -245,6 +242,8 @@ test('窄助手：浏览器方式缺连接当场失败（零请求、不退回�
   const http = sessionPayload({ mode: SESSION_MODE_HTTP, connected: false }, { allow_kick: true }, { year_month: '2026-11' });
   assert.deepEqual(http, { year_month: '2026-11', allow_kick: true, session_mode: SESSION_MODE_HTTP }, '直连时授权参数与改动前逐字节一致');
   assert.equal('device_id' in http, false);
+  assert.deepEqual(sessionPayload({ mode: SESSION_MODE_HTTP, connected: false }, { kick_token: 'confirmation' }),
+    { session_mode: SESSION_MODE_HTTP, kick_token: 'confirmation' });
   const params = sessionParams({ mode: SESSION_MODE_HTTP, connected: false }, { allow_kick: 'true' }, { expected_account: 'tester001' });
   assert.equal(params.get('session_mode'), SESSION_MODE_HTTP);
   assert.equal(params.get('allow_kick'), 'true');

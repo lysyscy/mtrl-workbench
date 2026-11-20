@@ -60,7 +60,7 @@ def row(identity, *, bad=False, **changes):
 
 
 def fetch(case):
-    response = case.client.post('/api/m03/notices/fetch', json={'year_month': '2026-10'})
+    response = case.client.post('/api/m03/notices/fetch', json={'year_month': '2026-10', 'session_mode': 'browser'})
     assert response.status_code == 200, response.text
     return response.json()
 

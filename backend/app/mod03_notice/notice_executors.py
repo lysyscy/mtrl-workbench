@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime
 from typing import Callable
 
@@ -30,7 +31,7 @@ from app.mod01_projects.domain import (
 )
 from app.mod01_projects import service as P1S
 from app.mod02_i8.browser_relay import open_i8_client
-from app.mod02_i8.client import I8Client
+from app.mod02_i8.client import I8Client, I8OnlineConflictError
 from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
@@ -154,16 +155,16 @@ def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
     """抓取执行器（D4 最小取数）。测试可覆盖。"""
 
     def _exec(year_month: str, allow_kick: bool) -> FetchResponse:
-        # ⚠️ 耗时的**起点**：必须在 `I8Client` 登录 i8 **之前**（见 `create_run_record` 那段）
         t0 = datetime.now()
-        # ⭐（`TAIL-476`）取数客户端走 `open_i8_client()` 工厂：**默认仍是产品原有 `I8Client`**
-        #    （Cookie 缓存 → 单次重登 → 强踢授权，一字未改）；只有调用方显式进入
-        #    `relay_scope(MODE_BROWSER, device_id)` 时才切到「复用浏览器已有会话」的那支。
-        #    `owner` 取**服务端认证身份**（`current_name()`，来自本请求会话），⛔ 不接受客户端声明。
-        #    ⚠️ 浏览器模式缺连接时这里**当场抛错**（落"失败"执行记录），⛔ 不会悄悄退回登录。
-        client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+        # 路由绑定会话策略。主取数与补建档的两个读取共用同一客户端。
+        with closing(open_i8_client(allow_kick=allow_kick, owner=current_name())) as client:
+            return _fetch(year_month, allow_kick, client, t0)
+
+    def _fetch(year_month: str, allow_kick: bool, client: I8Client, t0: datetime) -> FetchResponse:
         try:
             rows = NoticeFetcher(client).fetch_month(year_month)
+        except I8OnlineConflictError:
+            raise
         except Exception as exc:  # noqa: BLE001
             with session_scope() as session:
                 rec = create_run_record(session, run_type="fetch", target=year_month, total=0,
@@ -175,8 +176,6 @@ def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
                     detail=fetch_detail(), error_message=str(exc),
                 )
             raise
-        finally:
-            client.close()
 
         # ACC-PRJ-OWN-001：归属未确定的行本次不写，下次抓取重新判断。
         # 规则剔除行照常保留，不要求归属确定；两处判定使用同一份规则。
@@ -222,12 +221,24 @@ def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
 
             cp_loader = get_common_project_rows()
             wh_loader = get_warehouse_rows()
+            online_conflict = None
+
+            def load_for_archive(loader):
+                nonlocal online_conflict
+                try:
+                    return loader(allow_kick, client)
+                except I8OnlineConflictError as exc:
+                    online_conflict = exc
+                    raise
+
             with session_scope() as session:
                 archive_out = sync_and_archive(
                     session,
-                    load_common=lambda: cp_loader(allow_kick, client),      # ⭐ 复用**同一个**会话
-                    load_warehouses=lambda: wh_loader(allow_kick, client),
+                    load_common=lambda: load_for_archive(cp_loader),
+                    load_warehouses=lambda: load_for_archive(wh_loader),
                 )
+                if online_conflict is not None:
+                    raise online_conflict
             if not archive_out.get("degraded"):
                 judged = _judge()
 

@@ -14,6 +14,7 @@ interface FetchRequest<T> {
   payload: Record<string, unknown>;
   http?: Record<string, unknown>;
   parse: (value: unknown) => T;
+  onSuccess?: (result: T) => void;
 }
 interface Options {
   source?: keyof typeof sourceNames | 'mechanical';
@@ -21,12 +22,19 @@ interface Options {
   paused: boolean;
   refresh: () => Promise<unknown>;
   enabled?: boolean;
+  scopeKey?: string;
   pending?: boolean;
   onPending?: (pending: boolean) => void;
 }
 
+interface KickConfirmation {
+  message: string;
+  key: string;
+  submit: () => Promise<unknown>;
+}
+
 /** Shared execution lifecycle. Domains own scope, response meaning and subsequent adoption. */
-export function useI8FetchAction({source, me, paused, refresh, enabled = true, pending: initialPending = false, onPending}: Options) {
+export function useI8FetchAction({source, me, paused, refresh, enabled = true, scopeKey, pending: initialPending = false, onPending}: Options) {
   const session = useI8Session();
   // Monthly pages already retain the exact pending month; use that owner when supplied.
   const storageKey = source && !onPending ? `i8-fetch-pending:${source}:${me?.account ?? ''}` : '';
@@ -38,6 +46,8 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
   const [pending, setPending] = useState(restored), [error, setError] = useState(''), [storageError, setStorageError] = useState('');
   const [refreshError, setRefreshError] = useState(''), [refreshing, setRefreshing] = useState(false);
   const lock = useRef(false), pendingRef = useRef(restored), alive = useRef(true);
+  const kickRef = useRef<KickConfirmation | null>(null), kickGeneration = useRef(0);
+  const [kickConfirmation, setKickConfirmation] = useState<KickConfirmation | null>(null);
   useHistoryGuard(`i8-fetch-${source ?? 'monthly'}`, () => busy || refreshing ? 'i8 抓取正在处理，请稍候。' : pending ? 'i8 抓取结果待核实，请先核对。' : '');
   useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
   const config = useQuery({
@@ -53,6 +63,23 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
   const browserBlocked = session.mode === SESSION_MODE_BROWSER && !session.connected;
   const unavailable = paused || !enabled || busy || !me || config.isFetching || config.isError
     || !config.data?.ready || config.data.account !== me.account || browserBlocked;
+  const confirmationKey = JSON.stringify([scopeKey, session.mode, me?.id, me?.account, config.data?.i8_user, paused, enabled]);
+  useEffect(() => {
+    setKickConfirmation(null);
+    return () => {kickGeneration.current += 1; kickRef.current = null;};
+  }, [confirmationKey]);
+
+  function cancelKick() {
+    kickGeneration.current += 1;
+    kickRef.current = null;
+    setKickConfirmation(null);
+  }
+  async function confirmKick() {
+    const confirmation = kickRef.current;
+    if (unavailable || lock.current || pendingRef.current || !confirmation || confirmation.key !== confirmationKey) return;
+    cancelKick();
+    await confirmation.submit();
+  }
   function markPending(value: boolean) {
     pendingRef.current = value;
     if (alive.current) setPending(value);
@@ -68,6 +95,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
     setError('');
   }
   function reset() {
+    cancelKick();
     if (lock.current || pendingRef.current) return;
     setSent(false); setError(''); setRefreshError('');
   }
@@ -84,21 +112,44 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
       if (alive.current) setRefreshing(false);
     }
   }
-  async function run<T>({path, payload, http = {}, parse}: FetchRequest<T>): Promise<T | undefined> {
-    if (unavailable || lock.current || pendingRef.current) return undefined;
+  async function run<T>(request: FetchRequest<T>): Promise<T | undefined> {
+    if (unavailable || lock.current || pendingRef.current || kickRef.current) return undefined;
+    return submit(request);
+  }
+
+  async function submit<T>(request: FetchRequest<T>, retry?: ReturnType<typeof body>): Promise<T | undefined> {
+    const {path, payload, http = {}, parse, onSuccess} = request;
     lock.current = true; setBusy(true); setError(''); setRefreshError('');
-    let confirmed = false, issued = false, parsed: T | undefined;
+    const generation = kickGeneration.current;
+    let confirmed = false, issued = false, awaitingKick = false, parsed: T | undefined;
+    let snapshot: ReturnType<typeof body> | undefined;
     try {
-      const request = sessionPayload(session, http, payload);
+      snapshot = retry ?? body(sessionPayload(session, http, payload));
       markPending(true); setSent(true); issued = true;
-      const value = await requestJson(path, {method: 'POST', ...body(request)});
+      const value = await requestJson(path, {method: 'POST', ...snapshot});
       parsed = parse(value);
       confirmed = true;
     } catch (failure) {
       confirmed = !issued || failure instanceof ApiError && failure.status > 0 && failure.status < 500 && failure.code !== 'invalid_response';
-      if (alive.current) setError(failure instanceof Error ? failure.message : '抓取未完成。');
+      if (!retry && snapshot && session.mode !== SESSION_MODE_BROWSER && failure instanceof ApiError
+        && failure.status === 409 && failure.code === 'i8_online_conflict' && record(failure.detail)
+        && typeof failure.detail.kick_token === 'string' && failure.detail.kick_token) {
+        awaitingKick = true;
+        if (alive.current) {
+          setSent(false);
+          if (generation === kickGeneration.current) {
+            const confirmedBody = body({...JSON.parse(snapshot.body), kick_token: failure.detail.kick_token});
+            const confirmation = {
+              message: failure.message, key: confirmationKey,
+              submit: () => submit(request, confirmedBody),
+            };
+            kickRef.current = confirmation;
+            setKickConfirmation(confirmation);
+          }
+        }
+      } else if (alive.current) setError(failure instanceof Error ? failure.message : '抓取未完成。');
     } finally {
-      if (issued) {
+      if (issued && !awaitingKick) {
         try {await refresh();}
         catch (failure) {
           const reason = failure instanceof Error ? failure.message : '请重读核对。';
@@ -114,10 +165,13 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, p
       lock.current = false;
       if (alive.current) setBusy(false);
     }
+    if (alive.current && parsed !== undefined) onSuccess?.(parsed);
     return alive.current ? parsed : undefined;
   }
   const browserRecovery = browserBlocked && session.maintaining ? session.notice || '正在自动连接浏览器会话，请稍候。' : '';
-  return {busy, sent, pending, error, storageError, refreshError, refreshing, unavailable, browserBlocked, browserRecovery, config, mode: session.mode, run, reset, acknowledge, reread};
+  const kickMessage = kickConfirmation?.key === confirmationKey ? kickConfirmation.message : '';
+  return {busy, sent, pending, error, storageError, refreshError, refreshing, unavailable, browserBlocked, browserRecovery, config,
+    mode: session.mode, kickMessage, confirmKick, cancelKick, run, reset, acknowledge, reread};
 }
 
 export type I8FetchAction = ReturnType<typeof useI8FetchAction>;
@@ -139,6 +193,7 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
       ? <p className="notice" role="status">{action.browserRecovery}</p>
       : <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>)}
     {action.busy && <p role="status">正在抓取，请稍候…</p>}
+    {action.kickMessage && <p className="notice" role="status">{action.kickMessage}</p>}
     {action.error && <p className="notice" role="alert">{action.error}</p>}
     {action.refreshError && <div className="notice" role="alert">
       抓取已完成，台账暂未刷新。{action.refreshError}
@@ -170,6 +225,11 @@ export function I8FetchRecovery({action, source, scope = '', onAcknowledged}: {
 export function I8FetchActions({action, close, canRun = true, onRun, label = '确认抓取'}: {
   action: I8FetchAction; close: () => void; canRun?: boolean; onRun: () => void; label?: string;
 }) {
+  if (action.kickMessage) return <div className="dialog-actions">
+    <Button htmlType="button" onClick={action.cancelKick}>取消</Button>
+    <Button htmlType="button" type="primary" danger disabled={action.unavailable || !canRun}
+      onClick={() => void action.confirmKick()}>让现有会话下线并继续</Button>
+  </div>;
   return <div className="dialog-actions">
     <Button htmlType="button" disabled={action.busy || action.refreshing} onClick={close}>{action.sent ? '关闭' : '取消'}</Button>
     {!action.sent && <Button htmlType="button" type="primary" disabled={action.unavailable || action.pending || !canRun} onClick={onRun}>{label}</Button>}

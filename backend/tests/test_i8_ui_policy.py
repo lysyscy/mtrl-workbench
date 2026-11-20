@@ -99,7 +99,7 @@ def test_failed_ui_login_stops_without_retry_or_business_write(monkeypatch, logi
 
 
 @pytest.mark.parametrize('path', ['projects.tsx', 'notice-auto-link.tsx',
-    'mechanical-work.tsx', 'notice-maintenance.tsx', 'notice-fetch.tsx'])
+    'mechanical-work.tsx', 'ownership.tsx'])
 def test_react_i8_request_wiring(path):
     # Stable opt-in contract only; backend tests cover login and business state.
     root = Path(__file__).resolve().parents[2] / 'apps/frontend/src'

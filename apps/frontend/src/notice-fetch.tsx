@@ -31,19 +31,21 @@ export function NoticeFetch({ me, blocked, close, refresh }: { me: Identity | nu
   const [month, setMonth] = useState(currentMonth);
   const [result, setResult] = useState<ReturnType<typeof readNoticeFetch>>();
   const initialMonth = useRef(month);
-  const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'notices' });
-  const closing = useDialogClose({ busy: action.busy || action.refreshing, dirty: !action.sent && month !== initialMonth.current, close, active: !blocked });
+  const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'notices', scopeKey: month });
+  const closing = useDialogClose({
+    busy: action.busy || action.refreshing, dirty: !action.sent && month !== initialMonth.current,
+    close: () => { action.cancelKick(); close(); }, active: !blocked,
+  });
   const validMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
 
-  async function run() {
+  function run() {
     if (!me || !validMonth) return;
-    const receipt = await action.run({
+    void action.run({
       path: '/api/m03/notices/fetch',
       payload: { year_month: month, expected_account: me.account },
-      http: { allow_kick: true },
       parse: value => readNoticeFetch(value, month),
+      onSuccess: setResult,
     });
-    if (receipt) setResult(receipt);
   }
 
   return <BusinessModal open={!blocked} className="project-dialog notice-result-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
@@ -55,7 +57,7 @@ export function NoticeFetch({ me, blocked, close, refresh }: { me: Identity | nu
       </>}
       {result && <I8FetchReceiptContents data={result} />}
       <I8FetchRecovery action={action} source="notices" />
-      <I8FetchActions action={action} close={closing.requestClose} canRun={validMonth} onRun={() => void run()} />
+      <I8FetchActions action={action} close={closing.requestClose} canRun={validMonth} onRun={run} />
     </DialogContents>
   </BusinessModal>;
 }

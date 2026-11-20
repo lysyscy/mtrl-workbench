@@ -88,6 +88,7 @@ def http_login(
     user: str | None = None,
     password: str | None = None,
     allow_kick: bool = False,
+    base_url: str | None = None,
 ) -> LoginResult:
     """登录 i8，返回 `LoginResult`（**成功时** `cookie` 可用）。
 
@@ -95,14 +96,17 @@ def http_login(
     ⚠️ **不重试**：失败直接返回，由人工决定要不要再来一次。
     """
     settings = get_settings()
-    base = i8_base_of(settings)
+    base = i8_base_of(settings) if base_url is None else base_url
     if not base:
         raise NotConfiguredError("I8_BASE_URL 未配置（见 .env.example）")
     user = (user or settings.i8_user or "").strip()
     if not user:
         raise NotConfiguredError("I8_USER 未配置（见 .env.example）")
     password = settings.i8_password if password is None else password
-    return login_at(base, user, password, encrypt=sm2_encrypt, allow_kick=allow_kick)
+    return login_at(
+        base, user, password, encrypt=sm2_encrypt, allow_kick=allow_kick,
+        follow_redirects=base_url is None,
+    )
 
 
 def login_at(base, user, password, *, encrypt, allow_kick=False, follow_redirects=True):

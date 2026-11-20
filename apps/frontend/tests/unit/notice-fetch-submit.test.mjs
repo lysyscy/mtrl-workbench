@@ -40,7 +40,13 @@ registerHooks({
           return [slot.value, next => { slot.value = typeof next === 'function' ? next(slot.value) : next; }];
         }
         export function useRef(initial) { const slot = cell(); if (!slot.set) { slot.set = true; slot.value = { current: initial }; } return slot.value; }
-        export function useEffect() {}
+        export function useEffect(effect, deps) {
+          const slot = cell();
+          if (slot.deps && deps.every((dep, index) => Object.is(dep, slot.deps[index]))) return;
+          slot.cleanup?.();
+          slot.deps = deps;
+          slot.cleanup = effect();
+        }
         export function useMemo(factory) { return factory(); }
         export function useCallback(fn) { return fn; }
       `);
@@ -57,7 +63,7 @@ registerHooks({
     if (specifier === './dialog-close') {
       return stub(`
         export function DialogContents(p) { return { type: 'wrapper', props: { children: p.children } }; }
-        export function useDialogClose() { return { requestClose() {} }; }
+        export function useDialogClose({close}) { return { requestClose: close }; }
       `);
     }
     if (specifier === './history') {
@@ -241,7 +247,8 @@ test('月份是正常值、直连方式：点「确认抓取」会真的发出 P
   assert.equal(calls[0].method, 'POST');
   assert.equal(calls[0].body.year_month, '2026-11', '发出去的月份必须就是界面上那个月');
   assert.equal(calls[0].body.session_mode, 'http');
-  assert.equal(calls[0].body.allow_kick, true, '直连方式保持产品原有的强踢授权语义');
+  assert.equal('allow_kick' in calls[0].body, false);
+  assert.equal('kick_token' in calls[0].body, false);
   assert.equal(calls[0].body.expected_account, 'tester001');
 });
 
@@ -273,3 +280,80 @@ test('月份不合法时不发请求（原来的正则回归守卫）', async ()
   await submit(tree);
   assert.equal(calls.length, 0, '不是 YYYY-MM 的月份必须当场停，不能发出去猜');
 });
+
+function conflictRecorder({ repeat = false, topLevel = false } = {}) {
+  const calls = [];
+  globalThis.fetch = async (path, init) => {
+    calls.push({path, body: JSON.parse(init.body)});
+    if (calls.length === 1 || repeat) {
+      const message = '该 i8 账号已有在线会话。请确认是否让现有会话下线并继续本次操作。';
+      const token = {kick_token: 'one-time-confirmation'};
+      return {ok: false, status: 409, json: async () => ({
+        code: 'i8_online_conflict', message, ...(topLevel ? token : {detail: token}),
+      })};
+    }
+    return response({year_month: calls.at(-1).body.year_month, fetched: 3, upserted: 3, ignored: []});
+  };
+  return calls;
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const actionsOf = tree => walk(tree, node => node.type === I8FetchActions)[0].props;
+const kickButton = (tree, label = '让现有会话下线并继续') =>
+  walk(I8FetchActions(actionsOf(tree)), node => node.props?.children === label)[0];
+
+test('在线冲突暂停，确认仅重发原请求一次并显示回执', async () => {
+  const calls = conflictRecorder();
+  confirmButton(render()).props.onClick();
+  await settle();
+  const prompting = render();
+  assert.equal(actionsOf(prompting).action.pending, false);
+  assert.equal(sessionStorage.getItem('i8-fetch-pending:notices:tester001'), null);
+  assert.match(actionsOf(prompting).action.kickMessage, /在线会话/);
+  assert.equal(calls.length, 1);
+  const confirm = kickButton(prompting);
+  confirm.props.onClick();
+  confirm.props.onClick();
+  await settle();
+  const completed = render();
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], {path: calls[0].path, body: {...calls[0].body, kick_token: 'one-time-confirmation'}});
+  assert.equal(actionsOf(completed).action.sent, true);
+  assert.ok(walk(completed, node => node.props?.data?.summary?.written === 3).length);
+  assert.equal(actionsOf(completed).action.kickMessage, '');
+});
+
+test('已确认请求再次冲突时显示错误，原确认不能重复提交', async () => {
+  const calls = conflictRecorder({repeat: true, topLevel: true});
+  confirmButton(render()).props.onClick();
+  await settle();
+  kickButton(render()).props.onClick();
+  await settle();
+  const {action} = actionsOf(render());
+  assert.equal(action.kickMessage, '');
+  assert.equal(action.pending, false);
+  assert.match(action.error, /在线会话/);
+  assert.equal(calls.length, 2);
+});
+
+for (const invalidation of ['cancel', 'month', 'mode', 'close']) {
+  test(`待确认的顶号会随 ${invalidation} 失效`, async () => {
+    const calls = conflictRecorder();
+    confirmButton(render()).props.onClick();
+    await settle();
+    const prompting = render();
+    const staleConfirm = kickButton(prompting);
+    if (invalidation === 'cancel') kickButton(prompting, '取消').props.onClick();
+    if (invalidation === 'month') {
+      const [picker] = walk(prompting, node => node.props?.label === '抓取月份');
+      cells.month = '2026-10';
+      picker.props.onChange(cells.month);
+    }
+    if (invalidation === 'mode') render({mode: 'browser', connected: true});
+    if (invalidation === 'close') prompting.props.requestClose();
+    assert.equal(actionsOf(render()).action.kickMessage, '');
+    staleConfirm.props.onClick();
+    await settle();
+    assert.equal(calls.length, 1);
+  });
+}

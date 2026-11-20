@@ -86,25 +86,19 @@ def fetch_notices(
     req: FetchRequest,
     executor: Callable[[str, bool], FetchResponse | tuple[int, int, list[dict]]] = Depends(get_fetch_executor),
 ) -> FetchResponse:
-    """按核算年月抓取（D4 最小取数）。
-
-    ⚠️ 登录含强踢（KillOnlineUser）：`allow_kick=False` 时若检测到在线冲突 ⇒ 直接失败、不踢人。
-    ⚠️ 抓取失败**不自动重试登录**（D9）。
-    ⭐（`TAIL-476`）`session_mode="browser"` 时把本次请求绑定到浏览器连接：
-       在 `relay_scope` 内执行器会拿到「复用浏览器会话」的客户端（**不登录、不缓存、不强踢**）；
-       缺连接 ⇒ 当场失败（⛔ 不静默退回直连）。`http`（默认）路径与改动前**逐字节一致**。
-    """
+    """按核算年月抓取，客户端由本次操作的会话策略决定。"""
     from app.core.identity import require_expected_account
-    from app.mod02_i8.browser_relay import MODE_BROWSER, relay_scope
+    from app.core.session import current_name
     from app.mod02_i8.fetch_task import build_fetch_params
+    from app.mod02_i8.session_policy import unified_i8_session
 
     require_expected_account(req.expected_account)
     build_fetch_params(req.year_month)
-    if req.session_mode == MODE_BROWSER:
-        with relay_scope(MODE_BROWSER, req.device_id):
-            result = executor(req.year_month, req.allow_kick)
-    else:
-        result = executor(req.year_month, req.allow_kick)
+    with unified_i8_session(
+        req, owner=current_name(), operation="m03.notices.fetch",
+        scope={"year_month": req.year_month}, require_explicit=True,
+    ):
+        result = executor(req.year_month, False)
     if isinstance(result, FetchResponse):
         return result
     fetched, upserted, ignored = result

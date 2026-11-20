@@ -18,12 +18,14 @@ from __future__ import annotations
 import json
 import threading
 from contextlib import contextmanager
-from typing import Any
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import httpx
 
 from app.core.config import get_settings, i8_base_of
-from app.core.errors import ExternalServiceError, NotConfiguredError
+from app.core.errors import ExternalServiceError, MustReportError, NotConfiguredError
 from app.core.identity import current_i8_credentials
 from app.core.logging import get_logger
 from app.mod02_i8 import cookie_store
@@ -64,6 +66,16 @@ class I8OnlineConflictError(ExternalServiceError):
     http_status = 409
 
 
+@dataclass(frozen=True)
+class HttpSessionPolicy:
+    base_url: str
+    credentials: tuple[str, str] = field(repr=False)
+    take_kick_permission: Callable[[], bool]
+
+
+http_session_policy: ContextVar[HttpSessionPolicy | None] = ContextVar("i8_http_session_policy", default=None)
+
+
 class I8Client:
     """持会话的 i8 客户端。
 
@@ -73,14 +85,15 @@ class I8Client:
     - 网络异常 ⇒ 直接抛（不重试）。
     """
 
-    def __init__(self, *, allow_kick: bool = False) -> None:
+    def __init__(self, *, allow_kick: bool = False, policy: HttpSessionPolicy | None = None) -> None:
         self._allow_kick = allow_kick
+        self._policy = policy
         self._cookie: str | None = None
         self._session: httpx.Client | None = None
         self._lock = threading.Lock()
         # ⭐ i8 凭据**惰性取**（`_creds()`）—— ⛔ 不在 `__init__` 里取：
         #   9 个生产构造点因此**一行都不用改**，而"用哪份凭据"这件事只有一个出口。
-        self._i8_creds: tuple[str, str] | None = None
+        self._i8_creds: tuple[str, str] | None = policy.credentials if policy else None
 
     def _creds(self) -> tuple[str, str]:
         """本次操作用哪个 i8 账号 ＋ 密码 —— ⭐ **当前登录用户绑定的那一份**（§7.8「每人一份」）。
@@ -100,8 +113,7 @@ class I8Client:
     # --- 内部 ---
     def _ensure_session(self) -> httpx.Client:
         if self._session is None:
-            settings = get_settings()
-            base = i8_base_of(settings)
+            base = self._policy.base_url if self._policy else i8_base_of(get_settings())
             if not base:
                 raise NotConfiguredError("I8_BASE_URL 未配置（见 .env.example）")
             self._session = httpx.Client(
@@ -111,7 +123,7 @@ class I8Client:
                     "User-Agent": "Mozilla/5.0",
                     "X-Requested-With": "XMLHttpRequest",
                 },
-                follow_redirects=True,
+                follow_redirects=self._policy is None,
             )
         return self._session
 
@@ -130,9 +142,14 @@ class I8Client:
 
     def _login(self) -> None:
         user, password = self._creds()
-        result = http_login(user=user, password=password, allow_kick=self._allow_kick)
+        if self._policy:
+            allow_kick = self._policy.take_kick_permission()
+            result = http_login(user=user, password=password, allow_kick=allow_kick, base_url=self._policy.base_url)
+        else:
+            allow_kick = self._allow_kick
+            result = http_login(user=user, password=password, allow_kick=allow_kick)
         if not result.ok:
-            if result.conflict and not self._allow_kick:
+            if result.conflict and not allow_kick:
                 raise I8OnlineConflictError("该 i8 账号已有在线会话，本次未强踢。请先退出其他会话，或重新确认并允许强踢。")
             raise ExternalServiceError(f"i8 登录失败：{result.detail}")
         self._cookie = result.cookie
@@ -173,6 +190,13 @@ class I8Client:
         """发请求；401 时重登一次重试；其余一律不重试。"""
         with self._lock:
             session = self._ensure_session()
+            if self._policy is not None:
+                target = httpx.URL(path)
+                base = session.base_url
+                if target.is_absolute_url and (
+                    target.scheme, target.host, target.port
+                ) != (base.scheme, base.host, base.port):
+                    raise MustReportError("i8 站点已变化，请重新发起本次操作。")
             if self._cookie is None:
                 self._ensure_cookie()
             self._apply_cookie()

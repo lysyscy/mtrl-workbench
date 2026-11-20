@@ -27,7 +27,7 @@ export interface I8SessionValue {
 }
 
 const EMPTY: I8SessionValue = {
-  mode: SESSION_MODE_HTTP, state: null, connected: false, maintaining: false, halted: false, busy: false, notice: '', extensionReady: false,
+  mode: SESSION_MODE_BROWSER, state: null, connected: false, maintaining: false, halted: false, busy: false, notice: '', extensionReady: false,
   selectMode: () => {}, connect: async () => {}, disconnect: async () => {}, refresh: async () => {}, readIdentity: async () => {},
 };
 const I8SessionContext = createContext<I8SessionValue>(EMPTY);

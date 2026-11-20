@@ -134,20 +134,17 @@ function modeStorageKey(owner: string | null | undefined): string {
 }
 
 /**
- * 本账号选择的取数方式。**只有用户显式选过「浏览器」才返回 browser**；
- * 没选过（老页面/老请求）一律 `http` ＝ 与改动前逐字节一致的产品直连行为。
+ * 本账号选择的取数方式。首次使用默认复用浏览器会话。
  *
  * @param owner 登录账号（`id:account`）；不给就退回到不带账号的旧键。
  */
 export function relayMode(owner?: string | null): SessionMode {
-  return sessionStorage.getItem(modeStorageKey(owner)) === SESSION_MODE_BROWSER ? SESSION_MODE_BROWSER : SESSION_MODE_HTTP;
+  return sessionStorage.getItem(modeStorageKey(owner)) === SESSION_MODE_HTTP ? SESSION_MODE_HTTP : SESSION_MODE_BROWSER;
 }
 
 /** 记录本账号的选择。选了浏览器就**一直停在浏览器**，⛔ 不会因为失败悄悄改回直连。 */
 export function setRelayMode(mode: SessionMode, owner?: string | null): void {
-  const key = modeStorageKey(owner);
-  if (mode === SESSION_MODE_BROWSER) sessionStorage.setItem(key, SESSION_MODE_BROWSER);
-  else sessionStorage.removeItem(key);
+  sessionStorage.setItem(modeStorageKey(owner), mode);
 }
 
 /** Only the connection preference survives reload; every document still gets a fresh device ID. */
@@ -283,7 +280,7 @@ const BROWSER_MISSING = '当前选的是「浏览器已有会话」，但浏览�
  * 七个取数入口共用的**窄助手**：只决定「会话来源」那几个字段，业务字段仍由调用方给。
  *
  * - `browser`：**连接不在就当场失败**（⛔ 不退回登录、也绝不带强踢授权）；
- * - `http`：原样保留调用方给的那几个授权字段（例如 `allow_kick`）。
+ * - `http`：保留调用方提供的会话字段（例如已确认的 `kick_token` 或旧入口的 `allow_kick`）。
  */
 export function sessionPayload(choice: SessionChoice, http: Record<string, unknown> = {}, base: Record<string, unknown> = {}): Record<string, unknown> {
   if (choice.mode === SESSION_MODE_BROWSER) {
