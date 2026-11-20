@@ -5,7 +5,7 @@
   · **§9.5**（导入幂等）。⚠️ **2026-09-22 用户裁定**：**「手动 Excel 导入」兜底已删** ——
    接口不可用 ⇒ **显式报错待人处理**（原因 + 请稍后重试），⛔ 不再指向手动导入（§3.6 降级口径作废）。
 - 《技术栈选型分析》**§9.8**（接口形态：起止年月四个独立值 · `xmid` · `reportName=null`）
-- 用户裁定 **D9**：**抓取一律手动**（无定时）· **失败不得自动重试登录** · 抓前确认业务范围，登录按界面主动操作策略允许强踢
+- 用户裁定 **D9**：**抓取一律手动**（无定时）· **失败不得自动重试登录** · 抓前确认业务范围
 
 ⛔ 本模块**不落「是否作废」**（`NG-06`）—— 由 `importer` 在解析阶段丢弃。
 
@@ -39,7 +39,7 @@ import logging
 from app.mod02_i8 import fetch_task, report_export, source_cache
 
 logger = logging.getLogger(__name__)
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record
@@ -105,11 +105,7 @@ def run_fetch(
     with session_scope() as s:
         ids = P1S.export_phids(s)
     operator = operator or current_operator()
-    # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（与改动前一致）；
-    #    只有本请求显式选了「浏览器已有会话」才换通道，⛔ 缺连接即当场停、不悄悄退回登录。
-    client_factory = client_factory or (
-        lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
-    )
+    client_factory = client_factory or (lambda: open_i8_client(owner=current_name()))
     export = export or (lambda c, ym, ids_: report_export.export(
         c, spec_key=SPEC_KEY, year_month=ym, proj_ids=ids_))
 
@@ -131,7 +127,7 @@ def run_fetch(
             except OSError as cache_exc:           # 「含透视导出」只读这份缓存（⛔ 不再现场登 i8）。
                 logger.warning("i8 源文件存档失败（不影响抓取）：%s", cache_exc)
             rows = importer.parse_rows(content)
-        except StrictSessionStopped:
+        except (StrictSessionStopped, I8OnlineConflictError):
             # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
             #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
             raise

@@ -324,7 +324,7 @@ def test_二次确认且失败降级不重试():
     s = FakeSession({})
     with pytest.raises(MustReportError) as exc:
         _run_fetch(s, year_month="2026-08", confirmed=False, operator="测试")
-    assert "强踢" in str(exc.value)                            # 明写会强踢（D9）
+    assert "另行确认是否让现有会话下线" in str(exc.value)
     assert not s.by_model.get(RunRecord), "用法错误**不该**写执行记录"
 
     from app.mod01_projects.models import Project

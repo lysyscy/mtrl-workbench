@@ -147,9 +147,8 @@ def preview_payload(lists, projects, previous=None):
             'scope': '第四工程公司权限内全部项目', 'counts': {k: v['total'] for k, v in lists.items()}}
 
 
-def read_preview(projects, previous=None, *, allow_kick=False):
-    # ⚠️ 统一工厂：默认仍是原 `I8Client`；显式选了浏览器方式但连接不在 ⇒ 当场停，⛔ 不退回登录。
-    client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+def read_preview(projects, previous=None):
+    client = open_i8_client(owner=current_name())
     try:
         return preview_payload(fetch_lists(client), projects, previous)
     finally:

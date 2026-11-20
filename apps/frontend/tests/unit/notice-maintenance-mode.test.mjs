@@ -7,7 +7,7 @@
  *
  * 覆盖：
  *   1. 选了浏览器方式且已连接 ⇒ `session_mode=browser` + 本页 `device_id`，⛔ 不带强踢；
- *   2. 选了直连 ⇒ `session_mode=http` + 原来的 `allow_kick=true` 逐字节不变；
+ *   2. 选了直连 ⇒ `session_mode=http`，仅在用户确认后用令牌重发原查询；
  *   3. 选了浏览器方式但连接不在 ⇒ 按钮禁用、**零请求**（⛔ 不退回登录）。
  *
  * 运行：`node --import=tsx --test tests/unit/notice-maintenance-mode.test.mjs`
@@ -36,7 +36,21 @@ registerHooks({
         }
         export function useRef(initial) { const slot = cell(); if (!slot.set) { slot.set = true; slot.value = { current: initial }; } return slot.value; }
         export function useEffect() {}
-        export function useMemo(factory) { return factory(); }
+        function changed(slot, deps) {
+          if (slot.deps && deps.every((dep, i) => Object.is(dep, slot.deps[i]))) return false;
+          slot.deps = deps;
+          return true;
+        }
+        export function useLayoutEffect(effect, deps) {
+          const slot = cell();
+          if (changed(slot, deps)) { slot.cleanup?.(); slot.cleanup = effect(); }
+        }
+        export function useId() { return 'test-id'; }
+        export function useMemo(factory, deps) {
+          const slot = cell();
+          if (changed(slot, deps)) slot.value = factory();
+          return slot.value;
+        }
         export function useCallback(fn) { return fn; }
       `);
     }
@@ -132,10 +146,15 @@ function warehouseButton(mode, connected) {
   return button;
 }
 
-function recorder() {
+function recorder(conflict = false) {
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     calls.push({ url, method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
+    if (conflict && calls.length === 1) {
+      return { status: 409, ok: false, json: async () => ({
+        code: 'i8_online_conflict', message: '请确认是否让现有会话下线。', detail: {kick_token: 'warehouse-confirmation'},
+      }) };
+    }
     return { status: 200, ok: true, headers: { get: () => 'application/json' }, json: async () => ({ found: true, degraded: false, message: '已取到名单', from_cache: false, cached_at: '', owners: ['第四工程公司'] }) };
   };
   return calls;
@@ -161,14 +180,29 @@ test('仓库名单：选了浏览器方式且已连接 ⇒ 带 session_mode=brow
   assert.equal('allow_kick' in calls[0].body, false, '浏览器方式不得请求强踢');
 });
 
-test('仓库名单：选了直连 ⇒ session_mode=http 且保留原来的强踢授权', async () => {
-  const calls = recorder();
+test('仓库名单直连：在线冲突后，仅确认一次才重发原查询', async () => {
+  const calls = recorder(true);
   await click(warehouseButton('http', false));
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].body.session_mode, 'http');
-  assert.equal(calls[0].body.allow_kick, true, '直连保持改动前的授权语义');
-  assert.equal(calls[0].body.warehouse_name, '新建仓库A');
-  assert.equal('device_id' in calls[0].body, false);
+  assert.deepEqual(calls[0].body, {session_mode: 'http', warehouse_name: '新建仓库A'});
+  const [confirm] = walk(render('http', false), node => node.props?.children === '让现有会话下线并继续');
+  assert.ok(confirm);
+  await click(confirm);
+  await click(confirm);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1].body, {...calls[0].body, kick_token: 'warehouse-confirmation'});
+});
+
+test('仓库名变化后原下线确认失效', async () => {
+  const calls = recorder(true);
+  await click(warehouseButton('http', false));
+  const tree = render('http', false);
+  const [confirm] = walk(tree, node => node.props?.children === '让现有会话下线并继续');
+  const [label] = walk(tree, node => node.type === 'label' && node.props.children[0] === '新小微仓库名');
+  label.props.children[1].props.onChange({ target: { value: '新建仓库B' } });
+  assert.equal(walk(render('http', false), node => node.props?.children === '让现有会话下线并继续').length, 0);
+  await click(confirm);
+  assert.equal(calls.length, 1);
 });
 
 test('仓库名单：选了浏览器方式但连接不在 ⇒ 按钮禁用、零请求（⛔ 不退回登录）', async () => {

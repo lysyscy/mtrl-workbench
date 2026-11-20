@@ -77,9 +77,9 @@ def test_stale_account_is_rejected_before_any_execution(monkeypatch):
     with pytest.raises(DataConflictError):
         fetch_notices(FetchRequest(year_month='2026-01', expected_account='old-account'), executor=forbidden)
     with pytest.raises(DataConflictError):
-        router.sync_warehouses(allow_kick=False, rows_loader=forbidden, expected_account='old-account')
+        router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=forbidden, expected_account='old-account')
     with pytest.raises(DataConflictError):
-        router.sync_common_projects(allow_kick=False, rows_loader=forbidden, wh_loader=forbidden, expected_account='old-account')
+        router.sync_common_projects(session_mode="browser", device_id="test", rows_loader=forbidden, wh_loader=forbidden, expected_account='old-account')
     require_expected_account(None)
     with pytest.raises(MustReportError):
         fetch_notices(FetchRequest(year_month='2026'), executor=forbidden)
@@ -111,7 +111,7 @@ def test_failed_zero_row_sync_is_not_recorded_as_success(rollback_db):
     assert fetch_record_payload(object_desc='仓库列表', success=0, fail=0)['status'] == 'success'
     def unavailable(*args):
         raise ExternalServiceError('fixed failure')
-    result = router.sync_warehouses(allow_kick=False, rows_loader=unavailable, expected_account=None)
+    result = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=unavailable, expected_account=None)
     assert result.degraded is True
     with db.session_scope() as s:
         row = s.scalar(select(RunRecord).where(RunRecord.target == '仓库列表').order_by(RunRecord.id.desc()))

@@ -37,7 +37,7 @@ def _stub(rows=ROWS, *, seen=None):
 
 def _call(name, rows=ROWS, allow_kick=False, seen=None):
     return m03r.warehouse_check(
-        WarehouseCheckRequest(warehouse_name=name, allow_kick=allow_kick),
+        WarehouseCheckRequest(warehouse_name=name, session_mode="browser", device_id="test", allow_kick=allow_kick),
         wh_loader=_stub(rows, seen=seen),
     )
 
@@ -99,7 +99,7 @@ def test_取不到名单必须降级且不许说成没有(monkeypatch, tmp_path)
     def boom(allow_kick=False, client=None):
         raise RuntimeError("i8 登录失败")
 
-    bad = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="沭阳仓库"), wh_loader=boom)
+    bad = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="沭阳仓库", session_mode="browser", device_id="test"), wh_loader=boom)
     assert bad.degraded is True and bad.found is False
     assert "不等于" in bad.message and "没查到" in bad.message, f"要把两件事分开说：{bad.message}"
 
@@ -117,14 +117,14 @@ def test_取不到名单但有上次缓存时用缓存并说清是几点的(monk
     def boom(allow_kick=False, client=None):
         raise RuntimeError("i8 登录失败")
 
-    hit = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="沭阳仓库"), wh_loader=boom)
+    hit = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="沭阳仓库", session_mode="browser", device_id="test"), wh_loader=boom)
     assert hit.from_cache is True and hit.found is True and len(hit.owners) == 2
     assert hit.cached_at, "必须带出缓存的抓取时间"
     assert "没取到" in hit.message and hit.cached_at in hit.message, \
         f"要说清这次没抓到、用的是几点的缓存：{hit.message}"
     assert hit.degraded is False, "有上次名单可用 ⇒ 不该算「完全没结果」（但来源已如实说明）"
 
-    miss = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="不存在的仓库"), wh_loader=boom)
+    miss = m03r.warehouse_check(WarehouseCheckRequest(warehouse_name="不存在的仓库", session_mode="browser", device_id="test"), wh_loader=boom)
     assert miss.from_cache is True and miss.found is False and "没有" in miss.message
 
 
@@ -151,13 +151,8 @@ def test_端点只读且判定走唯一出口():
     assert "i8_warehouse_lookup(" in src, "判定要走唯一出口"
 
 
-def test_强踢授权默认关且原样透传():
-    """`D9`：查名单**要登录 i8**、可能**强踢**在线用户 ⇒ `allow_kick` **默认 False**，
-    且用户显式授权时**原样**传给取数件（⛔ 不许壳里悄悄替用户打开）。"""
-    assert WarehouseCheckRequest(warehouse_name="x").allow_kick is False, "默认必须是关的"
+def test_仓库核查忽略旧顶号字段():
     seen: list[bool] = []
     _call("沭阳仓库", allow_kick=True, seen=seen)
-    assert seen == [True], "显式授权要原样传下去"
-    seen2: list[bool] = []
-    _call("沭阳仓库", seen=seen2)
-    assert seen2 == [False], "不给就是不给（⛔ 别默认踢人）"
+    _call("沭阳仓库", seen=seen)
+    assert seen == [False, False]

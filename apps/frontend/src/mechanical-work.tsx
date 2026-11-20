@@ -11,7 +11,7 @@ import { detailSum, historyInitialization, mechanicalMoney as money, readI8Previ
 import type { Workbench, Relation, SourceRow, Discovery, Matter, I8Preview, HistoryBase, HistoryBaseDraft } from './mechanical-api';
 import { useHistoryGuard } from './history';
 import { ReadGrid } from './business-grid';
-import { I8FetchStatus, useI8FetchAction } from './i8-fetch';
+import { I8FetchActions, I8FetchStatus, useI8FetchAction } from './i8-fetch';
 import { numberColumnWidth, textWidth } from './grid';
 import { EllipsisText } from './grid-text';
 import type { ColDef,ColGroupDef } from 'ag-grid-community';
@@ -75,12 +75,13 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
   const lock=useRef(false),mounted=useRef(true);
   const scopeKey=JSON.stringify(warehouses),currentScope=useRef(scopeKey);currentScope.current=scopeKey;
   const fetchRefreshed=useRef(false);
-  const fetchAction=useI8FetchAction({me,paused,source:'mechanical',refresh:async()=>{
+  const fetchAction=useI8FetchAction({me,paused,source:'mechanical',scopeKey,refresh:async()=>{
     fetchRefreshed.current=await refresh();
     if(!fetchRefreshed.current)throw new Error('未能重读机械费核对数据。');
   }});
-  const blocked=busy||working;
+  const blocked=busy||working||fetchAction.busy;
   const fetchBlocked=!writable||blocked||fetchAction.unavailable;
+  function closeFetch(){fetchAction.cancelKick();setDialog(null);}
   useHistoryGuard('mechanical-history-base',()=>working?'累计起点正在保存，请稍候。':historyDirty?'请先处理累计起点未保存的修改。':'');
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{setDialog(null);setPreview(null);setSelected([]);setFeedback('');},[scopeKey]);
@@ -117,7 +118,7 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
     void commit(()=>post('ignore',{warehouse:row.warehouse,relation:row.relation,revision:row.revision,raw:row.raw,i8_revision:row.i8_revision,undo}),undo?'已恢复差额提醒。':'已留底忽略金额，以后只提示新增差额。');
   }
   async function fetchPreview(wh='') {
-    if(fetchBlocked||lock.current)return;
+    if(fetchBlocked||fetchAction.kickMessage||lock.current)return;
     // Explicitly obtaining another preview does not adopt it or retry automatically.
     // A previous preview may still finish; domain revisions continue to guard adoption.
     lock.current=true;setWorking(true);const scope=scopeKey;
@@ -126,14 +127,15 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
       setFeedback('');
       if(fetchAction.pending)fetchAction.acknowledge();
       fetchRefreshed.current=false;
-      const result=await fetchAction.run({
+      await fetchAction.run({
         path:'/api/m06/workbench/i8-fetch',
         payload:{request_id:randomUUID()},
-        http:{allow_kick:true},
         parse:readI8Preview,
+        onSuccess: result => {
+          if(!fetchRefreshed.current||!mounted.current||currentScope.current!==scope)return;
+          setPreview(result);setSelected(result.projects.filter(p=>p.complete&&(!wh||p.warehouse===wh)).map(p=>p.warehouse));
+        },
       });
-      if(!result||!fetchRefreshed.current||!mounted.current||currentScope.current!==scope)return;
-      setPreview(result);setSelected(result.projects.filter(p=>p.complete&&(!wh||p.warehouse===wh)).map(p=>p.warehouse));
     });}finally{lock.current=false;if(mounted.current)setWorking(false);}
   }
   function table(items:string[]) {
@@ -174,8 +176,10 @@ export function MechanicalWork({ me, data, warehouses, label, writable, busy, pa
     ]}/></section>}
     {table(rows)}{normal.length>0&&<ReconciledDetails count={normal.length}>{table(normal)}</ReconciledDetails>}
     {feedback&&!dialog&&<p className={'notice'+(feedbackKind==='success'?' mechanical-success':'')} role={feedbackKind==='success'?'status':'alert'}>{feedback}</p>}
-    <DialogPresence>{dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='initialize'?'mechanical-history-base-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='initialize'?'补齐累计起点，'+label(warehouse):dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} dirty={historyDirty} paused={paused} close={()=>setDialog(null)}>{requestClose=><>
-      {dialog==='fetch'&&(!preview?<>{fetchStatus}{!blocked&&<p>本次未取得可采用的预览。</p>}<footer><Button disabled={blocked} onClick={()=>setDialog(null)}>关闭</Button>{!blocked&&<Button disabled={fetchBlocked} onClick={()=>void fetchPreview(warehouse)}>重新获取预览</Button>}</footer></>:<>
+    <DialogPresence>{dialog&&<MechanicalDialog className={dialog==='fetch'?'mechanical-i8-dialog':dialog==='initialize'?'mechanical-history-base-dialog':dialog==='edit'||dialog==='discovery'?'mechanical-note-dialog':''} title={dialog==='fetch'?(warehouse?'更新本项目i8累计':'抓取 i8，累计变化核对'):dialog==='history'?'i6历史数据':dialog==='initialize'?'补齐累计起点，'+label(warehouse):dialog==='matters'?'跟进事项，'+label(warehouse):dialog==='edit'?(matter.id?'处理跟进事项':'新增跟进事项'):'取数变化，'+(discovery?.warehouse?label(discovery.warehouse):discovery?.projectName||discovery?.projectId||'')} busy={blocked} dirty={historyDirty} paused={paused} close={dialog==='fetch'?closeFetch:()=>setDialog(null)}>{requestClose=><>
+      {dialog==='fetch'&&(!preview?<>{fetchStatus}{fetchAction.kickMessage
+        ? <I8FetchActions action={{...fetchAction, confirmKick:()=>operate(fetchAction.confirmKick)}} close={closeFetch} canRun={!fetchBlocked} onRun={()=>void fetchPreview(warehouse)} />
+        : <>{!blocked&&<p>本次未取得可采用的预览。</p>}<footer><Button disabled={blocked} onClick={closeFetch}>关闭</Button>{!blocked&&<Button disabled={fetchBlocked} onClick={()=>void fetchPreview(warehouse)}>重新获取预览</Button>}</footer></>}</>:<>
         <p>已读取班组使用 {preview.counts.usage} 条、项目结算 {preview.counts.project} 条、班组消耗 {preview.counts.team} 条。确认只更新勾选项目。</p>
         <AdoptionSelection.Provider value={{selected,disabled:!writable||blocked,label,toggle:(warehouse,checked)=>setSelected(previous=>checked?[...new Set([...previous,warehouse])]:previous.filter(wh=>wh!==warehouse))}}><ReadGrid table="mechanical-i8-review" className="mechanical-work-table mechanical-i8-review" label="i8累计采用预览" domLayout="autoHeight" rows={reviewProjects} rowId={p=>p.warehouse} columns={[
       {colId:'pick',headerName:'采用',minWidth:60,maxWidth:80,cellRenderer:AdoptionCheckbox},

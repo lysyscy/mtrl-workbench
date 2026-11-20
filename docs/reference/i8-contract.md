@@ -19,20 +19,17 @@
 
 ### 界面主动操作与登录策略
 
-用户2026-10-28决定：本系统界面内由用户主动发起的 i8 操作默认允许强踢已有在线会话，不能仅因该账号已登录就禁止抓取。本决定替代此前界面内强踢另行确认的要求；保留操作处的会话下线提示及业务操作自身的范围确认、预览、选择采用、金额减少确认和权限保护。
+工作台默认选择浏览器已有会话。已接入统一会话策略的业务入口要求显式传 `session_mode`（`browser` 或 `http`），浏览器模式还需传当前页面的 `device_id`。浏览器连接、站点或登录态异常时结束当前操作。工作台直连先复用本人账号隔离的 Cookie。i8 返回在线冲突时，工作台返回 `409 i8_online_conflict` 与一次性 `kick_token`。用户确认下线后用该令牌重发同一操作。令牌绑定工作台身份、i8 站点、账号、操作和范围，120 秒内只可消费一次。旧请求中的 `allow_kick` 字段不授权下线。
 
-有 `allow_kick` 的通用接口由界面显式传 `true`，省略仍为 `false`；`I8Client`、HTTP登录与通用取数函数的默认值保持关闭，脚本调用按自身授权选择。当前界面调用包括：
-
-| 界面动作 | 调用与策略 |
+| 界面动作 | 工作台入口与业务条件 |
 |---|---|
-| 项目档案同步仓库/常用项目 | `POST /api/m02/sync/{warehouses,common-projects}`，query传 `allow_kick=true` |
-| 通知书按月抓取/新小微仓库查询 | `POST /api/m03/notices/{fetch,warehouse-check}`，body传 `allow_kick=true` |
-| 一键关联集采合同的预览/确认 | `POST /api/m11/{auto-link-preview,auto-link}`，body传 `allow_kick=true`；只预览不写关联，确认时重新核来源 |
-| 机械费抓取/单项目更新 i8 | 共用 `POST /api/m06/workbench/i8-fetch`，body传布尔 `allow_kick=true`；省略关闭，读取后仍须选择采用 |
-| 库存、收发结存、采购合同抓取 | `POST /api/m08/fetch`、`/api/m07/fetch`、`/api/m11/fetch`，既有抓取服务显式允许强踢，保留抓取范围确认 |
-| 通知书打印/导出 PDF | `POST /api/m03/batch` 的既有执行器显式允许强踢 |
+| 项目档案同步仓库及常用项目 | `POST /api/m02/sync/{warehouses,common-projects}`，会话字段可用 query 或 JSON body，保留 query 的 `expected_account` |
+| 通知书按月取数及新小微仓库查询 | `POST /api/m03/notices/{fetch,warehouse-check}`、`POST /api/m02/fetch/{preview,run}`，按原有范围查询或写入 |
+| 一键关联集采合同 | `POST /api/m11/{auto-link-preview,auto-link}`，预览只读，确认时重新核对采购应付来源 |
+| 机械费抓取及单项目更新 i8 | `POST /api/m06/workbench/i8-fetch`，取回预览后须选择采用 |
+| 收发结存、库存及采购合同抓取 | `POST /api/m07/fetch`、`POST /api/m08/fetch`、`POST /api/m11/fetch`，保留业务范围确认 |
 
-上述策略也适用于保留作回退的旧壳入口；i8接入层的配置/执行记录和本地Excel导出只读本地结果，不因此登录i8。先复用本人账号隔离的Cookie缓存；真正需要登录时才可能强踢。登录失败直接报错，不循环登录或自动重跑抓取；已建立会话失效时仍保留既有至多一次重新登录并重发该请求的恢复。有效空响应的单次复核沿各接口已有契约，不扩为登录失败重试。
+通知书打印及导出 PDF 的会话策略由 TAIL-506 迁移。通用 i8 客户端与独立脚本沿各自授权执行。i8 配置、执行记录与本地 Excel 导出读取工作台本地结果。HTTP 登录失败后直接报错，会话失效时沿既有规则允许至多一次重新登录及重发当前 i8 请求。有效空响应的单次复核沿各接口既有契约。
 
 ## 抓取回执
 
@@ -53,11 +50,11 @@
 
 - 会话留在浏览器里：扩展不读 Cookie、不用 `debugger`、不开远程调试端口；HttpOnly Cookie 由浏览器自动携带（已在隔离 Chromium 里固化为样机判据）。
 - 扩展是**无状态搬运工**：不接受任意 URL / 方法 / 头，只执行 broker 分配的票。
-- 通道只在**用户显式选择**「浏览器已有会话」时生效；缺省与其它的旧请求仍是产品原有 HTTP 直连。
+- 前端默认选择「浏览器已有会话」，并把明确的选择随业务请求发给工作台。缺少或无效的选择会被拒绝。
 
 ### 与既有 HTTP 模式的关系
 
-- **两套策略并存、互不回退**：HTTP 模式（含既有的至多一次重新登录、`allow_kick` 强踢授权、"先复用本人账号隔离的 Cookie 缓存"）保持；浏览器模式下站点不符或会话失效就停止。
+- **两套策略并存、互不回退**：HTTP 模式先复用本人账号的 Cookie，在线冲突遵循上面的单次确认流程；浏览器模式下站点不符或会话失效就停止。
 - 浏览器模式下 `I8Client` 的重登与强踢路径**结构上不可达**：子类 `_login()` 直接抛 `StrictSessionEnded` 并计数，`_ensure_cookie()` 不碰产品会话缓存 ⇒ 不会登录、不会顶掉在线会话、不写 `cookie_store`。
 - 浏览器模式连不上就失败（`i8_browser_relay_unavailable`），⛔ 绝不静默改走登录。
 

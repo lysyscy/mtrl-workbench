@@ -26,7 +26,7 @@ def test_preview_confirm_recheck_and_existing_link(rollback_db, monkeypatch):
         S.act_link_notice(s,notice_id=ids[1],contract_id=oldid)
     monkeypatch.setattr(api,'_read_payables',lambda **kw:[source()])
     app=FastAPI(); app.include_router(api.router); client=TestClient(app)
-    data=client.post('/api/m11/auto-link-preview',json={'notice_ids':ids}).json()
+    data=client.post('/api/m11/auto-link-preview',json={'notice_ids':ids, 'session_mode':'browser', 'device_id':'test'}).json()
     assert data['ready']==1
     ready=[r for r in data['rows'] if r['contract_id']]
     assert ready[0]['contract_id']==cid
@@ -34,7 +34,7 @@ def test_preview_confirm_recheck_and_existing_link(rollback_db, monkeypatch):
         assert R.payment_of_notice(s,ids[0]) is None
         ambiguous=S.auto_link_plan(s,[ids[0]],[source(),source('CGHT2')]); assert ambiguous['ready']==0
     # A changed amount/source after preview must not cause an unexpected association.
-    body={'notice_ids':ids,'selections':[{k:r[k] for k in ('notice_id','contract_id','amount','payable_codes')} for r in ready]}
+    body={'notice_ids':ids,'session_mode':'browser','device_id':'test','selections':[{k:r[k] for k in ('notice_id','contract_id','amount','payable_codes')} for r in ready]}
     monkeypatch.setattr(api,'_read_payables',lambda **kw:[source(amount='100.02')])
     assert client.post('/api/m11/auto-link',json=body).json()['linked']==0
     monkeypatch.setattr(api,'_read_payables',lambda **kw:[source()])

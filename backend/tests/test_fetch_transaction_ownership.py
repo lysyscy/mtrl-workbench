@@ -102,7 +102,9 @@ def test_fetch_releases_connection_and_actor_lock_until_atomic_apply(domain, mon
     monkeypatch.setattr(fetch, 'save_run_record', record)
     token, state = history.begin_request(actor, 'POST', '/api/450/fetch')
     try:
-        result = api_fetch(FetchIn(confirm=True) if domain == 'jc' else FetchRequest(month='2026-08', confirm=True))
+        session = {'session_mode': 'browser', 'device_id': 'test'}
+        result = api_fetch(FetchIn(confirm=True, **session) if domain == 'jc'
+                           else FetchRequest(month='2026-08', confirm=True, **session))
         assert result['ok'] is True
         assert result['matched'] == 1 if domain == 'jc' else result['rows'] == 1
         assert state.root is None and state.result == 'unsupported'
@@ -114,9 +116,8 @@ def test_fetch_releases_connection_and_actor_lock_until_atomic_apply(domain, mon
     with db.session_scope() as session:
         assert session.get(RunRecord, result['run_record_id']) is not None
         operations = session.scalars(select(OperationHistory).where(OperationHistory.actor == actor_key(actor))).all()
-        assert len(operations) == 2
-        assert session.get(OperationHistory, prior_id).state == 'discarded'
-        assert len([op for op in operations if op.state == 'barrier']) == 1
+        assert [op.state for op in operations] == ['barrier']
+        assert session.get(OperationHistory, prior_id) is None
 
 
 @pytest.mark.parametrize('initially_ignored', [False, True])

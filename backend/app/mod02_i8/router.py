@@ -7,25 +7,26 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Callable
+from typing import Annotated, Callable
 
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy import select
 
 from app.core.db import session_scope
+from app.core.identity import require_expected_account
+from app.core.session import current_name
 from app.mod02_i8 import browser_broker, wh_cache
 from app.mod02_i8.browser_relay import (
     MODE_BROWSER,
     MODE_HTTP,
     expected_org_id,
     open_i8_client,
-    scope_of,
 )
 from app.mod02_i8.browser_session import (
     StrictSessionStopped,
     StrictTargetMismatch,
 )
-from app.mod02_i8.client import I8Client
+from app.mod02_i8.client import I8Client, I8OnlineConflictError
 from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.fetch_task import (
     CONFIRM_CLOSES_DIALOG,
@@ -52,7 +53,9 @@ from app.mod02_i8.schemas import (
     FetchRunRequest,
     RunRecordOut,
     SyncOut,
+    SyncSessionRequest,
 )
+from app.mod02_i8.session_policy import unified_i8_session
 from app.mod02_i8.sources import CommonProjectSource, WarehouseSource
 
 router = APIRouter(prefix="/api/m02", tags=["mod02"])
@@ -61,31 +64,18 @@ router = APIRouter(prefix="/api/m02", tags=["mod02"])
 # --------------------------------------------------------------- 依赖（可注入）
 
 
-def _own_client(allow_kick: bool) -> I8Client:
-    """自建客户端（没有调用方传入可复用的 `client` 时）。
-
-    ⭐ 一律走 `open_i8_client()` 工厂：`http`（默认）⇒ 产品原有 `I8Client`，行为不变；
-       `browser` ⇒ 严格复用客户端，连接不在就**当场停**——⛔ 绝不在这里悄悄回落去登录，
-       否则「用浏览器已有会话」在仓库/常用项目这两个口子上会变成"看起来生效、实际在顶号"。
-    ⚠️ `owner` 取服务端认证身份 `current_name()`，⛔ 不接受客户端声明。
-    """
+def _own_client() -> I8Client:
+    """自建客户端时使用当前操作绑定的会话策略。"""
     from app.core.session import current_name
 
-    return open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+    return open_i8_client(owner=current_name())
 
 
 def get_notice_rows() -> Callable[[str, bool], list[dict]]:
-    """付款通知书取数（`API-01`）。测试可覆盖。
+    """付款通知书取数（API-01）。测试可覆盖。"""
 
-    ⭐ 客户端走 `open_i8_client()` 工厂：默认仍是**产品原有** `I8Client`（缓存 / 单次重登策略不变）；
-       只有当前请求显式选了「用浏览器已有会话」时才换成严格复用客户端。
-       ⚠️ `owner` 取**服务端认证身份** `current_name()`，⛔ 不接受客户端声明。
-    """
-
-    def _fetch(year_month: str, allow_kick: bool) -> list[dict]:
-        from app.core.session import current_name
-
-        client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+    def _fetch(year_month: str, _allow_kick: bool) -> list[dict]:
+        client = _own_client()
         try:
             return NoticeFetcher(client).fetch_month(year_month)
         finally:
@@ -95,7 +85,7 @@ def get_notice_rows() -> Callable[[str, bool], list[dict]]:
 
 
 def get_warehouse_rows() -> Callable[..., list[dict]]:
-    """仓库名单取数（`API-05`）。通用 `allow_kick` 默认 `False`，界面主动操作显式传 `True`。
+    """仓库名单取数（`API-05`）。
 
     ⭐ 传入 `client` ⇒ **复用该会话**（不新建、不关闭）：让「抓一次」只登录一次
        （抓取链路要顺带取名单来建档，见 `TAIL-29`-③；⛔ 否则一次抓取会登录 3 次 = 顶号 3 次）。
@@ -103,7 +93,7 @@ def get_warehouse_rows() -> Callable[..., list[dict]]:
 
     def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
         own = client is None
-        c = client if client is not None else _own_client(allow_kick)
+        c = client if client is not None else _own_client()
         try:
             rows = WarehouseSource(c).fetch()
         finally:
@@ -127,7 +117,7 @@ def get_common_project_rows() -> Callable[..., list[dict]]:
 
     def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
         own = client is None
-        c = client if client is not None else _own_client(allow_kick)
+        c = client if client is not None else _own_client()
         try:
             return CommonProjectSource(c).fetch()
         finally:
@@ -339,10 +329,11 @@ def fetch_preview(
     params = build_fetch_params(req.year_month)
     echo = echo_params(params)
     # ⚠️ 取数方式在**整个取数过程**内有效：同一请求里的登录/重登判断与后续 i8 调用走同一通道。
-    with scope_of(req):
+    with unified_i8_session(req, owner=current_name(), operation="m02.fetch.preview",
+                            scope={"year_month": req.year_month}, require_explicit=True):
         try:
-            rows = rows_loader(req.year_month, req.allow_kick)
-        except StrictSessionStopped:
+            rows = rows_loader(req.year_month, False)
+        except (StrictSessionStopped, I8OnlineConflictError):
             # ⛔（`TAIL-476`）浏览器方式下的停止**不降级成"可以去手动导 Excel"**：
             #    用户点的是"用浏览器里那个会话"，真实原因是连接不在/站点不符/会话失效，
             #    而"i8 抓不到数 ⇒ 请手动导 Excel"既不真、也让人以为该去导表。
@@ -370,64 +361,74 @@ def fetch_run(
 ) -> FetchRunOut:
     """**手动触发**抓取（001-05）；每次抓取**留一条执行记录**（001-07）。
 
-    `allow_kick=True` 允许登录时退出该账号其他在线会话，界面主动操作显式传入。
     ⚠️ 失败**不自动重试登录**（D9）；接口不可用 ⇒ **降级为手动 Excel 导入并显式说明**（001-06）。
     """
     target = f"付款通知书 {req.year_month}"
     t0 = datetime.now()          # ⚠️ 见 `create_run_record`：动作**开始前**取时刻，否则耗时恒 0
-    try:
-        with scope_of(req):
-            rows = rows_loader(req.year_month, req.allow_kick)
-    except StrictSessionStopped as exc:
-        # ⛔（`TAIL-476`）严格通道的停止：**仍要留失败执行记录**（001-07），
-        #    但给用户的说明必须是真实原因，⛔ 不能改口成"已降级为手动 Excel 导入"。
-        _persist_fetch(
-            payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc)),
-            started=t0,
-        )
-        raise
-    except Exception as exc:  # noqa: BLE001
-        info = degrade_to_excel(exc)
-        _persist_fetch(
-            payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc)),
-            started=t0,
-        )
-        return FetchRunOut(
-            year_month=req.year_month, fetched=0, status="failed", degraded=True, message=info["message"]
-        )
+    with unified_i8_session(req, owner=current_name(), operation="m02.fetch.run",
+                            scope={"year_month": req.year_month}, require_explicit=True):
+        try:
+            rows = rows_loader(req.year_month, False)
+        except I8OnlineConflictError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _persist_fetch(
+                payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc)),
+                started=t0,
+            )
+            if isinstance(exc, StrictSessionStopped):
+                raise
+            info = degrade_to_excel(exc)
+            return FetchRunOut(
+                year_month=req.year_month, status="failed", degraded=True, message=info["message"]
+            )
     _persist_fetch(payload=fetch_record_payload(object_desc=target, success=len(rows), fail=0),
                    started=t0)
     return FetchRunOut(year_month=req.year_month, fetched=len(rows), status="success")
 
 
+def _sync_session_payload(
+    payload: SyncSessionRequest | None,
+    session_mode: str | None,
+    device_id: str | None,
+    kick_token: str | None,
+) -> dict:
+    fields = (payload or SyncSessionRequest()).model_dump()
+    query = {"session_mode": session_mode, "device_id": device_id, "kick_token": kick_token}
+    return {**fields, **{key: value for key, value in query.items() if value is not None}}
+
+
 @router.post("/sync/warehouses", response_model=SyncOut)
 def sync_warehouses(
-    allow_kick: bool = Query(False, description="界面主动同步传 true；省略时不强踢在线会话"),
     rows_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
-    expected_account: str | None = Query(None),
-    session_mode: str = Query("", description="http（缺省）＝直连；browser＝浏览器已有会话"),
-    device_id: str = Query("", description="浏览器方式必传：本页面的连接标识"),
+    expected_account: Annotated[str | None, Query()] = None,
+    allow_kick: Annotated[bool, Query(deprecated=True, description="旧字段，已忽略")] = False,
+    session_mode: Annotated[str | None, Query()] = None,
+    device_id: Annotated[str | None, Query()] = None,
+    kick_token: Annotated[str | None, Query()] = None,
+    payload: SyncSessionRequest | None = None,
 ) -> SyncOut:
     """**同步仓库名单**（`API-05`，手动点击）—— 建档推导判据 / 占位行扶正的数据源。
 
     取回名单后，在原ID上扶正唯一匹配的占位档案；不创建新项目或改已有真实仓库。
     歧义与未建档项目逐项列出，扶正与成功记录同事务提交，失败整体回滚。
     """
-    from app.core.identity import require_expected_account
-
     require_expected_account(expected_account)
-    t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时要有起点
-    from app.mod02_i8.browser_relay import scope_of
-
-    try:
-        # ⚠️ 取数方式覆盖整个取数调用；缺连接即当场停（⛔ 不回落登录）。
-        with scope_of({"session_mode": session_mode, "device_id": device_id}):
-            rows = rows_loader(allow_kick)
-    except Exception as exc:  # noqa: BLE001
-        _persist_fetch(run_type="sync", payload=fetch_record_payload(
-            object_desc="仓库列表", success=0, fail=0, error_message=str(exc)
-        ), started=t0)
-        return SyncOut(table="warehouse_list", degraded=True, message=str(exc))
+    t0 = datetime.now()
+    session_payload = _sync_session_payload(payload, session_mode, device_id, kick_token)
+    with unified_i8_session(session_payload, owner=current_name(), operation="m02.sync.warehouses",
+                            scope={}, require_explicit=True):
+        try:
+            rows = rows_loader(False)
+        except I8OnlineConflictError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _persist_fetch(run_type="sync", payload=fetch_record_payload(
+                object_desc="仓库列表", success=0, fail=0, error_message=str(exc)
+            ), started=t0)
+            if isinstance(exc, StrictSessionStopped):
+                raise
+            return SyncOut(table="warehouse_list", degraded=True, message=str(exc))
     from app.mod01_projects import service as projects
     try:
         with session_scope() as s:
@@ -451,12 +452,14 @@ def sync_warehouses(
 
 @router.post("/sync/common-projects", response_model=SyncOut)
 def sync_common_projects(
-    allow_kick: bool = Query(False, description="界面主动同步传 true；省略时不强踢在线会话"),
     rows_loader: Callable[..., list[dict]] = Depends(get_common_project_rows),
     wh_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
-    expected_account: str | None = Query(None),
-    session_mode: str = Query("", description="http（缺省）＝直连；browser＝浏览器已有会话"),
-    device_id: str = Query("", description="浏览器方式必传：本页面的连接标识"),
+    expected_account: Annotated[str | None, Query()] = None,
+    allow_kick: Annotated[bool, Query(deprecated=True, description="旧字段，已忽略")] = False,
+    session_mode: Annotated[str | None, Query()] = None,
+    device_id: Annotated[str | None, Query()] = None,
+    kick_token: Annotated[str | None, Query()] = None,
+    payload: SyncSessionRequest | None = None,
 ) -> SyncOut:
     """**同步常用项目列表**（`API-06`，手动点击）—— **`phid` 权威来源**；抓完**按 `phid` 幂等建档**。
 
@@ -465,23 +468,20 @@ def sync_common_projects(
     需要人定的**显式列出、不自动建**（多仓库 / 壳下具体小微 / 缺 phid）—— **禁静默**。
 
     ⚠️ 仓库名单（`API-05`）**与本次同步一起取**（它是"仓库名 ↔ 所属项目全名"的映射，建档要用）。
-    `allow_kick=True` 允许登录时退出该账号其他在线会话，界面主动同步显式传入。
     """
-    from app.core.identity import require_expected_account
     from app.mod01_projects.sync_service import sync_and_archive      # noqa: PLC0415
 
     require_expected_account(expected_account)
 
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时的起点（本次同步要拉两个名单，通常是最慢的一条）
-    from app.mod02_i8.browser_relay import scope_of
-
-    # ⚠️ 两个名单在**同一次取数方式**下取（缺连接即当场停，⛔ 不回落登录）。
-    with scope_of({"session_mode": session_mode, "device_id": device_id}):
+    session_payload = _sync_session_payload(payload, session_mode, device_id, kick_token)
+    with unified_i8_session(session_payload, owner=current_name(), operation="m02.sync.common-projects",
+                            scope={}, require_explicit=True):
         with session_scope() as s:
             out = sync_and_archive(
                 s,
-                load_common=lambda: rows_loader(allow_kick),
-                load_warehouses=lambda: wh_loader(allow_kick),
+                load_common=lambda: rows_loader(False),
+                load_warehouses=lambda: wh_loader(False),
             )
     if out["degraded"]:
         _persist_fetch(run_type="sync", payload=fetch_record_payload(

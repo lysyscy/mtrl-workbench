@@ -215,7 +215,6 @@ def warehouse_check(
 
     ⚠️ **只读**：只查询名单，不扶正、不建档；主动仓库同步的扶正流程归 `POST /api/m02/sync/warehouses`；
        判定走 `mod01_projects.domain.i8_warehouse_lookup`（**唯一出口**），本层只组装回执。
-    `allow_kick` 默认 `False`，界面主动查询传 `True`，无需另行确认强踢。
     ⚠️ **禁静默**：取不到 ⇒ `degraded=True` ＋ 中文说明，⛔ **不许把"没取到"说成"名单里没有"**（那是两回事）。
     """
     name = str(req.warehouse_name or "").strip()
@@ -224,37 +223,33 @@ def warehouse_check(
 
     cached_at = ""
     head = ""
-    # ⚠️（`TAIL-476`）取数方式必须在**进入取数**之前进入作用域：这个入口过去连作用域都没有，
-    #    于是用户选了「浏览器已有会话」也照样按直连去登录 —— 那正是本票要堵的缝。
-    #    `http`（缺省）路径与改动前**逐字节一致**；`browser` 缺连接 ⇒ `wh_loader` 当场抛
-    #    `BrowserRelayUnavailable`，⛔ 不会悄悄变成登录。
-    from app.mod02_i8.browser_relay import scope_of
+    from app.core.session import current_name
     from app.mod02_i8.browser_session import StrictSessionStopped
+    from app.mod02_i8.client import I8OnlineConflictError
+    from app.mod02_i8.session_policy import unified_i8_session
 
-    try:
-        with scope_of(req):
-            rows = wh_loader(req.allow_kick)
-    except StrictSessionStopped:
-        # ⛔ 严格通道的停止（会话不在/身份或站点不符/浏览器没回音）**不许**被这里的
-        #    "回落上一次缓存"吞掉：那会让用户以为名单是刚查的、而实际上是没查成。
-        #    普通取数失败（网络抖动、i8 报错）仍走下面的缓存兜底 —— 那是既有行为。
-        raise
-    except Exception as exc:                              # noqa: BLE001
-        # ⭐ `TAIL-39`：抓不到 ⇒ **回退到上一次的名单**接着判（缓存是优化、不是功能），
-        #    但**必须说清"这是几点抓的"** —— ⛔ 不许把旧名单说成刚抓的（`wh_cache` 纪律 2）。
-        rows, cached_at = wh_cache.load()
-        if not rows:
-            return WarehouseCheckOut(
-                warehouse_name=name,
-                degraded=True,
-                message=human_reason(
-                    "没取到 i8 仓库名单", exc,
-                    next_step="⚠️ 这只是**没查到**，**不等于名单里没有**；也没有可用的上次名单 —— 可稍后重试",
-                ),
-            )
-        log_exc("i8 仓库名单没取到（改用缓存）", exc)
-        head = (f"⚠️ 这次**没取到**名单 ⇒ 下面用的是 "
-                f"**{cached_at or '未知时间'}** 那份缓存（{len(rows)} 条）：<br>")
+    with unified_i8_session(req, owner=current_name(), operation="m03.notices.warehouse-check",
+                            scope={"warehouse_name": name}, require_explicit=True):
+        try:
+            rows = wh_loader(False)
+        except (StrictSessionStopped, I8OnlineConflictError):
+            raise
+        except Exception as exc:                              # noqa: BLE001
+            # ⭐ `TAIL-39`：抓不到 ⇒ **回退到上一次的名单**接着判（缓存是优化、不是功能），
+            #    但**必须说清"这是几点抓的"** —— ⛔ 不许把旧名单说成刚抓的（`wh_cache` 纪律 2）。
+            rows, cached_at = wh_cache.load()
+            if not rows:
+                return WarehouseCheckOut(
+                    warehouse_name=name,
+                    degraded=True,
+                    message=human_reason(
+                        "没取到 i8 仓库名单", exc,
+                        next_step="⚠️ 这只是**没查到**，**不等于名单里没有**；也没有可用的上次名单 —— 可稍后重试",
+                    ),
+                )
+            log_exc("i8 仓库名单没取到（改用缓存）", exc)
+            head = (f"⚠️ 这次**没取到**名单 ⇒ 下面用的是 "
+                    f"**{cached_at or '未知时间'}** 那份缓存（{len(rows)} 条）：<br>")
 
     info = i8_warehouse_lookup(name, rows)
     total = int(info["total"])

@@ -5,7 +5,7 @@
   · **§9.5**（导入幂等）。⚠️ **2026-09-22（TAIL-69）**：本域**从未建成**手动导入通道 ⇒ 接口不可用 =
    **显式报错待人处理**（原 §3.6 那句「降级为手动导入」是**悬空承诺**，就此纠正）
 - 《技术栈选型分析》**§9.8**（`rep_id` / `dataSetId` / 项目参数 **`pc`** / **`reportName` = 收发结存表**）
-- 用户裁定 **D9**：抓取一律手动（无定时）· **失败不得自动重试登录** · 抓前确认业务范围，登录按界面主动操作策略允许强踢
+- 用户裁定 **D9**：抓取一律手动（无定时）· **失败不得自动重试登录** · 抓前确认业务范围
 
 ⭐ **陌生仓库**（导出里有、项目档案里没有）⇒ **自动建档 / 扶正**（《说明书》§2.4.2 **链路 B**，
    `ACC-PRJ-AUTO-001`）：**复用本次同一个 i8 会话**取一次仓库名单（**不额外登录、不重复强踢**），
@@ -34,7 +34,7 @@ from app.mod01_projects.recovery import (
 )
 from app.mod01_projects import service as P1S
 from app.mod02_i8 import fetch_task, report_export
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record
@@ -99,12 +99,7 @@ def run_fetch(
         ids = P1S.export_phids(s)
     report_export.require_ready(SPEC_KEY)               # 登记不全（如 reportName 未定稿）⇒ 显式拒
     operator = operator or current_operator()
-    # ⚠️ 走**统一工厂**：默认仍是产品原 `I8Client(allow_kick=True)`（缓存 + 单次重登 + 强踢，
-    #    与改动前逐字节一致）；只有本请求显式选了「浏览器已有会话」时才换成复用通道。
-    #    ⛔ 选了浏览器但连接不在 ⇒ 工厂当场抛停止，绝不在这里悄悄退回登录。
-    client_factory = client_factory or (
-        lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
-    )
+    client_factory = client_factory or (lambda: open_i8_client(owner=current_name()))
     export = export or (lambda c, ym, ids_: report_export.export(
         c, spec_key=SPEC_KEY, year_month=ym, proj_ids=ids_))
 
@@ -122,7 +117,7 @@ def run_fetch(
                 if callable(close):
                     close()
             rows = importer.parse_rows(content, ym=plan["ym"])
-        except StrictSessionStopped:
+        except (StrictSessionStopped, I8OnlineConflictError):
             # ⛔（`TAIL-476`）浏览器方式的停止**不是**「i8 抓不到数、请稍后重试」：
             #    真实原因是连接不在 / 站点或身份不符 / 会话已失效。
             #    吞掉它去写一条"稍后重试"的失败记录，等于让人对着错的原因反复点。

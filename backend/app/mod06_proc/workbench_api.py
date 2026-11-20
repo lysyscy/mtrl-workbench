@@ -70,39 +70,43 @@ def export_report(ym: str = '', projects: str = ''):
 def perform_action(name: str, payload: dict, request: Request):
     if name == 'i8-fetch':
         from app.mod06_proc.workbench_i8 import read_preview
-        allow_kick = payload.get('allow_kick', False)
-        if not isinstance(allow_kick, bool):
-            raise MustReportError('允许强踢须为布尔值')
-        started, operator = datetime.now(), current_operator()
-        try:
-            with session_scope() as session:
-                current = workbench.state(session)
-                previous = {}
-                for snapshot in current['i8']:
-                    ids = ({snapshot['projectId']} if snapshot.get('projectId') else {
-                        row['projectId'] for rows in snapshot.get('sources', {}).values()
-                        for row in rows if row.get('projectId')})
-                    previous[snapshot['warehouse']] = ids
-                projects = project_service.all_projects(session)
-            # ⚠️ 取数方式覆盖整次读取（缺连接即当场停，⛔ 不回落登录）。
-            from app.mod02_i8.browser_relay import scope_of
+        from app.core.session import current_name
+        from app.mod02_i8.client import I8OnlineConflictError
+        from app.mod02_i8.session_policy import unified_i8_session
 
-            with scope_of(payload):
-                incoming = read_preview(projects, previous, allow_kick=allow_kick)
-            incoming['request_id'] = payload.get('request_id', '')
-            with session_scope() as session:
-                result = workbench.action(session, 'i8-preview', incoming, operator)
-                count = sum(incoming['counts'].values())
-                run = i8_service.save_run_record(session, run_type='fetch', target='机械费三类来源（当前累计）',
-                    status='success', total_count=count, success_count=count, operator=operator,
-                    detail={'counts': incoming['counts'], 'preview_id': result['preview_id']}, started_at=started)
-                run_id = run.id
-            return {**result, 'counts': incoming['counts'], 'run_record_id': run_id}
-        except Exception as exc:
-            # A failed preview transaction must not erase its execution record.
-            with session_scope() as session:
-                i8_service.save_run_record(session, run_type='fetch', target='机械费三类来源（当前累计）',
-                    status='failed', error_message=str(exc), operator=operator, started_at=started)
-            raise
+        request_id = payload.get('request_id', '')
+        if not isinstance(payload.get('kick_token', ''), str):
+            raise MustReportError('i8 下线确认无效，请重新发起操作。')
+        started, operator = datetime.now(), current_operator()
+        with unified_i8_session(payload, owner=current_name(), operation="m06.workbench.i8-fetch",
+                                scope={"request_id": request_id}, require_explicit=True):
+            try:
+                with session_scope() as session:
+                    current = workbench.state(session)
+                    previous = {}
+                    for snapshot in current['i8']:
+                        ids = ({snapshot['projectId']} if snapshot.get('projectId') else {
+                            row['projectId'] for rows in snapshot.get('sources', {}).values()
+                            for row in rows if row.get('projectId')})
+                        previous[snapshot['warehouse']] = ids
+                    projects = project_service.all_projects(session)
+                incoming = read_preview(projects, previous)
+                incoming['request_id'] = request_id
+                with session_scope() as session:
+                    result = workbench.action(session, 'i8-preview', incoming, operator)
+                    count = sum(incoming['counts'].values())
+                    run = i8_service.save_run_record(session, run_type='fetch', target='机械费三类来源（当前累计）',
+                        status='success', total_count=count, success_count=count, operator=operator,
+                        detail={'counts': incoming['counts'], 'preview_id': result['preview_id']}, started_at=started)
+                    run_id = run.id
+                return {**result, 'counts': incoming['counts'], 'run_record_id': run_id}
+            except I8OnlineConflictError:
+                raise
+            except Exception as exc:
+                # A failed preview transaction must not erase its execution record.
+                with session_scope() as session:
+                    i8_service.save_run_record(session, run_type='fetch', target='机械费三类来源（当前累计）',
+                        status='failed', error_message=str(exc), operator=operator, started_at=started)
+                raise
     with session_scope() as session:
         return workbench.action(session, name, payload, current_operator())

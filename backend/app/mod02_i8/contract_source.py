@@ -50,7 +50,7 @@ from typing import Any
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import NotConfiguredError
 from app.core.logging import get_logger
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.notice_source import (  # noqa: PLC2701 —— 同层复用，见模块头
     _amount,
     _extract_records,
@@ -172,7 +172,7 @@ class ContractFetcher:
             resp = self._client.post_json(configured_detail_url(),
                                           params={"id": pid, "type": DETAIL_TYPE},
                                           data={}, timeout=DETAIL_TIMEOUT)
-        except StrictSessionStopped:
+        except (StrictSessionStopped, I8OnlineConflictError):
             raise                      # ⛔ 严格通道的停止不在这里降级成"本条留空"
         except Exception as exc:                        # noqa: BLE001 —— 见上：单条失败不断整批
             logger.warning("合同 {} 的材料名取数失败（本条留空，不影响落库）：{}", pid, exc)

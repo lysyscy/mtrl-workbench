@@ -42,7 +42,7 @@ from app.mod01_projects.pending import record_detail
 from app.mod01_projects import service as P1S
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
-from app.mod02_i8.client import serialize_fetch
+from app.mod02_i8.client import I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.contract_source import ContractFetcher
@@ -155,6 +155,7 @@ def run_fetch(
     confirmed: bool,
     operator: str = "",
     since: str | None = "",
+    automatic: bool = False,
     client_factory: Callable | None = None,
     fetch: Callable | None = None,
     sync: Callable | None = None,
@@ -169,8 +170,8 @@ def run_fetch(
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
     t0 = datetime.now()
-    automatic = since is None
-    if automatic:
+    if since is None:
+        automatic = True
         with session_scope() as s:
             since = default_since(s)
     since = str(since or "")
@@ -178,9 +179,7 @@ def run_fetch(
     if automatic:
         scope = f"自动范围（{scope}）"
     operator = operator or current_operator()
-    client_factory = client_factory or (
-        lambda: open_i8_client(allow_kick=True, owner=str(current_name()))
-    )
+    client_factory = client_factory or (lambda: open_i8_client(owner=current_name()))
     material_filled = material_blank = 0
     common_rows, warehouse_rows, sync_failure = [], [], None
     with ExitStack() as batch:
@@ -211,7 +210,7 @@ def run_fetch(
                 load_common, load_wh = loaders if loaders is not None else default_loaders(client)
                 try:
                     common_rows, warehouse_rows = load_common(), load_wh()
-                except StrictSessionStopped:
+                except (StrictSessionStopped, I8OnlineConflictError):
                     raise
                 except Exception as exc:
                     sync_failure = exc
@@ -219,7 +218,7 @@ def run_fetch(
                 close = getattr(client, "close", None)
                 if callable(close):
                     close()
-        except StrictSessionStopped:
+        except (StrictSessionStopped, I8OnlineConflictError):
             raise
         except Exception as exc:
             notice = fetch_task.degrade_to_excel(exc)
@@ -249,7 +248,7 @@ def run_fetch(
                 with s.begin_nested():
                     sync_result = (sync or sync_and_archive)(
                         s, load_common=common_snapshot, load_warehouses=lambda: warehouse_rows)
-            except StrictSessionStopped:
+            except (StrictSessionStopped, I8OnlineConflictError):
                 raise
             except Exception as exc:
                 sync_result = {"degraded": True, "message": human_reason(

@@ -42,7 +42,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   const [ruleError, setRuleError] = useState('');
   const [feedback, setFeedback] = useState('');
   const ruleLock = useRef(false);
-  const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts' });
+  const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts', scopeKey: JSON.stringify([all, since]) });
   const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all), close, active: !blocked });
   const { read: pendingRead, omit } = useContractOwnershipPending(result?.id ?? 0, !blocked && Boolean(result?.unsettled.length));
   const pending = pendingRead.data ? readReceiptRows(pendingRead.data, false) : fallbackPending;

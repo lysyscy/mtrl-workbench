@@ -17,7 +17,7 @@ from typing import Any
 
 from app.core.config import I8_PATH_COMMON_PROJECT, I8_PATH_WAREHOUSE_LIST, get_settings, i8_base_of, i8_endpoint_of
 from app.core.errors import NotConfiguredError
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
 
 
 def _extract_records(resp: Any) -> list[dict]:
@@ -133,7 +133,7 @@ def load_warehouse_rows(client) -> list[dict] | None:
 
     try:
         return WarehouseSource(client).fetch()
-    except StrictSessionStopped:
+    except (StrictSessionStopped, I8OnlineConflictError):
         raise
     except Exception:                                   # noqa: BLE001
         return None

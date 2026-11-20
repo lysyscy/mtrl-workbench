@@ -16,10 +16,11 @@ import pytest
 
 from app.core import app_settings
 from app.core.config import Settings, get_settings
+from app.core.errors import MustReportError
 from app.mod02_i8 import contract_source
 from app.mod02_i8 import sources as i8_sources
 from app.mod02_i8.browser_broker import BrowserRelayUnavailable
-from app.mod02_i8.browser_relay import MODE_BROWSER, MODE_HTTP, current_scope, relay_scope
+from app.mod02_i8.browser_relay import MODE_BROWSER, current_scope, relay_scope
 from app.mod02_i8.browser_session import (
     StrictSessionStopped,
     StrictSessionEnded,
@@ -125,10 +126,10 @@ def test_仓库查询入口真的把取数方式带进作用域(monkeypatch, tmp
     assert seen == [(MODE_BROWSER, "dev-1")], seen
     assert out.found is True and out.degraded is False
 
-    # 缺省（旧调用）仍是直连，逐字节一如此前
     seen.clear()
-    m03r.warehouse_check(_wh_request(), wh_loader=loader)
-    assert seen == [(MODE_HTTP, "")], seen
+    with pytest.raises(MustReportError):
+        m03r.warehouse_check(_wh_request(), wh_loader=loader)
+    assert seen == []
 
 
 @pytest.mark.parametrize("exc", STRICT_CASES, ids=lambda exc: type(exc).__name__)
@@ -156,7 +157,7 @@ def test_仓库查询入口的普通失败仍回落旧缓存(monkeypatch, tmp_pa
     def loader(allow_kick=False, client=None):  # noqa: ANN001, ARG001
         raise RuntimeError("i8 登录失败")
 
-    out = m03r.warehouse_check(_wh_request(), wh_loader=loader)
+    out = m03r.warehouse_check(_wh_request(session_mode="browser", device_id="dev-1"), wh_loader=loader)
     assert out.from_cache is True and out.found is True
     assert out.cached_at and out.cached_at in out.message
 
@@ -190,7 +191,7 @@ def test_预览失败时普通异常仍降级为手动导入():
     def loader(year_month, allow_kick=False):  # noqa: ANN001, ARG001
         raise RuntimeError("i8 500")
 
-    out = m02.fetch_preview(FetchPreviewRequest(year_month="2026-08"), rows_loader=loader)
+    out = m02.fetch_preview(FetchPreviewRequest(year_month="2026-08", session_mode="browser", device_id="dev-1"), rows_loader=loader)
     assert out.degraded is True and "手动" in out.message
 
 
@@ -204,7 +205,7 @@ def test_预览时严格停止不降级为手动导入(exc):
         raise exc
 
     with pytest.raises(type(exc)):
-        m02.fetch_preview(FetchPreviewRequest(year_month="2026-08"), rows_loader=loader)
+        m02.fetch_preview(FetchPreviewRequest(year_month="2026-08", session_mode="browser", device_id="dev-1"), rows_loader=loader)
 
 
 @pytest.mark.parametrize("exc", STRICT_CASES, ids=lambda exc: type(exc).__name__)
@@ -220,7 +221,7 @@ def test_抓取运行时严格停止仍留失败记录并原样抛出(exc, monke
         raise exc
 
     with pytest.raises(type(exc)):
-        m02.fetch_run(FetchRunRequest(year_month="2026-08"), rows_loader=loader)
+        m02.fetch_run(FetchRunRequest(year_month="2026-08", session_mode="browser", device_id="dev-1"), rows_loader=loader)
 
     assert len(recorded) == 1, recorded
     assert recorded[0]["status"] == "failed"
@@ -238,7 +239,7 @@ def test_抓取运行时普通异常仍降级并留失败记录(monkeypatch):
     def loader(year_month, allow_kick=False):  # noqa: ANN001, ARG001
         raise RuntimeError("i8 500")
 
-    out = m02.fetch_run(FetchRunRequest(year_month="2026-08"), rows_loader=loader)
+    out = m02.fetch_run(FetchRunRequest(year_month="2026-08", session_mode="browser", device_id="dev-1"), rows_loader=loader)
     assert out.status == "failed" and out.degraded is True
     assert recorded and recorded[0]["status"] == "failed"
 

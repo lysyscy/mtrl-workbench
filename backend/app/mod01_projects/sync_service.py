@@ -18,6 +18,7 @@ from app.mod01_projects import archive as A
 from app.mod01_projects.models import TYPE_SHELL
 from app.mod01_projects.repository import all_projects, create_project
 from app.mod02_i8.browser_session import StrictSessionStopped
+from app.mod02_i8.client import I8OnlineConflictError
 
 Loader = Callable[[], list[dict]]
 
@@ -42,7 +43,7 @@ def build_plan(
     try:
         common = load_common()
         warehouses = load_warehouses()
-    except StrictSessionStopped:
+    except (StrictSessionStopped, I8OnlineConflictError):
         raise
     except Exception as exc:                              # noqa: BLE001
         return {

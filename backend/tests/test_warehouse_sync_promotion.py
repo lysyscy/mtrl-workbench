@@ -28,7 +28,7 @@ def test_sync_promotes_same_id_preserves_notices_and_is_idempotent(rollback_db, 
     def load(allow):
         seen.append(allow)
         return rows
-    first = router.sync_warehouses(allow_kick=True, rows_loader=load, expected_account=None)
+    first = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=load, expected_account=None)
     assert first.counts['promote'] == 1
     assert '未建仓-同步' in first.message and '同步真实仓' in first.message
     with db.session_scope() as s:
@@ -38,8 +38,8 @@ def test_sync_promotes_same_id_preserves_notices_and_is_idempotent(rollback_db, 
         assert s.get(PaymentNotice, nid).ownership_id == pid
         rec = s.scalar(select(RunRecord).where(RunRecord.target == '仓库列表').order_by(RunRecord.id.desc()))
         assert rec.detail['warehouse_promotion']['promoted'][0]['project_id'] == pid
-    second = router.sync_warehouses(allow_kick=True, rows_loader=load, expected_account=None)
-    assert second.counts['promote'] == 0 and seen == [True, True]
+    second = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=load, expected_account=None)
+    assert second.counts['promote'] == 0 and seen == [False, False]
 
 
 def test_ambiguous_or_unowned_warehouses_are_reported_without_writes(rollback_db):
@@ -55,7 +55,7 @@ def test_ambiguous_or_unowned_warehouses_are_reported_without_writes(rollback_db
         ('候选甲', '__多仓__'), ('候选乙', '__多仓__'), ('陌生仓', '__未建档__'),
         ('另一个真实仓', '__已有真实__'), ('冲突仓', '__归属冲突甲__'), ('冲突仓', '__归属冲突乙__'),
         ('已占用仓', '__含已占用多仓__'), ('新候选仓', '__含已占用多仓__')]]
-    result = router.sync_warehouses(allow_kick=False, rows_loader=lambda allow: rows, expected_account=None)
+    result = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=lambda allow: rows, expected_account=None)
     assert result.counts['promote'] == 0 and result.counts['unresolved'] >= 4
     assert result.sample and all(r.get('reason') for r in result.sample)
     with db.session_scope() as s:
@@ -73,7 +73,7 @@ def test_write_failure_rolls_back_all_promotions_and_records_failure(rollback_db
             raise RuntimeError('isolated promotion failure')
     monkeypatch.setattr(projects, 'promote_placeholder', fail_second)
     rows = [dict(warehouse_name='事务仓' + str(i), owner_full_name='__事务' + str(i)) for i in range(2)]
-    result = router.sync_warehouses(allow_kick=False, rows_loader=lambda allow: rows, expected_account=None)
+    result = router.sync_warehouses(session_mode="browser", device_id="test", rows_loader=lambda allow: rows, expected_account=None)
     assert result.degraded
     with db.session_scope() as s:
         assert [s.get(Project, pid).warehouse_name for pid in ids] == ['未建仓-事务0', '未建仓-事务1']

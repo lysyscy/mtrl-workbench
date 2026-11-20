@@ -21,12 +21,10 @@ class FetchPlanOut(BaseModel):
 
 class FetchPreviewRequest(BaseModel):
     year_month: str
-    allow_kick: bool = Field(False, description="界面主动操作传 true；省略时不强踢在线会话")
-    #: 取数方式：空／`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
-    #: ⭐ 缺省值保证旧调用**行为逐字节不变**（仍走原 `I8Client`）。
-    session_mode: str = Field("", description="http（缺省）＝直连；browser＝浏览器已有会话")
+    session_mode: str = Field("", description="http＝工作台直连；browser＝浏览器已有会话")
     #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
     device_id: str = Field("", description="浏览模式必传：本页面的连接标识")
+    kick_token: str = ""
 
 
 class FetchPreviewOut(BaseModel):
@@ -41,9 +39,9 @@ class FetchPreviewOut(BaseModel):
 
 class FetchRunRequest(BaseModel):
     year_month: str
-    allow_kick: bool = Field(False, description="界面主动操作传 true；省略时不强踢在线会话")
-    session_mode: str = Field("", description="http（缺省）＝直连；browser＝浏览器已有会话")
+    session_mode: str = Field("", description="http＝工作台直连；browser＝浏览器已有会话")
     device_id: str = Field("", description="浏览模式必传：本页面的连接标识")
+    kick_token: str = ""
 
 
 class FetchRunOut(BaseModel):
@@ -52,6 +50,12 @@ class FetchRunOut(BaseModel):
     status: str = "success"
     degraded: bool = False
     message: str = ""
+
+
+class SyncSessionRequest(BaseModel):
+    session_mode: str = ""
+    device_id: str = ""
+    kick_token: str = ""
 
 
 class SyncOut(BaseModel):

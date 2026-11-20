@@ -29,7 +29,7 @@ export interface ReportFetchProps {
 
 export function I8ReportFetch({source, month: initial, me, paused, close, refresh, pending, onPending}: ReportFetchProps & {source: ReportSource}) {
   const [month, setMonth] = useState(initial), [result, setResult] = useState<FetchReceipt | null>(null);
-  const action = useI8FetchAction({source, me, paused, refresh, pending, onPending: value => onPending(value ? month : null)});
+  const action = useI8FetchAction({source, me, paused, refresh, pending, scopeKey: month, onPending: value => onPending(value ? month : null)});
   const closing = useDialogClose({busy: action.busy || action.refreshing, dirty: !action.sent && month !== initial, close, active: !paused});
   const spec = reportFetch[source], titleId = `${source}-fetch-title`;
   async function run() {

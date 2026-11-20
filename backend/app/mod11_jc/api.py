@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 
 from app.core.query import flatten_query
 from app.core.db import session_scope
+from app.core.session import current_name
+from app.mod02_i8.session_policy import unified_i8_session
 from app.mod11_jc import domain as D
 from app.mod11_jc import fetch_service as FS
 from app.mod11_jc import repository as R
@@ -137,10 +139,10 @@ class FetchIn(BaseModel):
 
     confirm: bool = False
     since: str | None = None          # `None` = 没传（用默认）；`""` = 显式要默认；有值 = 用它
-    #: 取数方式：空/`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
     session_mode: str = ""
     #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
     device_id: str = ""
+    kick_token: str = ""
 
 
 class TagIn(BaseModel):
@@ -184,15 +186,19 @@ def api_fetch(payload: FetchIn) -> dict:
     ⭐ **增量**：`since` 不传 ⇒ 后端用 `default_since`（库里最大合同日期 **− 3 天**）
        ⇒ 日常抓取 **1~5 秒**（实测：无过滤 40.4s vs 带日期 0.5~1.0s）；
        库空（首次）⇒ 自动全量（~40 秒）＋ 逐条补材料名（就这一次）。
-    `confirm` 表示用户确认合同抓取与写入范围；登录按界面主动操作策略允许强踢。
+    `confirm` 表示用户确认合同抓取与写入范围。
     """
     if not payload.confirm:
         return {"ok": False, "kind": "err",
                 "message": "请先确认采购合同抓取范围，再执行抓取"}
-    from app.mod02_i8.browser_relay import scope_of
-
-    with scope_of(payload):
-        return FS.run_fetch(confirmed=True, since=payload.since)
+    automatic = payload.since is None
+    since = payload.since
+    if automatic:
+        with session_scope() as session:
+            since = FS.default_since(session)
+    with unified_i8_session(payload, owner=current_name(), operation="m11.fetch",
+                            scope={"since": since, "automatic": automatic}, require_explicit=True):
+        return FS.run_fetch(confirmed=True, since=since, automatic=automatic)
 
 
 class ExportIn(BaseModel):
@@ -314,18 +320,16 @@ class AutoLinkSelection(BaseModel):
 class AutoLinkIn(BaseModel):
     notice_ids: list[int] = Field(min_length=1, max_length=5000)
     selections: list[AutoLinkSelection] = Field(default_factory=list, max_length=5000)
-    allow_kick: bool = Field(False, description='界面主动读取传 true；省略时不强踢在线会话')
-    #: 取数方式：空／`http` ＝产品原直连；`browser` ＝复用浏览器里已登录的 i8 会话。
     session_mode: str = ''
     #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
     device_id: str = ''
+    kick_token: str = ''
 
 
-def _read_payables(*, allow_kick=False):
-    from app.core.session import current_name
+def _read_payables():
     from app.mod02_i8.browser_relay import open_i8_client
     from app.mod02_i8.payable_source import fetch_payables
-    client = open_i8_client(allow_kick=allow_kick, owner=str(current_name()))
+    client = open_i8_client(owner=current_name())
     try:
         return fetch_payables(client)
     finally:
@@ -334,10 +338,9 @@ def _read_payables(*, allow_kick=False):
 
 @router.post('/api/m11/auto-link-preview')
 def api_auto_link_preview(payload: AutoLinkIn) -> dict:
-    from app.mod02_i8.browser_relay import scope_of
-
-    with scope_of(payload):
-        payables = _read_payables(allow_kick=payload.allow_kick)
+    with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link-preview",
+                            scope={"notice_ids": payload.notice_ids}, require_explicit=True):
+        payables = _read_payables()
     with session_scope() as s:
         return SV.auto_link_plan(s, payload.notice_ids, payables)
 
@@ -346,12 +349,13 @@ def api_auto_link_preview(payload: AutoLinkIn) -> dict:
 def api_auto_link(payload: AutoLinkIn) -> dict:
     if not payload.selections or {r.notice_id for r in payload.selections} - set(payload.notice_ids):
         return {'ok': False, 'message': '请先预览本次可关联通知书'}
-    from app.mod02_i8.browser_relay import scope_of
-
-    with scope_of(payload):
-        payables = _read_payables(allow_kick=payload.allow_kick)
+    selections = [row.model_dump() for row in payload.selections]
+    with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link",
+                            scope={"notice_ids": payload.notice_ids, "selections": selections},
+                            require_explicit=True):
+        payables = _read_payables()
     with session_scope() as s:
-        return SV.act_auto_link(s, [r.model_dump() for r in payload.selections], payables)
+        return SV.act_auto_link(s, selections, payables)
 
 
 class UnlinkIn(BaseModel):

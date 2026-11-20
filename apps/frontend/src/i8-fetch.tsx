@@ -5,14 +5,13 @@ import { ApiError, body, record, requestJson } from './api';
 import type { Identity } from './api';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
 import { useI8Session } from './i8-session';
-import { readRecords, recordSource } from './i8-api';
+import { readI8KickConfirmation, readRecords, recordSource } from './i8-api';
 import type { sourceNames } from './i8-api';
 import { useHistoryGuard } from './history';
 
 interface FetchRequest<T> {
   path: string;
   payload: Record<string, unknown>;
-  http?: Record<string, unknown>;
   parse: (value: unknown) => T;
   onSuccess?: (result: T) => void;
 }
@@ -118,29 +117,28 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   }
 
   async function submit<T>(request: FetchRequest<T>, retry?: ReturnType<typeof body>): Promise<T | undefined> {
-    const {path, payload, http = {}, parse, onSuccess} = request;
+    const {path, payload, parse, onSuccess} = request;
     lock.current = true; setBusy(true); setError(''); setRefreshError('');
     const generation = kickGeneration.current;
     let confirmed = false, issued = false, awaitingKick = false, parsed: T | undefined;
     let snapshot: ReturnType<typeof body> | undefined;
     try {
-      snapshot = retry ?? body(sessionPayload(session, http, payload));
+      snapshot = retry ?? body(sessionPayload(session, {}, payload));
       markPending(true); setSent(true); issued = true;
       const value = await requestJson(path, {method: 'POST', ...snapshot});
       parsed = parse(value);
       confirmed = true;
     } catch (failure) {
       confirmed = !issued || failure instanceof ApiError && failure.status > 0 && failure.status < 500 && failure.code !== 'invalid_response';
-      if (!retry && snapshot && session.mode !== SESSION_MODE_BROWSER && failure instanceof ApiError
-        && failure.status === 409 && failure.code === 'i8_online_conflict' && record(failure.detail)
-        && typeof failure.detail.kick_token === 'string' && failure.detail.kick_token) {
+      const conflict = readI8KickConfirmation(failure);
+      if (!retry && snapshot && session.mode !== SESSION_MODE_BROWSER && conflict) {
         awaitingKick = true;
         if (alive.current) {
           setSent(false);
           if (generation === kickGeneration.current) {
-            const confirmedBody = body({...JSON.parse(snapshot.body), kick_token: failure.detail.kick_token});
+            const confirmedBody = body({...JSON.parse(snapshot.body), kick_token: conflict.token});
             const confirmation = {
-              message: failure.message, key: confirmationKey,
+              message: conflict.message, key: confirmationKey,
               submit: () => submit(request, confirmedBody),
             };
             kickRef.current = confirmation;
@@ -188,7 +186,7 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
     {config.data && (!config.data.ready || config.data.account !== me?.account) && <p className="notice" role="alert">{config.data.message || '账号已变化，请关闭后重新打开。'}</p>}
     {(!action.sent || alwaysShowMode) && <p className="i8-fetch-mode">{action.mode === SESSION_MODE_BROWSER
       ? '使用浏览器已有会话，不登录、不顶号；会话失效时停止。'
-      : '使用工作台直连，可能使该 i8 账号的其他会话下线；失败不会自动重试。'}</p>}
+      : '使用工作台直连。遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>}
     {action.browserBlocked && (action.browserRecovery
       ? <p className="notice" role="status">{action.browserRecovery}</p>
       : <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再抓取。本次不会改用工作台直连。</p>)}

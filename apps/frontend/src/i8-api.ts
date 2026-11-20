@@ -1,5 +1,12 @@
 import { ApiError, record } from './api';
 
+export function readI8KickConfirmation(failure: unknown) {
+  if (!(failure instanceof ApiError) || failure.status !== 409 || failure.code !== 'i8_online_conflict') return null;
+  const detail = failure.detail;
+  if (!record(detail) || typeof detail.kick_token !== 'string' || !detail.kick_token) return null;
+  return { token: detail.kick_token, message: failure.message };
+}
+
 export const sourceNames = { notices: '付款通知书', settlement: '收发结存表', inventory: '库存单据明细表', contracts: '采购合同信息', warehouses: '仓库列表', 'common-projects': '常用项目列表' };
 export interface RunRecord { id: number; run_type: string; target: string; status: string; success_count: number; fail_count: number; error_message: string; started_at: string; finished_at: string | null; triggered_by: string; duration_seconds: number | null }
 export function readRecords(value: unknown): RunRecord[] {

@@ -279,16 +279,13 @@ class MoveRequest(BaseModel):
 
 
 class FetchRequest(BaseModel):
-    """按月抓取；`confirm` 缺省为假，保留核算月与写入范围确认。
-
-    ⭐ `session_mode` / `device_id`：取数方式由「i8 接入」页统一选择，`http`（缺省）＝产品原直连，
-       `browser`＝复用浏览器里已登录的 i8 会话（不登录、不顶号）。缺省值保证旧调用行为不变。
-    """
+    """按月抓取；确认核算月与写入范围后使用已选的 i8 会话。"""
 
     month: str = ""
     confirm: bool = False
     session_mode: str = ""
     device_id: str = ""
+    kick_token: str = ""
 
 
 @router.post("/api/m07/big/cell")
@@ -350,14 +347,16 @@ def api_big_move(req: MoveRequest) -> dict:
 def api_fetch(req: FetchRequest) -> dict:
     """**按月抓取**收发结存（`API-02`）—— 人工触发。
 
-    `confirm` 必须为真（用户已确认抓取范围）；登录按界面主动操作策略允许强踢。
+    `confirm` 必须为真（用户已确认抓取范围）。
     失败显式报错待人处理；本域无手动导入通道，绝不自动重试登录。
     """
-    from app.mod02_i8.browser_relay import scope_of
+    from app.core.session import current_name
+    from app.mod02_i8.session_policy import unified_i8_session
     from app.mod07_setl import fetch_service as FS
 
     # ⚠️ 取数方式在**整个抓取过程**内有效（同一请求内后续所有 i8 调用都走同一通道）。
-    with scope_of(req):
+    with unified_i8_session(req, owner=current_name(), operation="m07.fetch",
+                            scope={"month": req.month}, require_explicit=True):
         return FS.run_fetch(year_month=req.month, confirmed=req.confirm, operator=current_operator())
 
 

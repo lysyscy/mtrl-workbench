@@ -184,8 +184,7 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
     fetched_at = []
 
     class Client:
-        def __init__(self, *, allow_kick):
-            assert allow_kick
+        def __init__(self):
             assert api.tracker['active'] == 0
             calls.append('create')
 
@@ -202,9 +201,9 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
                                                'amount': '100.00', 'approval': None}]},
                 'project': {'total': 0, 'rows': []}, 'team': {'total': 0, 'rows': []}}
 
-    monkeypatch.setattr(workbench_i8, 'I8Client', Client)
+    monkeypatch.setattr(workbench_i8, 'open_i8_client', lambda *, owner: Client())
     monkeypatch.setattr(workbench_i8, 'fetch_lists', fetch_lists)
-    response = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'network-boundary', 'allow_kick': True})
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'session_mode': 'browser', 'device_id': 'test', 'request_id': 'network-boundary', 'allow_kick': True})
     assert response.status_code == 200
     body = response.json()
     assert body['counts'] == {'usage': 1, 'project': 0, 'team': 0}
@@ -230,7 +229,7 @@ def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
         raise MustReportError('读取失败，旧值保持')
 
     monkeypatch.setattr(workbench_i8, 'read_preview', fail_read)
-    response = api.client.post('/api/m06/workbench/i8-fetch', json={})
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'session_mode': 'browser', 'device_id': 'test'})
     assert response.status_code == 400
     assert api.tracker['commits'] == 2  # Project lookup and independent failure record.
     assert api.tracker['rollbacks'] == 0
@@ -260,16 +259,16 @@ def test_fetch_passes_shell_archive_and_keywords_without_holding_session(api, mo
     class Client:
         def __init__(self, **kw):
             assert api.tracker['active'] == 0
-            assert kw == {'allow_kick': False}
+            assert kw == {}
         def close(self):
             pass
 
-    monkeypatch.setattr(workbench_i8, 'I8Client', Client)
+    monkeypatch.setattr(workbench_i8, 'open_i8_client', lambda *, owner: Client())
     lists = {kind: {'total': 2, 'rows': [normalize({'phid': keyword + kind, 'phid_pc': 'shared-key',
               'bill_name': keyword, 'u_fyze': '10', 'u_bqjse': '10', 'u_bqspe': '10'}, kind)
               for keyword in ('大唐', '百利')]} for kind in ('usage', 'project', 'team')}
     monkeypatch.setattr(workbench_i8, 'fetch_lists', lambda client: deepcopy(lists))
-    response = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'keywords'})
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'session_mode': 'browser', 'device_id': 'test', 'request_id': 'keywords'})
     assert response.status_code == 200
     preview = response.json()
     assert preview['unmapped_projects'] == []
@@ -291,7 +290,7 @@ def test_i8_preview_failure_rolls_back_business_but_keeps_execution_record(api, 
         raise MustReportError('预览未保存')
 
     monkeypatch.setattr(workbench, 'action', fail_after_preview)
-    response = api.client.post('/api/m06/workbench/i8-fetch', json={})
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'session_mode': 'browser', 'device_id': 'test'})
     assert response.status_code == 400
     with api.factory() as session:
         assert list(session.scalars(select(MechanicalWorkbenchRecord))) == []
@@ -315,10 +314,10 @@ def test_complete_empty_fetch_requires_evidence_before_zeroing_old_project(api, 
         def close(self):
             pass
 
-    monkeypatch.setattr(workbench_i8, 'I8Client', Client)
+    monkeypatch.setattr(workbench_i8, 'open_i8_client', lambda *, owner: Client())
     monkeypatch.setattr(workbench_i8, 'fetch_lists', lambda client: {
         kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')})
-    reduced = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'all-empty'}).json()
+    reduced = api.client.post('/api/m06/workbench/i8-fetch', json={'session_mode': 'browser', 'device_id': 'test', 'request_id': 'all-empty'}).json()
     assert reduced['projects'][0]['warehouse'] == '甲'
     assert reduced['projects'][0]['reduction'] is True
     request = {'preview_id': reduced['preview_id'], 'warehouses': ['甲']}

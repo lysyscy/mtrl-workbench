@@ -117,18 +117,12 @@ class AssignResponse(BaseModel):
 
 
 class WarehouseCheckRequest(BaseModel):
-    """**兜底前先跑一次 i8 仓库名单**（`TAIL-39`）。
-
-    `allow_kick` 默认 `False`；界面主动查询传 `True`，允许登录时退出该账号其他在线会话。
-    ⚠️ `session_mode` / `device_id` 与其它日常抓取入口同口径（`TAIL-476`）：
-       不传＝产品原直连行为；传 `browser` ⇒ 必须走用户浏览器里已登录的 i8 会话，
-       ⛔ 连接不在就当场停，不许回落到登录。
-    """
+    """兜底前先查 i8 仓库名单（TAIL-39）。"""
 
     warehouse_name: str = ""
-    allow_kick: bool = False
-    session_mode: str = Field("", description="http（缺省）＝直连；browser＝浏览器已有会话")
-    device_id: str = Field("", description="浏览模式必传：本页面的连接标识")
+    session_mode: str = Field("", description="http＝工作台直连；browser＝浏览器已有会话")
+    device_id: str = Field("", description="浏览器方式必传：本页面的连接标识")
+    kick_token: str = ""
 
 
 class WarehouseCheckOut(BaseModel):
