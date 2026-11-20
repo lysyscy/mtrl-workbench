@@ -8,60 +8,276 @@ import { ApiError, record, requestFile, requestJson } from './api';
 import { body, money } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
+import { useI8Session } from './i8-session';
 
-interface Outcome { notice_id: number; bill_no: string; ok: boolean; unverified: boolean; reason: string; download_url: string }
-interface Result { total: number; success: number; failed: number; items: Outcome[]; unprinted_bill_nos: string[] }
-function readResult(value: unknown): Result {
-  if (!record(value) || ![value.total,value.success,value.failed].every(Number.isSafeInteger) || !Array.isArray(value.items) || !Array.isArray(value.unprinted_bill_nos) || !value.unprinted_bill_nos.every(x => typeof x === 'string') || !value.items.every(x => record(x) && Number.isSafeInteger(x.notice_id) && typeof x.bill_no === 'string' && typeof x.ok === 'boolean' && typeof x.unverified === 'boolean' && typeof x.reason === 'string' && typeof x.download_url === 'string')) throw new ApiError('执行回执不完整，请先查看运行记录核对，勿重复打印。');
-  return value as unknown as Result;
+type BatchMode = 'pdf' | 'print';
+type BatchStage = 'connecting' | 'preparing' | 'dispatching';
+
+interface Outcome {
+  notice_id: number;
+  bill_no: string;
+  ok: boolean;
+  unverified: boolean;
+  reason: string;
+  download_url: string;
 }
-function download(url: string, filename: string) { const link=document.createElement('a');link.href=url;link.download=filename;link.click(); }
-export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[]; mode: 'pdf'|'print'; blocked: boolean; close: () => void }) {
-  const lock=useRef(false), attempted=useRef(false);
-  const [busy,setBusy]=useState(true), [result,setResult]=useState<Result|null>(null), [error,setError]=useState('');
-  const [file,setFile]=useState<{url:string;filename:string;pdf:boolean}|null>(null);
-  const blobUrl=useRef('');
-  const title=mode==='print'?'批量打印':'只导出 PDF';
+
+interface Result { total: number; success: number; failed: number; items: Outcome[] }
+interface BatchView {
+  batch_id: string;
+  mode: BatchMode;
+  stage: BatchStage;
+  status: 'running' | 'ready' | 'failed' | 'complete';
+  total: number;
+  prepared_count: number;
+  dispatch_processed_count: number;
+  dispatched_count: number;
+  current_bill_no: string;
+  failed_bill_no: string;
+  failed_notice_id: number | null;
+  reason: string;
+  kick_token: string;
+  items: { notice_id: number; status: string }[];
+  result: Result | null;
+}
+
+function readBatch(value: unknown, mode: BatchMode): BatchView {
+  if (!record(value) || value.mode !== mode || typeof value.batch_id !== 'string' || !value.batch_id
+    || !['connecting', 'preparing', 'dispatching'].includes(String(value.stage))
+    || !['running', 'ready', 'failed', 'complete'].includes(String(value.status))
+    || ![value.total, value.prepared_count, value.dispatch_processed_count, value.dispatched_count].every(Number.isSafeInteger)
+    || ![value.current_bill_no, value.failed_bill_no, value.reason, value.kick_token].every(x => typeof x === 'string')
+    || (value.failed_notice_id !== null && !Number.isSafeInteger(value.failed_notice_id))
+    || !Array.isArray(value.items) || !value.items.every(x => record(x) && Number.isSafeInteger(x.notice_id) && typeof x.status === 'string')) {
+    throw new ApiError('批次状态不完整，请重查批次。');
+  }
+  const result = value.result;
+  if (result !== null && (!record(result) || ![result.total, result.success, result.failed].every(Number.isSafeInteger)
+    || !Array.isArray(result.items) || !result.items.every(x => record(x) && Number.isSafeInteger(x.notice_id)
+      && typeof x.bill_no === 'string' && typeof x.ok === 'boolean' && typeof x.unverified === 'boolean'
+      && typeof x.reason === 'string' && typeof x.download_url === 'string'))) {
+    throw new ApiError('执行回执不完整，请重查批次。');
+  }
+  return value as unknown as BatchView;
+}
+
+const stageLabel: Record<BatchStage, string> = {
+  connecting: '连接 i8', preparing: '准备 PDF', dispatching: '投递打印机',
+};
+const batchPath = '/api/m03/print-batches';
+const pathOf = (id: string) => batchPath + '/' + encodeURIComponent(id);
+const messageOf = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+
+export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[]; mode: BatchMode; blocked: boolean; close: () => void }) {
+  const session = useI8Session();
+  const lock = useRef(false);
+  const [scope, setScope] = useState(() => [...rows]);
+  const [waiting, setWaiting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [batch, setBatch] = useState<BatchView | null>(null);
+  const [error, setError] = useState('');
+  const [readFailed, setReadFailed] = useState(false);
+  const [kick, setKick] = useState<{ token: string; message: string } | null>(null);
+  const [file, setFile] = useState<{ url: string; filename: string; pdf: boolean } | null>(null);
+  const blobUrl = useRef('');
+  const alive = useRef(true);
+  const blockedRef = useRef(blocked);
+  const confirmationGeneration = useRef(0);
+  blockedRef.current = blocked;
+  const title = mode === 'print' ? '批量打印' : '只导出 PDF';
   const closing = useDialogClose({ busy, dirty: false, close });
-  useEffect(() => { if (!blocked) void run(); }, [blocked]);
-  useEffect(()=>()=>{ if(blobUrl.current) URL.revokeObjectURL(blobUrl.current); },[]);
+  const result = batch?.result;
+  const preparationFailed = batch?.status === 'failed' && batch.stage !== 'dispatching';
+  const failedIds = new Set(preparationFailed && batch.failed_notice_id !== null
+    ? batch.items.filter(item => item.status === 'failed').map(item => item.notice_id) : []);
+  const remaining = scope.filter(row => !failedIds.has(row.notice_id));
+  const stage = batch?.stage ?? 'connecting';
+  const completed = stage === 'dispatching' ? batch?.dispatch_processed_count : batch?.prepared_count;
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    };
+  }, []);
+  useEffect(() => {
+    setWaiting(false);
+    setKick(null);
+    return () => { confirmationGeneration.current += 1; };
+  }, [blocked, session.mode]);
+  useEffect(() => {
+    if (waiting && !blocked && session.mode === SESSION_MODE_BROWSER && session.connected) {
+      setWaiting(false);
+      void prepare();
+    }
+  }, [waiting, blocked, session.mode, session.connected]);
+
   async function loadFile(value: Result) {
-    const url=value.items.find(x=>x.ok && x.download_url)?.download_url;
-    if(!url) throw new ApiError('没有可下载的产物，请核对逐条回执。');
-    const item=await requestFile(url);
-    blobUrl.current=URL.createObjectURL(item.blob);
-    setFile({url:blobUrl.current,filename:item.filename,pdf:item.blob.type.includes('application/pdf')});
+    const url = value.items.find(x => x.ok && x.download_url)?.download_url;
+    if (!url) throw new ApiError('没有可下载的产物，请核对逐条回执。');
+    const item = await requestFile(url);
+    if (!alive.current) return;
+    clearFile();
+    blobUrl.current = URL.createObjectURL(item.blob);
+    setFile({ url: blobUrl.current, filename: item.filename, pdf: item.blob.type.includes('application/pdf') });
   }
-  async function run() {
-    if(blocked||lock.current||attempted.current) return;
-    lock.current=true;attempted.current=true;setBusy(true);setError('');
-    try { const value=readResult(await requestJson('/api/m03/batch',{method:'POST',...body({ids:rows.map(r=>r.notice_id),mode})}));setResult(value);if(mode==='pdf'&&value.success) await loadFile(value); }
-    catch(e) { setError((e instanceof Error?e.message:'执行未完成，请核对运行记录。')+(mode==='print'?' 请先核对运行记录及打印机，勿直接重复打印。':'')); }
-    finally { lock.current=false;setBusy(false); }
+
+  function clearFile() {
+    if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    blobUrl.current = '';
+    setFile(null);
   }
+
+  async function follow(handle: BatchView, generation: number, reread = false) {
+    const path = pathOf(handle.batch_id);
+    try {
+      let current = reread ? readBatch(await requestJson(path), mode) : handle;
+      while (alive.current) {
+        if (current.batch_id !== handle.batch_id) throw new ApiError('批次编号已变化，请重查原批次。');
+        setBatch(current);
+        if (current.status === 'ready' && mode === 'print') {
+          if (blockedRef.current) { setReadFailed(true); return; }
+          current = readBatch(await requestJson(path + '/dispatch', { method: 'POST' }), mode);
+        } else if (current.status === 'running') {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          if (!alive.current) return;
+          current = readBatch(await requestJson(path), mode);
+        } else {
+          if (generation === confirmationGeneration.current && session.mode !== SESSION_MODE_BROWSER && current.kick_token) {
+            setKick({ token: current.kick_token, message: current.reason });
+          }
+          if (mode === 'pdf' && current.result?.success) {
+            try { await loadFile(current.result); }
+            catch (failure) { setError(messageOf(failure, '下载失败，请重试下载。')); }
+          }
+          return;
+        }
+      }
+    } catch (failure) {
+      setReadFailed(true);
+      setError(messageOf(failure, '批次状态暂时无法核对，请重查原批次。'));
+    }
+  }
+
+  async function prepare(token = '') {
+    if (blocked || lock.current || !scope.length) return;
+    if (session.mode === SESSION_MODE_BROWSER && !session.connected) {
+      setBatch(null);
+      setError('');
+      setWaiting(true);
+      if (!session.maintaining) void session.connect();
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setBatch(null);
+    setKick(null);
+    setError('');
+    setReadFailed(false);
+    clearFile();
+    const generation = confirmationGeneration.current;
+    try {
+      const payload = sessionPayload(session, token ? { kick_token: token } : {}, {
+        ids: scope.map(row => row.notice_id), mode,
+      });
+      const initial = readBatch(await requestJson(batchPath + '/prepare', { method: 'POST', ...body(payload) }), mode);
+      await follow(initial, generation);
+    } catch (failure) {
+      if (generation === confirmationGeneration.current && !token
+        && session.mode !== SESSION_MODE_BROWSER && failure instanceof ApiError
+        && failure.status === 409 && failure.code === 'i8_online_conflict'
+        && record(failure.detail) && typeof failure.detail.kick_token === 'string' && failure.detail.kick_token) {
+        setKick({ token: failure.detail.kick_token, message: failure.message });
+      } else setError(messageOf(failure, '连接 i8 失败，请重试全批。'));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function recheck() {
+    if (!batch || blocked || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    setReadFailed(false);
+    try { await follow(batch, confirmationGeneration.current, true); }
+    finally { lock.current = false; setBusy(false); }
+  }
+
+  function removeFailed() {
+    setScope(remaining);
+    setBatch(null);
+    setKick(null);
+    setError('');
+    clearFile();
+  }
+
   async function retryDownload() {
-    if(!result||busy||blocked) return;setBusy(true);setError('');
-    try { await loadFile(result); }catch(e) { setError(e instanceof Error?e.message:'下载失败，请重试下载。'); }finally {setBusy(false);}
+    if (!result || blocked || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try { await loadFile(result); }
+    catch (failure) { setError(messageOf(failure, '下载失败，请重试下载。')); }
+    finally { lock.current = false; setBusy(false); }
   }
-  return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="notice-print-title" closing={closing}>
-    <p>本批 {rows.length} 条通知书（含搜索隐藏行）。</p>
-    <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
-      {field:'bill_no',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no||'—')),wrapText:false,valueFormatter:p=>p.value||'—'},
-      {field:'project_display',headerName:'付款项目'},
-      {field:'amount_approved',headerName:'审批金额（元）',...numberColumnWidth(rows.map(row=>money(row.amount_approved))),cellClass:'money',valueFormatter:p=>money(p.value)},
-    ]}/>
-    {busy&&<p role="status">正在{title}，请勿重复操作…</p>}
-    {result&&<section aria-label="执行回执"><p role="status">{mode==='pdf'?'已生成':'已投递'} {result.success} / 共 {result.total} 条，失败 {result.failed} 条。</p>
-      {result.unprinted_bill_nos.length>0&&<p className="notice" role="alert">未产出的单号：{result.unprinted_bill_nos.join('、')}</p>}
-      <ul>{result.items.map((item,i)=><li key={`${item.notice_id}-${i}`} className={!item.ok?'notice':''}>{item.bill_no||item.notice_id}：{!item.ok?'失败':item.unverified?'已投递但未核实，请核对出纸，勿重复打印':mode==='pdf'?'已生成':'已投递'}{item.reason&&`，${item.reason}`}</li>)}</ul>
-    </section>}
-    {error&&<p className="notice" role="alert">{error}</p>}
-    {file?.pdf&&<><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p><iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
-    <div className="dialog-actions"><Link to="/i8" onClick={event=>{if(busy)event.preventDefault();else closing.requestClose();}}>查看运行记录</Link><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>关闭</Button>
-      {file&&<Button htmlType="submit" className="primary" disabled={busy||blocked} onClick={()=>download(file.url,file.filename)}>下载 {file.filename}</Button>}
-      {result&&mode==='pdf'&&result.success>0&&!file&&<Button htmlType="submit" disabled={busy||blocked} onClick={()=>void retryDownload()}>重试下载</Button>}
-    </div>
-  </DialogContents></BusinessModal>;
+
+  return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
+    <DialogContents title={title} titleId="notice-print-title" closing={closing}>
+      <p>本批 {scope.length} 条通知书（含搜索隐藏行）。</p>
+      <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={scope} rowId={row => String(row.notice_id)} columns={[
+        { field: 'bill_no', headerName: '单据编码', ...fullTextWidth(scope.map(row => row.bill_no || '—')), wrapText: false, valueFormatter: p => p.value || '—' },
+        { field: 'project_display', headerName: '付款项目' },
+        { field: 'amount_approved', headerName: '审批金额（元）', ...numberColumnWidth(scope.map(row => money(row.amount_approved))), cellClass: 'money', valueFormatter: p => money(p.value) },
+      ]} />
+      {(waiting || busy || batch?.status === 'running') && <div>
+        <p>{stageLabel[stage]}{stage !== 'connecting' && <> {completed}/{batch?.total}</>}{batch?.current_bill_no && <> · {batch.current_bill_no}</>}</p>
+        {stage !== 'connecting' && <progress aria-label={stageLabel[stage]} max={batch?.total} value={completed} />}
+        {waiting && <p role="status">{session.notice || '正在连接工作台与 i8 浏览器会话…'}</p>}
+      </div>}
+      {preparationFailed && <p className="notice" role="alert">
+        {stageLabel[stage]}失败{batch.failed_bill_no && <> · {batch.failed_bill_no}</>}。{batch.reason} 已投递 {batch.dispatched_count} 张。
+      </p>}
+      {result && (mode === 'pdf' || !preparationFailed) && <section aria-label="执行回执">
+        <p role="status">{mode === 'pdf' ? '已生成' : '已投递'} {result.success} / 共 {result.total} 条，未完成 {result.failed} 条。</p>
+        <ul>{result.items.map(item => <li key={item.notice_id} className={!item.ok ? 'notice' : ''}>
+          {item.bill_no || item.notice_id}：{!item.ok ? '未完成' : item.unverified ? '已投递但未核实，请核对出纸，勿重复打印' : mode === 'pdf' ? '已生成' : '已投递'}
+          {item.reason && <>，{item.reason}</>}
+        </li>)}</ul>
+      </section>}
+      {error && <p className="notice" role="alert">{error}</p>}
+      {kick && <p className="notice" role="status">{kick.message}</p>}
+      {file?.pdf && <><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p>
+        <iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
+      <div className="dialog-actions">
+        <Link to="/i8" onClick={event => { if (busy) event.preventDefault(); else closing.requestClose(); }}>查看运行记录</Link>
+        <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>关闭</Button>
+        {waiting && <Button htmlType="button" onClick={() => setWaiting(false)}>取消等待</Button>}
+        {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
+          <Button htmlType="button" onClick={() => setKick(null)}>取消下线确认</Button>
+          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void prepare(kick.token)}>让现有会话下线并继续</Button>
+        </>}
+        {!busy && !waiting && !kick && (!batch || preparationFailed) &&
+          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void prepare()}>
+            {preparationFailed || error ? '重试全批' : '确认本批'}
+          </Button>}
+        {preparationFailed && failedIds.size > 0 && remaining.length > 0 &&
+          <Button htmlType="button" disabled={busy || blocked} onClick={removeFailed}>移出异常单并重新确认剩余批次</Button>}
+        {readFailed && <Button htmlType="button" disabled={busy || blocked} onClick={() => void recheck()}>重查原批次</Button>}
+        {file && <Button htmlType="button" type="primary" disabled={busy || blocked} onClick={() => {
+          const link = document.createElement('a');
+          link.href = file.url;
+          link.download = file.filename;
+          link.click();
+        }}>下载 {file.filename}</Button>}
+        {mode === 'pdf' && Boolean(result?.success) && !file &&
+          <Button htmlType="button" disabled={busy || blocked} onClick={() => void retryDownload()}>重试下载</Button>}
+      </div>
+    </DialogContents>
+  </BusinessModal>;
 }
 interface Printer { printer_ipp_url:string;print_mode:string;printer_name:string }
 interface Layout { key:string;label:string;hint:string;stored:string;env:string;effective:string }

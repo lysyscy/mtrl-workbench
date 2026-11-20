@@ -26,6 +26,8 @@ from typing import Callable, Protocol
 from app.core.config import get_settings
 from app.core.errors import MustReportError
 from app.core.logging import get_logger
+from app.mod02_i8.browser_session import StrictSessionStopped
+from app.mod02_i8.client import I8OnlineConflictError
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.print.fields import build_detail_rows, build_values
 from app.mod03_notice.print.signatures import bind_signatures, check_signature_coverage
@@ -122,6 +124,91 @@ class BatchResult:
         return [o.bill_no for o in self.outcomes if not o.ok]
 
 
+@dataclass(frozen=True)
+class PreparedPdf:
+    notice_id: int
+    bill_no: str
+    filename: str
+    content: bytes
+
+
+def prepare_batch(
+    notices: list[PaymentNotice],
+    *,
+    mode: str,
+    design_fetcher: DesignLike,
+    detail_fetcher: DetailLike,
+    signature_store: SignatureStoreLike,
+    render_pdf: Callable[[str], bytes],
+    on_start: Callable[[int, str], None],
+    on_item: Callable[[ItemOutcome, PreparedPdf | None], None],
+    on_connected: Callable[[], None] = lambda: None,
+) -> None:
+    """Render the confirmed scope in order, without contacting a printer."""
+    designs: dict[str, object] = {}
+    used_names: set[str] = set()
+    connected = False
+    for notice in notices:
+        bill_no = (notice.bill_no or "").strip() or str(notice.id)
+        on_start(notice.id, bill_no)
+        prepared = None
+        try:
+            if not notice.ph_id:
+                raise MustReportError("通知书已不存在或缺少 i8 单据标识。")
+            design = _get_design(designs, design_fetcher, notice.bill_type)
+            if not connected:
+                on_connected()
+                connected = True
+            html = render_notice_html(notice, design.tpl, detail_fetcher, signature_store)
+            pdf = render_pdf(html)
+            if not pdf.startswith(b"%PDF-"):
+                raise MustReportError("未生成有效的 PDF。")
+            name = _unique_name(bill_no, used_names)
+            prepared = PreparedPdf(notice.id, bill_no, name, pdf)
+            outcome = ItemOutcome(notice.id, bill_no, True, pdf_path=name)
+        except (StrictSessionStopped, I8OnlineConflictError):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            reason = _reason(exc)
+            logger.warning("准备 PDF 失败：单号={} 原因={}", bill_no, reason)
+            outcome = ItemOutcome(notice.id, bill_no, False, reason=reason)
+        on_item(outcome, prepared)
+        if mode == MODE_PRINT and not outcome.ok:
+            return
+
+
+def dispatch_prepared(pdf: PreparedPdf, dispatch_pdf: Callable[[bytes], object]) -> ItemOutcome:
+    try:
+        note = str(dispatch_pdf(pdf.content) or "")
+        return ItemOutcome(pdf.notice_id, pdf.bill_no, True, unverified=bool(note), reason=note)
+    except Exception as exc:  # noqa: BLE001
+        reason = _reason(exc)
+        logger.warning("投递打印机失败：单号={} 原因={}", pdf.bill_no, reason)
+        return ItemOutcome(pdf.notice_id, pdf.bill_no, False, reason=reason)
+
+
+def complete_preparation(
+    mode: str,
+    ids: tuple[int, ...],
+    outcomes: dict[int, ItemOutcome],
+    prepared: list[PreparedPdf],
+    *,
+    bill_nos: dict[int, str],
+) -> BatchResult:
+    """Report every confirmed item, including those left unprocessed after a stop."""
+    result = BatchResult(mode=mode)
+    for notice_id in ids:
+        outcome = outcomes.get(notice_id)
+        if outcome is None or (mode == MODE_PRINT and outcome.ok):
+            bill_no = bill_nos.get(notice_id, str(notice_id))
+            reason = "本批准备失败，未投递。" if outcome else "本批准备已停止，未处理此单。"
+            outcome = ItemOutcome(notice_id, bill_no, False, reason=reason)
+        result.outcomes.append(outcome)
+    if mode == MODE_PDF:
+        result.files = [(pdf.filename, pdf.content) for pdf in prepared]
+    return result
+
+
 def run_batch(
     notices: list[PaymentNotice],
     *,
@@ -130,63 +217,42 @@ def run_batch(
     detail_fetcher: DetailLike,
     signature_store: SignatureStoreLike,
     render_pdf: Callable[[str], bytes],
-    dispatch_pdf: Callable[[bytes], None] | None = None,
+    dispatch_pdf: Callable[[bytes], object] | None = None,
     batch_dir: Path | None = None,
 ) -> BatchResult:
-    """编排一批单据的「渲染 → （打印 / 落盘）」。
-
-    - 渲染 = **模板驱动**（`template.render_html`）：版式来自 i8、数据来自三个详情接口、签名按节点名绑定。
-    - `mode=print`：渲染后调 `dispatch_pdf` 投递（001-08 失败显式报）。
-    - `mode=pdf`：只渲染并落盘到产物目录，**绝不调 `dispatch_pdf`**（PDF-001-02）。
-    - 任一张失败 ⇒ 记入 `outcomes`（含原因），**不中断整批**，结束时由 `unprinted_bill_nos` 列明。
-    """
+    """Synchronous adapter for the existing endpoint and offline tools."""
     if mode not in _MODES:
         raise ValueError(f"未知模式：{mode}（应为 {' / '.join(_MODES)}）")
     if mode == MODE_PRINT and dispatch_pdf is None:
         raise MustReportError("打印模式缺少投递实现（内部错误）")
 
-    result = BatchResult(mode=mode)
+    outcomes: dict[int, ItemOutcome] = {}
+    prepared: list[PreparedPdf] = []
 
-    # ⚠️⚠️ **生产路径不落盘**（用户 2026-09-20 口径：「导出换成浏览器下载」）——
-    #    只有**显式传了 `batch_dir`**（工具 / 自检）才写盘；不传 ⇒ 字节收进 `result.files`，
-    #    由 `pdf_cache` 交给 `GET /api/m03/pdf/{token}` **流给浏览器**。
-    base: Path | None = None
+    def on_item(outcome: ItemOutcome, pdf: PreparedPdf | None) -> None:
+        outcomes[outcome.notice_id] = outcome
+        if pdf is not None:
+            prepared.append(pdf)
+
+    prepare_batch(
+        notices, mode=mode, design_fetcher=design_fetcher, detail_fetcher=detail_fetcher,
+        signature_store=signature_store, render_pdf=render_pdf, on_start=lambda *_: None,
+        on_item=on_item,
+    )
+    if mode == MODE_PRINT and len(prepared) == len(notices) and dispatch_pdf is not None:
+        return BatchResult(mode=mode, outcomes=[dispatch_prepared(pdf, dispatch_pdf) for pdf in prepared])
+
+    result = complete_preparation(
+        mode, tuple(notice.id for notice in notices), outcomes, prepared,
+        bill_nos={notice.id: (notice.bill_no or "").strip() or str(notice.id) for notice in notices},
+    )
     if mode == MODE_PDF and batch_dir is not None:
         base = Path(batch_dir)
         base.mkdir(parents=True, exist_ok=True)
         result.batch_dir = str(base.resolve())
-
-    designs: dict[str, object] = {}   # bill_type → PaymentNoticeDesign | Exception（批内复用，不重复取版式）
-    used_names: set[str] = set()
-
-    for notice in notices:
-        bill_no = (notice.bill_no or "").strip() or str(notice.id)
-        try:
-            design = _get_design(designs, design_fetcher, notice.bill_type)
-            html = render_notice_html(notice, design.tpl, detail_fetcher, signature_store)
-            pdf = render_pdf(html)
-            if mode == MODE_PRINT:
-                # ⭐ `TAIL-46`-①：投递实现**返回一句"投递说明"**（空串 = 已核实；非空 = 已投递无法核实）。
-                #    ⚠️ "说不清"**不算失败**（`ok=True, unverified=True`）—— 报失败会让人重复打印。
-                note = str(dispatch_pdf(pdf) or "")  # type: ignore[misc]
-                result.outcomes.append(ItemOutcome(
-                    notice.id, bill_no, True, unverified=bool(note), reason=note
-                ))
-            else:
-                name = _unique_name(bill_no, used_names)
-                if base is not None:
-                    result.outcomes.append(ItemOutcome(
-                        notice.id, bill_no, True, pdf_path=str(_write_pdf(base, name, pdf))))
-                else:
-                    # ⭐ **不落盘**：只把字节收住。⚠️ `pdf_path` 这里给的是**文件名**，
-                    #    ⛔ 不是本机路径 —— 它只用来在 zip 里当条目名 / 单张下载时当文件名。
-                    result.files.append((name, pdf))
-                    result.outcomes.append(ItemOutcome(notice.id, bill_no, True, pdf_path=name))
-        except Exception as exc:  # noqa: BLE001 —— 逐单据兜住，转成"未出 + 原因"，绝不静默
-            reason = _reason(exc)
-            logger.warning("批量{} 未产出：单号={} 原因={}", mode, bill_no, reason)
-            result.outcomes.append(ItemOutcome(notice.id, bill_no, False, reason=reason))
-
+        for outcome, pdf in zip(result.success, prepared, strict=True):
+            outcome.pdf_path = str(_write_pdf(base, pdf.filename, pdf.content))
+        result.files.clear()
     return result
 
 
@@ -220,7 +286,7 @@ def render_notice_html(
 
     values = build_values(info, detail)
     detail_rows = build_detail_rows(detail)
-    bound = bind_signatures(signature_store, flow)
+    bound = bind_signatures(signature_store, flow, tpl=tpl)
     check_signature_coverage(tpl, flow, bound)  # 001-06：零命中即抛错，不出无签名件
 
     html, _slots = render_html(tpl, values=values, detail_rows=detail_rows, signatures=bound)
@@ -232,6 +298,8 @@ def _get_design(cache: dict[str, object], fetcher: DesignLike, bill_type: str):
     if bill_type not in cache:
         try:
             cache[bill_type] = fetcher.fetch(bill_type)
+        except (StrictSessionStopped, I8OnlineConflictError):
+            raise
         except Exception as exc:  # noqa: BLE001
             cache[bill_type] = exc
     value = cache[bill_type]

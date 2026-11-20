@@ -36,11 +36,12 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Iterator
+from urllib.parse import urlsplit
 
 import httpx
 
 from app.core.config import get_settings, i8_base_of
-from app.core.errors import MustReportError, NotConfiguredError
+from app.core.errors import ExternalServiceError, MustReportError, NotConfiguredError
 from app.core.logging import get_logger
 from app.mod02_i8 import browser_broker
 from app.mod02_i8.browser_broker import RELAY_WAIT_SECONDS, BrowserBroker, BrowserRelayUnavailable
@@ -137,6 +138,39 @@ def _normalized_path(url: httpx.URL) -> str:
     return path
 
 
+_SIGNATURE_IMAGE_PATH = re.compile(
+    r"/(?:[A-Za-z0-9_.~-]+/)*[A-Za-z0-9_.~-]+\.(?:png|jpe?g|gif|bmp|webp)", re.IGNORECASE,
+)
+
+
+def is_signature_image_target(url: str) -> bool:
+    """The flow supplies a signed raster-image URL. Inspect its raw path before URL normalization."""
+    try:
+        raw = urlsplit(url)
+        target = httpx.URL(url)
+    except (httpx.InvalidURL, TypeError, ValueError):
+        return False
+    tokens = target.params.get_list("s")
+    return (
+        not raw.fragment and ".." not in raw.path and not target.userinfo
+        and _SIGNATURE_IMAGE_PATH.fullmatch(raw.path) is not None
+        and len(tokens) == 1 and bool(tokens[0].strip())
+    )
+
+
+def require_signature_image(status: int, content_type: str) -> None:
+    """Reject login pages and non-image responses without exposing signed URLs."""
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if 300 <= status < 400:
+        raise StrictRedirectStopped(_STOP_REDIRECT)
+    if status in (401, 403) or (200 <= status < 300 and media_type == "text/html"):
+        raise StrictSessionEnded("i8 签名图返回登录或会话异常页面，本批已停止。请核对 i8 会话后重试。")
+    if not 200 <= status < 300:
+        raise ExternalServiceError(f"签名图下载失败（HTTP {status}）。")
+    if not media_type.startswith("image/") or media_type == "image/":
+        raise ExternalServiceError("i8 签名图响应不是图片。")
+
+
 def assert_readonly(method: str, url: str) -> None:
     """**后端侧**只读端点校验：不在白名单内 ⇒ 当场停（⛔ 不发出去、不重试、不换通道）。
 
@@ -158,6 +192,8 @@ def assert_readonly(method: str, url: str) -> None:
         raise StrictTargetMismatch(
             "这次请求的地址里带了账号信息，本次已停止（未发出去、未登录）。"
         )
+    if verb == "GET" and is_signature_image_target(url):
+        return
     path = _normalized_path(parsed)
     if path not in _READONLY_ENDPOINTS.get(verb, frozenset()):
         raise StrictTargetMismatch(
@@ -279,7 +315,10 @@ class BrowserRelayTransport(httpx.BaseTransport):
             pending.reply_declared_length,
             pending.relay_failure,
         )
-        return httpx.Response(status, headers=headers, content=content, request=request)
+        response = httpx.Response(status, headers=headers, content=content, request=request)
+        if request.method == "GET" and is_signature_image_target(target):
+            require_signature_image(status, response.headers.get("content-type", ""))
+        return response
 
 
 #: 当前请求的作用域：`(模式, 设备 nonce)`。默认 `("http", "")` ⇒ 一切旧调用点行为不变。

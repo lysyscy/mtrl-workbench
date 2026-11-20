@@ -31,6 +31,9 @@ const WORKBENCH_ORIGINS = [
   'http://localhost:8065',
 ];
 
+// Paired with browser_relay.is_signature_image_target; the worker and tab use the same pattern.
+const SIGNATURE_IMAGE_PATH = /^\/(?:[A-Za-z0-9_.~-]+\/)*[A-Za-z0-9_.~-]+\.(?:png|jpe?g|gif|bmp|webp)$/i.source;
+
 /** 后端白名单的同名集合（`browser_relay._ALLOWED_HEADERS`）；扩展这侧再收一遍。 */
 const ALLOWED_HEADERS = ['accept', 'content-type', 'x-requested-with', 'accept-language'];
 
@@ -173,7 +176,12 @@ function checkEndpoint(method, rawUrl) {
   if (path.length > 1 && path.endsWith('/')) return '请求路径带了尾斜杠，已拒绝执行。';
   const verb = String(method || '').toUpperCase();
   const allowed = READONLY_ENDPOINTS[verb] || [];
-  if (!allowed.includes(path)) {
+  const rawPath = rawUrl.match(/^https?:\/\/[^/?#]+(\/[^?#]*)/i)?.[1] || '';
+  const tokens = target.searchParams.getAll('s');
+  const signatureImage = verb === 'GET' && !target.username && !target.password && !target.hash
+    && rawPath === target.pathname && !rawPath.includes('..')
+    && new RegExp(SIGNATURE_IMAGE_PATH, 'i').test(rawPath) && tokens.length === 1 && !!tokens[0].trim();
+  if (!allowed.includes(path) && !signatureImage) {
     return '这条请求不在只读取数白名单里，已拒绝执行（未触碰标签、未改任何数据）。';
   }
   return '';
@@ -365,7 +373,7 @@ async function readIdentity(message) {
  * 返回的 `declared_length` 是扩展自己数出来的字节数；后端会拿它核对解码长度，
  * 对不上即判「传输可能被截断」并停止。
  */
-async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEndpoints) {
+async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEndpoints, signaturePath) {
   const allowed = new Set(allowedHeaders);
   const headers = {};
   for (const [key, value] of Object.entries(payload.headers || {})) {
@@ -388,7 +396,12 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
   }
   // 端点白名单二次核对（service worker 侧已经拒过一次；这里是"到了页面再拒一次"）。
   const endpoints = (allowedEndpoints && allowedEndpoints[method]) || [];
-  if (!endpoints.includes(target.pathname)) {
+  const rawPath = payload.url.match(/^https?:\/\/[^/?#]+(\/[^?#]*)/i)?.[1] || '';
+  const tokens = target.searchParams.getAll('s');
+  const signatureImage = method === 'GET' && !target.username && !target.password && !target.hash
+    && rawPath === target.pathname && !rawPath.includes('..')
+    && new RegExp(signaturePath, 'i').test(rawPath) && tokens.length === 1 && !!tokens[0].trim();
+  if (!endpoints.includes(target.pathname) && !signatureImage) {
     return { failed: '这条请求不在只读取数白名单里' };
   }
   let body;
@@ -429,6 +442,13 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
   if (response.type === 'opaqueredirect' || response.type === 'opaque') {
     // 不透明响应拿不到状态与正文 ⇒ 不许当成结果继续解析（后端也会判停，这里先拦）。
     return { failed: '浏览器返回了不透明响应（无法核对结果）', code: 'opaque-response' };
+  }
+  if (signatureImage) {
+    const mediaType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+    if (response.status < 200 || response.status >= 300 || !/^image\/.+/.test(mediaType)) {
+      // Relay status and media type for a precise stop reason, without returning a login page.
+      return { status: response.status, headers: { 'content-type': mediaType }, body_b64: '', declared_length: 0 };
+    }
   }
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -538,7 +558,7 @@ async function execute(message, senderKey) {
         headers: request.headers || {},
         body_b64: request.body_b64 || '',
         timeout_ms: request.timeout_ms,
-      }, ALLOWED_HEADERS, ALLOWED_METHODS, READONLY_ENDPOINTS],
+      }, ALLOWED_HEADERS, ALLOWED_METHODS, READONLY_ENDPOINTS, SIGNATURE_IMAGE_PATH],
     });
   } catch {
     return { ok: false, code: 'binding-lost', message: '绑定的 i8 标签已不可用，工作台会自动重新连接。' };

@@ -233,7 +233,10 @@ function reply({ status = 200, headers = {}, bytes = new Uint8Array([0x7b, 0x7d]
   return {
     type,
     status,
-    headers: { forEach: visit => { for (const [key, value] of entries) visit(value, key); } },
+    headers: {
+      get: name => entries.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? null,
+      forEach: visit => { for (const [key, value] of entries) visit(value, key); },
+    },
     arrayBuffer: async () => bytes,
   };
 }
@@ -743,4 +746,51 @@ test('认不出来自哪个页面 ⇒ 不建立待核身份、不执行', async 
   assert.equal(answer.ok, false);
   assert.match(answer.message, /认不出/);
   assert.deepEqual(page.scriptCalls, []);   // 这一页从没成功 bind 过，所以是空的
+});
+
+test('签名图片限定同源 GET、安全路径和带签名参数的栅格图片', async () => {
+  const accepted = I8 + '/sig/test.png?s=demo';
+  const calls = [];
+  const relay = boot({fetchImpl: async (url, init) => {
+    calls.push({url, init});
+    return reply({headers: {'Content-Type': 'image/png'}, bytes: new Uint8Array([0x89, 0x50])});
+  }});
+  await relay.bind();
+  for (const input of [
+    {method: 'POST', url: accepted},
+    {method: 'GET', url: 'https://example.test/sig/test.png?s=demo'},
+    {method: 'GET', url: 'https://name@i8.example.test/sig/test.png?s=demo'},
+    {method: 'GET', url: I8 + '/sig/test.png'},
+    {method: 'GET', url: I8 + '/sig/test.png?s=demo&s=again'},
+    {method: 'GET', url: I8 + '/sig//test.png?s=demo'},
+    {method: 'GET', url: I8 + '/other/../sig/test.png?s=demo'},
+    {method: 'GET', url: I8 + '/other/%2e%2e/sig/test.png?s=demo'},
+  ]) {
+    assert.equal((await relay.call(exec(input))).ok, false);
+  }
+  assert.equal(calls.length, 0);
+  const response = await relay.call(exec({method: 'GET', url: accepted}));
+  assert.equal(response.ok, true);
+  assert.equal(response.body_b64, 'iVA=');
+  assert.equal(calls[0].init.redirect, 'manual');
+});
+
+test('签名图只回传图片字节，登录页和跳转不能当图片', async () => {
+  let sent = 0;
+  let type = 'basic';
+  const relay = boot({fetchImpl: async () => ({
+    ...reply({type, headers: {'Content-Type': 'text/html; charset=UTF-8'}}),
+    arrayBuffer: async () => { sent += 1; throw new Error('不得读取登录页'); },
+  })});
+  await relay.bind();
+  const request = exec({method: 'GET', url: I8 + '/sig/test.png?s=demo'});
+  const html = await relay.call(request);
+  assert.equal(html.headers['content-type'], 'text/html');
+  assert.equal(html.declared_length, 0);
+  assert.equal(html.body_b64, '');
+  type = 'opaqueredirect';
+  const redirect = await relay.call(request);
+  assert.equal(redirect.ok, false);
+  assert.equal(redirect.code, 'opaque-response');
+  assert.equal(sent, 0);
 });

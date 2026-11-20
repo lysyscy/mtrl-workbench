@@ -17,7 +17,7 @@
 
 ## 取图（照素材包 `print_paynotice.download_sig` 的口径）
 
-- `signature` 是**相对路径**（以 `http` 开头则直接用），拼到 `I8_BASE_URL` 后 **GET**（带会话 cookie）；
+- `signature` 是**相对路径**（也接受同源绝对地址），拼到 `I8_BASE_URL` 后 **GET**（带会话 cookie）；
 - 按**魔术字节**定 MIME（jpeg / gif / bmp，默认 png），编码成 `data:<mime>;base64,...` 直接嵌进 HTML；
 - **缓存键 = 去掉 query 的 path**（`?s=<token>` 每次都变，带 query 会永不命中）；
 - 缓存 TTL = 15 天（签名图是"按人固定"的图片）。
@@ -30,8 +30,13 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from app.core.errors import ExternalServiceError, MustReportError
+from app.core.config import get_settings, i8_base_of
+from app.core.errors import MustReportError
+from app.mod02_i8.browser_relay import is_signature_image_target, require_signature_image
+from app.mod02_i8.browser_session import StrictSessionStopped, StrictTargetMismatch, _origin_of
+from app.mod02_i8.client import I8OnlineConflictError
 from app.core.logging import get_logger
 
 logger = get_logger()
@@ -42,7 +47,7 @@ SIG_MIN_BYTES = 100          # 太小的响应视为坏图（素材包同阈值�
 # ⚠️ **本模块不声明"办理节点"这个字段名** —— 它只有一处口径 = `print/template.py::NODE_FILTER_FIELD`；
 #    `signature_slots()` 直接复用那边的 `node_of()`，所以这里**不需要**自己再来一份（曾有一份死常量，已删）。
 
-_MAGIC = ((b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"),
+_MAGIC = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"),
           (b"GIF89a", "image/gif"), (b"BM", "image/bmp"))
 
 
@@ -179,6 +184,8 @@ def check_signature_coverage(tpl, flow: list[dict] | None, bound: dict | None) -
             f"（版式槽位={slots}；流程已走到={reached}；取图失败={missing or '无'}）。"
             "已停止打印，禁止静默产出无签名件。"
         )
+    if cov.missing:
+        raise MustReportError("签名绑定失败：以下已到达审批节点的签名未能取得：" + "、".join(cov.missing))
     return cov
 
 
@@ -208,39 +215,41 @@ class SignatureStore:
         rel = str(rel or "").strip()
         if not rel:
             return ""
-        key = cache_key(rel)
+        base = i8_base_of(get_settings())
+        try:
+            parsed = urlsplit(rel)
+        except ValueError:
+            raise StrictTargetMismatch("i8 签名图地址无效，本批已停止。") from None
+        url = rel if parsed.scheme or parsed.netloc else f"{base.rstrip('/')}/{rel.removeprefix('/')}"
+        if not _origin_of(base) or _origin_of(url) != _origin_of(base) or not is_signature_image_target(url):
+            raise StrictTargetMismatch("i8 签名图地址不属于已配置站点或不符合只读图片路径，本批已停止。")
+        key = hashlib.sha256(f"{_origin_of(base)}:{cache_key(url)}".encode("utf-8")).hexdigest()
         if key in self._mem:
             return self._mem[key]
 
         blob = self._read_cache(key)
-        if blob is None:
-            blob = self._download(rel)
+        if not _valid_image(blob):
+            blob = self._download(url)
             if blob:
                 self._write_cache(key, blob)
-        if not blob or len(blob) < SIG_MIN_BYTES:
-            logger.warning("签名图取不到或过小（{} 字节）：{}", len(blob or b""), rel[:60])
+        if not _valid_image(blob):
+            logger.warning("签名图取不到或图片格式无效（{} 字节）", len(blob or b""))
             return ""
         uri = _to_data_uri(blob)
         self._mem[key] = uri
         return uri
 
     # --- 内部 ---
-    def _download(self, rel: str) -> bytes:
-        # ⚠️ 2026-09-18 修：这一行**原先只导了 `get_settings`**，而下一行用了 `i8_base_of`
-        #    ⇒ 真机取签名图时 `NameError: name 'i8_base_of' is not defined`
-        #    （离线测试全用桩、盖不到这条路径；是接线后"逐条如实"的打印回执把它顶出来的）。
-        from app.core.config import get_settings, i8_base_of  # noqa: PLC0415
-
-        base = i8_base_of(get_settings())
-        url = rel if rel.startswith("http") else f"{base}/{rel.lstrip('/')}"
+    def _download(self, url: str) -> bytes:
         try:
-            resp = self._client.request("GET", url)
+            resp = self._client.request("GET", url, follow_redirects=False)
+            require_signature_image(resp.status_code, resp.headers.get("content-type", ""))
+        except (StrictSessionStopped, I8OnlineConflictError):
+            raise
         except Exception as exc:  # noqa: BLE001
-            logger.warning("签名图下载异常：{}", exc)
+            logger.warning("签名图下载失败（{}）", type(exc).__name__)
             return b""
-        if resp.status_code >= 400:
-            raise ExternalServiceError(f"签名图下载失败 HTTP {resp.status_code}：{url[:80]}")
-        return resp.content or b""
+        return resp.content if _valid_image(resp.content) else b""
 
     def _cache_path(self, key: str) -> Path | None:
         return (self._dir / f"{key}.bin") if self._dir else None
@@ -260,18 +269,29 @@ class SignatureStore:
             p.write_bytes(blob)
 
 
+def _image_mime(blob: bytes | None) -> str:
+    if not blob:
+        return ""
+    if blob.startswith(b"RIFF") and blob[8:12] == b"WEBP":
+        return "image/webp"
+    return next((kind for magic, kind in _MAGIC if blob.startswith(magic)), "")
+
+
+def _valid_image(blob: bytes | None) -> bool:
+    return bool(blob and len(blob) >= SIG_MIN_BYTES and _image_mime(blob))
+
+
 def _to_data_uri(blob: bytes) -> str:
-    mime = "image/png"
-    for magic, kind in _MAGIC:
-        if blob.startswith(magic):
-            mime = kind
-            break
+    mime = _image_mime(blob) or "image/png"
     return f"data:{mime};base64,{base64.b64encode(blob).decode('ascii')}"
 
 
-def bind_signatures(store: SignatureStore, flow: list[dict] | None) -> dict[str, str]:
-    """流程 → `{节点名: data:URI}`（渲染器要的形态）。"""
-    return {name: store.uri_for(rel) for name, rel in collect_signature_paths(flow).items()}
+def bind_signatures(store: SignatureStore, flow: list[dict] | None, *, tpl=None) -> dict[str, str]:
+    """Fetch only nodes needed by this template when its slots are supplied."""
+    paths = collect_signature_paths(flow)
+    if tpl is not None:
+        paths = {name: paths[name] for name in signature_slots(tpl) if name in paths}
+    return {name: store.uri_for(rel) for name, rel in paths.items()}
 
 
 __all__ = [

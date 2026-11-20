@@ -19,6 +19,10 @@ class BatchRequest(BaseModel):
 
     ids: list[int] = Field(..., min_length=1, description="系统内勾选的单据 id（单选或多选）")
     mode: Literal["print", "pdf"] = Field("print", description="print=批量打印；pdf=只导出 PDF")
+    session_mode: str = ""
+    device_id: str = ""
+    kick_token: str = ""
+    expected_account: str | None = None
 
 
 class ItemOutcomeOut(BaseModel):
@@ -42,6 +46,33 @@ class BatchResponse(BaseModel):
     unprinted_bill_nos: list[str] = Field(default_factory=list, description="未产出单据的单号（001-07 / PDF-001-06）")
     batch_dir: str = ""
     items: list[ItemOutcomeOut] = Field(default_factory=list)
+
+
+class PreparationItemOut(BaseModel):
+    notice_id: int
+    bill_no: str
+    status: Literal["pending", "preparing", "prepared", "failed", "skipped"]
+    reason: str = ""
+
+
+class PrintBatchOut(BaseModel):
+    batch_id: str
+    mode: Literal["print", "pdf"]
+    ids: tuple[int, ...]
+    stage: Literal["connecting", "preparing", "dispatching"]
+    status: Literal["running", "ready", "failed", "complete"]
+    total: int
+    prepared_count: int
+    dispatch_processed_count: int
+    dispatched_count: int
+    current_bill_no: str = ""
+    failed_bill_no: str = ""
+    failed_notice_id: int | None = None
+    reason: str = ""
+    session_stopped: bool = False
+    kick_token: str = ""
+    items: list[PreparationItemOut]
+    result: BatchResponse | None = None
 
 
 class FetchRequest(BaseModel):
