@@ -7,7 +7,8 @@ import { ApiError, body, confirmWrite, record, requestJson, uncertainWrite } fro
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
-import { useI8Session } from './i8-session';
+import type { SessionChoice } from './i8-browser-relay';
+import { I8ConnectionWaitStatus, useI8ActionWait, useI8Session } from './i8-session';
 import { I8KickConfirmationActions, useI8KickConfirmation } from './i8-kick-confirmation';
 
 export type OwnershipDocument = {
@@ -114,15 +115,17 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
     enabled: !blocked, refetchOnMount: 'always',
     queryFn: ({ signal }) => readCandidates(document, signal),
   });
-  const closing = useDialogClose({
-    busy: busy || readback !== null, dirty: Boolean(value || newName || keyword), close, active: !blocked,
-  });
   const disabled = blocked || busy || readback !== null;
-  const browserBlocked = session.mode === SESSION_MODE_BROWSER && !session.connected;
   const name = newName.trim();
-  const kick = useI8KickConfirmation(JSON.stringify([
+  const scopeKey = JSON.stringify([
     document.source, document.number, document.name, document.project, value, name, session.mode, blocked,
-  ]));
+  ]);
+  const kick = useI8KickConfirmation(scopeKey);
+  const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(scopeKey);
+  const closing = useDialogClose({
+    busy: busy || readback !== null, dirty: Boolean(value || newName || keyword),
+    close: () => { cancelWaiting(); close(); }, active: !blocked,
+  });
   const word = keyword.trim();
   const keywordMatches = Boolean(word) && document.name.includes(word);
   const data = query.data;
@@ -130,13 +133,13 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
   const target = value === 'new'
     ? data?.shellId && name && warehouseReady ? { shell_id: data.shellId, new_small_name: name } : null
     : data?.candidates.some(item => String(item.id) === value) ? { small_id: Number(value) } : null;
-  const canSave = !disabled && !kick.message && !query.isFetching && !query.isError && keywordMatches && target !== null;
+  const canSave = !disabled && !waiting && !kick.message && !query.isFetching && !query.isError && keywordMatches && target !== null;
 
-  async function checkWarehouse(kickToken?: string) {
-    if (disabled || browserBlocked || !name || lock.current || (!kickToken && kick.message)) return;
+  async function checkWarehouse(kickToken?: string, choice: SessionChoice = session) {
+    if (disabled || !name || lock.current || (!kickToken && kick.message)) return;
     lock.current = true; setBusy(true); setError('');
     try {
-      const payload = sessionPayload(session, kickToken ? { kick_token: kickToken } : {}, { warehouse_name: name });
+      const payload = sessionPayload(choice, kickToken ? { kick_token: kickToken } : {}, { warehouse_name: name });
       const r = await requestJson('/api/m03/notices/warehouse-check', { method: 'POST', ...body(payload) });
       if (!record(r) || typeof r.found !== 'boolean' || typeof r.degraded !== 'boolean' ||
         typeof r.message !== 'string' || typeof r.from_cache !== 'boolean' || typeof r.cached_at !== 'string' ||
@@ -219,9 +222,10 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
             <p>{session.mode === SESSION_MODE_BROWSER
               ? '本次只查名单，不建档：查询由你浏览器里已登录的 i8 标签发出，不登录、不顶号；连接不在时会直接停下。'
               : '本次只查名单。工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>
-            {browserBlocked && <p className="notice" role="alert">当前选的是「浏览器已有会话」，但浏览器连接不在。请到「i8 接入」页重新连接，或把取数方式切回「工作台直连」。<strong>本次不会改用登录方式。</strong></p>}
-            {kick.message ? <I8KickConfirmationActions {...kick} disabled={disabled || browserBlocked} />
-              : <Button disabled={disabled || browserBlocked || !name} onClick={() => void checkWarehouse()}>查询 i8 仓库名单</Button>}
+            {waiting && <I8ConnectionWaitStatus />}
+            {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
+            {kick.message ? <I8KickConfirmationActions {...kick} disabled={disabled || waiting} />
+              : <Button disabled={disabled || waiting || !name} onClick={() => void runWhenReady(choice => checkWarehouse(undefined, choice))}>查询 i8 仓库名单</Button>}
             {warehouse && <div>
               <p>{warehouse.degraded ? '未取到名单，不等于名单里没有。' : warehouse.found
                 ? `名单中有该仓库，所属项目：${warehouse.owners.join('、')}` : '名单中没有该仓库；将来同步可能重复建档。'}</p>

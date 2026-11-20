@@ -79,7 +79,7 @@ def perform_action(name: str, payload: dict, request: Request):
             raise MustReportError('i8 下线确认无效，请重新发起操作。')
         started, operator = datetime.now(), current_operator()
         with unified_i8_session(payload, owner=current_name(), operation="m06.workbench.i8-fetch",
-                                scope={"request_id": request_id}, require_explicit=True):
+                                scope={"request_id": request_id}):
             try:
                 with session_scope() as session:
                     current = workbench.state(session)

@@ -43,7 +43,7 @@ def confirmed_ids(req: BatchRequest) -> tuple[int, ...]:
 def batch_i8_session(req: BatchRequest, owner: str, ids: tuple[int, ...]):
     return unified_i8_session(
         req, owner=owner, operation="m03.batch",
-        scope={"mode": req.mode, "ids": list(ids)}, require_explicit=True,
+        scope={"mode": req.mode, "ids": list(ids)},
     )
 
 
@@ -231,7 +231,7 @@ def _prepare(batch: _PrintBatch, req: BatchRequest, startup: Future[None]) -> No
 def start_batch(owner: str, req: BatchRequest) -> PrintBatchOut:
     if not owner:
         raise MustReportError("请登录工作台后重新发起 i8 操作。")
-    session_mode = resolve_mode(req.session_mode, require_explicit=True)
+    session_mode = resolve_mode(req.session_mode)
     batch = _PrintBatch(secrets.token_urlsafe(24), owner, req.mode, confirmed_ids(req))
     initial = batch.snapshot()
     with _index_lock:

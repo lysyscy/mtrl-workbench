@@ -100,7 +100,7 @@ def fetch_notices(
     build_fetch_params(req.year_month)
     with unified_i8_session(
         req, owner=current_name(), operation="m03.notices.fetch",
-        scope={"year_month": req.year_month}, require_explicit=True,
+        scope={"year_month": req.year_month},
     ):
         result = executor(req.year_month, False)
     if isinstance(result, FetchResponse):
@@ -233,7 +233,7 @@ def warehouse_check(
     from app.mod02_i8.session_policy import unified_i8_session
 
     with unified_i8_session(req, owner=current_name(), operation="m03.notices.warehouse-check",
-                            scope={"warehouse_name": name}, require_explicit=True):
+                            scope={"warehouse_name": name}):
         try:
             rows = wh_loader(False)
         except (StrictSessionStopped, I8OnlineConflictError):

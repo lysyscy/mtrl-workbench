@@ -356,7 +356,7 @@ def api_fetch(req: FetchRequest) -> dict:
 
     # ⚠️ 取数方式在**整个抓取过程**内有效（同一请求内后续所有 i8 调用都走同一通道）。
     with unified_i8_session(req, owner=current_name(), operation="m07.fetch",
-                            scope={"month": req.month}, require_explicit=True):
+                            scope={"month": req.month}):
         return FS.run_fetch(year_month=req.month, confirmed=req.confirm, operator=current_operator())
 
 

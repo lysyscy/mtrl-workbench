@@ -1,4 +1,5 @@
 /** Browser relay belongs to the account workspace, independently of the visible business page. */
+import Button from 'antd/es/button';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError } from './api';
@@ -7,7 +8,7 @@ import {
   relayAvailable, relayConnectionWanted, relayMode, requestBrowserPermission, resetBrowserRelay, setRelayConnectionWanted,
   setRelayMode, unbindBrowserIdentity,
 } from './i8-browser-relay';
-import type { BrowserRelayState, SessionMode } from './i8-browser-relay';
+import type { BrowserRelayState, SessionChoice, SessionMode } from './i8-browser-relay';
 import { maintainBrowserRelay, recoverable } from './i8-relay-recovery';
 import { createI8ActionGate } from './i8-action-gate';
 
@@ -55,10 +56,21 @@ export function useI8ActionWait(scopeKey: string) {
     return gate.cancel;
   }, [gate, scopeKey, actionKey]);
   const cancelWaiting = () => {gate.cancel(); setWaiting(false);};
-  function runWhenReady<T>(issue: () => T) {
-    return mode === SESSION_MODE_BROWSER ? gate.run(waitForBrowser, issue, setWaiting) : Promise.resolve(issue());
+  function runWhenReady<T>(issue: (choice: SessionChoice) => T) {
+    return mode === SESSION_MODE_BROWSER
+      ? gate.run(waitForBrowser, () => issue({mode, connected: true}), setWaiting)
+      : Promise.resolve(issue({mode, connected: false}));
   }
   return {waiting, cancelWaiting, runWhenReady};
+}
+
+export function I8ConnectionWaitStatus() {
+  const {notice, connectionCode, requestPermission} = useI8Session();
+  return <div className="notice">
+    <p role="status">{notice || '正在连接 i8…'}</p>
+    {connectionCode === 'permission-required' &&
+      <Button htmlType="button" onClick={() => void requestPermission()}>授权 i8 站点</Button>}
+  </div>;
 }
 
 export function I8SessionProvider({blocked, owner, children}: {blocked: boolean; owner: string; children: ReactNode}) {

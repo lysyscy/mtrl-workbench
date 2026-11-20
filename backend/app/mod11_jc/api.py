@@ -197,7 +197,7 @@ def api_fetch(payload: FetchIn) -> dict:
         with session_scope() as session:
             since = FS.default_since(session)
     with unified_i8_session(payload, owner=current_name(), operation="m11.fetch",
-                            scope={"since": since, "automatic": automatic}, require_explicit=True):
+                            scope={"since": since, "automatic": automatic}):
         return FS.run_fetch(confirmed=True, since=since, automatic=automatic)
 
 
@@ -339,7 +339,7 @@ def _read_payables():
 @router.post('/api/m11/auto-link-preview')
 def api_auto_link_preview(payload: AutoLinkIn) -> dict:
     with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link-preview",
-                            scope={"notice_ids": payload.notice_ids}, require_explicit=True):
+                            scope={"notice_ids": payload.notice_ids}):
         payables = _read_payables()
     with session_scope() as s:
         return SV.auto_link_plan(s, payload.notice_ids, payables)
@@ -351,8 +351,7 @@ def api_auto_link(payload: AutoLinkIn) -> dict:
         return {'ok': False, 'message': '请先预览本次可关联通知书'}
     selections = [row.model_dump() for row in payload.selections]
     with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link",
-                            scope={"notice_ids": payload.notice_ids, "selections": selections},
-                            require_explicit=True):
+                            scope={"notice_ids": payload.notice_ids, "selections": selections}):
         payables = _read_payables()
     with session_scope() as s:
         return SV.act_auto_link(s, selections, payables)

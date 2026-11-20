@@ -92,7 +92,7 @@ def http_login(
 ) -> LoginResult:
     """登录 i8，返回 `LoginResult`（**成功时** `cookie` 可用）。
 
-    `allow_kick=True` 才允许强踢；本系统界面主动操作按既定策略传入，通用默认仍关闭。
+    `allow_kick=True` 才允许强踢；工作台直连只在消费本次操作的下线确认后才允许。
     ⚠️ **不重试**：失败直接返回，由人工决定要不要再来一次。
     """
     settings = get_settings()

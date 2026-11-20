@@ -45,7 +45,7 @@ def _consume_token(token: str, binding: _TokenBinding) -> None:
 
 @contextmanager
 def unified_i8_session(
-    payload: object, *, owner: str, operation: str, scope: dict, require_explicit: bool = True,
+    payload: object, *, owner: str, operation: str, scope: dict,
 ) -> Iterator[None]:
     """Run the operation using clients from `open_i8_client` and server-owned scope values.
 
@@ -55,7 +55,7 @@ def unified_i8_session(
     def get(key: str) -> str:
         return payload.get(key, "") if isinstance(payload, dict) else getattr(payload, key, "")
 
-    mode = resolve_mode(get("session_mode"), require_explicit=require_explicit)
+    mode = resolve_mode(get("session_mode"))
     token = get("kick_token")
     if mode == MODE_BROWSER:
         if token:

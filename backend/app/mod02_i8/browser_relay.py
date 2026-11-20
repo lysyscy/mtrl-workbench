@@ -22,7 +22,7 @@ I8Client.request()  ──httpx──▶  BrowserRelayTransport.handle_request()
 
 ## 与"产品原有 HTTP 模式"的关系
 
-- 默认（`http`）⇒ 工厂**原样**返回 `I8Client(allow_kick=...)`，缓存/重登/强踢策略与改动前一致。
+- 显式 `http` ⇒ 工厂使用统一会话策略绑定的账号、站点和本次下线确认。
 - 选了 `browser` ⇒ 返回 `I8BrowserSessionClient`：`_login()` 直接抛停止、`_ensure_cookie()` 不碰
   `cookie_store` ⇒ **结构上**不可能登录、强踢、写会话缓存。
 - 选了 `browser` 但连接不在 ⇒ **当场抛停止**，⛔ 绝不悄悄退回 HTTP
@@ -321,16 +321,16 @@ class BrowserRelayTransport(httpx.BaseTransport):
         return response
 
 
-#: 当前请求的作用域：`(模式, 设备 nonce)`。默认 `("http", "")` ⇒ 一切旧调用点行为不变。
+#: 当前请求的作用域：`(模式, 设备 nonce)`。未进入会话策略时模式为空。
 #: ⚠️ 用 `ContextVar` 而不是全局变量：`uvicorn` 并发处理，全局量会串号（同 `core/session.py` 的教训）。
-_relay_scope: ContextVar[tuple[str, str]] = ContextVar("i8_relay_scope", default=(MODE_HTTP, ""))
+_relay_scope: ContextVar[tuple[str, str]] = ContextVar("i8_relay_scope", default=("", ""))
 
 
 @contextmanager
 def relay_scope(mode: str, device_id: str = "") -> Iterator[None]:
     """在**一次请求处理**内声明"这次取数走哪条通道"。退出即还原。"""
     token = _relay_scope.set((
-        str(mode or MODE_HTTP).strip() or MODE_HTTP,
+        resolve_mode(mode),
         str(device_id or ""),
     ))
     try:
@@ -340,52 +340,24 @@ def relay_scope(mode: str, device_id: str = "") -> Iterator[None]:
 
 
 def current_scope() -> tuple[str, str]:
-    mode, device = _relay_scope.get()
-    return (mode or MODE_HTTP), (device or "")
+    return _relay_scope.get()
 
 
-def resolve_mode(value: object, *, require_explicit: bool = False) -> str:
-    """把入参里的取数方式收敛成两个受控值。
-
-    空 / 没传 ⇒ `http`（＝产品原行为，旧调用点一行不用改）。
-    ⛔ 认不出来的值**直接拒**：绝不能把"用户明明选了浏览器方式"当成直连去登录。
-    """
-    text = str(value or "") if require_explicit else str(value or "").strip().lower()
-    if not text and not require_explicit:
-        return MODE_HTTP
-    if text not in (MODE_HTTP, MODE_BROWSER):
+def resolve_mode(value: object) -> str:
+    """只接受请求显式选择的会话模式。"""
+    if not isinstance(value, str) or value not in (MODE_HTTP, MODE_BROWSER):
         raise MustReportError("取数方式无法识别，请刷新页面后重新选择。")
-    return text
+    return value
 
 
-@contextmanager
-def scope_of(payload: object) -> Iterator[tuple[str, str]]:
-    """从**入参对象**取「取数方式 + 本页标识」并进入作用域（各日常入口共用，避免各写一套）。
-
-    `payload` 可以是任一模型的实例或 dict；缺字段一律按"没选过"处理（＝直连）。
-    """
-    get = payload.get if isinstance(payload, dict) else (lambda key, default=None: getattr(payload, key, default))
-    mode = resolve_mode(get("session_mode", ""))
-    device = str(get("device_id", "") or "")
-    with relay_scope(mode, device):
-        yield mode, device
-
-
-def open_i8_client(*, allow_kick: bool = False, owner: str = "") -> I8Client:
-    """**工厂**：按当前作用域给出该用的 i8 客户端（其他日常读取复用它即可，不必各自写一套）。
-
-    - 默认 / `http` ⇒ `I8Client(allow_kick=...)`：原有 Cookie 缓存 + 单次重登策略，一行没动。
-    - `browser` ⇒ `I8BrowserSessionClient`：只复用已有会话；连接不在就地停止。
-      ⚠️ `allow_kick` 在浏览器模式下**无效** —— 它结构上没有登录/踢人能力。
-
-    `owner` 必须是**服务端认证身份**（路由传 `current_name()`）；⛔ 不接受客户端声明。
-    """
+def open_i8_client(*, owner: str) -> I8Client:
+    """为当前会话策略创建客户端。owner 取自服务端认证身份。"""
     mode, device = current_scope()
-    if mode != MODE_BROWSER:
+    if resolve_mode(mode) == MODE_HTTP:
         policy = http_session_policy.get()
-        if policy is not None:
-            return I8Client(policy=policy)
-        return I8Client(allow_kick=allow_kick)
+        if policy is None:
+            raise MustReportError("工作台直连会话尚未建立，请重新发起 i8 操作。")
+        return I8Client(policy=policy)
 
     configured = _origin_of(i8_base_of(get_settings()))
     if not configured:
@@ -422,5 +394,4 @@ __all__ = [
     "open_i8_client",
     "relay_scope",
     "resolve_mode",
-    "scope_of",
 ]

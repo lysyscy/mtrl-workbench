@@ -9,7 +9,8 @@ import { body, money } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
-import { useI8ActionWait, useI8Session } from './i8-session';
+import type { SessionChoice } from './i8-browser-relay';
+import { I8ConnectionWaitStatus, useI8ActionWait, useI8Session } from './i8-session';
 
 type BatchMode = 'pdf' | 'print';
 type BatchStage = 'connecting' | 'preparing' | 'dispatching';
@@ -285,7 +286,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     } finally { lock.current = false; setBusy(false); }
   }
 
-  async function prepare(token = '') {
+  async function prepare(choice: SessionChoice, token = '') {
     if (!alive.current || blockedRef.current || lock.current || !scope.length) return;
     lock.current = true;
     setBusy(true);
@@ -296,7 +297,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     clearFile();
     const generation = confirmationGeneration.current;
     try {
-      const payload = sessionPayload(session, token ? { kick_token: token } : {}, {
+      const payload = sessionPayload(choice, token ? { kick_token: token } : {}, {
         ids: scope.map(row => row.notice_id), mode,
       });
       const initial = readBatch(await requestJson(batchPath + '/prepare', { method: 'POST', ...body(payload) }), mode);
@@ -353,7 +354,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
       {(waiting || busy || batch?.status === 'running') && <div>
         <p role="status">{stageLabel[stage]}{stage !== 'connecting' && <> {completed}/{batch?.total}</>}{batch?.current_bill_no && <> · {batch.current_bill_no}</>}</p>
         {stage !== 'connecting' && <progress aria-label={stageLabel[stage]} max={batch?.total} value={completed} />}
-        {waiting && <p role="status">{session.notice || '正在连接工作台与 i8 浏览器会话…'}</p>}
+        {waiting && <I8ConnectionWaitStatus />}
       </div>}
       {preparationFailed && <p className="notice" role="alert">
         {stageLabel[stage]}失败{batch.failed_bill_no && <> · {batch.failed_bill_no}</>}。{batch.reason} 已投递 {batch.dispatched_count} 张。
@@ -396,10 +397,10 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
         {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
         {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
           <Button htmlType="button" onClick={() => setKick(null)}>取消下线确认</Button>
-          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void prepare(kick.token)}>让现有会话下线并继续</Button>
+          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void prepare(session, kick.token)}>让现有会话下线并继续</Button>
         </>}
         {!busy && !waiting && !kick && scope.length > 0 && (!batch || preparationFailed) &&
-          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void runWhenReady(() => prepare())}>
+          <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void runWhenReady(prepare)}>
             {preparationFailed || error ? '重试全批' : '确认本批'}
           </Button>}
         {preparationFailed && failedIds.size > 0 && remaining.length > 0 &&

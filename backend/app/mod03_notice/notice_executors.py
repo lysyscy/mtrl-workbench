@@ -162,13 +162,13 @@ def apply_fetched_row(session, row: dict, *,
 def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
     """抓取执行器（D4 最小取数）。测试可覆盖。"""
 
-    def _exec(year_month: str, allow_kick: bool) -> FetchResponse:
+    def _exec(year_month: str, _legacy_allow_kick: bool) -> FetchResponse:
         t0 = datetime.now()
         # 路由绑定会话策略。主取数与补建档的两个读取共用同一客户端。
-        with closing(open_i8_client(allow_kick=allow_kick, owner=current_name())) as client:
-            return _fetch(year_month, allow_kick, client, t0)
+        with closing(open_i8_client(owner=current_name())) as client:
+            return _fetch(year_month, client, t0)
 
-    def _fetch(year_month: str, allow_kick: bool, client: I8Client, t0: datetime) -> FetchResponse:
+    def _fetch(year_month: str, client: I8Client, t0: datetime) -> FetchResponse:
         try:
             rows = NoticeFetcher(client).fetch_month(year_month)
         except I8OnlineConflictError:
@@ -234,7 +234,7 @@ def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
             def load_for_archive(loader):
                 nonlocal online_conflict
                 try:
-                    return loader(allow_kick, client)
+                    return loader(False, client)
                 except I8OnlineConflictError as exc:
                     online_conflict = exc
                     raise

@@ -70,7 +70,11 @@ registerHooks({
       return stub("export function DialogContents(p) { return { type: 'wrapper', props: { children: p.children } }; } export function useDialogClose() { return { requestClose() {} }; }");
     }
     if (specifier === './i8-session') {
-      return stub("export function useI8Session() { return globalThis.__notSession; }");
+      return stub("export function useI8Session() { return globalThis.__notSession; } " +
+        "export const I8ConnectionWaitStatus = () => null; " +
+        "export const useI8ActionWait = () => ({waiting: false, cancelWaiting() {}, runWhenReady: issue => {" +
+        "const session = globalThis.__notSession; if (session.mode === 'http' || session.connected) return issue(session);" +
+        "globalThis.__warehouseReady = () => issue({...session, connected: true}); }});");
     }
     return nextResolve(specifier, context);
   },
@@ -205,11 +209,15 @@ test('仓库名变化后原下线确认失效', async () => {
   assert.equal(calls.length, 1);
 });
 
-test('仓库名单：选了浏览器方式但连接不在 ⇒ 按钮禁用、零请求（⛔ 不退回登录）', async () => {
+test('仓库名单：确认后等待浏览器就绪，就绪后提交原查询', async () => {
   const calls = recorder();
   const button = warehouseButton('browser', false);
-  assert.ok(button, '按钮仍要显示，好让用户知道该去哪儿重连');
-  assert.equal(button.props.disabled, true, '没连接时必须禁用');
+  assert.ok(button);
+  assert.equal(button.props.disabled, false);
   await click(button);
-  assert.equal(calls.length, 0, '⛔ 连接不在时一个字都不发');
+  assert.equal(calls.length, 0);
+  await globalThis.__warehouseReady();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.session_mode, 'browser');
+  assert.equal(calls[0].body.warehouse_name, '新建仓库A');
 });

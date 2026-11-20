@@ -1,4 +1,4 @@
-"""扩展真机样机：在**独立临时 profile** 的 Chromium 里跑一遍 runtime / executeScript / fetch。
+"""用独立 Chromium profile 验证交付扩展协议及真实工作台的抓取、打印和导出入口。
 
 ⚠️ 这个脚本能证明什么、不能证明什么（读完再引用结论）：
 
@@ -18,6 +18,7 @@
        一个字都不用碰）；`document.cookie` **读不到**它；页面手工塞 `Cookie` 头会被浏览器
        **过滤**（服务端看到的是浏览器自己的那份，不是页面写的）。这正是本通道"不导出、
        不解密、不读 Cookie 也能复用会话"的机制基础。
+    7. 原入口的自动接入、等待取消、签名制单、整批 A4 闸门，以及原批恢复和投递回执。
 
   不能证明（⛔ 别拿它当验收）：
     - 不是 Edge：这里是 Chromium（`ms-playwright/chromium-1248`），Edge 上的实际行为未验；
@@ -27,42 +28,53 @@
 
 用法（只用仓库里已有的运行时）：
 
-    backend/.venv/Scripts/python.exe -B -X utf8 apps/browser-extension/tests/browser_smoke.py
+    backend/.venv/Scripts/python.exe -B -X utf8 apps/browser-extension/tests/browser_smoke.py --source-env <来源.env>
 
-端口：默认从 8071 起找一个空闲端口（不使用 8000/8065，避免碰他人的预览服务）。
+真实工作台使用已登记的空白测试 schema，i8 和 IPP 均为本机替身。
+交付扩展原样加载，工作台使用清单已允许的 127.0.0.1:8065；端口占用时直接退出。
+
 退出码：0 = 全部判据通过；1 = 有判据不通过（打印哪一条）。
 """
 
 from __future__ import annotations
 
+import argparse
 import base64
+import io
 import json
-import mimetypes
 import os
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
 import threading
+from contextlib import ExitStack, contextmanager
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from time import monotonic, sleep
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[3]
 EXT_DIR = ROOT / "apps" / "browser-extension"
 EXT_ID = "jfkgliolimmpceandogfimjkadplidem"
 
+BILL_NOS = ("SMOKE-1", "SMOKE-2", "SMOKE-3")
 FAKE_RECORD = {
-    "PhId": "3700000000000521",
-    "BillNo": "FKTZS2026090001",
     "PhidRecPayType_EXName": "其他支出",
-    "PhidPc_EXName": "第四工程公司",
+    "PhidPc_EXName": "样机项目",
     "AppStatus": 1,
-    "ApproveAmt": 12345.67,
+    "ApproveAmt": "12345.67",
+    "BillDt": datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
+    "PhidBusType_EXName": "付材料款",
     "Remark": "样机用假数据",
 }
-FAKE_BODY = json.dumps({"Success": True, "Record": [FAKE_RECORD]}, ensure_ascii=False).encode("utf-8")
+FAKE_BODY = json.dumps({"Success": True, "Record": [
+    dict(FAKE_RECORD, PhId=bill_no, BillNo=bill_no) for bill_no in BILL_NOS
+]}, ensure_ascii=False).encode("utf-8")
 
 # 假会话 Cookie：真 i8 的会话是 HttpOnly 的。值带哨兵前缀，方便在服务端日志里辨认。
 HTTPONLY_NAME = "MTRLSESSION"
@@ -71,11 +83,18 @@ FORGED_COOKIE = "forged-by-page-should-be-dropped"
 
 # 服务器收到过的每一条请求（用来证明"被拦的请求一个字节都没出去"）。
 RECEIVED: list[dict] = []
-NOTICE_POSTS: list[dict] = []
-CONNECTIONS: dict[str, dict] = {}
-TICKETS: dict[str, dict] = {}
-COMPLETED = threading.Event()
-FRONTEND: Path
+BATCH_PATH = "/api/m03/print-batches"
+IPP_REQUESTS: list[tuple[int, dict, bytes]] = []
+BLOCK_A4 = threading.Event()
+BLOCK_A4.set()
+BAD_SIGNATURE = threading.Event()
+HOLD_SECOND_PRINT = threading.Event()
+SECOND_PRINT_RECEIVED = threading.Event()
+# Synthetic 32 × 16 grayscale image, above the signature reader's minimum valid size.
+SIGNATURE_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAAAAABSayKFAAAARklEQVR4nI2QQQ4AIAjD9oT+/7N40og6hCNr0oEg8hwL"
+    "ffJQmQYswKlkk0thwNzhgcnbNwUF0gEaik9JF80zu4/yry4bwABZGMb7NPN+DAAAAABJRU5ErkJggg=="
+)
 
 WORKBENCH_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>工作台（样机）</title></head>
@@ -120,32 +139,6 @@ class Handler(BaseHTTPRequestHandler):
         if i8 and url.path == "/":
             self._send(200, I8_HTML.encode("utf-8"), "text/html;charset=utf-8")
             return
-        if url.path.startswith("/app/"):
-            relative = url.path.removeprefix("/app/")
-            file = FRONTEND / (relative if relative.startswith("assets/") else "index.html")
-            self._send(200, file.read_bytes(), mimetypes.guess_type(file)[0] or "text/javascript")
-            return
-        if url.path == "/static/theme.css":
-            self._send(200, b"", "text/css")
-            return
-        if url.path == "/api/m15/users":
-            self._json({"me": {"id": 1, "account": "smoke", "name": "烟测", "role": "admin", "ui_scale_css": "1"}})
-            return
-        if url.path == "/api/m02/config":
-            self._json({"ready": True, "account": "smoke", "i8_user": "i8-smoke", "message": ""})
-            return
-        if url.path == "/api/m03/notice-list":
-            self._json({"items": []})
-            return
-        if url.path.startswith("/api/"):
-            device = parse_qs(url.query).get("device_id", [""])[0]
-            if url.path == "/api/m02/browser/state":
-                self._json(CONNECTIONS.get(device, self._browser_state(0)))
-            elif url.path == "/api/m02/browser/pending":
-                self._json({"request": TICKETS.pop(device, None)})
-            else:
-                self._json([])
-            return
         if self.path == "/workbench":
             self._send(200, WORKBENCH_HTML.encode("utf-8"), "text/html;charset=utf-8")
             return
@@ -183,67 +176,98 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        if url.path.endswith(("/getPrintDesign", "/getFlowHisForPrint")) or url.path.startswith("/sig/"):
+            self._i8_business("GET", url, b"")
+            return
         self._send(404, b"{}")
 
-    def do_POST(self):  # noqa: N802
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length) if length else b""
-        if self.path == "/api/m02/browser/connect":
-            request = json.loads(body)
-            if request["i8_origin"] != I8_ORIGIN:
-                self._send(409, b"{}")
-                return
-            device = request["device_id"]
-            state = self._browser_state(CONNECTIONS.get(device, {}).get("generation", 0) + 1)
-            CONNECTIONS[device] = state
-            self._json(state)
+    def _i8_business(self, method, url, body):
+        RECEIVED.append({"method": method, "path": url.path, "headers": dict(self.headers),
+                         "body": body.decode("utf-8", "replace")})
+        if HTTPONLY_VALUE not in self.headers.get("Cookie", ""):
+            self._send(401, b"{}")
             return
-        if self.path == "/api/m02/browser/complete":
-            reply = json.loads(body)
-            accepted = reply["status"] == 200 and base64.b64decode(reply["body_b64"]) == FAKE_BODY
-            if accepted:
-                COMPLETED.set()
-            self._json({"accepted": accepted})
-            return
-        if self.path == "/api/m03/notices/fetch":
-            request = json.loads(body)
-            NOTICE_POSTS.append(request)
-            device = request.get("device_id")
-            state = CONNECTIONS.get(device)
-            if not state or request.get("session_mode") != "browser":
-                self._send(400, b"{}")
-                return
-            COMPLETED.clear()
-            TICKETS[device] = {
-                "ticket": "test-notice", "generation": state["generation"], "method": "POST",
-                "url": f"{I8_ORIGIN}/FC/FM/PaymentBill/getList", "headers": {}, "body_b64": "", "timeout_ms": 3000,
-            }
-            if not COMPLETED.wait(8):
-                self._send(502, b"{}")
-                return
-            self._json({"year_month": request["year_month"], "fetched": 1, "upserted": 1, "ignored": []})
-            return
-        RECEIVED.append({
-            "method": "POST",
-            "path": self.path,
-            "headers": dict(self.headers),
-            "body": body.decode("utf-8", "replace"),
-        })
-        if self.path.startswith(("/FC/FM/PaymentBill/getList", "/PMS/PCM/Contract/GetCntMList")):
+        if url.path.endswith(("/getList", "/GetCntMList")):
             self._send(200, FAKE_BODY)
-            return
-        self._send(404, b"{}")
+        elif url.path.endswith("/getPrintDesign"):
+            from tests.m03_helpers import sign_cell, text_cell
+
+            sheet = {
+                "cells": [text_cell(0, 0, "Isolated payment notice"),
+                          sign_cell(0, 1, "项目经理"), sign_cell(0, 2, "未到达节点")],
+                "globalSettings": {"cols": 3, "rows": 1},
+            }
+            margins = {"top": 5, "left": 5, "right": 5, "down": 5}
+            self._json({"Data": {"printSchema": json.dumps([sheet]),
+                                "printSetting": json.dumps([{"printConfig": {"margin": margins}}])}})
+        elif url.path.endswith("/getInfo"):
+            self._json({"Data": {"BillNo": parse_qs(body.decode())["id"][0]}})
+        elif url.path.endswith("/getDetInfo"):
+            self._json({"Record": [{"ApplyAmt": 5}]})
+        elif url.path.endswith("/getFlowHisForPrint"):
+            ph_id = parse_qs(url.query)["bizPk"][0]
+            self._json({"data": [{"task_des": "项目经理", "signature": f"/sig/{ph_id}.png?s=smoke"}]})
+        elif url.path.startswith("/sig/"):
+            if BAD_SIGNATURE.is_set() and url.path == "/sig/SMOKE-2.png":
+                self._send(200, b"invalid signature", "image/png")
+            else:
+                self._send(200, SIGNATURE_PNG, "image/png")
+        else:
+            self._send(404, b"{}")
+
+    def do_POST(self):  # noqa: N802
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        url = urlsplit(self.path)
+        if url.path == "/ipp/print":
+            self._ipp(body)
+        else:
+            self._i8_business("POST", url, body)
+
+    def _ipp(self, body):
+        operation, attributes, pdf = decode_ipp(body)
+        IPP_REQUESTS.append((operation, attributes, pdf))
+        if operation == 0x0004:
+            status = 0x040B if BLOCK_A4.is_set() else 0
+            tail = ipp_message("A4 unavailable on smoke printer") if status else b""
+        else:
+            assert operation == 0x0002
+            attempt = sum(op == 0x0002 for op, _, _ in IPP_REQUESTS)
+            status = 0
+            tail = b"\x02\x21\x00\x06job-id\x00\x04" + (100 + attempt).to_bytes(4, "big")
+            if attempt == 2:
+                SECOND_PRINT_RECEIVED.set()
+                assert HOLD_SECOND_PRINT.wait(15), "did not observe reload during dispatch"
+                self.close_connection = True
+                return
+            if attempt == 3:
+                status, tail = 0x040B, ipp_message("queue rejected third notice")
+        self._send(200, struct.pack(">BBH", 1, 1, status) + body[4:8] + tail + b"\x03", "application/ipp")
 
     def _json(self, value):
         self._send(200, json.dumps(value).encode("utf-8"))
 
-    @staticmethod
-    def _browser_state(generation):
-        return {
-            "connected": generation > 0, "mode": "browser" if generation else "http", "origin": I8_ORIGIN,
-            "generation": generation, "i8_user": "i8-smoke", "expected_org": "",
-            "expected_org_code": "", "expected_org_name": "", "message": "",
-        }
+
+def decode_ipp(body):
+    _, _, operation, _ = struct.unpack_from(">BBHI", body)
+    cursor, group = 8, 0
+    attributes = {}
+    while (tag := body[cursor]) != 3:
+        cursor += 1
+        if tag < 0x10:
+            group = tag
+            continue
+        size = int.from_bytes(body[cursor:cursor + 2], "big")
+        name = body[cursor + 2:cursor + 2 + size]
+        cursor += 2 + size
+        size = int.from_bytes(body[cursor:cursor + 2], "big")
+        attributes[name] = group, tag, body[cursor + 2:cursor + 2 + size]
+        cursor += 2 + size
+    return operation, attributes, body[cursor + 1:]
+
+
+def ipp_message(message):
+    value = message.encode()
+    return b"\x01\x41\x00\x0estatus-message" + len(value).to_bytes(2, "big") + value
 
 
 def free_port(start: int = 8071) -> int:
@@ -259,12 +283,14 @@ def free_port(start: int = 8071) -> int:
 
 
 PORT = free_port()
-ORIGIN = f"http://127.0.0.1:{PORT}"
+ORIGIN = "http://127.0.0.1:8065"
+FORBIDDEN_ORIGIN = f"http://127.0.0.1:{PORT}"
 I8_ORIGIN = f"http://localhost:{PORT}"
 OTHER_ORIGIN = f"http://127.0.0.1:{PORT + 1}"
 
 
 FAILURES: list[str] = []
+CHECKS: list[str] = []
 
 # 与工作台页面 / 后端共用的消息形状（closure 第 3 节）：连接按 `device_id` 隔离，
 # `bind` 必须带服务端给的正整数 `generation`。⛔ 字段名别改。
@@ -273,26 +299,11 @@ GENERATION = 1
 
 
 def check(name: str, ok: bool, detail: object = "") -> None:
+    CHECKS.append(name)
     mark = "PASS" if ok else "FAIL"
     print(f"[{mark}] {name}" + (f" —— {detail}" if detail and not ok else ""))
     if not ok:
         FAILURES.append(name)
-
-
-def make_copy(target: Path) -> None:
-    """Only replace the workbench allowlist for the isolated server."""
-    shutil.copytree(EXT_DIR, target, ignore=shutil.ignore_patterns("tests", "__pycache__"))
-    manifest_path = target / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert set(manifest["permissions"]) == {"activeTab", "scripting", "storage"}
-    assert "host_permissions" not in manifest and "<all_urls>" not in manifest["optional_host_permissions"]
-    manifest["externally_connectable"]["matches"] = [f"{ORIGIN}/*"]
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    worker_path = target / "service_worker.js"
-    source = worker_path.read_text(encoding="utf-8")
-    start = source.index("const WORKBENCH_ORIGINS = [")
-    end = source.index("];", start) + 2
-    worker_path.write_text(source[:start] + f"const WORKBENCH_ORIGINS = ['{ORIGIN}'];" + source[end:], encoding="utf-8")
 
 
 def build_frontend(target: Path) -> None:
@@ -319,12 +330,29 @@ def identity_message(device=DEVICE, **extra):
 
 def notice_flow(context, protocol_page):
     app = context.new_page()
+    app.set_default_timeout(15_000)
     app.goto(f"{ORIGIN}/app/notices")
+    submitted = []
+    prepare = []
+    dispatch = []
+
+    def observe(request):
+        if request.method != "POST":
+            return
+        path = urlsplit(request.url).path
+        if path == "/api/m03/notices/fetch":
+            submitted.append(request.post_data_json)
+        elif path == BATCH_PATH + "/prepare":
+            prepare.append(request.post_data_json)
+        elif path.startswith(BATCH_PATH + "/") and path.endswith("/dispatch"):
+            dispatch.append(path)
+
+    app.on("request", observe)
     app.get_by_role("button", name="按月抓取 i8", exact=True).click()
     app.get_by_role("button", name="确认抓取", exact=True).click()
     app.get_by_text("请授权工作台扩展访问当前 i8 站点", exact=False).wait_for()
     check("确认后缺权限时等待，当前没有 i8 标签或业务提交", app.get_by_role("button", name="取消等待").is_visible()
-          and len([tab for tab in context.pages if tab.url.startswith(I8_ORIGIN)]) == 0 and not NOTICE_POSTS)
+          and not [tab for tab in context.pages if tab.url.startswith(I8_ORIGIN)] and not submitted)
 
     with context.expect_page() as opened:
         app.get_by_role("button", name="授权 i8 站点").click()
@@ -357,13 +385,15 @@ def notice_flow(context, protocol_page):
     i8_tabs = [tab for tab in context.pages if tab.url.startswith(I8_ORIGIN)]
     check("并发尝试只后台打开一张 i8 页，工作台仍有焦点", len(i8_tabs) == 1
           and app.evaluate("() => document.hasFocus()"), [tab.url for tab in i8_tabs])
-    check("探测遇到未登录跳转时没有提交或跟随登录跳转", not NOTICE_POSTS and i8_tabs[0].url == I8_ORIGIN + "/")
+    check("探测遇到未登录跳转时没有提交或跟随登录跳转", not submitted and i8_tabs[0].url == I8_ORIGIN + "/")
     i8 = i8_tabs[0]
-    i8.goto(f"{I8_ORIGIN}/i8/business")
+    with app.expect_response(lambda res: res.url.endswith("/api/m03/notices/fetch")) as fetched:
+        i8.goto(f"{I8_ORIGIN}/i8/business")
+    receipt = fetched.value.json()
     app.get_by_role("button", name="关闭", exact=True).wait_for()
     notice_hits = [hit for hit in RECEIVED if hit["path"] == "/FC/FM/PaymentBill/getList"]
-    check("登录后无需再次确认，通知书入口及 i8 请求各发一次", len(NOTICE_POSTS) == len(notice_hits) == 1
-          and NOTICE_POSTS[0]["expected_account"] == "smoke" and COMPLETED.is_set())
+    check("登录后无需再次确认，原工作台只抓取一次并写入三条", len(submitted) == len(notice_hits) == 1
+          and submitted[0]["expected_account"] == "smoke" and receipt.get("upserted") == 3, receipt)
     app.get_by_role("button", name="关闭", exact=True).click()
     app.get_by_role("button", name="按月抓取 i8", exact=True).click()
     app.get_by_role("button", name="确认抓取", exact=True).wait_for()
@@ -380,17 +410,19 @@ def notice_flow(context, protocol_page):
     replacement = context.new_page()
     replacement.goto(f"{I8_ORIGIN}/i8/business?replacement=1")
     app.bring_to_front()
-    device = NOTICE_POSTS[0]["device_id"]
+    device = submitted[0]["device_id"]
     discarded = worker.evaluate("""async (device) => {
         const key = 'i8RelayBound:' + device;
         const {[key]: binding} = await chrome.storage.session.get(key);
         return (await chrome.tabs.discard(binding.tabId))?.discarded;
     }""", device)
     check("真实 Chromium 已释放原绑定标签", discarded)
-    app.get_by_role("button", name="确认抓取", exact=True).click()
+    with app.expect_response(lambda res: res.url.endswith("/api/m03/notices/fetch")) as fetched:
+        app.get_by_role("button", name="确认抓取", exact=True).click()
+    state = app.request.get(ORIGIN + "/api/m02/browser/state", params={"device_id": device}).json()
     app.get_by_role("button", name="关闭", exact=True).wait_for()
-    check("标签释放后自动改用健康标签，仅提交本次确认", len(NOTICE_POSTS) == 2
-          and CONNECTIONS[device]["generation"] == 2 and COMPLETED.is_set())
+    check("已登录会话及标签释放时均无需点扩展，仅提交本次确认", len(submitted) == 2
+          and state["generation"] > 1 and fetched.value.ok, state)
     app.get_by_role("button", name="关闭", exact=True).click()
     app.get_by_role("button", name="按月抓取 i8", exact=True).click()
 
@@ -399,15 +431,189 @@ def notice_flow(context, protocol_page):
     app.get_by_role("button", name="确认抓取", exact=True).click()
     app.get_by_text("请在 i8 标签页登录", exact=False).first.wait_for()
     app.get_by_role("button", name="取消等待", exact=True).click()
-    replacement.goto(f"{I8_ORIGIN}/i8/business")
-    app.get_by_text("请在 i8 标签页登录", exact=False).first.wait_for(state="hidden")
-    check("取消等待后，迟到的登录恢复没有再次提交", len(NOTICE_POSTS) == 2)
+    with app.expect_response(lambda res: res.url.endswith("/api/m02/browser/connect") and res.ok):
+        replacement.goto(f"{I8_ORIGIN}/i8/business")
+    check("取消等待后，迟到的登录恢复没有再次提交", len(submitted) == 2)
+    app.get_by_role("dialog").get_by_role("button", name="取消", exact=True).click()
+    print_flow(app, replacement, device, prepare, dispatch)
     app.close()
     login_tab.close()
     return replacement
 
 
-def boot(p, extension_dir: Path):
+def assert_pdf(content):
+    from pypdf import PdfReader
+
+    pdf = PdfReader(io.BytesIO(content))
+    page, = pdf.pages
+    assert abs(float(page.mediabox.width) - 595.3) < 2
+    assert abs(float(page.mediabox.height) - 841.9) < 2
+    text = page.extract_text()
+    assert "Isolatedpaymentnotice" in "".join(text.split()), text
+    assert len(page.images) == 1, "The relayed signature did not reach the rendered PDF"
+
+
+def print_flow(app, i8, device, prepare, dispatch):
+    def open_dialog(name):
+        app.get_by_role("button", name=name, exact=True).click()
+        return app.get_by_role("dialog")
+
+    def confirm(dialog):
+        dialog.get_by_role("button", name="确认本批", exact=True).click()
+
+    def expire():
+        app.context.add_cookies([{"name": HTTPONLY_NAME, "value": "expired",
+                                  "url": I8_ORIGIN, "httpOnly": True}])
+
+    def sign_in():
+        i8.goto(I8_ORIGIN + "/i8/business")
+
+    first = app.get_by_role("checkbox", name="勾选" + BILL_NOS[0], exact=True)
+    first.check()
+    dialog = open_dialog("导出 PDF")
+    expire()
+    confirm(dialog)
+    dialog.get_by_text("请在 i8 标签页登录", exact=False).wait_for()
+    dialog.get_by_role("button", name="取消等待").click()
+    with app.expect_response(lambda res: res.url.endswith("/api/m02/browser/connect") and res.ok):
+        sign_in()
+    check("PDF 取消等待后，迟到就绪未发起准备", not prepare and not IPP_REQUESTS)
+
+    expire()
+    confirm(dialog)
+    dialog.get_by_text("请在 i8 标签页登录", exact=False).wait_for()
+    with app.expect_response(lambda res: urlsplit(res.url).path.startswith("/api/m03/pdf/") and res.ok) as downloaded:
+        sign_in()
+    dialog.get_by_text("已生成 1 / 共 1 条", exact=False).wait_for()
+    assert_pdf(downloaded.value.body())
+    check("导出自动续接一次，实际 PDF 含签名和 A4 页，未投递",
+          len(prepare) == 1 and prepare[0]["mode"] == "pdf" and not IPP_REQUESTS)
+    dialog.get_by_role("button", name="关闭", exact=True).first.click()
+    dialog.wait_for(state="hidden")
+
+    app.get_by_role("checkbox", name="全选当前筛选结果").click()
+    app.get_by_text("已勾选 3 行", exact=False).wait_for()
+    dialog = open_dialog("批量打印")
+    expire()
+    BAD_SIGNATURE.set()
+    confirm(dialog)
+    dialog.get_by_text("请在 i8 标签页登录", exact=False).wait_for()
+    check("打印等待同一浏览器登录态时零提交", len(prepare) == 1)
+    sign_in()
+    dialog.get_by_role("alert").filter(has_text="已投递 0 张").wait_for()
+    check("第二张签名失败拦停整批，零 IPP 请求及零投递",
+          "SMOKE-2" in dialog.get_by_role("alert").inner_text()
+          and "签名" in dialog.get_by_role("alert").inner_text()
+          and len(prepare) == 2 and not dispatch and not IPP_REQUESTS)
+
+    BAD_SIGNATURE.clear()
+    dialog.get_by_role("button", name="重试全批", exact=True).click()
+    blocked = dialog.get_by_role("alert").filter(has_text="无法确认本批按 A4 出纸")
+    blocked.wait_for()
+    for reason in ("A4 unavailable on smoke printer", "系统驱动", "RAW 9100"):
+        assert reason in blocked.inner_text(), blocked.inner_text()
+    check("A4 拒绝时保留 IPP 首因及后续通道的限制，零打印作业", [op for op, _, _ in IPP_REQUESTS] == [4])
+    check("打印和导出沿用抓取的浏览器连接标识，所有业务请求携带同一 HttpOnly 会话",
+          len(prepare) == 3 and len(dispatch) == 1
+          and all(item["device_id"] == device and item["session_mode"] == "browser" for item in prepare)
+          and all(HTTPONLY_VALUE in hit["headers"].get("Cookie", "") for hit in RECEIVED)
+          and len([hit for hit in RECEIVED if hit["path"].startswith("/sig/")]) == 6,
+          [hit["path"] for hit in RECEIVED])
+
+    BLOCK_A4.clear()
+    with app.expect_response(lambda res: res.url.endswith("/dispatch") and res.ok) as started:
+        dialog.get_by_role("button", name="切换支持 A4 的通道（IPP）", exact=True).click()
+    batch = started.value.json()
+    batch_url = ORIGIN + BATCH_PATH + "/" + batch["batch_id"]
+    assert SECOND_PRINT_RECEIVED.wait(10), "second Print-Job did not reach IPP stub"
+    try:
+        with app.expect_response(lambda res: res.url == batch_url and res.request.method == "GET") as recovered:
+            app.reload()
+        assert recovered.value.json()["batch_id"] == batch["batch_id"]
+        app.get_by_text("投递打印机 1/3", exact=False).wait_for()
+        app.get_by_text("作业号 101", exact=False).first.wait_for()
+    finally:
+        HOLD_SECOND_PRINT.set()
+    receipts = app.get_by_role("region", name="逐张投递回执")
+    receipts.get_by_text(f'{batch["items"][1]["bill_no"]}：结果待核实', exact=False).wait_for()
+    receipts.get_by_text("queue rejected third notice", exact=False).wait_for()
+    with app.expect_response(lambda res: res.url == batch_url and res.request.method == "GET") as recovered:
+        app.reload()
+    final = recovered.value.json()
+    check("投递中和完成后刷新均恢复同批，保留三种逐张回执及设备原因",
+          final["batch_id"] == batch["batch_id"] and final["status"] == "complete"
+          and [(item["delivery_status"], item["job_id"]) for item in final["items"]]
+          == [("accepted", 101), ("unknown", None), ("failed", None)]
+          and "queue rejected third notice" in final["items"][2]["attempts"][0]["reason"],
+          final)
+    # Even an explicit retry of the same HTTP dispatch can only read its existing result.
+    replay = app.request.post(batch_url + "/dispatch").json()
+    check("重复投递原批只返回原回执，接收未知时零重投",
+          replay == final and len(prepare) == 3 and len(dispatch) == 2
+          and [op for op, _, _ in IPP_REQUESTS] == [4, 4, 2, 2, 2])
+    check("真实发送的校验和逐张投递显式要求 A4 与属性严格匹配",
+          all(attrs[b"media"] == (2, 0x44, b"iso_a4_210x297mm")
+              and attrs[b"ipp-attribute-fidelity"] == (1, 0x22, b"\x01")
+              and attrs[b"document-format"] == (1, 0x49, b"application/pdf")
+              and (pdf.startswith(b"%PDF") if op == 2 else not pdf) for op, attrs, pdf in IPP_REQUESTS))
+
+
+@contextmanager
+def isolated_workbench(source_env, frontend):
+    """Serve the real application on an allowlisted loopback origin in an empty test schema."""
+    sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
+    from tools.audit.workspace_paths import close_runs, development_run
+    from tools.dev.frontend_preview import isolated_database
+
+    success = False
+    with socket.socket() as listener:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        listener.bind(("127.0.0.1", urlsplit(ORIGIN).port))
+        listener.listen()
+        development_run()
+        try:
+            with isolated_database(source_env, preview=False) as env:
+                env.update(ALLOWED_IP_CIDRS="127.0.0.1/32", FRONTEND_APP_DIR=str(frontend),
+                           I8_BASE_URL=I8_ORIGIN, I8_PRINT_ID_MATERIAL="isolated-template",
+                           PRINT_MODE="auto", PRINTER_IPP_URL=f"ipp://127.0.0.1:{PORT}/ipp/print")
+                with patch.dict(os.environ, env):
+                    from fastapi.responses import HTMLResponse
+                    from uvicorn import Config, Server
+                    from app.core.db import session_scope
+                    from app.core.session import COOKIE_NAME, make
+                    from app.main import create_app
+                    from app.mod01_projects.models import Project
+                    from app.mod15_user.models import UserAccount
+
+                    app = create_app()
+                    with session_scope() as db:
+                        db.add(UserAccount(account="smoke", name="隔离验收", role="admin", i8_user="i8-smoke"))
+                        db.add(Project(project_type="normal", name_full="样机项目", warehouse_name="样机仓库", disp="样机项目"))
+
+                    @app.get("/workbench", response_class=HTMLResponse)
+                    def protocol_page():
+                        return WORKBENCH_HTML
+
+                    server = Server(Config(app, access_log=False, log_level="warning"))
+                    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+                    thread.start()
+                    try:
+                        deadline = monotonic() + 10
+                        while not server.started and thread.is_alive() and monotonic() < deadline:
+                            sleep(0.05)
+                        assert server.started, "isolated workbench did not start"
+                        yield {"name": COOKIE_NAME, "value": make("smoke"), "url": ORIGIN, "httpOnly": True}
+                    finally:
+                        server.should_exit = True
+                        thread.join(timeout=15)
+                        assert not thread.is_alive(), "isolated workbench did not stop"
+            success = not FAILURES
+        finally:
+            close_runs(success=success)
+
+
+def boot(p, extension_dir: Path, origin: str):
     profile = tempfile.mkdtemp(prefix="i8-smoke-profile-")
     context = p.chromium.launch_persistent_context(
         profile,
@@ -416,7 +622,7 @@ def boot(p, extension_dir: Path):
         args=[f"--disable-extensions-except={extension_dir}", f"--load-extension={extension_dir}"],
     )
     page = context.pages[0] if context.pages else context.new_page()
-    page.goto(f"{ORIGIN}/workbench", wait_until="load")
+    page.goto(f"{origin}/workbench", wait_until="load")
     # 页面发一条消息会唤醒 service worker。
     page_message(page, {"type": "i8-relay:identity", "device_id": DEVICE})
     for _ in range(80):
@@ -427,17 +633,22 @@ def boot(p, extension_dir: Path):
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-env", type=Path, required=True)
+    parser.add_argument("--frontend-dist", type=Path, help="Existing production build with base /app/")
+    args = parser.parse_args()
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:  # noqa: BLE001
         print(f"没有可用的 playwright：{type(exc).__name__}")
         return 1
 
-    global FRONTEND
     build_dir = tempfile.mkdtemp(prefix="i8-smoke-frontend-")
-    FRONTEND = Path(build_dir) / "dist"
+    frontend = args.frontend_dist.resolve() if args.frontend_dist else Path(build_dir) / "dist"
     try:
-        build_frontend(FRONTEND)
+        if args.frontend_dist is None:
+            build_frontend(frontend)
+        assert (frontend / "index.html").is_file(), "missing frontend build"
     except subprocess.CalledProcessError as exc:
         print(exc.stderr)
         shutil.rmtree(build_dir, ignore_errors=True)
@@ -446,11 +657,11 @@ def main() -> int:
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     tempdirs = [build_dir]
-    print(f"样机端口 {ORIGIN}（不使用 8000/8065）")
+    print(f"隔离工作台 {ORIGIN} · 模拟 i8/IPP {I8_ORIGIN}", flush=True)
     try:
-        with sync_playwright() as p:
+        with sync_playwright() as p, ExitStack() as resources:
             # ---------- A 段：原样包。样机 origin 不在 externally_connectable ⇒ 应当连不进来 ----------
-            profile_a, ctx_a, page_a = boot(p, EXT_DIR)
+            profile_a, ctx_a, page_a = boot(p, EXT_DIR, FORBIDDEN_ORIGIN)
             tempdirs.append(profile_a)
             try:
                 check(
@@ -467,10 +678,9 @@ def main() -> int:
             finally:
                 ctx_a.close()
 
-            ext_c = Path(tempfile.mkdtemp(prefix="i8-smoke-ext-")) / "ext"
-            tempdirs.append(str(ext_c.parent))
-            make_copy(ext_c)
-            profile_c, ctx_c, page_c = boot(p, ext_c)
+            cookie = resources.enter_context(isolated_workbench(args.source_env, frontend))
+            profile_c, ctx_c, page_c = boot(p, EXT_DIR, ORIGIN)
+            ctx_c.add_cookies([cookie])
             tempdirs.append(profile_c)
             try:
                 i8 = notice_flow(ctx_c, page_c)
@@ -823,6 +1033,7 @@ def main() -> int:
                 ctx_c.close()
     finally:
         server.shutdown()
+        server.server_close()
         for path in tempdirs:
             shutil.rmtree(path, ignore_errors=True)
 
@@ -832,7 +1043,7 @@ def main() -> int:
         for name in FAILURES:
             print(f"  - {name}")
         return 1
-    print("样机判据全部通过（仅证明通路；不等于 Edge 真机，也不等于真实 i8 业务验收）。")
+    print(f"隔离 Chromium + 工作台 + 模拟 i8/IPP 的 {len(CHECKS)} 项判据全部通过。")
     return 0
 
 

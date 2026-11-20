@@ -22,7 +22,8 @@ registerHooks({
     );
     if (specifier === './i8-session') return data(
       'export const useI8Session = () => globalThis.__noticePrintHooks.session;' +
-      'export const useI8ActionWait = () => ({waiting: false, cancelWaiting() {}, runWhenReady: issue => issue()});',
+      'export const I8ConnectionWaitStatus = () => null;' +
+      'export const useI8ActionWait = () => ({waiting: false, cancelWaiting() {}, runWhenReady: issue => issue(globalThis.__noticePrintHooks.session)});',
     );
     if (specifier === './business-modal') return data('export const BusinessModal = props => props.children;');
     if (specifier === './business-grid') return data('export const ReadGrid = "grid";');

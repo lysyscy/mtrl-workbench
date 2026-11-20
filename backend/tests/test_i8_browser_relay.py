@@ -20,6 +20,7 @@ import pytest
 
 from app.core import app_settings
 from app.core.config import Settings, get_settings
+from app.core.errors import MustReportError
 from app.mod02_i8 import browser_broker, cookie_store
 from app.mod02_i8 import client as clients
 from app.mod02_i8.browser_broker import (
@@ -35,6 +36,7 @@ from app.mod02_i8.browser_relay import (
     expected_org_id,
     open_i8_client,
     relay_scope,
+    resolve_mode,
 )
 from app.mod02_i8.browser_session import (
     I8BrowserSessionClient,
@@ -499,16 +501,26 @@ def test_出站消息带代号供页面回传(store):
 # --------------------------------------------------------------- 工厂：模式与回退边界
 
 
-def test_默认模式仍是产品原有客户端(guards):
-    client = open_i8_client(allow_kick=True, owner=OWNER)
-    assert type(client) is clients.I8Client
-    assert client._allow_kick is True      # noqa: SLF001 — 显式核"原策略参数照旧传下去"
+@pytest.mark.parametrize("mode", [None, "", " ", "HTTP", "other"])
+def test_模式必须显式合法(mode):
+    with pytest.raises(MustReportError, match="取数方式无法识别"):
+        resolve_mode(mode)
+    with pytest.raises(MustReportError, match="取数方式无法识别"):
+        with relay_scope(mode):
+            pytest.fail("非法模式进入了工作台会话作用域")
+
+
+def test_仅声明直连模式不能绕过统一会话策略(guards):
+    with relay_scope(MODE_HTTP):
+        with pytest.raises(MustReportError, match="直连会话尚未建立"):
+            open_i8_client(owner=OWNER)
+    assert guards == {"login": 0, "cache": []}
 
 
 def test_浏览器模式缺连接时当场失败不回落登录(guards):
     with relay_scope(MODE_BROWSER, DEVICE):
         with pytest.raises(BrowserRelayUnavailable):
-            open_i8_client(allow_kick=True, owner=OWNER)
+            open_i8_client(owner=OWNER)
     assert guards["login"] == 0
     assert guards["cache"] == []
 
@@ -516,7 +528,7 @@ def test_浏览器模式缺连接时当场失败不回落登录(guards):
 def test_浏览器模式不登录不清缓存(guards, store):
     store.connect(OWNER, DEVICE, BASE)
     with relay_scope(MODE_BROWSER, DEVICE):
-        client = open_i8_client(allow_kick=True, owner=OWNER)
+        client = open_i8_client(owner=OWNER)
         assert isinstance(client, I8BrowserSessionClient)
 
         def run():
@@ -571,11 +583,13 @@ def test_集采合同跟随设置页有效站点(monkeypatch, guards, path, fetc
     assert guards == {"login": 0, "cache": []}
 
 
-def test_作用域退出后回到直连(guards):
+def test_作用域退出后拒绝创建客户端(guards):
     with relay_scope(MODE_BROWSER, DEVICE):
         assert current_scope() == (MODE_BROWSER, DEVICE)
-    assert current_scope() == (MODE_HTTP, "")
-    assert type(open_i8_client()) is clients.I8Client
+    assert current_scope() == ("", "")
+    with pytest.raises(MustReportError, match="取数方式无法识别"):
+        open_i8_client(owner=OWNER)
+    assert guards == {"login": 0, "cache": []}
 
 
 def test_组织范围取自既有取数表单(guards):
@@ -764,9 +778,9 @@ def test_仓库名单在浏览器模式有连接时经通道取数且不登录(g
     assert guards["cache"] == []
 
 
-def test_日常直连模式仍用产品原有客户端(guards, monkeypatch):
-    """默认 `http` 路径的产品行为不变：自建客户端仍是原类。"""
+def test_显式直连由统一策略创建产品客户端(guards, monkeypatch):
     from app.mod02_i8 import router as m02
+    from app.mod02_i8 import session_policy
 
     captured = {}
 
@@ -776,7 +790,10 @@ def test_日常直连模式仍用产品原有客户端(guards, monkeypatch):
 
     monkeypatch.setattr(m02.WarehouseSource, "fetch", fake_fetch)
     monkeypatch.setattr(m02.wh_cache, "save", lambda *a, **k: None)
-    assert m02.get_warehouse_rows()() == []
+    monkeypatch.setattr(session_policy, "current_i8_credentials", lambda: ("bound-user", ""))
+    with session_policy.unified_i8_session({"session_mode": MODE_HTTP}, owner=OWNER,
+                                           operation="warehouse-test", scope={}):
+        assert m02.get_warehouse_rows()() == []
     assert type(captured["client"]) is clients.I8Client
 
 

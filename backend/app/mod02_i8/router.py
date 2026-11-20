@@ -335,7 +335,7 @@ def fetch_preview(
     echo = echo_params(params)
     # ⚠️ 取数方式在**整个取数过程**内有效：同一请求里的登录/重登判断与后续 i8 调用走同一通道。
     with unified_i8_session(req, owner=current_name(), operation="m02.fetch.preview",
-                            scope={"year_month": req.year_month}, require_explicit=True):
+                            scope={"year_month": req.year_month}):
         try:
             rows = rows_loader(req.year_month, False)
         except (StrictSessionStopped, I8OnlineConflictError):
@@ -371,7 +371,7 @@ def fetch_run(
     target = f"付款通知书 {req.year_month}"
     t0 = datetime.now()          # ⚠️ 见 `create_run_record`：动作**开始前**取时刻，否则耗时恒 0
     with unified_i8_session(req, owner=current_name(), operation="m02.fetch.run",
-                            scope={"year_month": req.year_month}, require_explicit=True):
+                            scope={"year_month": req.year_month}):
         try:
             rows = rows_loader(req.year_month, False)
         except I8OnlineConflictError:
@@ -422,7 +422,7 @@ def sync_warehouses(
     t0 = datetime.now()
     session_payload = _sync_session_payload(payload, session_mode, device_id, kick_token)
     with unified_i8_session(session_payload, owner=current_name(), operation="m02.sync.warehouses",
-                            scope={}, require_explicit=True):
+                            scope={}):
         try:
             rows = rows_loader(False)
         except I8OnlineConflictError:
@@ -481,7 +481,7 @@ def sync_common_projects(
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时的起点（本次同步要拉两个名单，通常是最慢的一条）
     session_payload = _sync_session_payload(payload, session_mode, device_id, kick_token)
     with unified_i8_session(session_payload, owner=current_name(), operation="m02.sync.common-projects",
-                            scope={}, require_explicit=True):
+                            scope={}):
         with session_scope() as s:
             out = sync_and_archive(
                 s,

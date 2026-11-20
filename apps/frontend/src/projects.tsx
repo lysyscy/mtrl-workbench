@@ -19,8 +19,9 @@ import { ApiError, readProjects, record, requestJson, uncertainWrite } from './a
 import type { Identity, Project } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
+import type { SessionChoice } from './i8-browser-relay';
 import { I8KickConfirmationActions, useI8KickConfirmation } from './i8-kick-confirmation';
-import { useI8Session } from './i8-session';
+import { I8ConnectionWaitStatus, useI8ActionWait, useI8Session } from './i8-session';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { OwnershipReturn } from './ownership';
 
@@ -262,7 +263,6 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   const p = 'project' in state ? state.project : null, item = 'item' in state ? state.item : null;
   // 取数方式来自账号工作区的统一选择（「i8 接入」页）；这里只消费，不另设一套。
   const session = useI8Session();
-  const browserBlocked = session.mode === SESSION_MODE_BROWSER && !session.connected;
   const [full, setFull] = useState(p?.name_full ?? ''), [disp, setDisp] = useState(p?.disp ?? '');
   const [choice, setChoice] = useState('');
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [done, setDone] = useState(false), [receipt, setReceipt] = useState(''), [samples, setSamples] = useState<Record<string, unknown>[]>([]);
@@ -270,14 +270,16 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   useEffect(() => { mounted.current = true;  return () => { mounted.current = false; }; }, []);
   const impact = useQuery({ queryKey: ['project-impact', p?.id], enabled: state.kind === 'delete' && !blocked, queryFn: async ({ signal }) => object<Impact>(await requestJson(`/api/m01/projects/${p!.id}/delete-impact`, { signal }), x => typeof x.can_delete === 'boolean' && typeof x.message === 'string' && Array.isArray(x.groups)), staleTime: 0 });
   const connection = useQuery({ queryKey: ['project-sync-config'], enabled: state.kind === 'sync' && !blocked, queryFn: async ({ signal }) => object<Connection>(await requestJson('/api/m02/config', { signal }), x => typeof x.account === 'string' && typeof x.i8_user === 'string' && typeof x.ready === 'boolean' && typeof x.message === 'string'), staleTime: 0, refetchOnMount: 'always' });
-  const kick = useI8KickConfirmation(JSON.stringify([
+  const scopeKey = JSON.stringify([
     state.kind === 'sync' ? state.source : '', me?.account, connection.data?.i8_user, session.mode, blocked,
-  ]));
+  ]);
+  const kick = useI8KickConfirmation(scopeKey);
+  const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(scopeKey);
   const title = state.kind === 'sync' ? `同步${state.source === 'warehouses' ? '仓库名单' : '常用项目列表'}` : ({ create: '手工建档，无仓库项目', delete: '删除项目档案', promote: '人工指认，扶正', archive: '选择仓库建档' } as const)[state.kind];
   const initial = useRef(JSON.stringify([full,disp,choice]));
-  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,choice]) !== initial.current, close });
-  const cannot = blocked || !me || busy || (state.kind === 'sync' && browserBlocked) || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
-  async function save(kickToken?: string) {
+  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,choice]) !== initial.current, close: () => { cancelWaiting(); close(); } });
+  const cannot = blocked || !me || busy || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
+  async function save(kickToken?: string, sessionChoice: SessionChoice = session) {
     if (cannot || lock.current || (!kickToken && kick.message)) return;
     if (state.kind === 'create' && !full.trim()) { setError('请填写项目全名。'); return; }
     if ((state.kind === 'promote' || state.kind === 'archive') && !choice) { setError('请先选择一项。'); return; }
@@ -291,7 +293,7 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
       else if (state.kind === 'archive') result = await requestJson('/api/m01/archive-row', { method: 'POST', ...body({ warehouse_name: choice, full_name: item!.full_name }) });
       else if (state.kind === 'sync') {
         const query = new URLSearchParams({ expected_account: me!.account });
-        const payload = sessionPayload(session, kickToken ? { kick_token: kickToken } : {});
+        const payload = sessionPayload(sessionChoice, kickToken ? { kick_token: kickToken } : {});
         result = await requestJson(`/api/m02/sync/${state.source}?${query}`, { method: 'POST', ...body(payload) });
         const sync = object<{ degraded: boolean; message: string; count: number; sample: Record<string, unknown>[] }>(result, x => typeof x.degraded === 'boolean' && typeof x.message === 'string' && typeof x.count === 'number' && Array.isArray(x.sample));
         if (sync.degraded) { await refresh(); throw new ApiError(sync.message || '同步未完成，请核对执行记录后重试。'); }
@@ -307,12 +309,14 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
     }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
-  return <BusinessModal open={!blocked} className={`project-dialog${state.kind === 'sync' ? ' project-sync-dialog' : ''}`} titleId="project-dialog-title" requestClose={closing.requestClose}><DialogContents titleId="project-dialog-title" title={title} closing={closing}><form onSubmit={e => { e.preventDefault(); void save(); }}>{p && <p>{label(p)}</p>}{item && <p>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</p>}
+  return <BusinessModal open={!blocked} className={`project-dialog${state.kind === 'sync' ? ' project-sync-dialog' : ''}`} titleId="project-dialog-title" requestClose={closing.requestClose}><DialogContents titleId="project-dialog-title" title={title} closing={closing}><form onSubmit={e => { e.preventDefault(); if (cannot || waiting) return;
+    if (state.kind === 'sync') void runWhenReady(choice => save(undefined, choice));
+    else void save(); }}>{p && <p>{label(p)}</p>}{item && <p>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</p>}
     {state.kind === 'create' && <><label>项目全名<Input aria-label="项目全名" autoFocus required value={full} disabled={busy} onChange={e => setFull(e.target.value)} /></label><label>展示名<Input aria-label="展示名" value={disp} disabled={busy} placeholder="留空取项目全名" onChange={e => setDisp(e.target.value)} /></label></>}
     {state.kind === 'promote' && <label>指定档案<Select aria-label="指定档案" autoFocus value={choice} disabled={busy} onChange={setChoice} options={[{value:'',label:'请选择档案'},...(item!.candidates??[]).map(c=>({value:String(c.id),label:`${c.disp||c.warehouse_name}，${c.warehouse_name}${c.status==='archived'?'（归档）':''}${!c.is_placeholder?'（已有仓库，不可扶正）':''}`,disabled:!c.is_placeholder}))]}/></label>}
     {state.kind === 'archive' && <><label>仓库<Select aria-label="仓库" autoFocus value={choice} disabled={busy} onChange={setChoice} options={[{value:'',label:'请选择仓库'},...(item!.warehouses??[]).map(value=>({value,label:value}))]}/></label><p>只为选中的仓库建档，其余仓库不建行。</p></>}
     {state.kind === 'delete' && <>{impact.isPending ? <p role="status">正在核对关联影响…</p> : impact.isError ? <p className="notice" role="alert">{impact.error.message}<Button htmlType="button" onClick={() => void impact.refetch()}>重读影响</Button></p> : <><p className={impact.data.can_delete ? 'danger' : ''}>{impact.data.message}</p>{impact.data.groups.filter(g => g.count > 0).map((g, i) => <details key={i}><summary>{g.label}：{g.count} 条（保留）</summary>{g.rows.map((row, j) => <p key={j}>{['bill_no', 'contract_no', 'batch_no', 'ym', 'year_month', 'doc_date', 'supplier', 'item_name', 'name_full'].map(key => row[key]).filter(v => typeof v === 'string' && v).join('，') || `记录 ${row.id ?? j + 1}`}</p>)}</details>)}</>}</>}
-    {state.kind === 'sync' && <>{connection.isPending ? <p role="status">正在核对当前账号的 i8 绑定…</p> : connection.isError ? <p className="notice" role="alert">{connection.error.message}<Button htmlType="button" onClick={() => void connection.refetch()}>重读绑定</Button></p> : <><dl className="project-sync-account"><div><dt>当前账号</dt><dd>{me?.name || me?.account}</dd></div><div><dt>i8 账号</dt><dd>{connection.data.i8_user || '未绑定'}</dd></div></dl>{(!connection.data.ready || connection.data.account !== me?.account) && <p role="alert">{connection.data.message || '账号已变化，请关闭后重新打开。'}</p>}</>}{!done && <p className="project-sync-summary">{state.source === 'warehouses' ? '从 i8 读取仓库名单，将唯一匹配的占位档案扶正；保留原档案及业务关联，需人工核对的逐项列出。' : '从 i8 读取常用项目列表，更新项目档案与待建档项。'}{session.mode === SESSION_MODE_BROWSER ? '使用浏览器已有会话。' : '工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>}{browserBlocked && <p className="notice" role="alert">浏览器会话未连接，请到「i8 接入」页连接后再同步。</p>}{receipt && <p role="status">{receipt}</p>}{samples.length > 0 && <details open><summary>{state.source === 'warehouses' ? '扶正与待处理明细' : '需处理项目'}</summary>{samples.map((sample, i) => <p key={i}>{['warehouse_name', 'name_full', 'owner_full_name', 'reason'].map(key => sample[key]).filter(v => typeof v === 'string' && v).join('，')}</p>)}</details>}</>}
-    {error && <p className="notice" role="alert">{error}</p>}{busy && <p role="status">正在执行，请稍候…</p>}{kick.message ? <I8KickConfirmationActions {...kick} disabled={cannot} /> : <div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{!done && <Button htmlType="submit" className={state.kind === 'delete' ? 'danger' : 'primary'} disabled={cannot}>{state.kind === 'delete' ? '确认删除' : state.kind === 'sync' ? '确认同步' : '保存'}</Button>}</div>}
+    {state.kind === 'sync' && <>{connection.isPending ? <p role="status">正在核对当前账号的 i8 绑定…</p> : connection.isError ? <p className="notice" role="alert">{connection.error.message}<Button htmlType="button" onClick={() => void connection.refetch()}>重读绑定</Button></p> : <><dl className="project-sync-account"><div><dt>当前账号</dt><dd>{me?.name || me?.account}</dd></div><div><dt>i8 账号</dt><dd>{connection.data.i8_user || '未绑定'}</dd></div></dl>{(!connection.data.ready || connection.data.account !== me?.account) && <p role="alert">{connection.data.message || '账号已变化，请关闭后重新打开。'}</p>}</>}{!done && <p className="project-sync-summary">{state.source === 'warehouses' ? '从 i8 读取仓库名单，将唯一匹配的占位档案扶正；保留原档案及业务关联，需人工核对的逐项列出。' : '从 i8 读取常用项目列表，更新项目档案与待建档项。'}{session.mode === SESSION_MODE_BROWSER ? '使用浏览器已有会话。' : '工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>}{waiting && <I8ConnectionWaitStatus />}{receipt && <p role="status">{receipt}</p>}{samples.length > 0 && <details open><summary>{state.source === 'warehouses' ? '扶正与待处理明细' : '需处理项目'}</summary>{samples.map((sample, i) => <p key={i}>{['warehouse_name', 'name_full', 'owner_full_name', 'reason'].map(key => sample[key]).filter(v => typeof v === 'string' && v).join('，')}</p>)}</details>}</>}
+    {error && <p className="notice" role="alert">{error}</p>}{busy && <p role="status">正在执行，请稍候…</p>}{kick.message ? <I8KickConfirmationActions {...kick} disabled={cannot} /> : <div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}{!done && <Button htmlType="submit" className={state.kind === 'delete' ? 'danger' : 'primary'} disabled={cannot || waiting}>{state.kind === 'delete' ? '确认删除' : state.kind === 'sync' ? '确认同步' : '保存'}</Button>}</div>}
   </form></DialogContents></BusinessModal>;
 }

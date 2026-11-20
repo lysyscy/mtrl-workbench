@@ -182,7 +182,7 @@ def api_fetch(req: FetchRequest) -> dict:
     from app.mod08_inv import fetch_service as FS
 
     with unified_i8_session(req, owner=current_name(), operation="m08.fetch",
-                            scope={"month": req.month}, require_explicit=True):
+                            scope={"month": req.month}):
         return FS.run_fetch(year_month=req.month, confirmed=req.confirm, operator=current_operator())
 
 
