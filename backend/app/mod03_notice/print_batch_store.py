@@ -374,11 +374,6 @@ def _prepare(batch: _PrintBatch, req: BatchRequest, startup: Future[None]) -> No
         # Browser context is copied at admission. HTTP confirmation is consumed by the worker.
         with (batch_i8_session(req, batch.owner, batch.ids) if req.session_mode == MODE_HTTP else nullcontext()):
             notices = load_batch_notices(batch.ids)
-            with batch.lock:
-                batch.bill_nos.update({
-                    notice.id: (notice.bill_no or "").strip() or str(notice.id) for notice in notices
-                })
-                _checkpoint(batch)
             with batch_resources(batch.owner) as resources:
                 prepare_batch(
                     notices, mode=batch.mode, **resources,
@@ -399,17 +394,15 @@ def start_batch(owner: str, req: BatchRequest) -> PrintBatchOut:
     if not owner:
         raise MustReportError("请登录工作台后重新发起 i8 操作。")
     session_mode = resolve_mode(req.session_mode)
+    ids = confirmed_ids(req)
+    with (batch_i8_session(req, owner, ids) if session_mode == MODE_BROWSER else nullcontext()):
+        context = copy_context()
+    bill_nos = {notice.id: (notice.bill_no or "").strip() or "单号缺失" for notice in load_batch_notices(ids)}
     with _index_lock:
         if len(_pending_preparations) >= MAX_PENDING_PREPARE_BATCHES:
             raise MustReportError("当前待准备的打印批次较多，请稍候重试。")
         _sweep(time.time())
-        ids = confirmed_ids(req)
-        if session_mode == MODE_BROWSER:
-            with batch_i8_session(req, owner, ids):
-                context = copy_context()
-        else:
-            context = copy_context()
-        batch = _PrintBatch(secrets.token_urlsafe(24), owner, req.mode, ids)
+        batch = _PrintBatch(secrets.token_urlsafe(24), owner, req.mode, ids, bill_nos=bill_nos)
         initial = batch.snapshot()
         try:
             _save_state(batch)

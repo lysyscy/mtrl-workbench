@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import MustReportError
-from app.mod02_i8.browser_relay import is_signature_image_target, require_signature_image
+from app.mod02_i8.browser_relay import is_signature_image_target, require_signature_image, signature_image_mime
 from app.mod02_i8.browser_session import StrictSessionStopped, StrictTargetMismatch, _origin_of
 from app.mod02_i8.client import I8OnlineConflictError
 from app.mod02_i8.login import I8AuthFailedError
@@ -47,10 +47,6 @@ SIG_MIN_BYTES = 100          # 太小的响应视为坏图（素材包同阈值�
 
 # ⚠️ **本模块不声明"办理节点"这个字段名** —— 它只有一处口径 = `print/template.py::NODE_FILTER_FIELD`；
 #    `signature_slots()` 直接复用那边的 `node_of()`，所以这里**不需要**自己再来一份（曾有一份死常量，已删）。
-
-_MAGIC = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"),
-          (b"GIF89a", "image/gif"), (b"BM", "image/bmp"))
-
 
 # ---------------------------------------------------------------- 纯函数：节点名 → 地址
 
@@ -270,20 +266,12 @@ class SignatureStore:
             p.write_bytes(blob)
 
 
-def _image_mime(blob: bytes | None) -> str:
-    if not blob:
-        return ""
-    if blob.startswith(b"RIFF") and blob[8:12] == b"WEBP":
-        return "image/webp"
-    return next((kind for magic, kind in _MAGIC if blob.startswith(magic)), "")
-
-
 def _valid_image(blob: bytes | None) -> bool:
-    return bool(blob and len(blob) >= SIG_MIN_BYTES and _image_mime(blob))
+    return bool(blob and len(blob) >= SIG_MIN_BYTES and signature_image_mime(blob))
 
 
 def _to_data_uri(blob: bytes) -> str:
-    mime = _image_mime(blob) or "image/png"
+    mime = signature_image_mime(blob) or "image/png"
     return f"data:{mime};base64,{base64.b64encode(blob).decode('ascii')}"
 
 

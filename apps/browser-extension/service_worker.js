@@ -415,7 +415,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
     body = bytes;
   }
-  let response, mediaType = '';
+  let response, signatureBytes;
   // 预算由后端按**这条请求自己的** read 超时给（合同列表 200s / 详情 60s / 默认 30s），
   // ⛔ 不要在这里另设固定值：拿 30s 去截 200s 的列表就是凭空判死一条正常请求。
   const budget = Number(payload.timeout_ms) > 0 ? Number(payload.timeout_ms) : 0;
@@ -434,16 +434,29 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
       cache: 'no-store',
       ...(controller ? { signal: controller.signal } : {}),
     });
+    if (response.type === 'opaqueredirect' || response.type === 'opaque') {
+      return { failed: '浏览器返回了不透明响应（无法核对结果）', code: 'opaque-response' };
+    }
     if (signatureImage) {
-      mediaType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
-      if (response.status === 200 && mediaType !== 'text/html' && !/^image\/.+/.test(mediaType)) {
-        const text = await response.text();
-        let code;
-        try { code = JSON.parse(text)?.Code; } catch { /* The server may also return plain text. */ }
-        if (String(code) === '401' || /no sessioninfo/i.test(text)) {
+      const mediaType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+      // Relay status and media type for a precise stop reason, without returning a login page.
+      const noImage = { status: response.status, headers: { 'content-type': mediaType }, body_b64: '', declared_length: 0 };
+      if (response.status < 200 || response.status >= 300 || mediaType === 'text/html') return noImage;
+
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const header = String.fromCharCode(...bytes.subarray(0, 12));
+      const raster = ['\x89PNG\r\n\x1a\n', '\xff\xd8\xff', 'GIF87a', 'GIF89a', 'BM'].some(magic => header.startsWith(magic))
+        || (header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP');
+      if (!raster) {
+        const text = new TextDecoder().decode(bytes);
+        let envelope;
+        try { envelope = JSON.parse(text); } catch { /* The server may also return plain text. */ }
+        if ([envelope?.Code, envelope?.code].some(code => String(code).trim() === '401') || /no sessioninfo/i.test(text)) {
           return { failed: 'i8 会话已失效，本批已停止。', code: 'session-ended' };
         }
       }
+      if (!raster || !/^image\/.+/.test(mediaType)) return noImage;
+      signatureBytes = bytes;
     }
   } catch (error) {
     // 超时是**超时**：⛔ 不许说成会话/身份失效（那会把用户推向重登，反而顶号）。
@@ -454,18 +467,7 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
   } finally {
     if (timer) clearTimeout(timer);
   }
-  if (response.type === 'opaqueredirect' || response.type === 'opaque') {
-    // 不透明响应拿不到状态与正文 ⇒ 不许当成结果继续解析（后端也会判停，这里先拦）。
-    return { failed: '浏览器返回了不透明响应（无法核对结果）', code: 'opaque-response' };
-  }
-  if (signatureImage) {
-    if (response.status < 200 || response.status >= 300 || !/^image\/.+/.test(mediaType)) {
-      // Relay status and media type for a precise stop reason, without returning a login page.
-      return { status: response.status, headers: { 'content-type': mediaType }, body_b64: '', declared_length: 0 };
-    }
-  }
-  const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
+  const bytes = signatureBytes ?? new Uint8Array(await response.arrayBuffer());
   let binary = '';
   const chunk = 0x8000;
   for (let index = 0; index < bytes.length; index += chunk) {

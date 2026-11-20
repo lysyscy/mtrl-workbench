@@ -136,6 +136,7 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
           fetch: fetchImpl,
           URL,
           Uint8Array,
+          TextDecoder,
           atob,
           btoa,
           console,
@@ -755,7 +756,7 @@ test('签名图片限定同源 GET、安全路径和带签名参数的栅格图�
   const calls = [];
   const relay = boot({fetchImpl: async (url, init) => {
     calls.push({url, init});
-    return reply({headers: {'Content-Type': 'image/png'}, bytes: new Uint8Array([0x89, 0x50])});
+    return reply({headers: {'Content-Type': 'image/png'}, bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])});
   }});
   await relay.bind();
   for (const input of [
@@ -773,7 +774,7 @@ test('签名图片限定同源 GET、安全路径和带签名参数的栅格图�
   assert.equal(calls.length, 0);
   const response = await relay.call(exec({method: 'GET', url: accepted}));
   assert.equal(response.ok, true);
-  assert.equal(response.body_b64, 'iVA=');
+  assert.equal(response.body_b64, 'iVBORw0KGgo=');
   assert.equal(calls[0].init.redirect, 'manual');
 });
 
@@ -818,21 +819,22 @@ test('completed auto-opened tab on a different site releases the next confirmed 
 });
 
 test('signature 200 with an i8 expiry body returns a strict session-ended signal only', async () => {
-  let payload;
-  const relay = boot({fetchImpl: async () => ({
-    ...reply({headers: {'Content-Type': 'application/json'}}),
-    text: async () => payload,
+  let payload, mediaType;
+  const relay = boot({fetchImpl: async () => reply({
+    headers: {'Content-Type': mediaType}, bytes: new TextEncoder().encode(payload),
   })});
   await relay.bind();
   const request = exec({method: 'GET', url: I8 + '/sig/test.png?s=demo'});
-  for (payload of ['{"Code":"401"}', '{"Code":401}', 'No SessionInfo found']) {
+  for (mediaType of ['application/json', 'image/png']) {
+    for (payload of ['{"Code":"401"}', '{"Code":401}', '{"code":401}', 'No SessionInfo found']) {
+      const answer = await relay.call(request);
+      assert.equal(answer.ok, false);
+      assert.equal(answer.code, 'session-ended');
+      assert.equal(answer.body_b64, undefined);
+    }
+    payload = '{"Code":500}';
     const answer = await relay.call(request);
-    assert.equal(answer.ok, false);
-    assert.equal(answer.code, 'session-ended');
-    assert.equal(answer.body_b64, undefined);
+    assert.equal(answer.ok, true);
+    assert.equal(answer.body_b64, '');
   }
-  payload = '{"Code":500}';
-  const answer = await relay.call(request);
-  assert.equal(answer.ok, true);
-  assert.equal(answer.body_b64, '');
 });

@@ -158,6 +158,18 @@ def is_signature_image_target(url: str) -> bool:
     )
 
 
+_SIGNATURE_IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif"), (b"BM", "image/bmp"),
+)
+
+
+def signature_image_mime(blob: bytes) -> str:
+    if blob.startswith(b"RIFF") and blob[8:12] == b"WEBP":
+        return "image/webp"
+    return next((mime for magic, mime in _SIGNATURE_IMAGE_MAGIC if blob.startswith(magic)), "")
+
+
 def require_signature_image(response: httpx.Response) -> None:
     """Reject login pages and non-image responses without exposing signed URLs."""
     status = response.status_code
@@ -168,7 +180,7 @@ def require_signature_image(response: httpx.Response) -> None:
         raise StrictSessionEnded("i8 签名图返回登录或会话异常页面，本批已停止。请核对 i8 会话后重试。")
     if not 200 <= status < 300:
         raise ExternalServiceError(f"签名图下载失败（HTTP {status}）。")
-    if not media_type.startswith("image/") or media_type == "image/":
+    if not signature_image_mime(response.content) or not media_type.startswith("image/") or media_type == "image/":
         if I8Client._is_session_invalid(response) or "no sessioninfo" in response.text.lower():
             raise StrictSessionEnded("i8 会话已失效，本批已停止。请核对 i8 会话后重试。")
         raise ExternalServiceError("i8 签名图响应不是图片。")

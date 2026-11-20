@@ -196,33 +196,41 @@ def main() -> int:
         if expected:
             print("✅ 识别校验通过（%s）" % counts)
 
-        failed = [r for r in rows if not r["ok"]]
-        if failed:
-            print("\n⚠️ 未出单号（%d 张）：%s" % (len(failed), [r["bill_no"] for r in failed]))
+        failed = [r["bill_no"] for r in rows if not r["ok"]]
 
         # ---------------- 出纸 ----------------
         if args.no_print:
             print("\n（--no-print）已跳过出纸。PDF 在：%s" % outdir)
-            return 0
+            return int(bool(failed))
 
         printed = 0
+        unknown = []
         for row in (item for item in rows if item["ok"]):
+            bill_no = row["bill_no"]
             try:
-                receipt = send_pdf(row["pdf"].read_bytes(), settings.printer_ipp_url)
-                if receipt.status == "accepted":
-                    printed += 1
-                    print("  ✅ %s → 已投递打印机" % row["bill_no"])
-                else:
-                    row["reason"] = receipt.reason
-                    print("  %s → %s" % (row["bill_no"], receipt.reason))
-            except Exception as exc:  # noqa: BLE001
-                row["reason"] = "%s: %s" % (type(exc).__name__, exc)
-                print("  ❌ %s → 出纸失败：%s" % (row["bill_no"], row["reason"]))
+                pdf = row["pdf"].read_bytes()
+            except OSError as exc:
+                failed.append(bill_no)
+                print("  ❌ %s → 无法读取 PDF：%s" % (bill_no, type(exc).__name__))
+                continue
+            try:
+                receipt = send_pdf(pdf, settings.printer_ipp_url)
+            except Exception:  # noqa: BLE001
+                unknown.append(bill_no)
+                print("  %s → 未取得有效的打印机回执" % bill_no)
+                continue
+            if receipt.status == "accepted":
+                printed += 1
+                print("  ✅ %s → 已投递打印机" % bill_no)
+            else:
+                (unknown if receipt.status == "unknown" else failed).append(bill_no)
+                print("  %s → %s" % (bill_no, receipt.reason))
 
-        unprinted = [row["bill_no"] for row in rows if not row["ok"] or row.get("reason")]
-        print("已投递 %d 张 · 未出 %s" % (printed, unprinted or "无"))
+        print("已投递 %d 张 · 未出 %s" % (printed, failed or "无"))
+        if unknown:
+            print("结果待核实（%d 张）：%s。请先核对打印机作业和出纸情况，勿盲目重打。" % (len(unknown), unknown))
         print("PDF 全在：%s" % outdir)
-        return 0
+        return int(bool(failed or unknown))
     finally:
         try:
             renderer.close()

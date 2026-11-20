@@ -13,10 +13,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.core.errors import MustReportError
+from app.mod02_i8.browser_session import StrictSessionEnded
 from app.mod03_notice.print.signatures import (
+    SignatureStore,
     _to_data_uri,
     cache_key,
     check_signature_coverage,
@@ -77,7 +80,18 @@ def test_按魔术字节判mime():
     assert _to_data_uri(b"\xff\xd8\xff" + b"0" * 200).startswith("data:image/jpeg;base64,")
     assert _to_data_uri(b"GIF89a" + b"0" * 200).startswith("data:image/gif;base64,")
     assert _to_data_uri(b"BM" + b"0" * 200).startswith("data:image/bmp;base64,")
+    assert _to_data_uri(b"RIFF\x00\x00\x00\x00WEBP" + b"0" * 200).startswith("data:image/webp;base64,")
     assert _to_data_uri(b"\x89PNG\r\n\x1a\n" + b"0" * 200).startswith("data:image/png;base64,")
+
+
+@pytest.mark.parametrize("payload", [b'{"Code":401}', b'{"code":"401"}', b'{"Msg":"No SessionInfo found"}'])
+def test_signature_download_propagates_session_expiry_through_image_content_type(payload):
+    class Client:
+        def request(self, *args, **kwargs):
+            return httpx.Response(200, content=payload, headers={"Content-Type": "image/png"})
+
+    with pytest.raises(StrictSessionEnded, match="会话已失效"):
+        SignatureStore(Client())._download("/signed.png?s=fixture")
 
 
 # ---------------------------------------------------------------- 模板侧节点名

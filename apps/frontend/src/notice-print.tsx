@@ -156,6 +156,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   const [printerUri, setPrinterUri] = useState('');
   const [kick, setKick] = useState<KickConfirmation | null>(null);
   const pendingKick = useRef<KickConfirmation | null>(null);
+  const [revocationNotice, setRevocationNotice] = useState('');
   const handledTokens = useRef(new Set<string>());
   const [file, setFile] = useState<{ url: string; filename: string; pdf: boolean } | null>(null);
   const blobUrl = useRef('');
@@ -166,7 +167,8 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   const title = mode === 'print' ? '批量打印' : '只导出 PDF';
   const closeLocked = busy && batch?.stage !== 'dispatching';
   const closing = useDialogClose({
-    busy: closeLocked, dirty: false, close: () => { cancelWaiting(); cancelKick(); close(); },
+    busy: closeLocked, dirty: false, beforeRequestClose: cancelWaiting,
+    close: () => { void cancelKick(); close(); },
   });
   const result = batch?.result;
   const deliveryStage = batch?.stage === 'dispatching' || batch?.stage === 'done';
@@ -192,27 +194,31 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
       if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
     };
   }, []);
-  function discardKick() {
+  function takeKick() {
     confirmationGeneration.current += 1;
     const pending = pendingKick.current;
     pendingKick.current = null;
-    if (pending) revokeI8KickToken(pending.token);
+    return pending?.token ?? '';
   }
 
-  function cancelKick() {
-    discardKick();
+  async function cancelKick() {
+    const token = takeKick();
+    const generation = confirmationGeneration.current;
     setKick(null);
+    const notice = await revokeI8KickToken(token);
+    if (notice && alive.current && generation === confirmationGeneration.current) setRevocationNotice(notice);
   }
 
   function offerKick(token: string, message: string, generation: number, retry: () => Promise<void>) {
     if (!token || handledTokens.current.has(token)) return;
     handledTokens.current.add(token);
     if (!alive.current || blockedRef.current || generation !== confirmationGeneration.current) {
-      revokeI8KickToken(token);
+      void revokeI8KickToken(token);
       return;
     }
     const next = {token, message, retry};
     pendingKick.current = next;
+    setRevocationNotice('');
     setKick(next);
   }
 
@@ -226,7 +232,8 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
 
   useLayoutEffect(() => {
     setKick(null);
-    return discardKick;
+    setRevocationNotice('');
+    return () => { void revokeI8KickToken(takeKick()); };
   }, [blocked, session.mode, owner, scope]);
 
   useEffect(() => {
@@ -378,7 +385,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   }
 
   function removeFailed() {
-    cancelKick();
+    void cancelKick();
     setScope(remaining);
     setBatch(null);
     setError('');
@@ -442,6 +449,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
       </section>}
       {error && <p className="notice" role="alert">{error}</p>}
       {kick && <p className="notice" role="status">{kick.message}</p>}
+      <div role="status" className={revocationNotice ? 'notice' : undefined}>{revocationNotice}</div>
       {file?.pdf && <><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p>
         <iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
       <div className="dialog-actions">
@@ -449,7 +457,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
         <Button htmlType="button" disabled={closeLocked} onClick={closing.requestClose}>关闭</Button>
         {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
         {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
-          <Button htmlType="button" onClick={cancelKick}>取消下线确认</Button>
+          <Button htmlType="button" onClick={() => void cancelKick()}>取消下线确认</Button>
           <Button htmlType="button" type="primary" disabled={blocked} onClick={confirmKick}>让现有会话下线并继续</Button>
         </>}
         {!busy && !waiting && !kick && scope.length > 0 && (!batch || preparationFailed) &&

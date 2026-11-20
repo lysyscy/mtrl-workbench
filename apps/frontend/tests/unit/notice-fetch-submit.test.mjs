@@ -69,14 +69,9 @@ registerHooks({
       `);
     }
     if (specifier === './business-modal') {
-      return stub("export function BusinessModal(p) { return { type: 'wrapper', props: { children: p.children } }; }");
+      return stub("export const BusinessModalTitle = {}; export function BusinessModal(p) { return { type: 'wrapper', props: p }; }");
     }
-    if (specifier === './dialog-close') {
-      return stub(`
-        export function DialogContents(p) { return { type: 'wrapper', props: { children: p.children } }; }
-        export function useDialogClose({close}) { return { requestClose: close }; }
-      `);
-    }
+    if (specifier === 'motion/react') return stub('export const useIsPresent = () => true;');
     if (specifier === './history') {
       return stub('export function useHistoryGuard() {}');
     }
@@ -110,7 +105,7 @@ const { ContractFetch } = await import('../../src/contract-tools.tsx');
 const { MechanicalWork } = await import('../../src/mechanical-work.tsx');
 const { useI8KickConfirmation } = await import('../../src/i8-kick-confirmation.tsx');
 const { ApiError } = await import('../../src/api.ts');
-const { I8FetchActions, useI8FetchAction } = await import('../../src/i8-fetch.tsx');
+const { I8FetchActions, I8FetchStatus, useI8FetchAction } = await import('../../src/i8-fetch.tsx');
 const { readReportFetchResult } = await import('../../src/i8-report-fetch-api.ts');
 
 class MemoryStorage {
@@ -433,6 +428,50 @@ for (const invalidation of ['cancel', 'month', 'mode', 'close']) {
 }
 
 
+test('cancelled fetch confirmation cannot submit while revocation is pending or after it fails', async () => {
+  const calls = [];
+  const revocation = Promise.withResolvers();
+  globalThis.fetch = async (path, init) => {
+    calls.push([path, JSON.parse(init.body)]);
+    if (calls.length === 1) return {ok: false, status: 409, json: async () => ({
+      code: 'i8_online_conflict', message: '已有在线会话', detail: {kick_token: 'fixture'},
+    })};
+    return revocation.promise;
+  };
+  confirmButton(render()).props.onClick();
+  await settle();
+  const prompting = render();
+  const staleConfirm = kickButton(prompting);
+  kickButton(prompting, '取消').props.onClick();
+  assert.equal(kickButton(render()), undefined);
+  staleConfirm.props.onClick();
+  revocation.reject(new TypeError('network failure'));
+  await settle();
+  staleConfirm.props.onClick();
+  const [status] = walk(render(), node => node.type === I8FetchStatus);
+  assert.ok(walk(I8FetchStatus(status.props), node => node.props?.role === 'status'
+    && /令牌撤回未确认/.test(node.props.children)).length);
+  assert.equal(confirmButton(render()).props.disabled, false);
+  assert.deepEqual(calls.map(([path]) => path), ['/api/m03/notices/fetch', '/api/m02/session/kick-cancel']);
+});
+
+test('shared confirmation clears its token before a rejected revocation completes', async () => {
+  const revoked = Promise.withResolvers();
+  globalThis.fetch = () => revoked.promise;
+  cells.month = null;
+  const renderKick = () => { cells.index = 0; return useI8KickConfirmation('scope'); };
+  const first = renderKick();
+  first.offer(new ApiError('已有在线会话', 409, 'i8_online_conflict', {kick_token: 'fixture'}),
+    () => assert.fail('cancelled confirmation submitted'));
+  const prompting = renderKick();
+  const cancellation = prompting.cancel();
+  assert.equal(renderKick().message, '');
+  prompting.confirm();
+  revoked.resolve({ok: false, status: 503, json: async () => ({message: 'unavailable'})});
+  await cancellation;
+  assert.match(renderKick().revocationNotice, /令牌撤回未确认/);
+});
+
 test('a late kick offer is revoked after scope change or dismissal', async () => {
   const calls = recorder();
   cells.month = null;
@@ -503,6 +542,44 @@ for (const [name, component, props, path, result, hasReceipt] of fetchSurfaces) 
     await settle();
     assert.deepEqual(calls, []);
   });
+}
+
+for (const [name, component, props, field, next] of [
+  ['notice', NoticeFetch, {blocked: false}, '抓取月份', '2026-10'],
+  ['report', I8ReportFetch, fetchSurfaces[0][2], '收发结存抓取月份', '2026-09'],
+  ['contract', ContractFetch, {blocked: false}, '合同抓取范围', 'all'],
+]) {
+  for (const exit of ['modal', 'heading']) {
+    test(name + ' cancels the browser wait before the ' + exit + ' close prompts to discard', async () => {
+      const calls = recorder();
+      const ready = Promise.withResolvers();
+      let signal;
+      globalThis.__relaySession = {...globalThis.__relaySession, mode: 'browser', waitForBrowser(value) {
+        signal = value;
+        return ready.promise;
+      }};
+      function surface() {
+        cells.index = 0;
+        if (component !== NoticeFetch) cells.month = null;
+        return component({...props, me, close: () => assert.fail('dirty dialog closed immediately'), refresh: async () => {}});
+      }
+      const [input] = walk(surface(), node => (node.props?.label || node.props?.['aria-label']) === field);
+      if (component === NoticeFetch) cells.month = next;
+      input.props.onChange(next);
+      actionsOf(surface()).onRun();
+      const waiting = surface();
+      assert.equal(actionsOf(waiting).action.waiting, true);
+      const [modal] = walk(waiting, node => typeof node.props?.requestClose === 'function');
+      const [contents] = walk(waiting, node => node.props?.closing);
+      const requestClose = exit === 'modal' ? modal.props.requestClose : contents.props.closing.requestClose;
+      requestClose();
+      assert.equal(signal.aborted, true);
+      assert.equal(walk(surface(), node => node.props?.closing)[0].props.closing.confirming, true);
+      ready.resolve(true);
+      await settle();
+      assert.deepEqual(calls, []);
+    });
+  }
 }
 
 test('mechanical wait keeps writes unlocked and can be closed before readiness', async t => {

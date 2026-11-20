@@ -7,10 +7,17 @@ export function readI8KickConfirmation(failure: unknown) {
   return { token: detail.kick_token, message: failure.message };
 }
 
-export function revokeI8KickToken(token: string) {
-  if (token) void requestJson('/api/m02/session/kick-cancel', {
-    method: 'POST', keepalive: true, ...body({kick_token: token}),
-  }).catch(() => {});
+export async function revokeI8KickToken(token: string): Promise<string> {
+  if (!token) return '';
+  const unconfirmed = '已取消本地操作。服务端令牌撤回未确认，令牌将在短时间内自动失效。';
+  try {
+    const receipt = await requestJson('/api/m02/session/kick-cancel', {
+      method: 'POST', keepalive: true, ...body({kick_token: token}),
+    });
+    return record(receipt) && receipt.ok === true ? '' : unconfirmed;
+  } catch {
+    return unconfirmed;
+  }
 }
 
 export const sourceNames = { notices: '付款通知书', settlement: '收发结存表', inventory: '库存单据明细表', contracts: '采购合同信息', warehouses: '仓库列表', 'common-projects': '常用项目列表' };

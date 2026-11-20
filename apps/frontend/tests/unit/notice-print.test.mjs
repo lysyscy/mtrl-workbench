@@ -109,6 +109,22 @@ async function until(predicate) {
   assert.fail('expected dialog state did not arrive');
 }
 
+test('print cancellation reports failed revocation and blocks the stale confirm handler', async t => {
+  const revocation = Promise.withResolvers();
+  const dialog = mount(t, 'print', ({path}) => path === root + '/prepare' ? Response.json({
+    code: 'i8_online_conflict', message: '已有在线会话', detail: {kick_token: 'print-cancel'},
+  }, {status: 409}) : revocation.promise, {mode: 'http', connected: false});
+  dialog.click('确认本批');
+  await until(() => text(dialog.render()).includes('已有在线会话'));
+  const confirm = walk(dialog.render()).find(node => text(node.props.children) === '让现有会话下线并继续');
+  dialog.click('取消下线确认');
+  confirm.props.onClick();
+  assert.doesNotMatch(text(dialog.render()), /让现有会话下线并继续/);
+  revocation.resolve(Response.json({message: 'unavailable'}, {status: 503}));
+  await until(() => walk(dialog.render()).some(node => node.props.role === 'status' && /令牌撤回未确认/.test(text(node))));
+  assert.deepEqual(dialog.calls.map(call => call.path), [root + '/prepare', '/api/m02/session/kick-cancel']);
+});
+
 test('preparation shows server counts and reconfirmation is required before sending a trimmed scope', async t => {
   let reads = 0, prepares = 0;
   const failed = view('first', 'print', {

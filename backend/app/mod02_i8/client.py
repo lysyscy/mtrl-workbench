@@ -187,7 +187,7 @@ class I8Client:
             return False
         if not isinstance(body, dict):
             return False
-        if str(body.get("Code")) == "401":
+        if any(str(body.get(key)).strip() == "401" for key in ("Code", "code")):
             return True
         return "no sessioninfo" in str(body.get("Msg") or body.get("msg") or "").lower()
 

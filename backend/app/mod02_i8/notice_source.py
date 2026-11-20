@@ -189,7 +189,10 @@ def _extract_flow_nodes(resp: Any) -> list[dict]:
 
 def _require_notice_records(resp: Any, keys: tuple[str, ...], label: str) -> list[dict]:
     if isinstance(resp, dict):
-        if resp.get("Success") is False or resp.get("success") is False:
+        codes = (str(resp[key]).strip() for key in ("Code", "code") if resp.get(key) is not None)
+        if resp.get("Success") is False or resp.get("success") is False or any(
+            code not in {"", "0", "200"} for code in codes
+        ):
             raise ExternalServiceError(f"i8 返回{label}读取失败，请核对后重试。")
         rows = next((resp[key] for key in keys if isinstance(resp.get(key), list)), None)
     else:

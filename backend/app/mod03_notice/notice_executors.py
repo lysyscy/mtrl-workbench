@@ -76,7 +76,7 @@ class _PrintDetails(NoticeDetailFetcher):
 def load_batch_notices(ids: tuple[int, ...]) -> list[PaymentNotice]:
     with session_scope() as session:
         found = {notice.id: notice for notice in get_notices_by_ids(session, list(ids))}
-    return [found.get(notice_id) or PaymentNotice(id=notice_id, bill_no=str(notice_id)) for notice_id in ids]
+    return [found.get(notice_id) or PaymentNotice(id=notice_id, bill_no="单据不存在") for notice_id in ids]
 
 
 @contextmanager

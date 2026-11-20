@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from pypdf import PdfReader, PdfWriter
 
 from app.core import app_settings
+from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.config import Settings, get_settings
 from app.core.session import COOKIE_NAME, make
@@ -26,6 +27,7 @@ from app.mod02_i8 import browser_broker, client as i8_client, session_policy
 from app.mod02_i8.browser_relay import assert_readonly
 from app.mod02_i8.browser_session import StrictTargetMismatch
 from app.mod03_notice import notice_executors, print_batch_store
+from app.mod03_notice.notice_executors import load_batch_notices
 from tests._auth import TestClient
 from app.mod03_notice.print import dispatch as channels, ipp
 from app.mod03_notice.schemas import BatchRequest
@@ -180,6 +182,8 @@ def pump(broker, *, second_image=None):
                             relay_failure = "session-ended"
                         elif second_image == "json_expired":
                             status, content_type, content = 200, "application/json", b'{"Code":"401"}'
+                        elif second_image == "mislabeled_expired":
+                            content = b'{"Code":0,"Msg":"NO SessionInfo found"}'
                         else:
                             status, content_type, content = 200, "text/plain", b"not an image"
                 else:
@@ -216,7 +220,7 @@ def wait_batch(api, batch_id):
     pytest.fail(f"batch not finished: {value}")
 
 
-@pytest.mark.parametrize("second_image", ["not_image", "session", "relay_expired", "json_expired"])
+@pytest.mark.parametrize("second_image", ["not_image", "session", "relay_expired", "json_expired", "mislabeled_expired"])
 def test_print_stops_mid_batch_then_only_dispatches_reconfirmed_scope(setup_batch, second_image):
     env = setup_batch
     relay = pump(env.broker, second_image=second_image)
@@ -638,6 +642,29 @@ def test_prepare_admission_releases_capacity_on_completion_and_submit_failure(se
     assert not store._pending_preparations
     assert list(store._batches) == [started.batch_id]
     assert list(store.STATE_DIR.glob("*.json")) == [store.STATE_DIR / f"{started.batch_id}.json"]
+
+
+def test_queued_batch_checkpoints_document_numbers_before_any_worker_runs(setup_batch, monkeypatch, rollback_db):
+    worker = _DeferredWorker()
+    monkeypatch.setattr(print_batch_store, "_workers", worker)
+    monkeypatch.setattr(print_batch_store, "load_batch_notices", load_batch_notices)
+    with session_scope() as db:
+        db.add_all([make_notice(4001, "DB-PN-1"), make_notice(4002, "DB-PN-2"), make_notice(4003, "")])
+
+    api = setup_batch.api
+    start = api.post(f"{PATH}/prepare", json=body((4002, 4001, 4002, 4003, 4004)))
+    assert start.status_code == 202
+    queued = start.json()
+    labels = ["DB-PN-2", "DB-PN-1", "单号缺失", "单据不存在"]
+    assert [item["bill_no"] for item in queued["items"]] == labels
+
+    print_batch_store._batches.clear()
+    recovered = api.get(f"{PATH}/{queued['batch_id']}").json()
+    assert recovered["status"] == "failed" and "重新确认" in recovered["reason"]
+    assert recovered["ids"] == [4002, 4001, 4003, 4004]
+    assert [item["bill_no"] for item in recovered["items"]] == labels
+    assert recovered["dispatched_count"] == 0
+    assert len(worker.jobs) == 1 and not setup_batch.rendered
 
 
 def test_queued_browser_batch_never_switches_to_a_new_connection(setup_batch, monkeypatch):

@@ -50,6 +50,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   const lock = useRef(false), pendingRef = useRef(restored), alive = useRef(true);
   const kickRef = useRef<KickConfirmation | null>(null), kickGeneration = useRef(0);
   const [kickConfirmation, setKickConfirmation] = useState<KickConfirmation | null>(null);
+  const [revocationNotice, setRevocationNotice] = useState('');
   useHistoryGuard(`i8-fetch-${source ?? 'monthly'}`, () => busy || refreshing ? 'i8 抓取正在处理，请稍候。' : pending ? 'i8 抓取结果待核实，请先核对。' : '');
   useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
   const config = useQuery({
@@ -67,20 +68,24 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   const {waiting, cancelWaiting, runWhenReady} = useI8ActionWait(confirmationKey);
   const unavailable = paused || !enabled || busy || !me || config.isFetching || config.isError
     || !config.data?.ready || config.data.account !== me.account || waiting;
-  function discardKick() {
+  function takeKick() {
     kickGeneration.current += 1;
     const confirmation = kickRef.current;
     kickRef.current = null;
-    if (confirmation) revokeI8KickToken(confirmation.token);
+    return confirmation?.token ?? '';
   }
   useLayoutEffect(() => {
     setKickConfirmation(null);
-    return discardKick;
+    setRevocationNotice('');
+    return () => { void revokeI8KickToken(takeKick()); };
   }, [confirmationKey]);
 
-  function cancelKick() {
-    discardKick();
+  async function cancelKick() {
+    const token = takeKick();
+    const generation = kickGeneration.current;
     setKickConfirmation(null);
+    const notice = await revokeI8KickToken(token);
+    if (notice && alive.current && generation === kickGeneration.current) setRevocationNotice(notice);
   }
   async function confirmKick() {
     const confirmation = kickRef.current;
@@ -105,7 +110,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   }
   function reset() {
     cancelWaiting();
-    cancelKick();
+    void cancelKick();
     if (lock.current || pendingRef.current) return;
     setSent(false); setError(''); setRefreshError('');
   }
@@ -136,7 +141,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
       issued = true;
       result = await submit(request, choice, retry);
     });
-    if (!issued) revokeI8KickToken(token);
+    if (!issued) void revokeI8KickToken(token);
     return result;
   }
 
@@ -166,9 +171,10 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
             submit: () => issue(request, choice, confirmedBody, conflict.token),
           };
           kickRef.current = confirmation;
+          setRevocationNotice('');
           setKickConfirmation(confirmation);
         } else {
-          revokeI8KickToken(conflict.token);
+          void revokeI8KickToken(conflict.token);
           if (retry && alive.current) setError(conflict.message);
         }
       } else if (alive.current) setError(failure instanceof Error ? failure.message : '抓取未完成。');
@@ -195,7 +201,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
   const kickMessage = kickConfirmation?.key === confirmationKey ? kickConfirmation.message : '';
   return {busy, sent, pending, error, storageError, refreshError, refreshing, unavailable, browserBlocked, config,
     waiting, cancelWaiting, connectionNotice: session.notice,
-    mode: session.mode, kickMessage, confirmKick, cancelKick, run, reset, acknowledge, reread};
+    mode: session.mode, kickMessage, revocationNotice, confirmKick, cancelKick, run, reset, acknowledge, reread};
 }
 
 export type I8FetchAction = ReturnType<typeof useI8FetchAction>;
@@ -217,6 +223,7 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
       <p role="status">{action.connectionNotice || '确认抓取后将自动连接 i8。'}</p>}
     {action.busy && <p role="status">正在抓取，请稍候…</p>}
     {action.kickMessage && <p className="notice" role="status">{action.kickMessage}</p>}
+    <div role="status" className={action.revocationNotice ? 'notice' : undefined}>{action.revocationNotice}</div>
     {action.error && <p className="notice" role="alert">{action.error}</p>}
     {action.refreshError && <div className="notice" role="alert">
       抓取已完成，台账暂未刷新。{action.refreshError}
@@ -249,7 +256,7 @@ export function I8FetchActions({action, close, canRun = true, onRun, label = '�
   action: I8FetchAction; close: () => void; canRun?: boolean; onRun: () => void; label?: string;
 }) {
   if (action.kickMessage) return <div className="dialog-actions">
-    <Button htmlType="button" onClick={action.cancelKick}>取消</Button>
+    <Button htmlType="button" onClick={() => void action.cancelKick()}>取消</Button>
     <Button htmlType="button" type="primary" danger disabled={action.unavailable || !canRun}
       onClick={() => void action.confirmKick()}>让现有会话下线并继续</Button>
   </div>;

@@ -224,6 +224,7 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
               : '本次只查名单。工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>
             {waiting && <I8ConnectionWaitStatus />}
             {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
+            <div role="status" className={kick.revocationNotice ? 'notice' : undefined}>{kick.revocationNotice}</div>
             {kick.message ? <I8KickConfirmationActions {...kick} disabled={disabled || waiting} />
               : <Button disabled={disabled || waiting || !name} onClick={() => void runWhenReady(choice => checkWarehouse(undefined, choice))}>查询 i8 仓库名单</Button>}
             {warehouse && <div>

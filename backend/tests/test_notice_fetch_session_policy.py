@@ -12,10 +12,11 @@ from fastapi.testclient import TestClient
 
 from app.core import app_settings
 from app.core.config import I8_PATH_PAYMENT_NOTICE
-from app.core.errors import MustReportError
+from app.core.errors import ExternalServiceError, MustReportError
 from app.core.session import set_current_name
 from app.main import _install_error_handlers
 from app.mod02_i8 import browser_broker, cookie_store, login, session_policy
+from app.mod02_i8.notice_source import NoticeDetailFetcher
 from app.mod03_notice.router import router
 
 BASE = "https://i8.example.test"
@@ -94,6 +95,56 @@ def case(monkeypatch, rollback_db):
             "/api/m02/session/kick-cancel", json={"kick_token": token}, headers={"x-test-owner": owner},
         )
         yield state
+
+
+def test_failed_login_logs_only_safe_metadata(case):
+    attempts = iter([
+        httpx.Response(200, json={}),
+        httpx.Response(500, json={"accesstoken": "synthetic-sensitive-body"}),
+    ])
+    messages = []
+    sink = login.logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
+    try:
+        original = httpx.Client
+
+        def mock_client(**kwargs):
+            return original(**kwargs, transport=httpx.MockTransport(lambda request: next(attempts)))
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(httpx, "Client", mock_client)
+            result = login.login_at(BASE, "fixture", "", encrypt=lambda plain: plain)
+    finally:
+        login.logger.remove(sink)
+
+    assert not result.ok
+    assert len(messages) == 1
+    assert "synthetic-sensitive-body" not in messages[0]
+    for field in ("500", "has_accesstoken=True", "has_cookie=False", "kicked=False"):
+        assert field in messages[0]
+
+
+@pytest.mark.parametrize(("method", "key"), [("fetch_detail", "Record"), ("fetch_flow", "data")])
+@pytest.mark.parametrize(("fields", "valid"), [
+    ({"Code": "500"}, False), ({"code": 503, "Success": True}, False),
+    ({"Code": 0, "Success": False}, False), ({"Code": 0, "code": " 503 "}, False),
+    ({}, True), ({"Code": 0}, True), ({"code": " 200 ", "success": True}, True),
+])
+def test_notice_list_envelope_checks_status_before_confirming_empty(monkeypatch, method, key, fields, valid):
+    calls = []
+
+    def respond(path, **kwargs):
+        calls.append(path)
+        return {key: [], **fields}
+
+    monkeypatch.setattr("app.mod02_i8.notice_source.time.sleep", lambda _: None)
+    fetcher = NoticeDetailFetcher(SimpleNamespace(post_json=respond, get_json=respond))
+    fetch = getattr(fetcher, method)
+    if valid:
+        assert fetch("fixture") == []
+    else:
+        with pytest.raises(ExternalServiceError, match="读取失败"):
+            fetch("fixture")
+    assert len(calls) == (2 if valid else 1)
 
 
 def paths(case):

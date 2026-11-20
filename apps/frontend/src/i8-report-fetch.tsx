@@ -31,7 +31,7 @@ export function I8ReportFetch({source, month: initial, me, paused, close, refres
   const [month, setMonth] = useState(initial), [result, setResult] = useState<FetchReceipt | null>(null);
   const action = useI8FetchAction({source, me, paused, refresh, pending, scopeKey: month, onPending: value => onPending(value ? month : null)});
   const closing = useDialogClose({busy: action.busy || action.refreshing, dirty: !action.sent && month !== initial,
-    close: () => { action.cancelWaiting(); action.cancelKick(); close(); }, active: !paused});
+    beforeRequestClose: action.cancelWaiting, close: () => { void action.cancelKick(); close(); }, active: !paused});
   const spec = reportFetch[source], titleId = `${source}-fetch-title`;
   async function run() {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return;

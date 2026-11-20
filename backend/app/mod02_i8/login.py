@@ -157,8 +157,12 @@ def login_at(base, user, password, *, encrypt, allow_kick=False, follow_redirect
             LOGIN_PATH, data={"body": encrypt(_build_plain(user, password, sid, "1"))}
         )
         cookie = "; ".join(f"{k}={v}" for k, v in session.cookies.items())
-        if not r2.is_success or "accesstoken" not in r2.text or not cookie:
-            logger.warning("i8 登录失败（HTTP {}）：{}", r2.status_code, r2.text[:200])
+        has_accesstoken = "accesstoken" in r2.text
+        if not r2.is_success or not has_accesstoken or not cookie:
+            logger.warning(
+                "i8 登录失败（HTTP {}，has_accesstoken={}，has_cookie={}，kicked={}）",
+                r2.status_code, has_accesstoken, bool(cookie), kicked,
+            )
             return LoginResult(ok=False, conflict=bool(conflict), kicked_online=kicked, detail=AUTH_FAILED)
         return LoginResult(
             ok=True,

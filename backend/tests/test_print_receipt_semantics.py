@@ -122,7 +122,7 @@ def test_已核实与真失败两态不受影响(monkeypatch):
     assert "出纸失败" in o2.reason
 
 
-def test_probe_prints_successful_rows_and_preserves_original_exit_codes(monkeypatch, tmp_path):
+def test_probe_distinguishes_delivery_states_and_exit_codes(monkeypatch, tmp_path, capsys):
     import sys
     from types import SimpleNamespace
 
@@ -145,13 +145,22 @@ def test_probe_prints_successful_rows_and_preserves_original_exit_codes(monkeypa
     sent = []
     def send(pdf, uri):
         sent.append((pdf, uri))
-        return ipp.IppOutcome("failed" if pdf == b"reject" else "accepted", "fixture receipt")
+        status = {b"reject": "failed", b"timeout": "unknown"}.get(pdf, "accepted")
+        return ipp.IppOutcome(status, "fixture receipt")
 
     monkeypatch.setattr(cli, "one_bill", render)
     monkeypatch.setattr(cli, "send_pdf", send)
-    monkeypatch.setattr(sys, "argv", ["print_bills", "missing", "reject", "ok"])
-    assert cli.main() == 0
-    assert sent == [(b"reject", "ipp://fixture"), (b"ok", "ipp://fixture")]
+    monkeypatch.setattr(sys, "argv", ["print_bills", "missing", "reject", "timeout", "ok"])
+    assert cli.main() == 1
+    output = capsys.readouterr().out.splitlines()
+    assert next(line for line in output if " · 未出 " in line).endswith("['missing', 'reject']")
+    unknown = next(line for line in output if line.startswith("结果待核实"))
+    assert "['timeout']" in unknown and "勿盲目重打" in unknown
+    assert sent == [(bill, "ipp://fixture") for bill in (b"reject", b"timeout", b"ok")]
+    sent.clear()
+    for bill, expected in (("ok", 0), ("reject", 1), ("timeout", 1)):
+        monkeypatch.setattr(sys, "argv", ["print_bills", bill])
+        assert cli.main() == expected
     sent.clear()
     monkeypatch.setattr(sys, "argv", ["print_bills", "--expect", "material=2", "ok"])
     assert cli.main() == 2 and sent == []
