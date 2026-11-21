@@ -87,8 +87,12 @@ def check_status_document(root, product_commit):
     if next_heading:
         section = section[:next_heading.start()]
     versions = re.findall(r'正式前端资源[ \t]+`([0-9a-f]{8,40})`', section, flags=re.IGNORECASE)
-    if len(versions) != 1:
-        return {'state': 'unverified', 'reason': '正式前端资源版本不唯一或缺失', 'action': action}
+    if len(versions) == 0:
+        return {'state': 'unverified', 'reason': '未在「当前正式运行」段找到「正式前端资源 `<提交>`」记录', 'action': action}
+    if len(versions) > 1:
+        return {'state': 'unverified',
+                'reason': f'「当前正式运行」段发现 {len(versions)} 处「正式前端资源」记录，须保持唯一；请将历史条目改为「发布前端版本」后重试',
+                'action': action}
     recorded = versions[0].lower()
     if product_commit.startswith(recorded):
         return {'state': 'matched', 'recorded_commit': recorded}
