@@ -132,14 +132,12 @@ def _matrix_for(data: dict, warehouse: str) -> dict:
     inv = data["inv"].get(warehouse, [])
     manual = data["manual"].get(warehouse, [])
     history = data["history"].get(warehouse, [])
-    tables = {name: D.build_matrix(inv_rows=inv, manual_rows=manual,
-                                   history_rows=history, warehouse=warehouse,
-                                   adjusted=adjusted, cutoff_ym=cutoff)
-              for name, adjusted in (("raw", False), ("adjusted", True))}
+    tables = D.build_matrix_pair(inv_rows=inv, manual_rows=manual, history_rows=history,
+                                 warehouse=warehouse, cutoff_ym=cutoff)
     diffs = D.diff_rows(inv, warehouse=warehouse)
+    totals = {name: D.column_totals(rows) for name, rows in tables.items()}
     return {**tables, "cutoff_ym": cutoff, "diffs": diffs, "diff_totals": D.diff_totals(diffs),
-            "totals": {name: D.column_totals(rows) for name, rows in tables.items()},
-            "segments": {name: D.segment_totals(rows) for name, rows in tables.items()}}
+            "totals": totals, "segments": {name: D.segments_from_totals(values) for name, values in totals.items()}}
 
 
 def build_page_data(s: Session, state: dict | None = None) -> dict:

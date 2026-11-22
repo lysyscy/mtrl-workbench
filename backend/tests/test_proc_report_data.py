@@ -21,6 +21,27 @@ INV, HIST, MECH, MIX, UNKNOWN, EMPTY = (
     "库存仓", "历史仓", "机械仓", "混合仓", "未登记仓", "无数据档案仓")
 
 
+@pytest.mark.parametrize("changed", [(), ("2026-01",), ("2026-01", "2026-02")])
+def test_matrix_pair_preserves_independent_months_and_adjustment_values(changed):
+    from app.mod06_proc import domain as D
+
+    inventory = [
+        {"warehouse": "甲", "ym": ym, "direction": "入库", "material_property": "工具", "amount": "1.255"}
+        for ym in ("2026-01", "2026-02")
+    ]
+    for row in inventory:
+        if row["ym"] in changed:
+            row.update(adj_amount="0", adjusted_values={"material_property": "劳保"})
+    sources = dict(inv_rows=inventory, warehouse="甲", cutoff_ym="2025-11",
+                   manual_rows=[{"warehouse": "甲", "ym": "2026-01", "mech_0": "7.13"}],
+                   history_rows=[{"warehouse": "甲", "ym": "2025-10", "in_主辅材": "5.25"}])
+    pair = D.build_matrix_pair(**sources)
+    for key in ("raw", "adjusted"):
+        assert pair[key] == D.build_matrix(**sources, adjusted=key == "adjusted")
+    pair["adjusted"][0]["in_主辅材"] = Decimal("0")
+    assert pair["raw"][0]["in_主辅材"] == Decimal("5.25")
+
+
 @pytest.fixture
 def sources(monkeypatch, tmp_path):
     """只提供假来源和展示名；导出真实工作簿到临时目录，不访问i8。"""
@@ -195,23 +216,24 @@ def test_bucketed_matrices_keep_precedence_null_zero_order_and_document_trace(mo
     for name, value in (("load_inv_rows", inv), ("load_history", history), ("load_mech", manual)):
         monkeypatch.setattr(R, name, lambda s, value=value, **kw: value)
     monkeypatch.setattr(M6, "load_cutoffs", lambda s: {"A": "2025-11"})
-    original = M6.D.build_matrix
+    pair = M6.D.build_matrix_pair
     seen = []
 
     def matrix(**kw):
         assert all(str(row.get("warehouse") or "") == kw["warehouse"]
                    for name in ("inv_rows", "history_rows", "manual_rows") for row in kw[name])
         seen.append((kw["warehouse"], len(kw["inv_rows"])))
-        result = original(**kw)
-        legacy = original(**{**kw, "inv_rows": inv, "history_rows": history, "manual_rows": manual})
-        assert result == legacy
+        result = pair(**kw)
+        all_sources = {**kw, "inv_rows": inv, "history_rows": history, "manual_rows": manual}
+        for name in ("raw", "adjusted"):
+            assert result[name] == M6.D.build_matrix(**all_sources, adjusted=name == "adjusted")
         return result
 
-    monkeypatch.setattr(M6.D, "build_matrix", matrix)
+    monkeypatch.setattr(M6.D, "build_matrix_pair", matrix)
     data = M6.build_matrices(None, warehouses=["C", "A", "C", "不存在"])
     assert data["projects"] == ["A", "B", "C"]
     assert list(data["matrices"]) == ["C", "A"]
-    assert seen == [("C", 0), ("C", 0), ("A", 2), ("A", 2)]
+    assert seen == [("C", 0), ("A", 2)]
     a = data["matrices"]["A"]
     assert [row["id"] for row in a["diffs"]] == [9, 7]
     assert a["diffs"][0] == {"id": 9, "doc_no": "单据", "seq": "2", "material": "材料",

@@ -309,6 +309,24 @@ def build_matrix(
     return rows
 
 
+def build_matrix_pair(*, inv_rows: list[dict], manual_rows: list[dict], history_rows: list[dict],
+                      warehouse: str, cutoff_ym: str | None = None) -> dict[str, list[dict]]:
+    """原始与调整表共用来源；仅有库存调整的月份需要重新组装。"""
+    sources = {"inv_rows": inv_rows, "manual_rows": manual_rows, "history_rows": history_rows}
+    raw = build_matrix(**sources, warehouse=warehouse, cutoff_ym=cutoff_ym, adjusted=False)
+    changed_months = {str(row["ym"]) for row in inv_rows
+                      if row.get("ym") and str(row.get("warehouse") or "") == warehouse
+                      and (row.get("adj_amount") not in (None, "") or row.get("adjusted_values"))}
+    if changed_months and len(changed_months) < len(raw):
+        sources = {name: [row for row in rows if str(row.get("ym") or "") in changed_months]
+                   for name, rows in sources.items()}
+    changed = build_matrix(**sources, warehouse=warehouse, cutoff_ym=cutoff_ym, adjusted=True) if changed_months else []
+    by_month = {row[YM_KEY]: row for row in changed}
+    # Every returned table owns its rows, including months without adjustments.
+    adjusted = [by_month[row[YM_KEY]] if row[YM_KEY] in by_month else row.copy() for row in raw]
+    return {"raw": raw, "adjusted": adjusted}
+
+
 def difference_rows(raw_rows: list[dict], adjusted_rows: list[dict]) -> list[dict]:
     """**导出的「差异表」** = 两张表**逐格之差**（调整后 − 原始），行形状与 `build_matrix` **完全一致**。
 
@@ -352,7 +370,11 @@ def column_totals(rows: list[dict]) -> dict[str, Decimal | None]:
 
 def segment_totals(rows: list[dict]) -> tuple[dict, ...]:
     """「总求和」行的**四段**横向总计（001-06）—— 每段一个合计，跨列数与 `SUM_SEGMENTS` 一致。"""
-    totals = column_totals(rows)
+    return segments_from_totals(column_totals(rows))
+
+
+def segments_from_totals(totals: dict[str, Decimal | None]) -> tuple[dict, ...]:
+    """从同张表的列合计得到四段金额。"""
     return tuple(
         {"name": name, "keys": keys, "span": len(keys),
          "total": sum_money([totals[k] for k in keys if totals[k] is not None])}
@@ -519,9 +541,9 @@ __all__ = [
     "column_source", "column_editable", "snapshot_by_month", "build_matrix",
     "FORBIDDEN_PHRASES", "FORBIDDEN_ACTIONS", "column_meta", "to_category", "normalize_ym",
     "row_material_amount", "material_by_month", "mech_by_month",
-    "TAB_RAW", "TAB_ADJUSTED", "TAB_DIFF", "TABS", "DEFAULT_TAB", "tab_of", "build_matrix",
+    "TAB_RAW", "TAB_ADJUSTED", "TAB_DIFF", "TABS", "DEFAULT_TAB", "tab_of", "build_matrix", "build_matrix_pair",
     "difference_rows",
-    "column_totals", "segment_totals", "grand_total",
+    "column_totals", "segment_totals", "segments_from_totals", "grand_total",
     "DIFF_COLUMNS", "DIFF_SUM_KEYS", "DIFF_PAGE_ONLY_KEYS", "diff_rows", "diff_totals", "jump_query",
     "EXPORT_DOMAIN", "tab_name", "export_selection", "export_file_name", "export_manifest",
     "MATERIAL_READONLY", "boundary_violations",

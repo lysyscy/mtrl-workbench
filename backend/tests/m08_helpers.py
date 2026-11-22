@@ -57,6 +57,9 @@ class FakeSession:
     def __init__(self, by_model: dict | None = None) -> None:
         self.by_model: dict = {k: list(v) for k, v in (by_model or {}).items()}
 
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name='memory'))
+
     def execute(self, stmt):  # noqa: ANN001
         entity = stmt.column_descriptions[0]["entity"]
         rows = self.by_model.get(entity, [])
