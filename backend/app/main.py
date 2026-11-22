@@ -287,7 +287,8 @@ def create_app() -> FastAPI:
     #    正常响应；被白名单拦掉的 403 不经它（本来就不必压）。⚠️ 它是**纯 ASGI** 中间件，
     #    与外围的 `BaseHTTPMiddleware`（CORS / request_id / 白名单）叠加是安全组合。
     #    `minimum_size` 以下不压：小响应压了反而更大（多一层 gzip 头）。
-    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # Keep cold asset and large JSON reads responsive with the standard gzip level.
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
     # ⚠️ add 顺序 = CORS → request_id → 白名单（运行期执行顺序相反，见模块 docstring）
     _install_cors(app)
