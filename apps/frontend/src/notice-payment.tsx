@@ -36,7 +36,8 @@ export function PayAmountCell({ row, override, draft, disabled, change, edit }: 
   function commit() {
     const parsed = value.trim() ? amount(value) : decimal(cents(row.amount_approved)-cents(row.amount_paid));
     if (parsed === null) { setError('金额不合法，请修改'); return; }
-    setError('');setValue(parsed);edit(row,null);change(row,parsed);
+    setError('');setValue(parsed);edit(row,null);
+    if (parsed !== shown) change(row,parsed);
   }
   return <span><input data-pay-notice={row.notice_id} aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => { setValue(e.target.value);setError('');edit(row,e.target.value); }} onBlur={commit} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError('');edit(row,null); } }} />{error && <small id={errorId} role="alert">{error}</small>}</span>;
 }
