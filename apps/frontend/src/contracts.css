@@ -30,14 +30,10 @@
 .contract-row-actions{padding:0;gap:4px;flex-direction:row;flex-wrap:nowrap;align-items:center}
 .contract-amount-action{display:flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;gap:4px;width:100%;min-width:0}
 .contract-amount-action>span{white-space:nowrap}
-.contract-inline-input{box-sizing:border-box;width:100%;min-width:0;height:var(--control-sm);min-height:var(--control-sm);padding:0 4px;margin:0;border:1px solid var(--bd3);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);font:inherit;line-height:1.666667;text-overflow:ellipsis}
+.contracts-grid .ant-input{width:100%;min-width:0;font-size:inherit;height:calc(28px * var(--fscale));padding:0 4px}
 .contract-scroll-method{display:flex;align-items:center;justify-content:space-between;gap:4px;width:100%;height:var(--control-sm);padding:0 7px;border:1px solid var(--bd3);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);font:inherit;text-align:start;cursor:pointer}
 .contract-scroll-method::after{content:'';width:6px;height:6px;flex:none;border:solid var(--tx2);border-width:0 1px 1px 0;transform:translateY(-2px) rotate(45deg)}
 .contract-scroll-method:disabled{background:var(--sf2);cursor:not-allowed}
-.contract-inline-input:hover:not(:disabled){border-color:var(--pri-d)}
-.contract-inline-input:focus{border-color:var(--pri);outline:2px solid var(--pri);outline-offset:-2px}
-.contract-inline-input:disabled{background:var(--sf2);cursor:not-allowed}
-.contract-inline-input::placeholder{color:var(--tx2)}
 .contracts-grid .status-tag{max-width:100%;white-space:nowrap;overflow-wrap:normal;padding-inline:.25em}
 .contracts-grid .contract-inline-select .enum-tag{padding-inline:.25em}
 .contract-inline-editor{padding:calc(16px * var(--fscale));background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-card);flex:none}
