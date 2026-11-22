@@ -218,7 +218,12 @@ def test_home_keeps_its_tiles_while_the_todo_read_is_in_flight(server, browser_p
     expect(page.locator('.home-tile')).to_have_count(3)
     expect(page.locator('.home-tile-count-reading')).to_have_count(3)
     expect(page.locator('.home-read-lane [role=status]')).to_have_count(1)
-    before = page.locator('.home-todos').bounding_box()
+    # The retained page slides on entry. Measure in its layout coordinates so
+    # the page animation cannot look like a tile moving when a count arrives.
+    tiles = page.locator('.home-todos')
+    def geometry():
+        return tiles.evaluate("e => [e.offsetLeft, e.offsetTop, e.offsetWidth, e.offsetHeight]")
+    before = geometry()
     for route in held:
         route.continue_()
     page.unroute('**/api/m03/notice-todos')
@@ -226,6 +231,4 @@ def test_home_keeps_its_tiles_while_the_todo_read_is_in_flight(server, browser_p
     expect(page.locator('.home-tile-count-reading')).to_have_count(0)
     expect(page.locator('.home-read-lane [role=status]')).to_have_count(0)
     expect(page.locator('.home-tile-count').first).to_have_text(re.compile(r'^\d+$'))
-    after = page.locator('.home-todos').bounding_box()
-    assert abs(after['y'] - before['y']) < 1, (before, after)
-    assert abs(after['height'] - before['height']) < 1, (before, after)
+    assert geometry() == before
