@@ -267,7 +267,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       [key, totals[key]!.minWidth > width.minWidth ? totals[key]! : width]));
   }, [sourceWidths, totalRow, query.data?.columns, scale]);
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
-  const baseColumns=useMemo<ColDef<ContractRow>[]>(()=>[
+  const contractColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
@@ -275,9 +275,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       const editorParams = {editKey, control: () => inlineControl.current};
       // Keep formatted amounts and totals intact before flexible text columns shrink.
       const header=c.key==='tag'?'纳入状态':c.label.replace('（自动）','');
-      const amountWidth=numeric?moneyWidths[c.key]:undefined;
       const bounded=c.key==='material'?{initialWidth:260*scale,...textWidth(220,360,scale,0)}:c.key==='remark'?textWidth(110,210,scale,.7):textWidth(120,c.key==='supplier'?260:240,scale,1);
-      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??amountWidth??bounded),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
+      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??(numeric?{}:bounded)),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
         ...(editKey === 'payment_method' ? {loadingCellRenderer: ContractInlineCell, loadingCellRendererParams: {...editorParams, scrolling:true}} : {}),
         comparator:numeric?(a:string|null,b:string|null)=>cents(a??'0')<cents(b??'0')?-1:cents(a??'0')>cents(b??'0')?1:0:undefined,
         cellRenderer:editKey ? ContractInlineCell : (p:ICellRendererParams<ContractRow>)=>{
@@ -294,7 +293,13 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         }} as ColDef<ContractRow>;
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
-  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
+  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,selectionColumn]);
+  // Filtered totals can change a width suggestion. Keep the React renderers for
+  // surviving rows mounted when only that numeric suggestion changes.
+  const baseColumns=useMemo(()=>contractColumns.map(column=>{
+    const width = column.field && moneyWidths[column.field];
+    return width ? {...column, ...width} : column;
+  }),[contractColumns,moneyWidths]);
   const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey);
   const activeWidths=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
   const widthColumns=useGridWidthColumns(activeWidths,widths.savedWidths,'material');
