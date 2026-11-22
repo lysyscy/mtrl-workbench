@@ -8,6 +8,7 @@ Run with `uv run --no-project tools/dev/sync_misans_web.py` after an authorized 
 The application has no FontTools or network dependency.
 """
 from concurrent.futures import ThreadPoolExecutor
+from itertools import zip_longest
 import hashlib
 import json
 from pathlib import Path
@@ -52,7 +53,7 @@ def main():
     originals = {weight: TTFont(FONTS / f'MiSans-{name}.woff2') for weight, name in [(400, 'Regular'), (500, 'Medium'), (600, 'Semibold')]}
     coverage = {weight: set() for weight in originals}
     manifest = {'source': SOURCE, 'unmodified_official_subsets': [], 'coverage': {}, 'metric_differences': []}
-    rules = []
+    rules = {weight: [] for weight in originals}
     for (weight, url, codes), body in zip(faces, bodies, strict=True):
         name = f'{weight}-{url.rsplit("/", 1)[1]}'
         target = folder / name
@@ -68,16 +69,19 @@ def main():
                 manifest['metric_differences'].append({'weight': weight, 'code': hex(code), 'before': before, 'after': after})
                 assert not 0x3400 <= code <= 0x9FFF, 'Chinese text geometry changed'
         coverage[weight].update(codes)
-        rules.append(f"@font-face{{font-family:MiSans;font-style:normal;font-weight:{weight};font-display:swap;src:url('/static/fonts/misans-web/{name}') format('woff2');unicode-range:{ranges(codes)}}}")
+        rules[weight].append(f"@font-face{{font-family:MiSans;font-style:normal;font-weight:{weight};font-display:swap;src:url('/static/fonts/misans-web/{name}') format('woff2');unicode-range:{ranges(codes)}}}")
         manifest['unmodified_official_subsets'].append({'file': name, 'source': url, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()})
     for weight, original in originals.items():
         missing = set(original.getBestCmap()) - coverage[weight]
         name = original['name'].getDebugName(6) + '.woff2'
         # shortcut: official subsets omit rare glyphs; original files cover those ranges until Xiaomi supplies them.
-        rules.append(f"@font-face{{font-family:MiSans;font-style:normal;font-weight:{weight};font-display:swap;src:url('/static/fonts/{name}') format('woff2');unicode-range:{ranges(missing)}}}")
+        rules[weight].append(f"@font-face{{font-family:MiSans;font-style:normal;font-weight:{weight};font-display:swap;src:url('/static/fonts/{name}') format('woff2');unicode-range:{ranges(missing)}}}")
         manifest['coverage'][weight] = {'original': len(original.getBestCmap()), 'official': len(coverage[weight]), 'original_fallback': len(missing)}
         assert set(original.getBestCmap()) <= coverage[weight] | missing
-    (FONTS / 'misans-web.css').write_text('\n'.join(rules) + '\n', encoding='utf-8')
+    # Adjacent weights share Unicode coverage. Keep those ranges within gzip's
+    # dictionary window without changing declaration priority within a weight.
+    ordered = (rule for group in zip_longest(*rules.values()) for rule in group if rule is not None)
+    (FONTS / 'misans-web.css').write_text('\n'.join(ordered) + '\n', encoding='utf-8')
     (folder / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print(f'Verified {len(faces)} unmodified official subsets; complete original coverage/line metrics verified; horizontal differences recorded')
 
