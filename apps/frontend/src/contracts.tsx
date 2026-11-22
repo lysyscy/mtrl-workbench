@@ -58,31 +58,28 @@ function ContractSelectionHeader(){
 }
 const approvalOptions = ['', ...contractApprovalStatuses, '无状态'].map(value => ({ value, label: value || '全部' }));
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:'',approval:''});
-type InlineKey='remark'|'arch_no'|'ret_date'|'payment_term'|'payment_method';
+const inlineKeys = ['remark','arch_no','ret_date','payment_term','payment_method'] as const;
+type InlineKey = typeof inlineKeys[number];
 type InlineControl={disabled:boolean;methods:string[];drafts:Record<string,string>;change:(id:number,key:InlineKey,value:string)=>void;save:(row:ContractRow,key:InlineKey|'arch',value:string)=>Promise<boolean>;remark:(row:ContractRow,value:string)=>void;next:(row:ContractRow)=>string;advance:(row:ContractRow)=>Promise<void>};
 // 只对完整合法的日期立即保存，半截输入仍留在草稿里。
 const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
-function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKey;control:()=>InlineControl}){
+function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKey;control:()=>InlineControl;scrolling?:boolean}){
   const row=p.data!,key=p.editKey,name=`${row.id}:${key}`,control=p.control();
   const value=control.drafts[name]??(key==='remark'?contractRemarkText(row.remark??''):row[key]);
-  const [text,setText]=useState(value), syncingFocus=useRef(false);
-  function trackFocus(target: HTMLElement) {
-    const index = p.node.rowIndex, column = p.column;
-    if (index == null || !column || syncingFocus.current) return;
-    const current = p.api.getFocusedCell();
-    if (current?.rowIndex === index && current.column === column) return;
-    // A native input can receive focus without a cell click. Register the same
-    // cell with AG Grid so horizontal scrolling retains its editor.
-    syncingFocus.current = true;
-    try {
-      p.api.setFocusedCell(index, column);
-      target.focus({ preventScroll: true });
-    } finally { syncingFocus.current = false; }
-  }
+  const [text,setText]=useState(value), [methodIntent,setMethodIntent]=useState<'focus'|'open'|null>(null);
   useEffect(()=>setText(value),[value]);
   if(p.node.rowPinned)return null;
-  if(key==='payment_method')return <Select className="contract-inline-select" aria-label={`${row.contract_no||row.material} 合同付款方式`} value={text} onFocus={e=>trackFocus(e.target as HTMLElement)} disabled={control.disabled} options={['',...control.methods].map(value=>({value,label:value?<EnumTag kind="payMethod" value={value}/>: '未约定'}))} onChange={value=>{setText(value);p.control().change(row.id,key,value);void p.control().save(row,key,value);}}/>;
-  return <TextPreview text={text}><Input className={key==='arch_no'?'record-value record-hint':'record-value'} onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} onFocus={e=>trackFocus(e.target)} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?archiveNoHint(control.next(row)):'可填'} onChange={e=>{const next=e.target.value;setText(next);p.control().change(row.id,key,next);if(key==='ret_date'&&VALID_DATE.test(next))void p.control().save(row,key,next);}} onBlur={()=>{if(!syncingFocus.current)void p.control().save(row,key,text);}} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/></TextPreview>;
+  if (key === 'payment_method' && p.scrolling && !methodIntent) {
+    // AG can defer the dropdown while scrolling. Show its value and let the first click open it.
+    return <button className="contract-scroll-method" type="button" role="combobox" aria-expanded={false} aria-haspopup="listbox"
+      aria-label={`${row.contract_no||row.material} 合同付款方式`} disabled={control.disabled}
+      onFocus={event => { if (event.currentTarget.matches(':focus-visible')) setMethodIntent('focus'); }}
+      onPointerDown={event => { if (event.pointerType === 'mouse' && event.button === 0) { event.preventDefault(); setMethodIntent('open'); } }}
+      onClick={() => setMethodIntent('open')}>
+      {text?<EnumTag kind="payMethod" value={text}/>:'未约定'}</button>;
+  }
+  if(key==='payment_method')return <Select autoFocus={methodIntent !== null} defaultOpen={methodIntent === 'open'} className="contract-inline-select" aria-label={`${row.contract_no||row.material} 合同付款方式`} value={text} disabled={control.disabled} options={['',...control.methods].map(value=>({value,label:value?<EnumTag kind="payMethod" value={value}/>: '未约定'}))} onChange={value=>{setText(value);p.control().change(row.id,key,value);void p.control().save(row,key,value);}}/>;
+  return <TextPreview text={text}><input className={key==='arch_no'?'contract-inline-input record-value record-hint':'contract-inline-input record-value'} onDoubleClick={key==='remark'?()=>p.control().remark(row,text):undefined} aria-label={`${row.contract_no||row.material} ${key==='remark'?'备注':key==='arch_no'?'存档号':key==='payment_term'?'账期':'寄回日期'}`} type={key==='ret_date'?'date':'text'} value={text} maxLength={key==='remark'?255-(contractHistoryDate(row.remark)?historyContractRemark(contractHistoryDate(row.remark),'').length:0):key==='arch_no'||key==='payment_term'?32:undefined} disabled={control.disabled} placeholder={key==='arch_no'?archiveNoHint(control.next(row)):'可填'} onChange={e=>{const next=e.target.value;setText(next);p.control().change(row.id,key,next);if(key==='ret_date'&&VALID_DATE.test(next))void p.control().save(row,key,next);}} onBlur={()=>void p.control().save(row,key,text)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(key==='arch_no'&&!text.trim()){const next=p.control().next(row);setText(next);p.control().change(row.id,key,next);return;}void p.control().save(row,key,text);}}/></TextPreview>;
 }
 function ContractRemarkEditor({ row, initial, busy, disabled, paused, error, save, close }: { row:ContractRow;initial:string;busy:boolean;disabled:boolean;paused:boolean;error:string;save:(value:string)=>Promise<boolean>;close:()=>void }) {
   const [text,setText]=useState(initial);
@@ -272,13 +269,16 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     selectionColumn,
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
+      const editKey = inlineKeys.find(key => key === c.key);
+      const editorParams = {editKey, control: () => inlineControl.current};
       // Keep formatted amounts and totals intact before flexible text columns shrink.
       const header=c.key==='tag'?'纳入状态':c.label.replace('（自动）','');
       const amountWidth=numeric?moneyWidths[c.key]:undefined;
       const bounded=c.key==='material'?{initialWidth:260*scale,...textWidth(220,360,scale,0)}:c.key==='remark'?textWidth(110,210,scale,.7):textWidth(120,c.key==='supplier'?260:240,scale,1);
-      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??amountWidth??bounded),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?{cellRenderer:ContractInlineCell,cellRendererParams:{editKey:c.key,control:()=>inlineControl.current}}:{}),
+      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??amountWidth??bounded),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
+        ...(editKey === 'payment_method' ? {loadingCellRenderer: ContractInlineCell, loadingCellRendererParams: {...editorParams, scrolling:true}} : {}),
         comparator:numeric?(a:string|null,b:string|null)=>cents(a??'0')<cents(b??'0')?-1:cents(a??'0')>cents(b??'0')?1:0:undefined,
-        cellRenderer:['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?ContractInlineCell:(p:ICellRendererParams<ContractRow>)=>{
+        cellRenderer:editKey ? ContractInlineCell : (p:ICellRendererParams<ContractRow>)=>{
           if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
           const row=p.data!;
           if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectNames.get(row.project_key)||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
@@ -287,7 +287,6 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
             if(row.approve_status===null)return <span className="muted">—</span>;
             return <Tag className={`status-tag ${row.approve_status==='已审批'?'status-positive':'status-pending'}`}>{row.approve_status}</Tag>;
           }
-          if(c.key==='payment_method')return row.payment_method?<EnumTag kind="payMethod" value={row.payment_method}/>:<span className="muted">未约定</span>;
           if(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)&&!(c.key==='trade_inv_sum'&&!row.trade_co))return <div className="contract-amount-action"><span>{money(String(p.value??'0'))}</span><Button size="small" aria-label={`${row.contract_no||row.material} ${c.key==='inv_sum'?'供应商发票':c.key==='trade_inv_sum'?'贸易公司发票':'付款'}子表`} onClick={()=>setSubtable({row,kind:c.key==='inv_sum'?'supplier':c.key==='trade_inv_sum'?'trade':'payment'})}>子表</Button></div>;
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
@@ -323,7 +322,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       {projects.isError&&<ReadFailure read={projects} label="项目清单"/>}
     </ReadStatusLane>
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
-    {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
+    {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
     <AnimatePresence initial={false}>{Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={`${key}:${editor.presenceId}`} materialOnly={editor.materialOnly} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}</AnimatePresence>
     <DialogPresence>{subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}</DialogPresence>
     <DialogPresence>{remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}</DialogPresence>

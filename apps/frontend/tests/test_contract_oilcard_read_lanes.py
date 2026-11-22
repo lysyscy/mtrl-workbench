@@ -7,7 +7,7 @@ and its tabs stay usable meanwhile.
 
 from playwright.sync_api import expect
 
-from live_data import contract_sample, open_page, reveal_contract_column
+from live_data import contract_sample, open_page
 from test_preview import browser_page, login, server  # noqa: F401 (fixtures)
 
 
@@ -107,7 +107,6 @@ def test_contract_subtable_reads_inside_the_dialog_without_moving_the_summary(se
     # The real, already-covered subtable entry: search the list, then its named button.
     open_page(page, server, 'contracts', '集采台账')
     page.get_by_label('搜索', exact=True).fill(label)
-    reveal_contract_column(page, 'pay_sum')
     page.get_by_role('button', name=label + ' 付款子表', exact=True).click()
     modal = page.locator('.contract-subtable-dialog')
     expect(modal).to_be_visible()

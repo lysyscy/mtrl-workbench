@@ -5,7 +5,7 @@ import openpyxl
 import pytest
 from playwright.sync_api import expect
 from test_preview import server,browser_page
-from live_data import get,open_page, reveal_contract_column
+from live_data import get,open_page
 from preview_select import pick_option
 
 
@@ -23,7 +23,6 @@ def test_real_contract_order_export_and_explicit_empty_range(server,browser_page
     page.get_by_role('button',name='重置',exact=True).click()
     expect(page.locator('.contract-filter-count')).to_contain_text(f'显示 {len(included)} 条')
     pick_option(page,'审批状态',status or '无状态')
-    reveal_contract_column(page, 'contract_amt')
     page.get_by_role('columnheader',name=re.compile('^合同金额$')).click()
     expected=[r['id'] for r in sorted((r for r in included if r['approve_status']==status),key=lambda r:Decimal(str(r['contract_amt'] or 0)))]
     with page.expect_request(lambda r:r.url.endswith('/api/m11/export')) as request, page.expect_download() as event:

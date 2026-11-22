@@ -3,13 +3,12 @@ import json
 from decimal import Decimal
 from playwright.sync_api import expect
 from test_preview import server,browser_page
-from live_data import get,open_page,contract_sample, reveal_contract_column
+from live_data import get,open_page,contract_sample
 
 
 def open_payment(page,server,row,label):
     open_page(page,server,'contracts','集采台账')
     page.get_by_label('搜索',exact=True).fill(label)
-    reveal_contract_column(page, 'pay_sum')
     page.get_by_role('button',name=label+' 付款子表',exact=True).click()
     modal=page.locator('.contract-subtable-dialog');expect(modal).to_be_visible();return modal
 

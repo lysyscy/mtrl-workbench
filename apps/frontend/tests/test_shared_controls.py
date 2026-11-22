@@ -3,7 +3,7 @@ import re
 
 from playwright.sync_api import expect
 from test_preview import server,browser_page,login
-from live_data import contract_sample,get,ledger_sample,open_page,reveal_contract_column
+from live_data import contract_sample,get,ledger_sample,open_page
 from preview_select import pick_option
 
 
@@ -56,7 +56,6 @@ def test_contract_grid_caret_and_party_select_keep_control_keys(server, browser_
     if row['tag'] != '纳入台账':
         pick_option(page, '纳入状态', '全部')
     page.get_by_role('textbox', name='搜索', exact=True).fill(label)
-    reveal_contract_column(page, 'payment_term')
     field = page.get_by_label(label + ' 账期', exact=True)
     field.fill('12')
     field.press('ArrowLeft')
