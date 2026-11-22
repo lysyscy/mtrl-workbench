@@ -6,7 +6,7 @@ import { BusinessModal } from './business-modal';
 import { ReadGrid } from './business-grid';
 import { PaymentGrid } from './notice-payment-grid';
 import { numberColumnWidth,fullTextWidth } from './grid';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
@@ -41,6 +41,7 @@ export function PayAmountCell({ row, override, draft, disabled, change, edit }: 
   }
   return <span><input data-pay-notice={row.notice_id} aria-label={`${row.bill_no}付款金额`} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} inputMode="decimal" title="仅本次会话有效；清空恢复审批金额减已付金额" disabled={disabled} value={value} onChange={e => { setValue(e.target.value);setError('');edit(row,e.target.value); }} onBlur={commit} onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault();commit(); } if (e.key === 'Escape') { setValue(shown);setError('');edit(row,null); } }} />{error && <small id={errorId} role="alert">{error}</small>}</span>;
 }
+const emptyMethods: string[] = [];
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }
 export function NoticePayment({ ids, overrides, projects, blocked, remove, close, paid, refresh, announce }: { ids: number[]; overrides: Record<number,PayOverride>; projects: Project[]; blocked: boolean; remove: (id: number) => void; close: () => void; paid: (ids: number[]) => void; refresh: () => Promise<void>; announce: (message: string, needsAttention?: boolean) => void }) {
@@ -62,23 +63,45 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   const confirmed = useRef<{ ids: number[]; drafts: Record<string,PaymentDraft>; pay_date: string; remark: string } | null>(null);
   const [checked,setChecked] = useState<PaymentContext | null>(null);
   const initialDate = useRef(date), initialDrafts = useRef<Record<number,PaymentDraft>>({});
-  const rows = ids.map(id => query.data?.rows.find(row => row.notice_id === id)).filter((row): row is NoticeRow => Boolean(row)).map(row => { const project = projects.find(item => item.id === row.ownership_id); return project ? { ...row, project_display: projectLabel(project) } : row; });
-  const excluded = rows.filter(row => row.is_excluded || row.is_revoked), targets = rows.filter(row => !row.is_excluded && !row.is_revoked);
-  const missing = ids.filter(id => !rows.some(row => row.notice_id === id));
-  const targetIds = targets.map(row => row.notice_id);
+  const { rows, excluded, targets, missing, targetIds } = useMemo(() => {
+    const byId = new Map<number, NoticeRow>();
+    for (const row of query.data?.rows ?? []) {
+      if (!byId.has(row.notice_id)) byId.set(row.notice_id, row);
+    }
+    const rows: NoticeRow[] = [], missing: number[] = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) { missing.push(id); continue; }
+      const project = projects.find(item => item.id === row.ownership_id);
+      rows.push(project ? { ...row, project_display: projectLabel(project) } : row);
+    }
+    const targets = rows.filter(row => !row.is_excluded && !row.is_revoked);
+    return { rows, targets, missing, targetIds: targets.map(row => row.notice_id),
+      excluded: rows.filter(row => row.is_excluded || row.is_revoked) };
+  }, [query.data?.rows, ids, projects]);
   const context = useQuery({ queryKey: ['notice-payment-context',targetIds,date], enabled: !blocked && phase === 'edit' && Boolean(query.data) && !missing.length && Boolean(targets.length) && Boolean(date), placeholderData: keepPreviousData, retry: false, refetchOnWindowFocus: false,
     queryFn: ({signal}) => readPaymentContext(targetIds,date,query.data!.methods,signal) });
-  if (!blocked && context.isFetchedAfterMount && context.isSuccess && !context.isFetching) {
-    for (const item of context.data.rows) defaults.current[item.notice_id] ??= item.default_pay_method;
+  const confirmedDefaults = !blocked && context.isFetchedAfterMount && context.isSuccess && !context.isFetching ? context.data : undefined;
+  if (confirmedDefaults) {
+    for (const item of confirmedDefaults.rows) defaults.current[item.notice_id] ??= item.default_pay_method;
   }
-  function draft(row: NoticeRow): PaymentDraft { const fallback = { amount: paymentValue(row,overrides), pay_method: defaults.current[row.notice_id] || row.planned_pay_method || '现汇' }; initialDrafts.current[row.notice_id] = fallback; return {...fallback,...drafts.current[row.notice_id]}; }
-  function update(row: NoticeRow, field: keyof PaymentDraft, value: string) { drafts.current[row.notice_id] = {...drafts.current[row.notice_id],[field]:value};setRevision(revision+1); }
+  const due = useCallback((row: NoticeRow) => paymentValue(row, overrides), [overrides]);
+  const draft = useCallback((row: NoticeRow): PaymentDraft => { const fallback = { amount: paymentValue(row,overrides), pay_method: defaults.current[row.notice_id] || row.planned_pay_method || '现汇' }; initialDrafts.current[row.notice_id] = fallback; return {...fallback,...drafts.current[row.notice_id]}; }, [overrides, revision, confirmedDefaults]);
+  const update = useCallback((row: NoticeRow, field: keyof PaymentDraft, value: string) => {
+    drafts.current[row.notice_id] = {...drafts.current[row.notice_id], [field]:value};
+    setRevision(previous => previous + 1);
+  }, []);
   function reason(row: NoticeRow): string { return row.pay_block_reason || (cents(paymentValue(row,overrides)) <= 0n ? '本次应付不大于0，请调整付款金额' : ''); }
   const invalid = targets.some(row => reason(row)), busy = phase === 'checking' || phase === 'sending', editable = phase === 'edit';
   const dirty = phase !== 'saved' && (date !== initialDate.current || Boolean(remark) || Object.entries(drafts.current).some(([id,value]) => { const initial = initialDrafts.current[Number(id)]; return !initial || value.amount !== undefined && value.amount !== initial.amount || value.pay_method !== undefined && value.pay_method !== initial.pay_method; }));
   const closing = useDialogClose({ busy, dirty, close: () => { const id = removing.current; removing.current = null; if (id !== null) remove(id); close(); } });
   const paymentClosing = { ...closing, resume: () => { removing.current = null; closing.resume(); } };
-  function removeRow(id: number) { if(ids.length===1) { removing.current = id; closing.requestClose(); } else remove(id); }
+  const requestClose = useRef(closing.requestClose);
+  requestClose.current = closing.requestClose;
+  const removeRow = useCallback((id: number) => {
+    if (ids.length === 1) { removing.current = id; requestClose.current(); }
+    else remove(id);
+  }, [ids.length, remove]);
   async function reread() {
     setRefreshFailed(false);
     try { await refresh(); return true; } catch { setRefreshFailed(true); return false; }
@@ -144,6 +167,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     try { await sendPayment(); } finally { lock.current=false; }
   }
   const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
+  const warningIds = useMemo(() => shownContext?.rows.filter(item => item.term_warning).map(item => item.notice_id) ?? [], [shownContext]);
   return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
       {message && <p role="status" className="notice-feedback">{message}</p>}
@@ -154,7 +178,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
         {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
         {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
         {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
-      ]}/> : <PaymentGrid rows={targets} due={row=>paymentValue(row,overrides)} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??[]} normalize={amount} warningIds={shownContext?.rows.filter(item=>item.term_warning).map(item=>item.notice_id)??[]} />}
+      ]}/> : <PaymentGrid scale={Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} />}
       {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
       {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
       {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
