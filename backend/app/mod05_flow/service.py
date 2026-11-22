@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -408,10 +408,16 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None,
         jc_rows = M11.build_list(s)["rows"]
     by_wh = {str(getattr(p, "warehouse_name", "") or ""): pid for pid, p in index.items()}
     # ① 辅材 / 机械：**逐项目**复用 `debt_by_category`（⚠️ 是内存里切行，不是逐条查库 = 无 N+1）
+    notices_by_project: dict[int | None, list[NoticeDebtView]] = defaultdict(list)
+    openings_by_project: dict[int | None, list[OpeningView]] = defaultdict(list)
+    for notice in rows:
+        notices_by_project[notice.ownership_id].append(notice)
+    for opening in openings:
+        openings_by_project[opening.project_id].append(opening)
     per: dict[int, dict[str, Decimal]] = {}
     for pid in index:
-        mine = [r for r in rows if r.ownership_id == pid]
-        mine_open = [o for o in openings if o.project_id == pid]
+        mine = notices_by_project.get(pid, [])
+        mine_open = openings_by_project.get(pid, [])
         if not mine and not mine_open and pid not in mechanical:
             continue                                    # 该项目两边都没数 ⇒ 不出行（⛔ 别刷一屏 0）
         by_cat = dom.debt_by_category(mine, mine_open, mech_settle_total=mechanical.get(pid, to_money(0)))
