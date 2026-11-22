@@ -202,7 +202,8 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
     notices = notice_rows(session) if notice_ids is None else get_notices_by_ids(session, notice_ids)
     for n in notices:
         approved = to_money(n.amount_approved)
-        paid = effective_total(flows_of(int(n.id)))
+        flows = tuple(flows_of(int(n.id)) or ())
+        paid = effective_total(flows)
         hint = ""
         if n.excluded and n.exclude_source == EXCLUDE_BY_RULE:
             if rules is None:
@@ -231,7 +232,7 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
                 i8_revoked=bool(n.i8_revoked),
                 is_manual=bool(getattr(n, "is_manual", False)),
                 ownership_id=n.ownership_id,
-                flows=tuple(flows_of(int(n.id)) or ()),
+                flows=flows,
                 has_link=bool(links_of(int(n.id))),
                 edited_fields=tuple(manual_edited_fields(traces_of(int(n.id)), int(n.id))),
                 # ⛔ **不许漏装**：`list_data._row_dict` 已改为直取本字段（不再 `getattr` 兜空）——
@@ -268,10 +269,7 @@ def _flows_by_notice(session, notice_ids: list[int] | None = None):
     """
     from app.mod05_flow import service as flow_service      # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2a）
 
-    if notice_ids is None:
-        flows = flow_service.list_flows(session)
-    else:
-        flows = flow_service.flows_of_notices(session, list(notice_ids), descending=True)
+    flows = flow_service.notice_flow_rows(session, notice_ids)
     grouped: dict[int, list[dict]] = {}
     for f in flows:
         if f.notice_id is None:

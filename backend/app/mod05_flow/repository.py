@@ -44,6 +44,18 @@ def stat_flow_rows(s: Session) -> list[Row]:
     return list(s.execute(stmt.order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())))
 
 
+def notice_flow_rows(s: Session, notice_ids: list[int] | None = None) -> list[Row]:
+    """通知书列表及对象核对消费同一份流水投影，包含已撤销行。"""
+    if notice_ids == []:
+        return []
+    stmt = select(
+        PaymentFlow.notice_id, PaymentFlow.id, PaymentFlow.flow_no, PaymentFlow.amount,
+        PaymentFlow.pay_date, PaymentFlow.pay_method, PaymentFlow.status,
+        PaymentFlow.revoke_reason, PaymentFlow.revoked_at,
+    ).where(PaymentFlow.notice_id.in_(notice_ids) if notice_ids is not None else PaymentFlow.notice_id.is_not(None))
+    return list(s.execute(stmt.order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())))
+
+
 def flows_of_notices(s: Session, notice_ids: list[int], *, descending: bool = False) -> list[PaymentFlow]:
     """一次取指定通知书的全部流水，供合同明细分笔展示。
 
