@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { confirmNoticeAmount, noticeAmountMatches, saveNoticeAmount } from '../../src/notices-api.ts';
-import { uncertainWrite } from '../../src/api.ts';
+import { cents, money, uncertainWrite } from '../../src/api.ts';
+
+test('cent values and money labels keep signed decimal precision and reject malformed amounts', () => {
+  for (const [raw, amount, label] of [
+    ['-000.0', 0n, '0.00'], ['-000.01', -1n, '-0.01'], ['0001200', 120000n, '1,200.00'],
+    ['-12345678901234567890.7', -1234567890123456789070n, '-12,345,678,901,234,567,890.70'],
+  ]) {
+    assert.equal(cents(raw), amount);
+    assert.equal(money(raw), label);
+  }
+  for (const raw of ['1,200', '1.234', '1e3', '1.']) {
+    assert.throws(() => cents(raw), /金额读取不完整/);
+    assert.throws(() => money(raw), /金额读取不完整/);
+  }
+});
 
 test('amount reconciliation follows accepted separators and HALF_UP without another write',()=>{
   for(const [input,actual] of [['1,234.50','1234.50'],[' 1，234.50 ','1234.50'],['12.345','12.35'],['-0.00','0.00'],['1.2e2','120.00']])assert.equal(noticeAmountMatches(input,actual),true);

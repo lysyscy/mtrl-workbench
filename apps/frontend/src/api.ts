@@ -121,13 +121,24 @@ const amountPattern = /^(-?)(\d+)(?:\.(\d{1,2}))?$/;
 export function assertAmountText(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !amountPattern.test(value)) throw new ApiError('金额读取不完整，请重试。');
 }
-export function cents(value: string): bigint {
+function amountParts(value: string) {
   const match = amountPattern.exec(value);
   if (!match) throw new ApiError('金额读取不完整，请重试。');
-  return (match[1] ? -1n : 1n) * (BigInt(match[2]!) * 100n + BigInt((match[3] ?? '').padEnd(2, '0')));
+  return match;
+}
+export function cents(value: string): bigint {
+  const [, sign, whole, fraction = ''] = amountParts(value);
+  return BigInt(`${sign}${whole}${fraction.padEnd(2, '0')}`);
 }
 export function decimal(value: bigint): string { const n = value < 0n ? -value : value; return `${value < 0n ? '-' : ''}${n / 100n}.${String(n % 100n).padStart(2, '0')}`; }
-export function money(value: string): string { const [whole, part] = decimal(cents(value)).split('.'); return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${part}`; }
+export function money(value: string): string {
+  const [, sign, digits, fraction = ''] = amountParts(value);
+  const whole = digits!.replace(/^0+(?=\d)/, ''), part = fraction.padEnd(2, '0');
+  const firstGroup = whole.length % 3 || 3;
+  const grouped = whole.length <= 3 ? whole : whole.slice(0, firstGroup) + whole.slice(firstGroup).replace(/\d{3}/g, ',$&');
+  const prefix = sign === '-' && (whole !== '0' || part !== '00') ? '-' : '';
+  return `${prefix}${grouped}.${part}`;
+}
 export const body = (value: unknown) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 
 export function confirmWrite(confirmed: boolean, message: string) {
