@@ -339,10 +339,14 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
   }), [scale,Boolean(draft),selectionColumn]);
+  const draftActionWidth = useMemo(() => draft ? completeColumnWidth(['保存 取消'], '操作', scale, 64) : null, [Boolean(draft), scale]);
   const columns = useMemo(() => baseColumns.map(column => {
     const width = widths[column.colId ?? String(column.field)];
+    if (column.colId === 'actions' && draftActionWidth && draftActionWidth.minWidth > (width?.minWidth ?? 0)) {
+      return { ...column, ...draftActionWidth };
+    }
     return width ? { ...column, ...width } : column;
-  }), [baseColumns, widths]);
+  }), [baseColumns, widths, draftActionWidth]);
   const footer = useMemo(() => draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary, [draft,summary]);
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;
