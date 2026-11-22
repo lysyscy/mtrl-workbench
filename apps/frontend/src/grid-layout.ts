@@ -118,7 +118,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       let host: HTMLDivElement | undefined;
       try {
         const wrapping = columns.filter(c => c.wrap || c.render);
-        const body = [...new Set(wrapping.flatMap(column => rows.map(row => column.text(row))))].join('') + '0123456789,.-';
+        const texts = new Set<string>();
+        for (const column of wrapping) for (const row of rows) texts.add(column.text(row));
+        const body = [...texts].join('') + '0123456789,.-';
         const footer = columns.flatMap(column => totals.map(row => column.text(row, true))).join('');
         await Promise.all([fontRoot?.current ? loadElementFonts(fontRoot.current) : Promise.resolve(), loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
@@ -147,26 +149,34 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         host.replaceChildren();
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
         const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
-        function cellKey(row: T, column: TextGridColumn<T>, pinned: boolean) {
-          const span = Math.max(1, Math.floor(column.span?.(row,pinned) ?? 1));
-          let width = widthById.get(column.id) ?? 0;
-          if (span !== 1) {
-            const start = displayed.findIndex(col=>col.getColId()===column.id);
-            width = plannedWidths.slice(start,start+span).reduce((sum,value)=>sum+value,0);
-          }
-          const weight = pinned ? '600' : '400', text = column.text(row, pinned);
-          return { key: `${column.id}\0${width}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
-        }
-        // Compute each domain text/signature once; applying measured heights must
-        // not repeat formatter work across every row and wrapping column.
-        const plannedRows: {id: string; cells: string[]}[] = [];
-        for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) {
-          const cells = wrapping.map(column => {
-            const cell = cellKey(row, column, pinned);
-            if (!cache.current.has(cell.key)) jobs.set(cell.key, cell);
-            return cell.key;
+        type CellSize = { key: string; height: number | undefined };
+        const plannedRows: { id: string; cells: CellSize[] }[] = [];
+        for (const [data, pinned] of [[rows, false], [totals, true]] as const) {
+          const weight = pinned ? '600' : '400';
+          // Intern each column's repeated values at their actual width. Rows share
+          // one measured height instead of hashing a new composite key per cell.
+          const planners = wrapping.map(column => {
+            const width = widthById.get(column.id) ?? 0;
+            const values = new Map<string, CellSize>();
+            const start = column.span ? displayed.findIndex(col => col.getColId() === column.id) : -1;
+            return (row: T): CellSize => {
+              let actualWidth = width;
+              const span = Math.max(1, Math.floor(column.span?.(row, pinned) ?? 1));
+              if (span !== 1) {
+                actualWidth = plannedWidths.slice(start, start + span).reduce((sum, value) => sum + value, 0);
+              }
+              const text = column.text(row, pinned), signature = column.signature?.(row, pinned) ?? text;
+              const lookup = column.span ? `${actualWidth}\0${signature}` : signature;
+              const existing = values.get(lookup);
+              if (existing) return existing;
+              const key = `${column.id}\0${actualWidth}\0${weight}\0${signature}`;
+              const size = { key, height: cache.current.get(key) };
+              values.set(lookup, size);
+              if (size.height === undefined) jobs.set(key, { text, column, width: actualWidth, weight, row, pinned });
+              return size;
+            };
           });
-          plannedRows.push({id:rowId(row),cells});
+          for (const row of data) plannedRows.push({ id: rowId(row), cells: planners.map(plan => plan(row)) });
         }
         // A whole string that fits one actual-font canvas line needs no wrapping DOM.
         // Multiline/long strings still use the browser's real breaking rules below.
@@ -206,7 +216,10 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const next = new Map<string, number>();
         for (const row of plannedRows) {
           let height = minimum;
-          for (const key of row.cells) height = Math.max(height, cache.current.get(key)!);
+          for (const cell of row.cells) {
+            cell.height ??= cache.current.get(cell.key)!;
+            height = Math.max(height, cell.height);
+          }
           next.set(row.id, height);
         }
         // Header text uses the actual header structure and final width, including sort space.
