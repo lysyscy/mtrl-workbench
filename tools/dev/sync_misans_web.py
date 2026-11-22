@@ -59,7 +59,8 @@ def main():
         target = folder / name
         # Browsers can keep versioned subset URLs across releases. A changed
         # upstream body needs a new URL before it can be published locally.
-        if target.exists() and target.read_bytes() != body:
+        versioned = re.fullmatch(r'(?:400|500|600)-(?:cs|lt)\.[0-9a-f]{16}\.[0-9]+\.woff2', name)
+        if versioned and target.exists() and target.read_bytes() != body:
             raise ValueError(f'Changed font bytes at existing subset URL: {name}')
         target.write_bytes(body)
         font = TTFont(target); actual = font.getBestCmap(); original = originals[weight]
