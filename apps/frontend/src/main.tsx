@@ -1,6 +1,7 @@
 import './styles.css';
 import { prepareAppearance, loadTextFonts } from './appearance-ready';
 import { PageSurface } from './page-surface';
+import { NoticeEntry } from './notice-entry';
 import { PageErrorBoundary, WorkspaceReloadButton } from './page-error';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
@@ -49,7 +50,7 @@ const pages: { path: string; title: string; mod: string; group: string; loading?
   { path: '/', title: '首页', mod: '', group: 'home', loading: '正在读取首页…', component: HomeEntry },
   { path: '/projects', title: '项目档案', mod: '01', group: 'base', loading: '正在读取项目档案…', component: lazy(() => import('./projects').then(module => ({ default: module.Projects }))) },
   { path: '/i8', title: 'i8 接入层', mod: '02', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
-  { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: lazy(() => import('./notices').then(module => ({ default: module.NoticesPage }))) },
+  { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: NoticeEntry },
   { path: '/debt', title: '欠款台账', mod: '05', group: 'payment', loading: '正在读取欠款台账…', component: lazy(() => import('./flow').then(module => ({ default: module.DebtPage }))) },
   { path: '/ledger', title: '付款流水', mod: '05', group: 'payment', loading: '正在读取付款流水…', component: lazy(() => import('./flow').then(module => ({ default: module.FlowPage }))) },
   { path: '/contracts', title: '集采台账', mod: '11', group: 'contracts', loading: '正在读取集采合同…', component: lazy(() => import('./contracts').then(module => ({ default: module.ContractsPage }))) },

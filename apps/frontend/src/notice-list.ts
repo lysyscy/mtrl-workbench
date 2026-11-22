@@ -1,4 +1,4 @@
-import { ApiError, assertAmountText, cents, record } from './api';
+import { ApiError, assertAmountText, cents, record, requestJson } from './api';
 
 export interface NoticeRow {
   notice_id: number; doc_date: string; bill_no: string; project_display: string; project_name: string; ownership_id: number | null;
@@ -19,4 +19,9 @@ export function readNotices(value: unknown): NoticeRow[] {
     return row as unknown as NoticeRow;
   });
 }
+export const noticeListQuery = {
+  queryKey: ['notices'] as const,
+  queryFn: async ({ signal }: { signal: AbortSignal }) => readNotices(await requestJson('/api/m03/notice-list?period=', { signal })),
+};
+
 export function live(row: NoticeRow): boolean { return !row.is_excluded && (!row.is_revoked || cents(row.amount_paid) > 0n || row.has_link); }

@@ -11,15 +11,17 @@ import { readHistory, useHistoryGuard } from './history';
 import { BusinessModal } from './business-modal';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { AgGridReactProps } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams, PostSortRowsParams } from 'ag-grid-community';
-import { ApiError, confirmWrite, uncertainWrite, projectLabel, readProjects, record, requestJson } from './api';
-import type { Identity } from './api';
+import { ApiError, confirmWrite, uncertainWrite, projectLabel, record, requestJson } from './api';
+import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { cacheFontMeasurement, contentWidth, fixedWidth, gridTheme, numberColumnWidth, textWidth } from './grid';
 import { completeColumnWidth, EllipsisText } from './grid-text';
-import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, readNotices, receipt, searchKey, selectable, total } from './notices-api';
+import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, receipt, searchKey, selectable, total } from './notices-api';
+import { noticeListQuery } from './notice-list';
 import type { MoneyKey, NoticeRow } from './notices-api';
 import { NoticeFetch } from './notice-fetch';
 import { NoticePaste } from './notice-paste';
@@ -89,7 +91,10 @@ function scopeHit(r: NoticeRow, f: Filters): boolean {
     (!f.pending || (f.pending === 'ownership' ? !r.ownership_id : r.is_revoked)) &&
     (arch ? r.is_excluded || r.is_revoked : live(r) && (!f.category || f.category === r.category) && (!f.approval || f.approval === r.approve_status) && (!f.paid || f.paid === r.pay_status) && (!f.link || r.category === 'jc' && (f.link === 'yes' ? r.has_link : !r.has_link)));
 }
-export function NoticesPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
+export function NoticesPage({ me, blocked, active, query, projects }: {
+  me: Identity | null; blocked: boolean; active: boolean;
+  query: UseQueryResult<NoticeRow[]>; projects: UseQueryResult<Project[]>;
+}) {
   const { message } = App.useApp();
   const client = useQueryClient(), api = useRef<GridApi<NoticeRow> | null>(null), gridRoot = useRef<HTMLDivElement>(null), pageRoot = useRef<HTMLDivElement>(null), lock = useRef(false), mounted = useRef(true);
   const [filters, setFilters] = useState(defaults), [picked, setPicked] = useState<Set<number>>(() => new Set());
@@ -151,9 +156,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   // via the removable pending chip).
   useEffect(() => { if (!active) return; const kind = params.get('todo'); if (kind === 'jc') { setFilters({ ...defaults(), category: 'jc', link: 'no' }); setSearch(''); setPasteScope(null); } else if (kind === 'ownership' || kind === 'void') { setFilters({ ...defaults(), period: '全部', paid: '', pending: kind }); setSearch(''); setPasteScope(null); } }, [params.get('todo'), active]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const query = useQuery({ queryKey: ['notices'], enabled: !blocked && active, queryFn: async ({ signal }) => readNotices(await requestJson('/api/m03/notice-list?period=', { signal })), refetchOnMount: 'always' });
   useEffect(() => { if (query.data) setPayOverrides(old => { const entries=Object.entries(old).filter(([id,draft]) => query.data.some(row => row.notice_id===Number(id) && draft.basis===`${row.amount_approved}:${row.amount_paid}`));return entries.length===Object.keys(old).length ? old : Object.fromEntries(entries); }); }, [query.data]);
-  const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked && active, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const rows = useMemo(() => (query.data ?? []).map(r => { const p = projects.data?.find(p => p.id === r.ownership_id); return { ...r, pay_amount: paymentValue(r,payOverrides), project_display: p ? projectLabel(p) : r.ownership_id ? r.project_display : '未建档' }; }), [query.data, projects.data, payOverrides]);
   const scope = useMemo(() => rows.filter(r => (!pasteScope || pasteScope.includes(r.notice_id)) && scopeHit(r, filters)), [rows, filters, pasteScope]);
   const needle = searchKey(search);
@@ -213,7 +216,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['notices'],exact:true});
-    const data = await client.fetchQuery({queryKey:['notices'],staleTime:0,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
+    const data = await client.fetchQuery({...noticeListQuery,staleTime:0});
     if(scope==='ownership')await projects.refetch({throwOnError:true});
     if(scope==='fetch')await refreshNoticeOwnershipPending(client);
     if(me){const queryKey=['history',`${me.id}:${me.account}`];await client.cancelQueries({queryKey,exact:true});await client.fetchQuery({queryKey,staleTime:0,queryFn:async({signal})=>readHistory(await requestJson('/api/history/status',{signal}))});}
