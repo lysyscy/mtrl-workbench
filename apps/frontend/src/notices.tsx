@@ -20,7 +20,7 @@ import type { ColDef, GridApi, ICellRendererParams, PostSortRowsParams } from 'a
 import { ApiError, confirmWrite, uncertainWrite, projectLabel, record, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { cacheFontMeasurement, contentWidth, fixedWidth, gridTheme, numberColumnWidth, textWidth } from './grid';
+import { cacheFontMeasurement, cachedNumberColumnWidths, contentWidth, fixedWidth, gridTheme, textWidth } from './grid';
 import { completeColumnWidth, EllipsisText } from './grid-text';
 import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, receipt, searchKey, selectable, total } from './notices-api';
 import { noticeListQuery } from './notice-list';
@@ -57,9 +57,9 @@ function noticeSummary(rows: NoticeRow[]): NoticeRow[] {
   return liveRows.length ? [{ notice_id: -1, bill_no: '合计', ...Object.fromEntries(moneyKeys.map(key => [key, total(liveRows, key)])) } as NoticeRow] : [];
 }
 
-function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number) {
-  const date = Math.max(100, numberColumnWidth(shown.map(row => row.doc_date), 1).minWidth);
-  const code = Math.max(142, numberColumnWidth(shown.map(row => row.bill_no), 1).minWidth);
+function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number, measure: ReturnType<typeof cachedNumberColumnWidths>) {
+  const date = Math.max(100, measure('doc_date', shown.map(row => row.doc_date), 1).minWidth);
+  const code = Math.max(142, measure('bill_no', shown.map(row => row.bill_no), 1).minWidth);
   const widths: Record<string, Partial<ColDef<NoticeRow>>> = {
     doc_date: contentWidth(date, 200, scale),
     bill_no: contentWidth(code, Math.max(code, 360), scale),
@@ -71,10 +71,11 @@ function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number) {
     actions: completeColumnWidth(['保存 取消', ...shown.map(row => [row.has_any_flow ? '查看流水' : '', cents(row.amount_paid) > 0n ? '撤销付款' : '', row.is_manual ? '手动 编辑 删除' : ''].filter(Boolean).join(' '))], '操作', scale, 64),
   };
   for (const key of moneyKeys) {
-    const values = [...shown, ...summary].map(row => money(row[key]));
+    const values = shown.map(row => money(row[key]));
     const editable = key === 'pay_amount' || key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && shown.some(row => row.is_manual);
-    const display = numberColumnWidth(values, 1, false).minWidth;
-    const input = editable ? numberColumnWidth(shown.map(row => row[key]), 1, true).minWidth : 0;
+    const display = Math.max(measure(key, values, 1).minWidth,
+      measure(`${key}-total`, summary.map(row => money(row[key])), 1).minWidth);
+    const input = editable ? measure(`${key}-input`, shown.map(row => row[key]), 1, true).minWidth : 0;
     const min = Math.max(display, input, completeColumnWidth([], amountNames[key], 1).minWidth);
     widths[key] = contentWidth(min, Math.max(min, 180), scale);
   }
@@ -160,7 +161,23 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   useEffect(() => { if (!active) return; const kind = params.get('todo'); if (kind === 'jc') { setFilters({ ...defaults(), category: 'jc', link: 'no' }); setSearch(''); setPasteScope(null); } else if (kind === 'ownership' || kind === 'void') { setFilters({ ...defaults(), period: '全部', paid: '', pending: kind }); setSearch(''); setPasteScope(null); } }, [params.get('todo'), active]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { if (query.data) setPayOverrides(old => { const entries=Object.entries(old).filter(([id,draft]) => query.data.some(row => row.notice_id===Number(id) && draft.basis===`${row.amount_approved}:${row.amount_paid}`));return entries.length===Object.keys(old).length ? old : Object.fromEntries(entries); }); }, [query.data]);
-  const rows = useMemo(() => (query.data ?? []).map(r => { const p = projects.data?.find(p => p.id === r.ownership_id); return { ...r, pay_amount: paymentValue(r,payOverrides), project_display: p ? projectLabel(p) : r.ownership_id ? r.project_display : '未建档' }; }), [query.data, projects.data, payOverrides]);
+  const sourceRows = useMemo(() => {
+    const labels = new Map<number, string>();
+    for (const project of projects.data ?? []) {
+      if (!labels.has(project.id)) labels.set(project.id, projectLabel(project));
+    }
+    return (query.data ?? []).map(row => {
+      const label = row.ownership_id === null ? '未建档' : labels.get(row.ownership_id) ?? (row.ownership_id ? row.project_display : '未建档');
+      return label === row.project_display ? row : { ...row, project_display: label };
+    });
+  }, [query.data, projects.data]);
+  const rows = useMemo(() => {
+    if (!Object.keys(payOverrides).length) return sourceRows;
+    return sourceRows.map(row => {
+      const value = paymentValue(row, payOverrides);
+      return value === row.pay_amount ? row : { ...row, pay_amount: value };
+    });
+  }, [sourceRows, payOverrides]);
   const compareAmounts = useAmountComparator(rows);
   const scope = useMemo(() => rows.filter(r => (!pasteScope || pasteScope.includes(r.notice_id)) && scopeHit(r, filters)), [rows, filters, pasteScope]);
   const needle = searchKey(search);
@@ -179,10 +196,11 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const selectedAmounts = useMemo(() => ({ approved: money(total(selectedPay, 'amount_approved')), due: money(total(selectedPay, 'pay_amount')) }), [selectedPay]);
   const publishedNotices = useMemo(() => new Map(query.data?.map(row => [row.notice_id, row])), [query.data]);
   const scale = Number(me?.ui_scale_css) || 1;
+  const measureNumbers = useMemo(cachedNumberColumnWidths, [query.data]);
   const scopeDisplay = useMemo(() => {
     const summary = noticeSummary(scope);
-    return { summary, widths: cacheFontMeasurement(() => noticeWidths(scope, summary, scale)) };
-  }, [scope, scale]);
+    return { summary, widths: cacheFontMeasurement(() => noticeWidths(scope, summary, scale, measureNumbers)) };
+  }, [scope, scale, measureNumbers]);
   const summary = useMemo(() => shown === scope ? scopeDisplay.summary : noticeSummary(shown), [shown, scope, scopeDisplay]);
   const cellSaves = useNoticeCellSaves({ rows: query.data, enabled: active && !blocked && Boolean(me),
     canWrite: !busy && !draft && !draftUncertain && !query.isPending && !query.isError, read: refresh });
@@ -299,7 +317,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     return () => { cancelAnimationFrame(frame); editor.removeEventListener('blur', released); };
   }, [active, picked, rows, unavailable, draft]);
   const widths = useMemo(() => shown === scope
-    ? scopeDisplay.widths() : noticeWidths(shown, summary, scale), [scope, scopeDisplay, shown, summary, scale]);
+    ? scopeDisplay.widths() : noticeWidths(shown, summary, scale, measureNumbers), [scope, scopeDisplay, shown, summary, scale, measureNumbers]);
   // Amount blur updates the data and measured widths during the following click.
   // Keep both checkbox component types stable while the other columns resize.
   const selectionColumn = useMemo<ColDef<NoticeRow>>(() => ({

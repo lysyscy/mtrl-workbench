@@ -51,13 +51,43 @@ export function contentWidth(min: number, max: number, scale = 1, stretch = 0) {
   return { initialWidth: min * scale, minWidth: min * scale, ...(stretch ? {initialFlex:stretch} : {maxWidth:max * scale}) };
 }
 
+interface ColumnTextSample {
+  current: { font: string; ready: Promise<FontFaceSet>; texts: Set<string>; longest: string; width: number } | undefined;
+}
+
+// A changed subset only needs new texts measured while its previous widest
+// text is still present. Keep one result per column in the owning page.
+export function cachedNumberColumnWidths() {
+  const fields = new Map<string, ColumnTextSample>();
+  return (key: string, values: readonly unknown[], scale: number, editable = false) => {
+    let field = fields.get(key);
+    if (!field) {
+      field = { current: undefined };
+      fields.set(key, field);
+    }
+    return numberColumnWidth(values, scale, editable, 0, field);
+  };
+}
+
 // Size complete values and totals, rather than imposing the same wide floor on every number.
-export function numberColumnWidth(values: readonly unknown[], scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1, editable = false, stretch = 0) {
+export function numberColumnWidth(values: readonly unknown[], scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1, editable = false, stretch = 0, sample?: ColumnTextSample) {
   const css = getComputedStyle(document.documentElement), fontSize = Number(css.getPropertyValue('--font-ui-size')) || 13.5;
   const context = document.createElement('canvas').getContext('2d')!;
   context.font = `600 ${fontSize * scale}px ${css.fontFamily}`;
-  let widest = context.measureText('0.00').width;
-  for (const value of new Set(values.map(value => String(value ?? '')))) widest = Math.max(widest, context.measureText(value).width);
+  const texts = new Set(values.map(value => String(value ?? ''))).add('0.00');
+  const ready = sample && document.fonts.ready;
+  const last = sample?.current;
+  const prior = last && last.font === context.font && last.ready === ready && document.fonts.status === 'loaded' && texts.has(last.longest) ? last : undefined;
+  let widest = prior?.width ?? 0, longest = prior?.longest ?? '0.00';
+  for (const text of texts) {
+    if (prior?.texts.has(text)) continue;
+    const width = context.measureText(text).width;
+    if (width > widest) { widest = width; longest = text; }
+  }
+  if (sample && ready) {
+    sample.current = document.fonts.status === 'loaded' && ready === document.fonts.ready
+      ? { font: context.font, ready, texts, longest, width: widest } : undefined;
+  }
   const minimum = Math.ceil(widest / scale + (editable ? 24 : 12));
   return contentWidth(minimum, Math.max(minimum, 180), scale, stretch);
 }
