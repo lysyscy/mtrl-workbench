@@ -32,9 +32,24 @@ export function TextPreview({text, children}: {text: string; children: ReactNode
     window.clearTimeout(timer.current);
     if (preview === 'open') timer.current = window.setTimeout(() => setPreview('closed'), 150);
   }
-  // The editor stays mounted. A cell pays for its popup and positioning only
-  // when the user actually hovers clipped text.
-  return <span ref={root} className="grid-text-preview" onMouseEnter={enter} onMouseLeave={leave}
+  useEffect(() => {
+    if (preview !== 'open') return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target;
+      if (event.pointerType === 'touch' && target instanceof Node && !root.current?.contains(target) && !document.getElementById(tooltipId)?.contains(target)) setPreview('closed');
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+  }, [preview, tooltipId]);
+  // Mount the popup on demand and keep the native editor in place.
+  return <span ref={root} className="grid-text-preview" onPointerEnter={event => { if (event.pointerType !== 'touch') enter(); }}
+    onPointerLeave={event => { if (event.pointerType !== 'touch') leave(); }}
+    onTouchStart={event => {
+      if (!root.current?.contains(event.target as Node)) return;
+      window.clearTimeout(timer.current);
+      if (preview === 'open') setPreview('closed');
+      else if (text && clipped(root.current)) setPreview('open');
+    }}
     aria-describedby={preview === 'open' ? tooltipId : undefined}>
     {children}
     {preview !== 'unused' && <Tooltip id={tooltipId} title={<span className="grid-full-text" onMouseDown={event => event.stopPropagation()}
