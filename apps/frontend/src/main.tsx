@@ -26,6 +26,20 @@ type WorkspacePageProps = {
   onExportGuard: (guard: string) => void; exportGuard: string;
 };
 
+// The default landing page can prepare alongside the first identity read.
+// Pin the selected component for this mount so a retained page keeps its state.
+let readyHome: ComponentType<WorkspacePageProps> | undefined;
+let homeModule: Promise<{ default: ComponentType<WorkspacePageProps> }> | undefined;
+const loadHome = () => homeModule ??= import('./home').then(({ HomePage }) => {
+  readyHome = HomePage;
+  return { default: HomePage };
+});
+const LazyHome = lazy(loadHome);
+function HomeEntry(props: WorkspacePageProps) {
+  const [Page] = useState<ComponentType<WorkspacePageProps>>(() => readyHome ?? LazyHome);
+  return <Page {...props} />;
+}
+
 const groups = [
   { id: 'home', title: '工作台' },
   { id: 'base', title: '主数据 / 基础' }, { id: 'payment', title: '付款域' },
@@ -33,7 +47,7 @@ const groups = [
   { id: 'global', title: '全局' },
 ];
 const pages: { path: string; title: string; mod: string; group: string; loading?: string; component: ComponentType<WorkspacePageProps> }[] = [
-  { path: '/', title: '首页', mod: '', group: 'home', loading: '正在读取首页…', component: lazy(() => import('./home').then(module => ({ default: module.HomePage }))) },
+  { path: '/', title: '首页', mod: '', group: 'home', loading: '正在读取首页…', component: HomeEntry },
   { path: '/projects', title: '项目档案', mod: '01', group: 'base', loading: '正在读取项目档案…', component: lazy(() => import('./projects').then(module => ({ default: module.Projects }))) },
   { path: '/i8', title: 'i8 接入层', mod: '02', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
   { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: lazy(() => import('./notices').then(module => ({ default: module.NoticesPage }))) },
@@ -171,6 +185,10 @@ function App() {
   }
   useEffect(() => {
     void check();
+    if (window.location.pathname === appBase || window.location.pathname === appBase + '/') {
+      // The page boundary handles a rejected module when it mounts.
+      void loadHome().catch(() => {});
+    }
     // Keep local navigation/input responsive; API intents wait at the identity gate.
     const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(false, true); };
     const lost = () => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setFontError(''); setChecking(false); };

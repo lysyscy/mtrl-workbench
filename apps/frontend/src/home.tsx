@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { requestJson } from './api';
-import { live, readNotices } from './notices-api';
+import { live, readNotices } from './notice-list';
 import { ReadFailure, ReadStatusLane, readPhase } from './read-region';
 
 // The three home todos are the same backend truth the notices page renders:
