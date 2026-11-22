@@ -84,7 +84,7 @@ def test_contract_project_read_failure_is_announced_and_blocks_writes(server, br
     # Necessary project data is not merged yet, so the writes that need it stay closed
     # rather than offering an action the page cannot complete.
     fetch = page.get_by_role('button', name='抓取采购合同信息', exact=True)
-    create = page.get_by_role('button', name='＋ 手工新增合同', exact=True)
+    create = page.get_by_role('button', name='+ 手工新增合同', exact=True)
     expect(fetch).to_be_disabled()
     expect(create).to_be_disabled()
 
