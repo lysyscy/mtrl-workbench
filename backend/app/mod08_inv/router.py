@@ -95,21 +95,21 @@ def api_inventory() -> dict:
     - `adjusted` = 这一行有没有调整单（壳里判 `adjOf` 用它，也用于「只看被调整行」筛选）。
     """
     from app.mod06_proc.domain import to_category, MATERIAL_PROPERTIES
-    from app.mod08_inv.adjustment_values import edit_token, effective_value, original_values, adjustment_values
+    from app.mod08_inv.adjustment_values import adjustment_values, effective_value, original_values_and_token
 
     with session_scope() as s:
         adjs = adjustments(s)
         rows = load_rows(s, adjs=adjs)                       # 本请求复用调整单映射
-        items = [
-            {
-                **r,
-                "c5": to_category(effective_value(r, "material_property")) or "",
-                "adjusted": r["id"] in adjs,
-                "original_values": original_values(r),
-                "edit_token": edit_token(r, adjs.get(r["id"])),
-            }
-            for r in rows
-        ]
+        items = []
+        for row in rows:
+            original, token = original_values_and_token(row, adjs.get(row["id"]))
+            items.append({
+                **row,
+                "c5": to_category(effective_value(row, "material_property")) or "",
+                "adjusted": row["id"] in adjs,
+                "original_values": original,
+                "edit_token": token,
+            })
         payload = [
             {
                 "id": a.id,

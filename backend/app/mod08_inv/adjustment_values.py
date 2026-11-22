@@ -76,10 +76,16 @@ def effective_value(row: Mapping, field: str):
     return row.get(field)
 
 
-def edit_token(row: Mapping, adjustment) -> str:
+def original_values_and_token(row: Mapping, adjustment) -> tuple[dict[str, str], str]:
+    original = original_values(row)
     source = {**{key: str(row.get(key) or '') for key in ('id', 'ym', 'warehouse', 'doc_no', 'seq')},
-              **original_values(row)}
+              **original}
     current = None if adjustment is None else {
         'id': adjustment.id, 'values': adjustment_values(adjustment),
         'remark': adjustment.remark, 'at': str(adjustment.changed_at)}
-    return hashlib.sha256(json.dumps([source, current], ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
+    token = hashlib.sha256(json.dumps([source, current], ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
+    return original, token
+
+
+def edit_token(row: Mapping, adjustment) -> str:
+    return original_values_and_token(row, adjustment)[1]
