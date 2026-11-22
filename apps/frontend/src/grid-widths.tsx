@@ -15,7 +15,17 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
   const current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging});
   current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging};
   const binding = useRef<ReturnType<typeof bindGridWidths> | null>(null), cleanup = useRef<(() => void) | null>(null);
-  const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({type: 'fitCellContents', skipHeader: true}), []);
+  // AG reads this initial strategy when the first rows arrive, after manual
+  // preferences and the current scale have been applied to the native columns.
+  const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({
+    type: 'fitCellContents', skipHeader: true,
+    get columnLimits() {
+      return Object.entries(preferences.getWidths()).map(([colId, width]) => {
+        const pixels = width * current.current.scale;
+        return {colId, minWidth:pixels, maxWidth:pixels};
+      });
+    },
+  }), [preferences]);
   const attach = useCallback((api: GridApi) => {
     cleanup.current?.();
     const controller = bindGridWidths(api, {owner, table, storage: () => window.localStorage, scale: () => current.current.scale,
