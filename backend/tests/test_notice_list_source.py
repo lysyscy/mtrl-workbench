@@ -115,3 +115,30 @@ def test_home_todos_match_list_window_through_payment_and_link_changes(rollback_
         s.add(PaymentFlow(notice_id=unpaid.id, amount=10))
         s.flush()
         check(1, 0, 1)
+
+
+def test_display_projection_keeps_historical_names_and_full_rule_input(rollback_db):
+    from app.mod03_notice import repository
+    from app.mod03_notice.models import EXCLUDE_BY_RULE, PaymentNotice
+
+    with session_scope() as s:
+        sources = []
+        for i, fields in enumerate([{}, {"BillName": None}, {"BillName": False}, {"BillName": 17},
+                                    {"BillName": ["甲", 2]}, {"BillName": {"乙": 2, "甲": 1}},
+                                    {"BillName": "规则用单据"}]):
+            raw = {**fields, "source_only": "完整原始字段"}
+            row = PaymentNotice(ph_id=f"test-display-name-{i}", doc_date="9999-12-31", fields=raw,
+                                excluded=i == 6, exclude_source=EXCLUDE_BY_RULE if i == 6 else "")
+            s.add(row)
+            sources.append(row)
+        s.flush()
+        ids = [r.id for r in sources]
+        display = {row.id: row for row in repository.notice_display_rows(s) if row.id in ids}
+        assert all("source_only" not in display[r.id].fields for r in sources[:-1])
+        assert display[sources[-1].id].fields == sources[-1].fields
+        expected = {row.notice_id: row for row in build_rows(s, notice_ids=ids)}
+        actual = {row.notice_id: row for row in build_rows(s) if row.notice_id in ids}
+        assert actual == expected
+        assert [actual[r.id].bill_name for r in sources] == [str((r.fields or {}).get("BillName") or "") for r in sources]
+        # The narrow projection must not replace any source entity held by this session.
+        assert all(s.get(PaymentNotice, r.id).fields["source_only"] == "完整原始字段" for r in sources)

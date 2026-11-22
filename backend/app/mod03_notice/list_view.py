@@ -186,9 +186,9 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
     `flows_of` / `links_of` / `traces_of` 可注入（`notice_id -> …`），默认自己查 —— **测试注入桩即可离线**。
     """
     from app.mod03_notice.domain import manual_edited_fields
-    from app.mod03_notice.repository import NOTICE_LIST_LIMIT, get_notices_by_ids, notice_rows
+    from app.mod03_notice.repository import NOTICE_LIST_LIMIT, get_notices_by_ids, notice_display_rows
 
-    notices = notice_rows(session) if notice_ids is None else get_notices_by_ids(session, notice_ids)
+    notices = notice_display_rows(session) if notice_ids is None else get_notices_by_ids(session, notice_ids)
     if not notices:
         return []
     # Once the display limit is reached, older history cannot contribute to these rows.

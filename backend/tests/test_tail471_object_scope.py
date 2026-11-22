@@ -119,10 +119,10 @@ def test_display_cap_bounds_related_reads(scoped, monkeypatch):
 
     s, *_ = scoped
     full = build_rows(s)
-    read_notices = notices.notice_rows
+    read_notices = notices.notice_display_rows
     first = read_notices(s, limit=1)[0].id
     monkeypatch.setattr(notices, 'NOTICE_LIST_LIMIT', 1)
-    monkeypatch.setattr(notices, 'notice_rows', lambda session: read_notices(session, limit=1))
+    monkeypatch.setattr(notices, 'notice_display_rows', lambda session: read_notices(session, limit=1))
 
     calls = []
     def scoped_read(original):

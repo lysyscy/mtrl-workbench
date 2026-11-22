@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Row, select
+from sqlalchemy import Row, case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import any_ids
@@ -20,7 +20,7 @@ from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 M
     finish_run_record,
 )
 from app.mod03_notice.domain import StatTrace, adjust_stat
-from app.mod03_notice.models import NoticeStatLog, PaymentNotice
+from app.mod03_notice.models import EXCLUDE_BY_RULE, NoticeStatLog, PaymentNotice
 
 
 def get_notice(session: Session, notice_id: int, **kw) -> PaymentNotice | None:
@@ -306,8 +306,24 @@ def notice_todo_rows(session: Session) -> list[Row]:
     return list(session.execute(_notice_list_window(stmt, NOTICE_LIST_LIMIT)))
 
 
+def notice_display_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[Row]:
+    """列表装配的只读投影。规则解释仍接收原始单据字段。"""
+    n = PaymentNotice
+    # Keep the JSON value (including historical arrays/objects) until Python
+    # applies the same BillName display conversion as the single-object read.
+    fields = case(
+        ((n.excluded & (n.exclude_source == EXCLUDE_BY_RULE)) | (func.json_typeof(n.fields) != "object"), n.fields),
+        else_=func.json_build_object("BillName", n.fields["BillName"]),
+    ).label("fields")
+    stmt = select(n.id, n.doc_date, n.bill_no, fields, n.project_name, n.category,
+                  n.biz_type, n.payee, n.input_by, n.amount_approved, n.stat_settle, n.stat_paid,
+                  n.approve_status, n.excluded, n.exclude_source, n.i8_revoked, n.is_manual,
+                  n.ownership_id, n.jc_supplier, n.planned_pay_method)
+    return list(session.execute(_notice_list_window(stmt, limit)))
+
+
 def notice_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[PaymentNotice]:
-    """全部通知书行（按单据日期倒序）—— **列表页的取数出口**（剔除/撤单行**也返回**）。
+    """展示范围内的完整通知书实体（剔除/撤单行也返回），供需要原始字段的调用方。
 
     ⚠️ 剔除与撤单行的「默认隐藏」是**筛选层**的事（`list_view.filter_rows`），不是取数层 ——
        取数层必须给全，否则计数与「分类 = 剔除」视图都算不出来。
