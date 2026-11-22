@@ -20,10 +20,10 @@ import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-wid
 import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
-import { contractApprovalStatuses, contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
+import { contractApprovalStatuses, contractMoneyKeys, nextArchiveNumbers, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
 import type { ContractList, ContractRow } from './contracts-api';
 import { cents, money, receipt, searchKey } from './notices-api';
-import { ContractEditor, archiveNoHint, nextContractArchiveNo } from './contract-dialog';
+import { ContractEditor, archiveNoHint } from './contract-dialog';
 import { createInlineFieldQueue } from './inline-field-queue';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
@@ -111,6 +111,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const query=useQuery({queryKey:['contracts'],enabled:!blocked&&active,refetchOnMount:'always',queryFn:async({signal})=>readContracts(await requestJson('/api/m11/list',{signal}))});
   const projects=useQuery({queryKey:['projects','all'],enabled:!blocked&&active,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
+  const archiveNumbers=useMemo(()=>nextArchiveNumbers(rows),[rows]);
+  const nextArchiveNo=(row:ContractRow)=>archiveNumbers.get(row.project_key)??'1';
   const projectRows=useMemo(()=>projects.data??[],[projects.data]);
   const projectNames = useMemo(() => {
     const names = new Map<string | null, string>();
@@ -232,8 +234,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       await saveField(latest,'arch',nextArch(latest.arch));
     }finally{advancing.current=false;}
   }
-  const inlineControl=useRef<InlineControl>({disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row),advance});
-  inlineControl.current={disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:row=>nextContractArchiveNo(rows,row),advance};
+  const inlineControl=useRef<InlineControl>({disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:nextArchiveNo,advance});
+  inlineControl.current={disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:nextArchiveNo,advance};
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['remark','arch_no','ret_date','payment_term','payment_method']});},[active,inlineDisabled,paymentMethodsKey]);
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['arch_no']});},[active,rows]);
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['actions']});},[active,actionDisabled]);
@@ -248,11 +250,11 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     const values=rows.map(row=>String(row[c.key as keyof ContractRow]??''));
     if(c.key==='approve_status')values.push(...contractApprovalStatuses);
     if(c.key==='payment_method')values.push('未约定',...(query.data?.payment_methods??[]));
-    if(c.key==='arch_no')values.push(...[...new Map(rows.map(row=>[row.project_key,row])).values()].map(row=>nextContractArchiveNo(rows,row)));
+    if(c.key==='arch_no')values.push(...archiveNumbers.values());
     if(c.key==='ret_date')values.push('2000-12-31');
     const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch','approve_status'].includes(c.key)?12:0;
     return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
-  })),[rows,query.data?.columns,query.data?.payment_methods,scale]);
+  })),[rows,archiveNumbers,query.data?.columns,query.data?.payment_methods,scale]);
   // The contract values stay in scope across searches. Only the filtered totals
   // change; take the same maximum over both sets at the current font and scale.
   const sourceWidths = useMemo(() => cacheFontMeasurement(() =>
@@ -323,7 +325,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     </ReadStatusLane>
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
     {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
-    <AnimatePresence initial={false}>{Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={`${key}:${editor.presenceId}`} materialOnly={editor.materialOnly} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}</AnimatePresence>
+    <AnimatePresence initial={false}>{Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={`${key}:${editor.presenceId}`} materialOnly={editor.materialOnly} nextArchiveNo={editor.row ? nextArchiveNo(editor.row) : '1'} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}</AnimatePresence>
     <DialogPresence>{subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}</DialogPresence>
     <DialogPresence>{remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}</DialogPresence>
     <DialogPresence>{tool==='fetch'&&<ContractFetch me={me} blocked={blocked||!active} close={()=>setTool(null)} refresh={refresh}/>}</DialogPresence>

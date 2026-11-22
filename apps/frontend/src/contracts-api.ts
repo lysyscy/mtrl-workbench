@@ -4,6 +4,17 @@ import { body } from './notices-api';
 
 export const contractMoneyKeys = ['contract_amt','inv_sum','trade_contract_amt','trade_inv_sum','settle','pay_sum','debt'] as const;
 export const contractApprovalStatuses = ['已审批', '未审批'] as const;
+export function nextArchiveNumbers(rows: readonly Pick<ContractRow,'project_key'|'arch_no'>[]): Map<string,string> {
+  const maximum = new Map<string,bigint>();
+  for (const row of rows) {
+    const text=row.arch_no.trim();
+    const number=/^\d+$/.test(text)?BigInt(text):0n;
+    const prior=maximum.get(row.project_key);
+    if (prior===undefined || number>prior) maximum.set(row.project_key,number);
+  }
+  return new Map([...maximum].map(([key,value])=>[key,String(value+1n)]));
+}
+
 export const editableContractKeys = ['material_name','payment_term','payment_method','remark','arch','arch_no','ret_date'] as const;
 export type ContractFields = Record<typeof editableContractKeys[number], string>;
 const nonArrayObject = v.custom<object>(record);

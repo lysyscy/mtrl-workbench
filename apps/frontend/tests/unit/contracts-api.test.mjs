@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readContracts, readContractDetail, contractFields } from '../../src/contracts-api.ts';
+import { readContracts, readContractDetail, contractFields, nextArchiveNumbers } from '../../src/contracts-api.ts';
 
 const base = {
   id: 1, project_seq: null, contract_no: '', date: '', material: '物料', supplier: '供应商',
@@ -8,6 +8,17 @@ const base = {
   settle: '12.34', pay_sum: '0.00', debt: '12.34', payment_term: '', payment_method: '', remark: '',
   tag: '', arch: '', arch_no: '', ret_date: '',
 };
+test('archive suggestions group every project and use the full numeric archive number', () => {
+  const rows = [
+    {project_key:'甲',arch_no:' 0008 '}, {project_key:'乙',arch_no:'A-42'},
+    {project_key:'甲',arch_no:'-18'}, {project_key:'丙',arch_no:'99999999999999999999999999999999'},
+    {project_key:'甲',arch_no:'007'}, {project_key:'乙',arch_no:'  '},
+  ];
+  assert.deepEqual([...nextArchiveNumbers(rows)], [
+    ['甲','9'], ['乙','1'], ['丙','100000000000000000000000000000000'],
+  ]);
+});
+
 const list = row => ({ rows: [row], columns: [{ key: 'material', label: '物料', type: 'text' }], tags: [], payment_methods: [] });
 const row = () => ({ ...base, project_key: '项目', notice_ids: [1], approve_status: null });
 const detail = () => ({ data: { ...base, supplier_invoices: [{ id: 2, kind: 'supplier', date: '', amount: '12.34' }], trade_invoices: [] } });
