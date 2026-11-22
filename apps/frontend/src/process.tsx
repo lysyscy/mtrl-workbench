@@ -2,7 +2,7 @@ import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, type RefObject, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ColGroupDef, ICellRendererParams, IHeaderParams } from 'ag-grid-community';
 import { Link } from 'react-router';
@@ -32,21 +32,38 @@ const matrixColumns=[
   ...['in','out'].flatMap((direction,i)=>categories.map((label,j)=>({field:`${direction}_${label}`,label:`${i?'出库':'入库'}${label}`,header:label,segment:j===0}))),
   ...mechKeys.map((field,i)=>({field,label:mechLabels[i]!,header:i<4?mechLabels[i]!:i===4?'零租':'包月',segment:i===0||i===4})),
 ];
-interface Cells { drafts:Record<string,Draft>; warehouse:string; disabled:boolean; source:(ym:string,column:string)=>boolean; change:(ym:string,column:string,value:string)=>void; save:(key:string,retry?:boolean)=>void; cancel:(key:string)=>void }
+interface CellActions {
+  change:(ym:string,column:string,value:string)=>void;
+  save:(key:string,retry?:boolean)=>void;
+  cancel:(key:string)=>void;
+}
+interface Cells {
+  drafts:Record<string,Draft>; warehouse:string; disabled:boolean;
+  source:(ym:string,column:string)=>boolean; actions:RefObject<CellActions>;
+}
 const ProcessCells=createContext<Cells|null>(null);
 function ProcessAmountCell({data,column,label,mechanical=false}:{data:ProcessRow;column:string;label:string;mechanical?:boolean}) {
   const cells=useContext(ProcessCells)!;
-  const [focused,setFocused]=useState(false),key=keyOf(cells.warehouse,data.ym,column),draft=cells.drafts[key];
-  const raw=draft?.value??data[column]??'';
+  const key=keyOf(cells.warehouse,data.ym,column);
+  return <AmountInput cellKey={key} ym={data.ym} column={column} label={label} amount={data[column]??''}
+    draft={cells.drafts[key]} disabled={cells.disabled} detail={mechanical&&cells.source(data.ym,column)} actions={cells.actions}/>;
+}
+
+const AmountInput = memo(function AmountInput({cellKey,ym,column,label,amount,draft,disabled,detail,actions}:{
+  cellKey:string; ym:string; column:string; label:string; amount:string;
+  draft:Draft|undefined; disabled:boolean; detail:boolean; actions:RefObject<CellActions>;
+}) {
+  const [focused,setFocused]=useState(false);
+  const raw=draft?.value??amount;
   let display=raw;
   if(!focused&&String(raw).trim())display=displayAmount(raw);
   // Native input records an explicit 0 even when it replaces the same displayed default.
-  return <div className={`process-cell${draft?' process-dirty':''}`}><Input className="record-value" htmlSize={1} aria-label={`${data.ym} ${label}`} value={display} disabled={cells.disabled}
+  return <div className={`process-cell${draft?' process-dirty':''}`}><Input className="record-value" htmlSize={1} aria-label={`${ym} ${label}`} value={display} disabled={disabled}
     status={draft?.error?'error':''} title={draft?.error||undefined}
-    onFocus={()=>setFocused(true)} onInput={e=>cells.change(data.ym,column,e.currentTarget.value)} onBlur={()=>{setFocused(false);cells.save(key);}}
-    onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);e.currentTarget.blur();}}} />
-    {draft?.error?<div className="process-cell-error" role="alert"><span>{draft.error}</span><div><Button size="small" disabled={cells.disabled} onClick={()=>cells.save(key,true)}>重试</Button><Button size="small" disabled={cells.disabled} onClick={()=>cells.cancel(key)}>取消修改</Button></div></div>:mechanical&&cells.source(data.ym,column)&&<small>明细确认</small>}</div>;
-}
+    onFocus={()=>setFocused(true)} onInput={e=>actions.current.change(ym,column,e.currentTarget.value)} onBlur={()=>{setFocused(false);actions.current.save(cellKey);}}
+    onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();actions.current.save(cellKey,true);e.currentTarget.blur();}}} />
+    {draft?.error?<div className="process-cell-error" role="alert"><span>{draft.error}</span><div><Button size="small" disabled={disabled} onClick={()=>actions.current.save(cellKey,true)}>重试</Button><Button size="small" disabled={disabled} onClick={()=>actions.current.cancel(cellKey)}>取消修改</Button></div></div>:detail&&<small>明细确认</small>}</div>;
+});
 function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
   return <ProcessAmountCell data={data} column={column} label={mechLabels[mechKeys.indexOf(column)]!} mechanical/>;
 }
@@ -157,6 +174,13 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   ],[scale]);
   const dirty=Object.keys(drafts).length>0,reason=uncertain?'先重读核对保存结果':busy?'正在保存':dirty?'先处理未保存输入':query.isError||projects.isError?'先重读资料':query.isFetching?'正在重读':'';
   const currentDrafts=Object.entries(drafts).filter(([,d])=>d.warehouse===warehouse);
+  const errors=JSON.stringify(currentDrafts.filter(([,draft])=>draft.error).map(([key,draft])=>[key,draft.error]));
+  function cancel(key:string) {
+    saves.update(current=>{const next={...current};delete next[key];return next;});
+  }
+  // Unchanged inputs keep their render while events use the latest committed draft and source.
+  const actions=useRef<CellActions>({change,save,cancel});
+  useLayoutEffect(()=>{actions.current={change,save,cancel};});
   const readState=readPhase(query,(query.data?.projects.length??0)===0);
   const settled=readState==='ready'||readState==='empty';
   // A settled read without a matrix is a real result (no data, or no project picked yet), never a running read.
@@ -175,8 +199,8 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     <FirstReadRegion className={tab!==2 ? "process-first-read-matrix" : ''} phase={query.data !== undefined ? 'content' : readState==='error' ? 'error' : 'pending'} canPublish={!query.data?.projects.length || Boolean(warehouse)} placeholder={<div className="process-read-body"><ReadPlaceholder rows={6} quiet={readState==='error'} /></div>}>
     {matrix?<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
-      <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,cancel:key=>saves.update(current=>{const next={...current};delete next[key];return next;})}}>
-        <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale} sources={query.data?.sources[warehouse]}/>
+      <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,actions}}>
+        <MatrixGrid matrix={matrix} rows={displayRows} kind={kind} warehouse={warehouse} scale={scale} sources={query.data?.sources[warehouse]} errors={errors}/>
       </ProcessCells.Provider></>}
     </>:<div className="process-read-body">{regionBody}</div>}
     </FirstReadRegion>
@@ -200,9 +224,11 @@ function MatrixCell(p:ICellRendererParams<MatrixRow>){
   if(p.node.rowPinned)return show(row[field]);
   const column=matrixColumns.find(column=>column.field===field)!;return field.startsWith('mech_')?<MechanicalCell data={row} column={field}/>:<MaterialCell data={row} column={field} label={column.label}/>;
 }
-function MatrixGrid({matrix,rows,kind,warehouse,scale,sources}:{matrix:Awaited<ReturnType<typeof getProcess>>['matrices'][string];rows:ProcessRow[];kind:'raw'|'adjusted';warehouse:string;scale:number;sources:ProcessData['sources'][string]|undefined}){
-  const cells=useContext(ProcessCells)!;
-  const errors=JSON.stringify(Object.entries(cells.drafts).filter(([,draft])=>draft.warehouse===warehouse&&draft.error).map(([key,draft])=>[key,draft.error]));
+const matrixRowId=(row:MatrixRow)=>row.ym;
+const MatrixGrid=memo(function MatrixGrid({matrix,rows,kind,warehouse,scale,sources,errors}:{
+  matrix:ProcessData['matrices'][string]; rows:ProcessRow[]; kind:'raw'|'adjusted'; warehouse:string;
+  scale:number; sources:ProcessData['sources'][string]|undefined; errors:string;
+}){
   const measurement=useMemo(()=>{
     const messages=new Map<string,string>(JSON.parse(errors));
     // Only what the measuring render of one cell reads: its own amount, whether it is an
@@ -218,8 +244,8 @@ function MatrixGrid({matrix,rows,kind,warehouse,scale,sources}:{matrix:Awaited<R
     {field:'ym',headerName:'核算月',pinned:'left',...fixedWidth(112,scale)},
     ...[['入库',0,5],['出库',5,10],['机械',10,14],['机械（不含税）',14,16]].map(([name,start,end])=>({headerName:String(name),children:matrixColumns.slice(Number(start),Number(end)).map((column,index):ColDef<MatrixRow>=>({field:column.field,headerName:column.header,headerTooltip:column.label,headerComponentParams:{innerHeaderComponent:MatrixHeader},...numberColumnWidth([...rows.map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,true,1),wrapText:false,cellClass:p=>'money'+(column.segment?' process-segment':'')+(kind==='adjusted'&&!column.field.startsWith('mech_')&&matrix.raw.some(raw=>raw.ym===p.data?.ym&&raw[column.field]!==p.data?.[column.field])?' process-adjusted':''),colSpan:p=>p.data?.rowkind==='segments'&&index===0?Number(end)-Number(start):1,cellRenderer:MatrixCell}))})),
   ],[matrix,rows,kind,scale]);
-  return <div className="process-matrix-scroll" role="region" aria-label="过程资料月度表，可横向滚动"><BusinessGrid table="process-matrix" className="process-matrix-view" gridClassName="process-matrix" label={tabLabels[kind==='raw'?0:1]+'，金额单位：元'} domLayout="normal" rows={rows} totals={totals} columns={columns} measurement={measurement} rowId={row=>row.ym} scope={warehouse+':'+kind} scale={scale} rowMinimum={56*scale} style={{height:'100%'}} grid={{overlayNoRowsTemplate:'当前项目没有月度记录',groupHeaderHeight:34*scale}}/></div>;
-}
+  return <div className="process-matrix-scroll" role="region" aria-label="过程资料月度表，可横向滚动"><BusinessGrid table="process-matrix" className="process-matrix-view" gridClassName="process-matrix" label={tabLabels[kind==='raw'?0:1]+'，金额单位：元'} domLayout="normal" rows={rows} totals={totals} columns={columns} measurement={measurement} rowId={matrixRowId} scope={warehouse+':'+kind} scale={scale} rowMinimum={56*scale} style={{height:'100%'}} grid={{overlayNoRowsTemplate:'当前项目没有月度记录',groupHeaderHeight:34*scale}}/></div>;
+});
 function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
   matrix: Awaited<ReturnType<typeof getProcess>>['matrices'][string]; diffs: ColDef<Difference>[]; warehouse: string; scale: number; active: boolean;
 }) {
