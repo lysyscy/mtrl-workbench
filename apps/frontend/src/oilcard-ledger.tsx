@@ -31,7 +31,7 @@ import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
 type Field = keyof EntryFields;
 type TableRow = OilEntry & { total?: boolean };
 const labels: Record<Field, string> = { date_text: '日期', kind: '类型', project_id: '项目', account_id: '用卡账户', amount: '金额', remark: '备注' };
-interface Cells { drafts: Record<string, Draft>; entries: OilEntry[]; archives: OilArchives; projects: Project[]; disabled: boolean; busy: boolean; structuralDisabled: boolean; remove: (row: OilEntry) => void; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
+interface Cells { drafts: Record<string, Draft>; entries: ReadonlyMap<string, OilEntry>; archives: OilArchives; projects: Project[]; disabled: boolean; busy: boolean; structuralDisabled: boolean; remove: (row: OilEntry) => void; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
 const LedgerCells = createContext<Cells | null>(null);
 
 function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
@@ -40,7 +40,7 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
   if (!row) return null;
   const field = colDef?.field as Field;
   if (node.rowPinned) return field === 'date_text' ? '合计' : field === 'amount' ? money(row.amount) : '';
-  const draft = state.drafts[row.request_id], current = draft ?? state.entries.find(entry => entry.request_id === row.request_id);
+  const draft = state.drafts[row.request_id], current = draft ?? state.entries.get(row.request_id);
   if (!current) return null;
   const label = `${labels[field]}：${current.id ? `充值记录 #${current.id}` : '新增充值'}`;
   const disabled = state.disabled || !current.id && state.busy;
@@ -84,6 +84,11 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   const [invoiceLocked, setInvoiceLocked] = useState(false), [invoiceUncertain, setInvoiceUncertain] = useState(false);
   const [filters, setFilters] = useState<Record<string, ValueFilterModel>>({});
   const query = useQuery({ queryKey: ['oilcard-ledger'], enabled: active && !blocked, queryFn: ({ signal }) => getOilLedger(signal) });
+  const entries = query.data?.entries;
+  const byRequest = useMemo(() => new Map(entries?.map(row => [row.request_id, row])), [entries]);
+  const savedRows = useRef(byRequest); savedRows.current = byRequest;
+  const projectById = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
+  const accountById = useMemo(() => new Map(archives.accounts.map(account => [account.id, account])), [archives.accounts]);
   const current = useRef(query.data); current.current = query.data;
   const draftRef = useRef<Record<string, Draft>>({});
   const ownPairWrite = useRef<{ key: string; transferId: string; beforeVersion: string; savedVersion: string } | null>(null);
@@ -127,17 +132,17 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   const disabled = !active || blocked || !me || uncertain || invoiceLocked || !query.data || query.isError || archiveLocked;
   const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0;
   const filterOptions = useMemo<Record<Field, ValueFilterOptions<TableRow>>>(() => {
-    const saved = (row: TableRow) => current.current?.entries.find(entry => entry.request_id === row.request_id);
+    const saved = (row: TableRow) => savedRows.current.get(row.request_id);
     const common = { includeCandidate: (row: TableRow) => Boolean(saved(row)), keepVisible: (row: TableRow) => Boolean(draftRef.current[row.request_id]) };
     return {
       date_text: { ...common, kind: 'date', value: row => saved(row)?.date_text },
       kind: { ...common, kind: 'text', value: row => { const kind = saved(row)?.kind; return kind ? oilEntryKindLabels[kind] : null; } },
-      project_id: { ...common, kind: 'text', value: row => { const project = projects.find(project => project.id === saved(row)?.project_id); return project ? projectLabel(project) : null; } },
-      account_id: { ...common, kind: 'text', value: row => archives.accounts.find(account => account.id === saved(row)?.account_id)?.name },
+      project_id: { ...common, kind: 'text', value: row => { const project = projectById.get(saved(row)?.project_id ?? 0); return project ? projectLabel(project) : null; } },
+      account_id: { ...common, kind: 'text', value: row => accountById.get(saved(row)?.account_id ?? 0)?.name },
       amount: { ...common, kind: 'number', value: row => saved(row)?.amount, format: value => money(String(value)) },
       remark: { ...common, kind: 'text', value: row => saved(row)?.remark },
     };
-  }, [archives, projects]);
+  }, [projectById, accountById]);
   const filteredAmount = useMemo(() => decimal((query.data?.entries ?? []).filter(row => Object.entries(filters).every(([field, model]) => {
     const options = filterOptions[field as Field];
     return !options || valueFilterPasses(model, options.value(row), options.kind);
@@ -190,11 +195,40 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       return actual && sameFields(actual, draft) ? [] : [[key, { ...(actual ? rebaseOilEntryDraft(draft, actual) : draft), error: '' }]];
     })));
   }
-  const rows = useMemo<TableRow[]>(() => [...(query.data?.entries ?? []).map(row => drafts[row.request_id] ?? row), ...Object.values(drafts).filter(draft => !query.data?.entries.some(row => row.request_id === draft.request_id))], [query.data, drafts]);
-  const bounds = (query.data?.entries ?? []).reduce((sum, row) => {
-    const value = cents(row.amount); if (value > 0n) sum.positive += value; else sum.negative += value; return sum;
-  }, { positive: 0n, negative: 0n });
-  const amountWidth = fullTextWidth([money(decimal(bounds.positive)), money(decimal(bounds.negative)), ...(query.data?.entries ?? []).map(row => money(row.amount))], scale).minWidth;
+  const rows = useMemo<TableRow[]>(() => [
+    ...(entries ?? []).map(row => drafts[row.request_id] ?? row),
+    ...Object.values(drafts).filter(draft => !byRequest.has(draft.request_id)),
+  ], [entries, drafts, byRequest]);
+  const amountTexts = useMemo(() => {
+    let positive = 0n, negative = 0n;
+    const amounts = (entries ?? []).map(row => {
+      const value = cents(row.amount);
+      if (value > 0n) positive += value; else negative += value;
+      return money(row.amount);
+    });
+    return [...amounts, money(decimal(positive)), money(decimal(negative))];
+  }, [entries]);
+  const amountWidth = fullTextWidth(amountTexts, scale).minWidth;
+  // Measure equal editors once per column and width. Refunds display plain labels,
+  // while draft amounts and pinned totals can render differently from saved input.
+  const measurement = useMemo(() => ({
+    signature(row: TableRow, column: string, pinned: boolean) {
+      if (pinned) return column === 'amount' ? row.amount : 'footer';
+      switch (column) {
+        case 'actions': return 'delete';
+        case 'project_id': {
+          const project = projectById.get(row.project_id);
+          return JSON.stringify([row.kind === 'refund', row.project_id, project?.disp, project?.status, project?.project_type]);
+        }
+        case 'account_id': {
+          const account = accountById.get(row.account_id);
+          return JSON.stringify([row.kind === 'refund', row.account_id, account?.name, account?.status, account?.project_id === row.project_id]);
+        }
+        case 'amount': return JSON.stringify([row.amount, 'original' in row]);
+        default: return String(row[column as Field]);
+      }
+    },
+  }), [projectById, accountById]);
   const columns = useMemo<ColDef<TableRow>[]>(() => ([
     { field: 'date_text', headerName: '日期', sortable: true, initialSort: 'asc',
       comparator: (_, __, a, b) => (a.data?.entry_date ?? '').localeCompare(b.data?.entry_date ?? ''),
@@ -222,7 +256,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
       </div>
       <FirstReadRegion className="oilcard-grid-slot" phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
-      {query.data ? <LedgerCells.Provider value={{ drafts, entries: query.data.entries, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
+      {query.data ? <LedgerCells.Provider value={{ drafts, entries: byRequest, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} measurement={measurement} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
         enableFilterHandlers: true, popupParent: document.body, alwaysShowHorizontalScroll: true, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>),
         postSortRows: ({ nodes }) => { const draft = nodes.findIndex(node => node.data?.id === 0); if (draft >= 0) nodes.push(...nodes.splice(draft, 1)); },
         onRowDataUpdated: ({ api }) => {
