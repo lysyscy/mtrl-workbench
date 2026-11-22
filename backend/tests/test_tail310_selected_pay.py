@@ -60,7 +60,7 @@ def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError('付款不得走展示/全量事实出口')
     for module, name in ((list_view, 'build_rows'), (notices, 'notice_rows'),
-                         (notices, 'stat_trace_index'), (flows, 'list_flows')):
+                         (notices, 'stat_trace_index'), (flows, 'list_flows'), (flows, 'notice_flow_rows')):
         monkeypatch.setattr(module, name, forbidden)
     seen = []
     for module, name in ((notices, 'get_notices_by_ids'), (flows, 'flows_of_notices'),

@@ -113,6 +113,32 @@ def test_scoped_proxies_keep_projection_order_and_supplier(scoped, monkeypatch):
     assert got[a][0] == '471 供应商' and got[a][1] is True
 
 
+def test_display_cap_bounds_related_reads(scoped, monkeypatch):
+    """达到展示上限时，只装配实际返回的通知书；行内容与未截断列表一致。"""
+    from app.mod11_jc import service as contracts
+
+    s, *_ = scoped
+    full = build_rows(s)
+    read_notices = notices.notice_rows
+    first = read_notices(s, limit=1)[0].id
+    monkeypatch.setattr(notices, 'NOTICE_LIST_LIMIT', 1)
+    monkeypatch.setattr(notices, 'notice_rows', lambda session: read_notices(session, limit=1))
+
+    calls = []
+    def scoped_read(original):
+        def read(session, ids):
+            assert ids == [first]
+            calls.append(original.__name__)
+            return original(session, ids)
+        return read
+
+    for module, name in ((flows, 'notice_flow_rows'), (contracts, 'links_by_notice'),
+                         (contracts, 'linked_suppliers'), (notices, 'stat_trace_index_of')):
+        monkeypatch.setattr(module, name, scoped_read(getattr(module, name)))
+    assert build_rows(s) == [row for row in full if row.notice_id == first]
+    assert len(calls) == 4
+
+
 def test_empty_scope_is_empty_and_never_queries(scoped, monkeypatch):
     """③ 空集合 = 空，且不查库（空选不等于全量）。"""
     s, a, b, _ = scoped

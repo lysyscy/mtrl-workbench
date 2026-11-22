@@ -292,7 +292,10 @@ def list_notices(session: Session, *, bill_type: str | None = None, limit: int =
     return list(session.execute(stmt.limit(limit)).scalars().all())
 
 
-def notice_rows(session: Session, *, limit: int = 5000) -> list[PaymentNotice]:
+NOTICE_LIST_LIMIT = 5000
+
+
+def notice_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[PaymentNotice]:
     """全部通知书行（按单据日期倒序）—— **列表页的取数出口**（剔除/撤单行**也返回**）。
 
     ⚠️ 剔除与撤单行的「默认隐藏」是**筛选层**的事（`list_view.filter_rows`），不是取数层 ——

@@ -58,7 +58,7 @@ has_request_id = repo.has_request_id    # 付款提交的**幂等**判据（§4.
 create_flow = repo.create_flow          # 落一条流水（⛔ 别绕过它：它自动走 `sync_stat_paid` 重算唯一出口）
 flows_of_notices = repo.flows_of_notices
 notice_flow_rows = repo.notice_flow_rows
-list_flows = repo.list_flows            # 全部流水（含已撤销）—— 通知书列表与撤销入口要看
+list_flows = repo.list_flows            # 完整流水的兼容出口（含已撤销）；通知书核对走上面的窄投影。
 
 
 # ---------------------------------------------------------------- 输入行视图
