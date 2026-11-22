@@ -43,6 +43,17 @@ class Formula(str):
         return value
 
 
+class TextFormula(Formula):
+    """Lookup formulas may display identifiers or project names before Excel recalculates."""
+
+    def __new__(cls, expression: str, result: str):
+        if not expression.startswith('=') or not isinstance(result, str):
+            raise ValueError('文本公式需要公式和文本结果')
+        value = str.__new__(cls, expression)
+        value.result = result
+        return value
+
+
 def set_formula(cell, formula):
     cell.value = formula
     # openpyxl coerces string subclasses; retain the cache metadata until serialization.
@@ -50,7 +61,7 @@ def set_formula(cell, formula):
 
 
 def _cache_formulas(wb, payload):
-    cached = {i: {c.coordinate: c.value.result for row in sheet for c in row
+    cached = {i: {c.coordinate: c.value for row in sheet for c in row
                   if isinstance(c.value, Formula)} for i, sheet in enumerate(wb, 1)}
     if not any(cached.values()):
         return payload
@@ -66,13 +77,14 @@ def _cache_formulas(wb, payload):
                 for cell in root.findall(f'.//{{{ns}}}sheetData/{{{ns}}}row/{{{ns}}}c'):
                     if cell.get('r') not in sheets[info.filename]:
                         continue
-                    value = sheets[info.filename][cell.get('r')]
+                    formula = sheets[info.filename][cell.get('r')]
+                    value = formula.result
                     cache = cell.find(f'{{{ns}}}v')
                     if cache is None:
                         cache = ET.SubElement(cell, f'{{{ns}}}v')
-                    if value is None:
+                    if value is None or isinstance(formula, TextFormula):
                         cell.set('t', 'str')
-                        cache.text = None
+                        cache.text = value
                     else:
                         cell.attrib.pop('t', None)
                         cache.text = format(Decimal(str(value)), 'f')
@@ -110,4 +122,4 @@ def workbook_bytes(wb) -> bytes:
     return _cache_formulas(wb, buf.getvalue())
 
 
-__all__ = ["save_workbook", "workbook_bytes", "Formula", "set_formula"]
+__all__ = ["save_workbook", "workbook_bytes", "Formula", "TextFormula", "set_formula"]

@@ -30,6 +30,19 @@ class MoneyError(ValueError):
     """金额相关的输入非法 —— 必须显式报出，不得静默取 0。"""
 
 
+def ledger_product(quantity: Decimal | None, price: Decimal | None) -> Decimal | None:
+    """设备三账保留原底稿的四位小数；缺少数量或单价时金额留空。"""
+    if quantity is None or price is None:
+        return None
+    unrounded = quantity * price
+    if abs(unrounded) >= Decimal("1e14"):
+        raise MoneyError("计算结果超过台账金额范围")
+    value = unrounded.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    if abs(value) >= Decimal("1e14"):
+        raise MoneyError("计算结果超过台账金额范围")
+    return value
+
+
 #: ⭐ `TAIL-63`（2026-09-21）：金额文本里一律清掉的字符（千分位 / 货币符号 / 空白）。
 #: ⛔ 加字符必须同步改 `tests/test_amount_text_parity.py` 的判据（否则口径改了没人知道）。
 _AMOUNT_NOISE: tuple[str, ...] = (",", "，", "¥", "￥", "$", " ", "\u3000")

@@ -31,4 +31,6 @@ from app.mod15_user import models as _m15  # noqa: F401  ← 2026-09-26 启用�
 #   就会生成一条删表的迁移 —— 那正是本条尾巴警告的雷）。⚠️ 登录/账号体系**早就在跑**（`main.py` 挂了
 #   `mod15_api_router`、`core/identity.py` 靠它取「当前登录用户」）⇒ 这行只是**漏登记**，不是"未启用"。
 
+from app.mod16_equipment import models as _equipment  # noqa: F401
+
 __all__: list[str] = []

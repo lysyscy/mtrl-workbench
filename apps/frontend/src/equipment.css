@@ -1,0 +1,90 @@
+.equipment-page,
+.equipment-dialog {
+  min-inline-size: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx);
+}
+.equipment-toolbar,
+.equipment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55em;
+  align-items: center;
+}
+.equipment-toolbar {
+  margin-block: 0.85em;
+}
+.equipment-toolbar .ant-select {
+  min-inline-size: 8em;
+  max-inline-size: 22em;
+}
+.equipment-toolbar > .ant-input,
+.equipment-toolbar > .ant-input-search {
+  max-inline-size: 16em;
+}
+.equipment-dialog {
+  width: min(calc(680px * var(--fscale)), calc(100vw - 24px));
+  padding: 1.4em;
+}
+.equipment-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15em, 100%), 1fr));
+  gap: 0 1em;
+}
+.equipment-fields :is(.ant-input-number, .ant-picker) {
+  width: 100%;
+}
+.equipment-preview,
+.equipment-selection {
+  max-block-size: 15em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  margin-block: 0.85em;
+}
+.equipment-preview strong {
+  display: block;
+}
+.equipment-receipt,
+.equipment-total,
+.equipment-project h3 {
+  padding: 0.8em 1em;
+  background: var(--sf2);
+  overflow-wrap: anywhere;
+}
+.equipment-total,
+.equipment-project h3 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1em;
+  font-weight: 600;
+}
+.equipment-total small,
+.equipment-project h3 span {
+  font-size: 0.95em;
+  color: var(--tx2);
+  font-weight: 500;
+}
+.equipment-project {
+  margin-block: 1em;
+}
+.equipment-project h3 {
+  margin: 0;
+  font-size: 1em;
+}
+.equipment-billing {
+  display: grid;
+  justify-items: start;
+  gap: 0.3em;
+  line-height: 1.4;
+  padding-block: 0.3em;
+}
+.equipment-dialog pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.equipment-page [role='alert'],
+.equipment-dialog [role='alert'] {
+  color: var(--status-danger-fg);
+}
