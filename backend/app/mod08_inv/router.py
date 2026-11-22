@@ -100,11 +100,10 @@ def api_inventory() -> dict:
     with session_scope() as s:
         adjs = adjustments(s)
         rows = load_rows(s, adjs=adjs)                       # 本请求复用调整单映射
-        items = []
+        # Enrich the fresh request-local rows without duplicating the full list.
         for row in rows:
             original, token = original_values_and_token(row, adjs.get(row["id"]))
-            items.append({
-                **row,
+            row.update({
                 "c5": to_category(effective_value(row, "material_property")) or "",
                 "adjusted": row["id"] in adjs,
                 "original_values": original,
@@ -125,7 +124,7 @@ def api_inventory() -> dict:
             for a in sorted(adjs.values(), key=lambda x: x.id)
         ]
         projects = sorted({str(r.get("warehouse") or "") for r in rows if r.get("warehouse")})
-    return {"rows": items, "adjustments": payload, "count": len(items), "projects": projects, "material_properties": list(MATERIAL_PROPERTIES)}
+    return {"rows": rows, "adjustments": payload, "count": len(rows), "projects": projects, "material_properties": list(MATERIAL_PROPERTIES)}
 
 
 @router.post("/api/m08/adjust")
