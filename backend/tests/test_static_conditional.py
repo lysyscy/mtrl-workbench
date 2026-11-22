@@ -25,6 +25,21 @@ def static_client(tmp_path, monkeypatch):
         yield client, tmp_path
 
 
+def test_only_versioned_font_subsets_can_reuse_fresh_browser_cache(static_client):
+    client, root = static_client
+    folder = root / "web/fonts/misans-web"
+    folder.mkdir()
+    for name, policy in [("400-cs.5dd139a4b434052f.0.woff2", "private, max-age=31536000, immutable"),
+                         ("400-unversioned.woff2", "no-cache")]:
+        (folder / name).write_bytes(b"isolated font subset")
+        url = "/static/fonts/misans-web/" + name
+        response = client.get(url)
+        assert response.status_code == 200 and response.headers["cache-control"] == policy
+        validated = client.get(url, headers={"If-None-Match": response.headers["etag"]})
+        assert validated.status_code == 304 and validated.headers["cache-control"] == policy
+    assert client.get("/static/fonts/misans-web/400-cs.0000000000000000.0.woff2").status_code == 404
+
+
 @pytest.mark.parametrize("path", ["/app", "/static/fonts/MiSans-Regular.woff2"])
 @pytest.mark.parametrize("encoding", ["gzip", "identity"])
 def test_conditional_get_precedence_and_headers(static_client, path, encoding):

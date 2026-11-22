@@ -380,7 +380,10 @@ def create_app() -> FastAPI:
             path = _APP_DIR / "web" / "fonts" / name
             if not path.is_file():
                 raise HTTPException(status_code=404)
-            return _static_file(request, path, "font/woff2")
+            response = _static_file(request, path, "font/woff2")
+            if re.fullmatch(r"misans-web/(?:400|500|600)-(?:cs|lt)\.[0-9a-f]{16}\.[0-9]+\.woff2", name):
+                response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+            return response
         if name not in media:
             raise HTTPException(status_code=404)
         return _static_file(request, _APP_DIR / "web" / "fonts" / name, media[name])

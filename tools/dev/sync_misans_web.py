@@ -57,6 +57,10 @@ def main():
     for (weight, url, codes), body in zip(faces, bodies, strict=True):
         name = f'{weight}-{url.rsplit("/", 1)[1]}'
         target = folder / name
+        # Browsers can keep versioned subset URLs across releases. A changed
+        # upstream body needs a new URL before it can be published locally.
+        if target.exists() and target.read_bytes() != body:
+            raise ValueError(f'Changed font bytes at existing subset URL: {name}')
         target.write_bytes(body)
         font = TTFont(target); actual = font.getBestCmap(); original = originals[weight]
         assert codes <= actual.keys()
