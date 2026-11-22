@@ -85,15 +85,34 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarseWidths = useMemo(() => cacheFontMeasurement(() => inventoryWidths(coarse, coarseTotals, scale)),
     [coarse, coarseTotals, scale]);
   const widths = useMemo(() => rows === coarse ? coarseWidths() : inventoryWidths(rows, totals, scale), [rows, totals, scale, coarse, coarseWidths]);
+  // Sort keys belong to this immutable response. Repeated comparisons of the
+  // same amount reuse its exact cent value, including on subsequent sorts.
+  const compareAmounts = useMemo(() => {
+    const parsed = new Map<string, bigint>();
+    function sortValue(text: string) {
+      let value = parsed.get(text);
+      if (value === undefined) {
+        value = cents(text);
+        parsed.set(text, value);
+      }
+      return value;
+    }
+    return (a: string, b: string) => {
+      if (a === b) return 0;
+      if (!a || !b) return a ? 1 : b ? -1 : 0;
+      const left = sortValue(a), right = sortValue(b);
+      return left < right ? -1 : left > right ? 1 : 0;
+    };
+  }, [displayedRows]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),
-      ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
+      ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:compareAmounts} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
       ...(widths[field] ?? contentWidth(['seq','unit'].includes(field)?40:field==='spec'?56:['wbs_name','cbs_name'].includes(field)?60:field==='material_property'?64:76,['seq','unit'].includes(field)?85:300,scale,['material','vendor','warehouse','spec','wbs_name','cbs_name'].includes(field)?1:0)),
       ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier',suppressAutoSize:true}:{}),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
-  ] satisfies ColDef<InventoryRow>[]),[scale, widths]);
+  ] satisfies ColDef<InventoryRow>[]),[scale, widths, compareAmounts]);
   const presentation = useGridPresentation({ table: 'inventory', root, active: active && !blocked, rows, totals: totals as InventoryRow[], columns, measurement:layoutColumns, scope: JSON.stringify([period,[...ids].sort(),direction,onlyAdjusted,deferredFilters,target]), identity: [...ids].sort().join(','), rowId: inventoryRowId, scale });
   useLayoutEffect(() => {
     controls.current = { unavailable: paused || filtering || query.isError || query.isFetching || presentation.state === 'updating', pendingId: pending?.id ?? null };
