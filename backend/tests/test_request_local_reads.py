@@ -73,6 +73,7 @@ def test_ledger_scopes_notice_ownership_and_mechanical_warehouse_independently(r
     from app.mod01_projects.models import Project
     from app.mod03_notice.models import PaymentNotice
     from app.mod06_proc.models import ProcMechManual
+    from sqlalchemy import event
 
     with session_scope() as session:
         left = Project(warehouse_name="月账甲仓", name_full="甲")
@@ -91,7 +92,22 @@ def test_ledger_scopes_notice_ownership_and_mechanical_warehouse_independently(r
         ])
         session.flush()
         for project, settle, paid, mechanical in [(left, "23.51", "1.34", "15.08"), (right, "72.80", "6.75", "5.00")]:
-            ledger = M5.build_ledger(session, project_id=project.id, end_ym="2025-03")
+            statements = []
+            def record(_conn, _cursor, sql, params, _context, _many):
+                statements.append((" ".join(sql.lower().split()), params))
+
+            conn = session.connection()
+            event.listen(conn, "before_cursor_execute", record)
+            try:
+                ledger = M5.build_ledger(session, project_id=project.id, end_ym="2025-03")
+            finally:
+                event.remove(conn, "before_cursor_execute", record)
+            for model, key, expected in [(PaymentNotice, "ownership_id", project.id),
+                                         (ProcMechManual, "warehouse_name", project.warehouse_name)]:
+                reads = [(sql, params) for sql, params in statements if f" from {model.__tablename__} " in sql]
+                assert len(reads) == 1
+                sql, params = reads[0]
+                assert f"where {model.__tablename__}.{key} =" in sql and expected in params.values()
             material, machine = ledger["sides"]
             march = next(row for row in material["rows"] if row["month"] == "2025-03")
             assert (march["other_expense"], march["payment"]) == (settle, paid)
