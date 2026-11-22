@@ -1,4 +1,5 @@
 import { DialogPresence } from './workspace-motion';
+import { useGridSearch } from './grid-search';
 import Input from 'antd/es/input';
 import App from 'antd/es/app';
 import Select from 'antd/es/select';
@@ -91,21 +92,9 @@ function scopeHit(r: NoticeRow, f: Filters): boolean {
 export function NoticesPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
   const { message } = App.useApp();
   const client = useQueryClient(), api = useRef<GridApi<NoticeRow> | null>(null), gridRoot = useRef<HTMLDivElement>(null), pageRoot = useRef<HTMLDivElement>(null), lock = useRef(false), mounted = useRef(true);
-  const [filters, setFilters] = useState(defaults), [search, setAppliedSearch] = useState(''), [picked, setPicked] = useState<Set<number>>(() => new Set());
+  const [filters, setFilters] = useState(defaults), [picked, setPicked] = useState<Set<number>>(() => new Set());
   const [busy, setBusy] = useState(false), [warning, setWarning] = useState(''), [error, setError] = useState(''), [fetchOpen, setFetchOpen] = useState(false), [exportOpen, setExportOpen] = useState(false), [pasteOpen,setPasteOpen] = useState(false), [pasteTop,setPasteTop] = useState<Set<number>>(() => new Set()), [pasteScope,setPasteScope] = useState<number[] | null>(null);
-  const [searchInput, setSearchInput] = useState(''), [composing, setComposing] = useState(false);
-  const searchBusy = searchInput !== search;
-  useEffect(() => {
-    if (!active || blocked || composing || !searchBusy) return;
-    // Keep the pending text across page switches. Only the visible list needs
-    // to publish a new result after the current burst of input has settled.
-    const timer = window.setTimeout(() => setAppliedSearch(searchInput), 100);
-    return () => window.clearTimeout(timer);
-  }, [active, blocked, composing, searchBusy, searchInput]);
-  function setSearch(value: string) {
-    setSearchInput(value);
-    setAppliedSearch(value);
-  }
+  const { applied: search, pending: searchBusy, input: searchInput, reset: setSearch } = useGridSearch(active && !blocked);
   function announce(text: string, needsAttention = false) {
     if (needsAttention) { message.destroy('notice-success'); setWarning(text); }
     else { void message.success({key: 'notice-success', content: text, duration: 3}); }
@@ -388,7 +377,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>
       <label>分类<Select aria-label="通知书分类" disabled={false} value={filters.category} onChange={value=>setFilters(f=>({...f,category:value, link: ''}))} options={[{value:'',label:'全部'},...Object.entries(categories).map(([value,label])=>({value,label})),{value:'exclude',label:'剔除'}]}/></label><label>合同关联（集采）<Select aria-label="合同关联" disabled={!['','jc'].includes(filters.category)} value={filters.link} onChange={value=>setFilters(f=>({...f,link:value}))} options={[{value:'',label:'全部'},{value:'no',label:'未关联'},{value:'yes',label:'已关联'}]}/></label>
-      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="submit" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" value={searchInput} onChange={e => setSearchInput(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setSearchInput(e.currentTarget.value); }} /></label><Button htmlType="submit" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
+      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="submit" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label><Button htmlType="submit" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
       <Button htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button></div>
       <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setPicked(new Set(ids)); setPasteTop(new Set(ids)); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { setPicked(new Set()); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}

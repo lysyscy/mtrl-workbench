@@ -1,4 +1,5 @@
 import { DialogPresence } from './workspace-motion';
+import { useGridSearch } from './grid-search';
 import { AnimatePresence } from 'motion/react';
 import Button from 'antd/es/button';
 import App from 'antd/es/app';
@@ -49,12 +50,12 @@ function contractAmountWidths(columns: ContractList['columns'], rows: ContractRo
   }));
 }
 
-type ContractSelection={shown:ContractRow[];picked:Set<number>;chooseAll:(checked:boolean)=>void};
+type ContractSelection={shown:ContractRow[];picked:Set<number>;pending:boolean;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
 // The header observes selection and filter results through context, so ticking a row never rebuilds the column definitions.
 function ContractSelectionHeader(){
   const current=useContext(ContractSelectionContext);
-  return <Checkbox aria-label="选择当前合同" checked={current.shown.length>0&&current.shown.every(row=>current.picked.has(row.id))} onChange={e=>current.chooseAll(e.target.checked)}/>;
+  return <Checkbox aria-label="选择当前合同" disabled={current.pending} checked={current.shown.length>0&&current.shown.every(row=>current.picked.has(row.id))} onChange={e=>current.chooseAll(e.target.checked)}/>;
 }
 const approvalOptions = ['', ...contractApprovalStatuses, '无状态'].map(value => ({ value, label: value || '全部' }));
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:'',approval:''});
@@ -96,7 +97,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const { message }=App.useApp();
   const announce=(text:string)=>{void message.success({key:'contract-success',content:text,duration:3});};
   const client=useQueryClient(),grid=useRef<GridApi<ContractRow>|null>(null),root=useRef<HTMLDivElement>(null),lock=useRef(false),pendingFocus=useRef(0);
-  const [filters,setFilters]=useState(initialFilters),[search,setSearch]=useState(''),[picked,setPicked]=useState<Set<number>>(()=>new Set()),[trade,setTrade]=useState(false);
+  const { applied: search, pending: searchBusy, input: searchInput, reset: setSearch } = useGridSearch(active && !blocked);
+  const [filters,setFilters]=useState(initialFilters),[picked,setPicked]=useState<Set<number>>(()=>new Set()),[trade,setTrade]=useState(false);
   const editorSequence=useRef(0);
   const [editors,setEditors]=useState<Record<string,{row:ContractRow|null;materialOnly:boolean;presenceId:number}>>({}),[editorId,setEditorId]=useState<string|null>(null),[tool,setTool]=useState<'fetch'|'party'|'receipt'|null>(null);
   function openEditor(row:ContractRow|null,materialOnly=Boolean(row)){const key=row?`${row.id}:${materialOnly?'material':'full'}`:'new',presenceId=++editorSequence.current;setEditors(old=>old[key]?old:{...old,[key]:{row,materialOnly,presenceId}});setEditorId(key);}
@@ -243,7 +245,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['select']});},[active,picked,shown]);
   const state=useRef({unavailable,actionDisabled,picked,shown,tag,advance});state.current={unavailable,actionDisabled,picked,shown,tag,advance};
   // The select header reads the live selection through context, so ticking a row no longer rebuilds every column.
-  const selection=useMemo<ContractSelection>(()=>({shown,picked,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked]);
+  const selection=useMemo<ContractSelection>(()=>({shown,picked,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked,searchBusy]);
   const scale=Number(me?.ui_scale_css??1);
   const widths=useGridWidths('contracts',root,scale,active&&!blocked);
   const completeWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no','approve_status','payment_term','payment_method','tag','arch','arch_no','ret_date'].includes(c.key)).map(c=>{
@@ -311,17 +313,17 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const placeheld=readState==='idle'||readState==='reading'||readState==='error';
   const pageState=useRef({blocked,active,editorId});pageState.current={blocked,active,editorId};
   function created(id:number){if(pageState.current.blocked||!pageState.current.active||pageState.current.editorId!=='new')return;setFilters({...initialFilters(),tag:''});setSearch('');pendingFocus.current=id;const row=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===id);closeEditor('new');if(row){grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');if(contractHistoryDate(row.remark))setSubtable({row,kind:'supplier'});}}
-  return <section className="contracts-page" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button disabled={blocked||!active} onClick={()=>setTool('receipt')}>最近抓取结果</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>+ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,search,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
-    <div className="contract-selection"><span>已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
+  return <section className="contracts-page" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button disabled={blocked||!active} onClick={()=>setTool('receipt')}>最近抓取结果</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>+ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,searchInput.value,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} searchBusy={searchBusy} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
+    <div className="contract-selection"><span>已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||searchBusy||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
     <div className="contract-filters">
       <label>项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label>
       <label>纳入状态<Select aria-label="纳入状态" value={filters.tag} options={['',...(query.data?.tags??[])].map(value=>({value,label:value||'全部'}))} onChange={tag=>setFilters(old=>({...old,tag}))}/></label>
       <label>审批状态<Select aria-label="审批状态" value={filters.approval} options={approvalOptions} onChange={approval=>setFilters(old=>({...old,approval}))}/></label>
       <label>存档情况<Select aria-label="合同存档筛选" value={filters.arch} options={['','未存档','资产处','已存档'].map(value=>({value,label:value||'全部'}))} onChange={arch=>setFilters(old=>({...old,arch}))}/></label>
-      <label className="contract-search-field">搜索<Input aria-label="搜索" placeholder="搜索各列内容" value={search} allowClear onChange={e=>setSearch(e.target.value)}/></label>
+      <label className="contract-search-field">搜索<Input aria-label="搜索" placeholder="搜索各列内容" allowClear {...searchInput}/></label>
       <Button disabled={blocked||!active} onClick={()=>setTool('party')}>甲方单位分类</Button>
       <Button onClick={()=>{setFilters(initialFilters());setSearch('');}}>重置</Button>
-      <span className="contract-filter-count">已勾选 <b>{selected.length}</b> 行 · {placeheld ? (readState==='reading'?'正在读取…':'尚未读取') : <>显示 <b>{shown.length}</b> 条</>}</span>
+      <span className="contract-filter-count">已勾选 <b>{selected.length}</b> 行 · {placeheld ? (readState==='reading'?'正在读取…':'尚未读取') : searchBusy ? '正在筛选…' : <>显示 <b>{shown.length}</b> 条</>}</span>
     </div>
     {error&&<p className="notice" role="alert">{error}<Button onClick={()=>void reread()}>重读核对</Button></p>}
     <ReadStatusLane phase={readState} announce="正在读取集采合同…" className="contract-read-status">
@@ -329,7 +331,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       {projects.isError&&<ReadFailure read={projects} label="项目清单"/>}
     </ReadStatusLane>
     {editors.new&&<ContractEditor key="new" inline subtables={subtables} contracts={rows} created={created} row={null} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!=='new'} close={()=>closeEditor('new')} refresh={refresh} announce={announce}/>}
-    {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
+    {placeheld?<div className="contracts-grid contract-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState==='error'}/></div>:<ContractSelectionContext.Provider value={selection}><GridWidthContext.Provider value={widths}><div className="contracts-grid grid-single-line" aria-busy={searchBusy} ref={root}><AgGridReact<ContractRow> theme={gridTheme} rowBuffer={2} rowData={shown} columnDefs={widthColumns} defaultColDef={defaultColumn} autoSizeStrategy={widths.strategy} getRowId={p=>String(p.data.id)} pinnedBottomRowData={totalRow} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={false} suppressScrollOnNewData suppressColumnVirtualisation onSortChanged={e=>setSort(JSON.stringify(e.api.getColumnState().filter(c=>c.sort).map(c=>[c.colId,c.sort,c.sortIndex])))} onGridReady={e=>{grid.current=e.api;widths.attach(e.api);}} onRowDataUpdated={e=>{if(pendingFocus.current){const id=pendingFocus.current;pendingFocus.current=0;e.api.ensureNodeVisible(node=>node.data?.id===id,'middle');const target=e.api.getRowNode(String(id));if(target?.rowIndex!=null)e.api.setFocusedCell(target.rowIndex,'material');}}} overlayNoRowsTemplate="没有符合条件的合同，可调整筛选。"/></div></GridWidthContext.Provider></ContractSelectionContext.Provider>}
     <AnimatePresence initial={false}>{Object.entries(editors).filter(([key])=>key!=='new').map(([key,editor])=><ContractEditor key={`${key}:${editor.presenceId}`} materialOnly={editor.materialOnly} nextArchiveNo={editor.row ? nextArchiveNo(editor.row) : '1'} subtables={subtables} contracts={rows} created={created} row={editor.row} me={me} projects={projectRows} methods={query.data?.payment_methods??[]} blocked={blocked||!active||editorId!==key} close={()=>closeEditor(key)} refresh={refresh} announce={announce}/>)}</AnimatePresence>
     <DialogPresence>{subtable&&<ContractSubtableDialog row={subtable.row} kind={subtable.kind} contracts={rows} workspace={subtables} paused={blocked||!active} writable={!unavailable} close={()=>setSubtable(null)}/>}</DialogPresence>
     <DialogPresence>{remarkEditor&&<ContractRemarkEditor key={remarkEditor.row.id} row={remarkEditor.row} initial={remarkEditor.initial} busy={busy} disabled={blocked||!me||uncertain||query.isPending||query.isError} paused={blocked||!active} error={error} save={async value=>{changeInline(remarkEditor.row.id,'remark',value);return saveField(remarkEditor.row,'remark',value,true);}} close={()=>setRemarkEditor(null)}/>}</DialogPresence>
