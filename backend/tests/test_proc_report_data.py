@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import nullcontext
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from types import SimpleNamespace
@@ -40,6 +42,34 @@ def test_matrix_pair_preserves_independent_months_and_adjustment_values(changed)
         assert pair[key] == D.build_matrix(**sources, adjusted=key == "adjusted")
     pair["adjusted"][0]["in_主辅材"] = Decimal("0")
     assert pair["raw"][0]["in_主辅材"] == Decimal("5.25")
+
+
+def test_matrix_http_keeps_default_json_representation_and_read_error(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.encoders import jsonable_encoder
+    from fastapi.responses import JSONResponse
+    from fastapi.testclient import TestClient
+    from app.mod06_proc import router as routes
+
+    data = {"matrices": {"仓": [{"amounts": [Decimal("314"), Decimal("12.30"), Decimal("-0.00"),
+                                        Decimal("1E+2"), None], "day": date(2026, 11, 1)}]}}
+    monkeypatch.setattr(routes, "session_scope", nullcontext)
+    monkeypatch.setattr(M6, "build_matrices", lambda session: data)
+    app = FastAPI()
+    app.include_router(routes.router)
+    with TestClient(app) as client:
+        result = client.get("/api/m06/matrix")
+        assert result.status_code == 200 and result.headers["content-type"] == "application/json"
+        assert result.content == JSONResponse(jsonable_encoder({"ok": True, **data})).body
+
+        def fail(session):
+            raise MustReportError("合成读取失败")
+
+        monkeypatch.setattr(M6, "build_matrices", fail)
+        result = client.get("/api/m06/matrix")
+        assert result.status_code == 200 and result.json()["ok"] is False
+        assert result.json()["message"].startswith("读取过程资料失败")
+        assert "合成读取失败" not in result.json()["message"]
 
 
 @pytest.fixture

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal, DecimalException
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
+from fastapi.encoders import decimal_encoder, jsonable_encoder
 from pydantic import BaseModel
 
 from app.core.db import session_scope
@@ -66,6 +68,12 @@ def api_proc_export(request: Request):
                         headers={"X-Export-Filename": quote(path.name)})
 
 
+def _matrix_json_value(value: Any) -> Any:
+    # Most non-native matrix values are Decimal amounts. Use the same FastAPI
+    # converter as the default response, including its integer/float rule.
+    return decimal_encoder(value) if isinstance(value, Decimal) else jsonable_encoder(value)
+
+
 @router.get("/api/m06/matrix")
 def api_proc_matrix():
     """过程资料所有项目、核算月与汇总的唯一读取出口。"""
@@ -74,9 +82,14 @@ def api_proc_matrix():
 
     try:
         with session_scope() as s:
-            return {"ok": True, **build_matrices(s)}
+            data = {"ok": True, **build_matrices(s)}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "message": human_reason("读取过程资料失败", exc)}
+
+    # The matrix already has JSON keys and containers. Keep FastAPI's encoding
+    # for Decimal leaves without copying every project, month and cell first.
+    payload = json.dumps(data, default=_matrix_json_value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    return Response(payload, media_type="application/json")
 
 
 # ⚠️ 2026-09-18（`§19` 批 2）：**PRG 版机械手录已删**（`POST /m06/mech` ＋ `mech_save`）——
