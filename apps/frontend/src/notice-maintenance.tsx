@@ -2,7 +2,7 @@ import { BusinessDate } from './time-picker';
 import { ProjectPicker } from './ledger-controls';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { useRef, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
 import type { Project } from './api';
@@ -14,7 +14,9 @@ export type Draft = { row_id: string; doc_date: string; bill_no: string; bill_na
 export function manualDraft(row?: NoticeRow): Draft {
   return { row_id: row ? String(row.notice_id) : '', doc_date: row?.doc_date ?? `${currentMonth()}-01`, bill_no: row?.bill_no ?? '', bill_name: row?.bill_name ?? '', biz_type: row?.biz_type ?? '', payee: row?.payee ?? '', category: row?.category ?? 'material', amount_approved: row?.amount_approved ?? '0', stat_settle: row?.stat_settle ?? '0', stat_paid: row?.stat_paid ?? '0', ownership_id: row?.ownership_id ? String(row.ownership_id) : '', approve_status: row?.approve_status ?? '已批' };
 }
-export function DraftField({ draft, field, label, disabled, projects }: { draft: Draft; field: keyof Draft; label: string; disabled: boolean; projects: Project[] }) {
+export const NoticeDraftDisabled = createContext(false);
+export function DraftField({ draft, field, label, projects }: { draft: Draft; field: keyof Draft; label: string; projects: Project[] }) {
+  const disabled = useContext(NoticeDraftDisabled);
   const [value, setValue] = useState(draft[field]);
   const choose = (next: string) => { draft[field] = next; setValue(next); };
   if (field === 'ownership_id') return <ProjectPicker projects={projects.filter(p => p.project_type !== 'shell')} selected={value ? [Number(value)] : []} pick={ids => choose(String(ids[0] ?? ''))} label={`草稿${label}`} disabled={disabled} />;

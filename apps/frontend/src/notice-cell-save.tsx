@@ -14,6 +14,15 @@ interface Cells {
   cancel: (key: string) => void;
 }
 export const NoticeCells = createContext<Cells | null>(null);
+export const PublishedNotices = createContext<ReadonlyMap<number, NoticeRow>>(new Map());
+
+// A reread can change the overpayment flag or an editor's limit without
+// changing this column's value. Keep the mounted cell in sync, including
+// while a different row has an active input.
+export function PaidAmountCell({ row }: { row: NoticeRow }) {
+  const current = useContext(PublishedNotices).get(row.notice_id) ?? row;
+  return <span>{money(current.amount_paid)}{current.is_overpaid && <span className="notice-tag rule">超付</span>}</span>;
+}
 const keyOf = (id: number, field: Field) => `${id}:${field}`;
 
 export function useNoticeCellSaves({ rows, enabled, canWrite, read }: {
@@ -71,7 +80,8 @@ export function useNoticeCellSaves({ rows, enabled, canWrite, read }: {
   return { ...saves, cells, confirm, readback };
 }
 
-export function StatCell({ row, field }: { row: NoticeRow; field: Field }) {
+export function StatCell({ row: initialRow, field }: { row: NoticeRow; field: Field }) {
+  const row = useContext(PublishedNotices).get(initialRow.notice_id) ?? initialRow;
   const cells = useContext(NoticeCells)!, key = keyOf(row.notice_id, field), draft = cells.drafts[key];
   return <input className={row.edited_fields.includes(field) ? 'notice-edited' : ''}
     aria-label={`${row.bill_no}${field === 'amount_approved' ? '审批金额' : field === 'stat_settle' ? '统计结算金额' : '统计付款金额'}`}
