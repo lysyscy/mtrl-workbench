@@ -12,11 +12,12 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
@@ -553,7 +554,8 @@ def build_stats(
     selected = dom.bucket_of(bucket + '-01' if len(bucket) == 7 else bucket, gran) if bucket else _current_bucket(gran, today)
 
     notices = notice_debt_views(s)
-    rows = payment_stat_views(notices, repo.list_flows(s))
+    rows = payment_stat_views(notices, repo.stat_flow_rows(s))
+    counts = Counter(dom.bucket_of(row.pay_date, gran) for row in rows)
     index = project_index(s)                      # ⚠️ 循环外取一次（别在循环里回查 = 伪 N+1）
     names = {pid: project_label(p) for pid, p in index.items()}
     grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets) | {selected})
@@ -586,18 +588,17 @@ def build_stats(
                          for k, r in zip(sorted(grid, key=lambda k: str(k)), left)
                          if grid[k].get(selected, 0)],
             "total": f"{sum((grid[k].get(selected, 0) for k in grid), Decimal('0')):.2f}",
-            "count": sum(1 for r in rows if dom.bucket_of(r.pay_date, gran) == selected),
+            "count": counts[selected],
         },
         "total": f"{sum((r.amount for r in rows), Decimal('0')):.2f}",
-        "counts": [sum(1 for r in rows if dom.bucket_of(r.pay_date, gran) == b)
-                   for b in buckets],
+        "counts": [counts[b] for b in buckets],
         "layout": dom.LAYOUT,
         "project_id": project_id,
-        "project_options": project_options(s),
+        "project_options": project_options(s, index),
     }
 
 
-def payment_stat_views(notices: list[NoticeDebtView], flows: list[PaymentFlow]) -> list[dom.PaymentStatView]:
+def payment_stat_views(notices: list[NoticeDebtView], flows: list[PaymentFlow] | list[Row]) -> list[dom.PaymentStatView]:
     """按通知书归属/剔除关联有效流水；欠款人工值不参与付款统计。"""
     included = {n.notice_id: n for n in notices if not n.excluded}
     rows = []

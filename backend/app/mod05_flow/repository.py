@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.core.identity import current_operator
@@ -33,9 +33,15 @@ from app.mod05_flow.models import (
 
 
 def list_flows(s: Session) -> list[PaymentFlow]:
-    """全部流水（**按付款日期倒序**，同日按 id 倒序）—— 列表与统计共用同一批数据。"""
+    """全部流水（**按付款日期倒序**，同日按 id 倒序）—— 供完整流水消费者读取。"""
     stmt = select(PaymentFlow).order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())
     return list(s.execute(stmt).scalars().all())
+
+
+def stat_flow_rows(s: Session) -> list[Row]:
+    """付款统计只消费关联、状态、实际日期与金额，保持流水顺序。"""
+    stmt = select(PaymentFlow.notice_id, PaymentFlow.status, PaymentFlow.pay_date, PaymentFlow.amount)
+    return list(s.execute(stmt.order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())))
 
 
 def flows_of_notices(s: Session, notice_ids: list[int], *, descending: bool = False) -> list[PaymentFlow]:
