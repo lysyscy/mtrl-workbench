@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Tooltip from 'antd/es/tooltip';
 import { fullTextWidth } from './grid';
@@ -18,13 +18,32 @@ function clipped(root: HTMLElement | null) {
 }
 
 export function TextPreview({text, children}: {text: string; children: ReactNode}) {
-  const root = useRef<HTMLSpanElement>(null), [open, setOpen] = useState(false);
-  return <Tooltip title={<span className="grid-full-text">{text}</span>} open={open}
-    onOpenChange={next => setOpen(next && Boolean(text) && clipped(root.current))}
-    mouseEnterDelay={0.3} mouseLeaveDelay={0.15} destroyOnHidden
-    styles={{root: {maxWidth: 'min(40rem, calc(100vw - 24px))', pointerEvents: 'auto'}, container: {maxHeight: 'min(32rem, calc(100dvh - 32px))', overflowY: 'auto'}}}>
-    <span ref={root} className="grid-text-preview">{children}</span>
-  </Tooltip>;
+  const root = useRef<HTMLSpanElement>(null), timer = useRef(0), tooltipId = useId();
+  const [preview, setPreview] = useState<'unused' | 'open' | 'closed'>('unused');
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  function enter() {
+    window.clearTimeout(timer.current);
+    if (preview === 'open' || !text) return;
+    timer.current = window.setTimeout(() => {
+      if (clipped(root.current)) setPreview('open');
+    }, 300);
+  }
+  function leave() {
+    window.clearTimeout(timer.current);
+    if (preview === 'open') timer.current = window.setTimeout(() => setPreview('closed'), 150);
+  }
+  // The editor stays mounted. A cell pays for its popup and positioning only
+  // when the user actually hovers clipped text.
+  return <span ref={root} className="grid-text-preview" onMouseEnter={enter} onMouseLeave={leave}
+    aria-describedby={preview === 'open' ? tooltipId : undefined}>
+    {children}
+    {preview !== 'unused' && <Tooltip id={tooltipId} title={<span className="grid-full-text" onMouseDown={event => event.stopPropagation()}
+      onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>{text}</span>}
+      open={preview === 'open' && Boolean(text)} trigger={[]} onOpenChange={next => { if (!next) setPreview('closed'); }} destroyOnHidden
+      styles={{root: {maxWidth: 'min(40rem, calc(100vw - 24px))', pointerEvents: 'auto'}, container: {maxHeight: 'min(32rem, calc(100dvh - 32px))', overflowY: 'auto'}}}>
+      <span className="grid-text-anchor" aria-hidden="true" />
+    </Tooltip>}
+  </span>;
 }
 
 export function EllipsisText({text, fullText = text}: {text: string; fullText?: string}) {
