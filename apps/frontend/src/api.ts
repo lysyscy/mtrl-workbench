@@ -117,8 +117,12 @@ export function readProjects(value: unknown): Project[] {
   });
 }
 
+const amountPattern = /^(-?)(\d+)(?:\.(\d{1,2}))?$/;
+export function assertAmountText(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !amountPattern.test(value)) throw new ApiError('金额读取不完整，请重试。');
+}
 export function cents(value: string): bigint {
-  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+  const match = amountPattern.exec(value);
   if (!match) throw new ApiError('金额读取不完整，请重试。');
   return (match[1] ? -1n : 1n) * (BigInt(match[2]!) * 100n + BigInt((match[3] ?? '').padEnd(2, '0')));
 }

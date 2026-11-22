@@ -26,7 +26,12 @@ export function timeRange(value: string): TimeRange {
   }
   throw new RangeError('时间范围无效');
 }
+// A table evaluates the same period for every row. Keep its closed interval private.
+let lastPeriod: { value: string; range: TimeRange } | undefined;
 export function timeMatches(value: string, date: string) {
-  const { dateFrom, dateTo } = timeRange(value);
-  return !dateFrom || (date.slice(0, 10) >= dateFrom && date.slice(0, 10) <= dateTo);
+  if (!lastPeriod || lastPeriod.value !== value) lastPeriod = { value, range: timeRange(value) };
+  const { dateFrom, dateTo } = lastPeriod.range;
+  if (!dateFrom) return true;
+  const day = date.slice(0, 10);
+  return day >= dateFrom && day <= dateTo;
 }

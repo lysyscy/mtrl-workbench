@@ -26,11 +26,20 @@ export function toggleValueFilter(model: ValueFilterModel | null, values: readon
   for (const value of values) { if (checked) selected.add(value); else selected.delete(value); }
   return selected.size ? { values: [...selected] } : null;
 }
+const naturalOrder = new Intl.Collator('zh', { numeric: true });
+function compareText(left: string, right: string): number {
+  if (!left || !right) return Number(!left) - Number(!right);
+  return naturalOrder.compare(left, right);
+}
 export function compareFilterValues(a: FilterValue, b: FilterValue, kind: ValueFilterKind): number {
-  const left = valueFilterKey(a, kind), right = valueFilterKey(b, kind);
-  if (kind === 'number' && left.startsWith('n:') && right.startsWith('n:')) return new Decimal(left.slice(2)).comparedTo(right.slice(2));
-  if (left === 'blank:' || right === 'blank:') return Number(left === 'blank:') - Number(right === 'blank:');
-  return String(a ?? '').localeCompare(String(b ?? ''), 'zh', { numeric: true });
+  const left = String(a ?? ''), right = String(b ?? '');
+  if (kind === 'number' && left && right) {
+    try {
+      const x = new Decimal(left), y = new Decimal(right);
+      if (x.isFinite() && y.isFinite()) return x.comparedTo(y);
+    } catch { /* Unexpected source text uses the same natural order as text columns. */ }
+  }
+  return compareText(left, right);
 }
 export function valueFilterCandidates(values: readonly FilterValue[], kind: ValueFilterKind, format?: (value: FilterValue) => string): ValueCandidate[] {
   const candidates = new Map<string, ValueCandidate>();
@@ -39,7 +48,12 @@ export function valueFilterCandidates(values: readonly FilterValue[], kind: Valu
     if (existing) existing.count++;
     else candidates.set(key, { key, count: 1, label: key === 'blank:' ? '（空白）' : format ? format(value) : key.startsWith('n:') ? key.slice(2) : String(value) });
   }
-  return [...candidates.values()].sort((a, b) => compareFilterValues(a.key.slice(a.key.indexOf(':') + 1), b.key.slice(b.key.indexOf(':') + 1), kind));
+  const ordered = [...candidates.values()].map(candidate => {
+    const text = candidate.key.slice(candidate.key.indexOf(':') + 1);
+    return { candidate, text, number: candidate.key.startsWith('n:') ? new Decimal(text) : null };
+  });
+  ordered.sort((a, b) => a.number && b.number ? a.number.comparedTo(b.number) : compareText(a.text, b.text));
+  return ordered.map(item => item.candidate);
 }
 export function valueFilterTree(candidates: readonly ValueCandidate[], kind: ValueFilterKind): ValueFilterNode[] {
   const roots: ValueFilterNode[] = [], years = new Map<string, ValueFilterNode>(), months = new Map<string, ValueFilterNode>();

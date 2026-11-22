@@ -1,4 +1,4 @@
-import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
+import { ApiError, assertAmountText, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 import { timeMatches } from './business-time';
 
 export const fields = [
@@ -23,7 +23,7 @@ export const filterOn = (f:ColumnFilter) => Boolean(f.q || f.min || f.max || f.v
 const invalid = () => new ApiError('库存读取不完整，请重读。');
 function numeric(value:unknown):string {
   if (typeof value !== 'number' && typeof value !== 'string') throw invalid();
-  const text = String(value); cents(text); return text;
+  const text = String(value); assertAmountText(text); return text;
 }
 function readValues(value:unknown,partial=false):Partial<InventoryValues> {
   if(!record(value)) throw invalid();
@@ -68,7 +68,7 @@ export function filterRows(rows:InventoryRow[], filters:Filters) {
   const active = fields.flatMap(([key,,type]) => {
     const f = filters[key];
     return f && filterOn(f) ? [{key,type,q:f.q.toLocaleLowerCase(),min:f.min,max:f.max,
-      lower:Number(f.min.replace(/,/g,'')),upper:Number(f.max.replace(/,/g,'')),values:f.values}] : [];
+      lower:Number(f.min.replace(/,/g,'')),upper:Number(f.max.replace(/,/g,'')),values:new Set(f.values)}] : [];
   });
   if (!active.length) return rows;
   return rows.filter(r => active.every(f => {
@@ -78,7 +78,7 @@ export function filterRows(rows:InventoryRow[], filters:Filters) {
       if (f.min && (!Number.isFinite(f.lower) || Number(raw) < f.lower)) return false;
       if (f.max && (!Number.isFinite(f.upper) || Number(raw) > f.upper)) return false;
     } else if (f.q && !raw.toLocaleLowerCase().includes(f.q)) return false;
-    return !f.values.length || f.values.includes(raw);
+    return !f.values.size || f.values.has(raw);
   }));
 }
 
