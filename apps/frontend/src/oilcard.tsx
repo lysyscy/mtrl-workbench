@@ -23,8 +23,7 @@ import { OilReconciliationSheet } from './oilcard-reconciliation';
 import { OilLinkageSheet } from './oilcard-linkage';
 import { OilTotalExport } from './oilcard-export';
 import { FirstReadRegion, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
-import { motion } from 'motion/react';
-import { DialogPresence, WorkspacePanel, workspaceSpring } from './workspace-motion';
+import { DialogPresence, WorkspaceMarker, WorkspacePanel } from './workspace-motion';
 
 type ArchiveKind = 'card' | 'account';
 type Field = 'card_no' | 'kind' | 'remark' | 'name' | 'project_id' | 'card_id' | 'status';
@@ -288,7 +287,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const renderRemark = useCallback((kind: ArchiveKind, row: OilCard | OilAccount) => <ArchiveEditor kind={kind} row={row} field="remark" />, []);
   function chooseTab(value: typeof tab) { if (value === 'ledger') setLedgerVisited(true); if (value === 'linkage') setLinkageVisited(true); setTab(value); }
   return <section className={`oilcard-page${tab === 'ledger' || tab === 'archives' ? ' oilcard-page-bounded' : ''}`} aria-label="油卡管理">
-    <div data-page-chrome className="oilcard-workspace-bar"><div className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'archives', label: '账户与油卡' }] as const).map(item => <button type="button" className="oilcard-tab" key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} onClick={() => chooseTab(item.value)}>{item.label}{tab === item.value && <motion.span className="oilcard-tab-marker" aria-hidden="true" layoutId="oilcard-workspace-tab" transition={workspaceSpring} />}</button>)}</div><OilTotalExport disabled={disabled || busy || ledgerLocked || linkageLocked} active={active && !blocked} /></div>
+    <div data-page-chrome className="oilcard-workspace-bar"><div className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'archives', label: '账户与油卡' }] as const).map(item => <button type="button" className="oilcard-tab" key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} onClick={() => chooseTab(item.value)}>{item.label}{tab === item.value && <WorkspaceMarker className="oilcard-tab-marker" layoutId="oilcard-workspace-tab" />}</button>)}</div><OilTotalExport disabled={disabled || busy || ledgerLocked || linkageLocked} active={active && !blocked} /></div>
     {!me && <p className="state">登录后可维护油卡档案。</p>}
     {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值或收票结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对保存结果</Button></p>}
     {linkageUncertain && tab !== 'linkage' && <p className="notice" role="alert">用油自定义额保存结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('linkage')}>核对保存结果</Button></p>}

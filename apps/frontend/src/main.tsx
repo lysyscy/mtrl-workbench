@@ -17,8 +17,7 @@ import type { ComponentType } from 'react';
 import { GridWidthOwner } from './grid-width-owner';
 import { resetBrowserRelay } from './i8-browser-relay';
 import { I8SessionProvider } from './i8-session';
-import { motion } from 'motion/react';
-import { DialogPresence, MotionAccess, workspaceSpring } from './workspace-motion';
+import { DialogPresence, MotionAccess, WorkspaceMarker } from './workspace-motion';
 
 type WorkspacePageProps = {
   me: Identity | null; blocked: boolean; active: boolean;
@@ -118,7 +117,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
     <div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
-      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{({ isActive }) => <>{isActive && <motion.span aria-hidden="true" className="navigation-marker" layoutId="workspace-navigation" transition={workspaceSpring} />}<span className="navigation-label">{entry.title}</span></>}</NavLink>)}</div>)}
+      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{({ isActive }) => <>{isActive && <WorkspaceMarker className="navigation-marker" layoutId="workspace-navigation" />}<span className="navigation-label">{entry.title}</span></>}</NavLink>)}</div>)}
     </nav></aside>
     <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section aria-labelledby="not-found-title"><h2 id="not-found-title">没有找到这个页面</h2><NavLink to="/">返回首页</NavLink></section>} /></Routes>

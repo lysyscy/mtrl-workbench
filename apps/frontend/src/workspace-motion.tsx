@@ -7,6 +7,14 @@ export const ReducedMotion = createContext(false);
 export const MotionAccess = createContext(true);
 export const useWorkspaceReducedMotion = () => useContext(ReducedMotion);
 export const workspaceSpring = { type: 'spring', stiffness: 420, damping: 38, mass: 1 } as const;
+// Reduced motion places the indicator directly in its new selection. Even a
+// zero-duration shared layout can project the previous box for one frame.
+export function WorkspaceMarker({ className, layoutId }: { className: string; layoutId: string }) {
+  const reduced = useWorkspaceReducedMotion();
+  return reduced ? <span aria-hidden="true" className={className} />
+    : <motion.span aria-hidden="true" className={className} layoutId={layoutId} transition={workspaceSpring} />;
+}
+
 export function DialogPresence({ children }: { children: ReactNode }) {
   const shown = isValidElement(children);
   const type = shown ? children.type : null, key = shown ? children.key : null;
