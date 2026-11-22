@@ -66,7 +66,9 @@ export function numberColumnWidth(values: readonly unknown[], scale = Number(get
 export function fullTextWidth(values:readonly string[],scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1) {
   const css=getComputedStyle(document.documentElement),context=document.createElement('canvas').getContext('2d')!;
   context.font=`500 ${(Number(css.getPropertyValue('--font-ui-size'))||13.5)*scale}px ${css.fontFamily}`;
-  const min=Math.ceil(Math.max(0,...[...new Set(values)].map(value=>context.measureText(value).width))/scale+12);
+  let widest = 0;
+  for (const value of new Set(values)) widest = Math.max(widest, context.measureText(value).width);
+  const min = Math.ceil(widest / scale + 12);
   return contentWidth(min,Math.max(min,300),scale);
 }
 export function textWidth(min: number, max: number, scale = 1, flex = 1) {

@@ -29,6 +29,24 @@ const inventoryRowId = (row: InventoryRow) => String(row.id);
 const layoutColumns = fields.map(([id,,type]) => ({ id, text: (row: InventoryRow) => type === 'num' ? row[id] ? money(row[id]) : '' : row[id] ?? '', wrap: type !== 'num' && !['doc_no','doc_date','biz_type'].includes(id), className: 'inventory-cell-text' }));
 const totalsOf = (rows: InventoryRow[]) => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [];
 
+function inventoryWidths(rows: InventoryRow[], totals: ReturnType<typeof totalsOf>, scale: number) {
+  const widths: Partial<Record<Field, ReturnType<typeof contentWidth>>> = {};
+  const withTotals = [...rows, ...totals];
+  for (const [field, , type] of fields) {
+    if (type === 'num') {
+      const values = new Set<string>();
+      for (const row of withTotals) {
+        const value = row[field as keyof typeof row];
+        if (value != null && value !== '') values.add(String(value));
+      }
+      widths[field] = numberColumnWidth([...values].map(value => money(value)), scale);
+    } else if (field === 'doc_no' || field === 'doc_date' || field === 'biz_type') {
+      widths[field] = fullTextWidth(rows.map(row => row[field]), scale);
+    }
+  }
+  return widths;
+}
+
 export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
   const location = useLocation(), navigate = useNavigate();
   const rawTarget = active ? new URLSearchParams(location.search).get('row') : null;
@@ -63,20 +81,29 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const controls = useRef({ unavailable: false, pendingId: null as number | null });
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
-  const amountWidths = useMemo(() => Object.fromEntries(fields.filter(([, ,type]) => type === 'num').map(([field]) => {
-    const values = new Set([...rows,...totals].map(row=>row[field as keyof typeof row]).filter(value=>value!=null&&value!=='').map(String));
-    return [field, numberColumnWidth([...values].map(value=>money(value)),scale)];
-  })), [scale,rows,totals]);
-  const identifiers=useMemo(()=>Object.fromEntries(['doc_no','doc_date','biz_type'].map(field=>[field,fullTextWidth(rows.map(row=>row[field as Field]),scale)])),[rows,scale]);
+  // Clearing column filters returns to this same immutable coarse result.
+  // A new font loading cycle replaces fonts.ready; never retain fallback widths from a pending load.
+  const coarseWidths = useMemo(() => {
+    let cached: { font: string; ready: Promise<FontFaceSet>; widths: ReturnType<typeof inventoryWidths> } | undefined;
+    return () => {
+      const css = getComputedStyle(document.documentElement);
+      const font = `${css.fontFamily}:${css.getPropertyValue('--font-ui-size')}`, ready = document.fonts.ready;
+      if (cached?.font === font && cached.ready === ready && document.fonts.status === 'loaded') return cached.widths;
+      const widths = inventoryWidths(coarse, coarseTotals, scale);
+      if (document.fonts.status === 'loaded' && ready === document.fonts.ready) cached = { font, ready, widths };
+      return widths;
+    };
+  }, [coarse, coarseTotals, scale]);
+  const widths = useMemo(() => rows === coarse ? coarseWidths() : inventoryWidths(rows, totals, scale), [rows, totals, scale, coarse, coarseWidths]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
-      ...(type === 'num' ? amountWidths[field]! : identifiers[field] ?? contentWidth(['seq','unit'].includes(field)?40:field==='spec'?56:['wbs_name','cbs_name'].includes(field)?60:field==='material_property'?64:76,['seq','unit'].includes(field)?85:300,scale,['material','vendor','warehouse','spec','wbs_name','cbs_name'].includes(field)?1:0)),
+      ...(widths[field] ?? contentWidth(['seq','unit'].includes(field)?40:field==='spec'?56:['wbs_name','cbs_name'].includes(field)?60:field==='material_property'?64:76,['seq','unit'].includes(field)?85:300,scale,['material','vendor','warehouse','spec','wbs_name','cbs_name'].includes(field)?1:0)),
       ...(['doc_no','doc_date','biz_type'].includes(field)?{cellClass:'inventory-identifier',suppressAutoSize:true}:{}),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
-  ] satisfies ColDef<InventoryRow>[]),[scale, amountWidths, identifiers]);
+  ] satisfies ColDef<InventoryRow>[]),[scale, widths]);
   const presentation = useGridPresentation({ table: 'inventory', root, active: active && !blocked, rows, totals: totals as InventoryRow[], columns, measurement:layoutColumns, scope: JSON.stringify([period,[...ids].sort(),direction,onlyAdjusted,deferredFilters,target]), identity: [...ids].sort().join(','), rowId: inventoryRowId, scale });
   useLayoutEffect(() => {
     controls.current = { unavailable: paused || filtering || query.isError || query.isFetching || presentation.state === 'updating', pendingId: pending?.id ?? null };
