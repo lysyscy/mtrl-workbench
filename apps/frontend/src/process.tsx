@@ -231,10 +231,13 @@ const MatrixGrid=memo(function MatrixGrid({matrix,rows,kind,warehouse,scale,sour
 }){
   const measurement=useMemo(()=>{
     const messages=new Map<string,string>(JSON.parse(errors));
-    // Only what the measuring render of one cell reads: its own amount, whether it is an
-    // input or plain text, the 明细确认 marker, and its own error message. Pinned totals rows
-    // keep the whole row so the 总求和 label layout stays keyed as before.
-    return {signature:(row:MatrixRow,column:string,pinned:boolean)=>pinned?JSON.stringify([row,'']):JSON.stringify([row[column]??null,row.materialEditable??null,messages.get(keyOf(warehouse,row.ym,column))??'',sources?.[row.ym]?.[column]?.mode==='detail'?'detail':''])};
+    return {signature:(row:MatrixRow,column:string,pinned:boolean)=>{
+      if (pinned) return JSON.stringify(row);
+      // Read-only amounts use the column's nowrap money renderer, even after a width drag.
+      if (!column.startsWith('mech_') && row.materialEditable!=='yes') return row[column]==null?'empty':'amount';
+      // Every amount input occupies one fixed-height line. Only its error or source label can add lines.
+      return JSON.stringify(['input',messages.get(keyOf(warehouse,row.ym,column))??'',sources?.[row.ym]?.[column]?.mode==='detail']);
+    }};
   },[errors,warehouse,sources]);
   const totals=useMemo<MatrixRow[]>(()=>[
     {...matrix.totals[kind],ym:'合计',rowkind:'total'} as MatrixRow,

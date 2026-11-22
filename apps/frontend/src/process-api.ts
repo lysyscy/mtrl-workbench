@@ -1,5 +1,5 @@
-import { ApiError, record, requestJson } from './api';
-import { body, cents } from './notices-api';
+import { ApiError, assertAmountText, record, requestJson } from './api';
+import { body } from './notices-api';
 
 export const categories = ['主辅材','工具','劳保','周转材料','临时设施'];
 export const mechLabels = ['租分公司设备','内租设备','外租零租含税','外租包月含税','外租零租不含税','外租包月不含税'];
@@ -17,7 +17,7 @@ const invalid = () => new ApiError('过程资料读取不完整，请重读。')
 function amount(value:unknown):string|null {
   if (value === null) return null;
   if (typeof value !== 'string' && typeof value !== 'number') throw invalid();
-  const text=String(value); cents(text); return text;
+  const text=String(value); assertAmountText(text); return text;
 }
 function amounts(value:unknown,keys=dataKeys):Amounts {
   if(!record(value)) throw invalid();
