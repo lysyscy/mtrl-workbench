@@ -68,7 +68,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
   rowSize.current = {minimum,rowId};
   const ready = useRef(false), heights = useRef(new Map<string, number>());
   const fitted = useRef('');
-  const cache = useRef(new Map<string, number>()), geometry = useRef('');
+  type CellMeasurements = {
+    key: string; grid: GridApi<T>; columns: TextGridColumn<T>[];
+    fonts: Promise<FontFaceSet>; sizes: Map<string, number>;
+  };
+  const currentSizes = useRef<CellMeasurements | null>(null);
+  // A transient filtered result releases its published sizes with the row array.
+  const publishedTextSizes = useRef(new WeakMap<T[], CellMeasurements>());
   const headerSize = useRef({ key: '', height: headerMinimum });
   const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string; errors:string } | null>(null);
   const appliedScope = useRef(scope), appliedIdentity = useRef(identity);
@@ -145,7 +151,18 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const plannedWidths = displayed.map(col => col.getActualWidth());
         const widthById = new Map(displayed.map((col,i) => [col.getColId(),plannedWidths[i]!]));
         const key = `${css.font}:${css.lineHeight}:${minimum}:${displayed.map(c => `${c.getColId()}:${widthById.get(c.getColId())}`).join('|')}`;
-        if (geometry.current !== key) { cache.current.clear(); geometry.current = key; }
+        const fonts = document.fonts.ready;
+        const plain = wrapping.every(column => !column.render);
+        const published = plain && document.fonts.status === 'loaded' ? publishedTextSizes.current.get(rows) : undefined;
+        const compatible = (seen: CellMeasurements | null | undefined): seen is CellMeasurements =>
+          seen?.key === key && seen.grid === grid && (!plain || (seen.columns === columns && seen.fonts === fonts));
+        // Restoring the same immutable rows at their original flex widths can use
+        // their published text heights. Rich controls use only the working layout.
+        let measurements = currentSizes.current;
+        if (compatible(published)) measurements = published;
+        if (!compatible(measurements)) measurements = { key, grid, columns, fonts, sizes: new Map() };
+        currentSizes.current = measurements;
+        const sizes = measurements.sizes;
         host.replaceChildren();
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
         const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
@@ -170,7 +187,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
               const existing = values.get(lookup);
               if (existing) return existing;
               const key = `${column.id}\0${actualWidth}\0${weight}\0${signature}`;
-              const size = { key, height: cache.current.get(key) };
+              const size = { key, height: sizes.get(key) };
               values.set(lookup, size);
               if (size.height === undefined) jobs.set(key, { text, column, width: actualWidth, weight, row, pinned });
               return size;
@@ -182,7 +199,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         // Multiline/long strings still use the browser's real breaking rules below.
         if (canFitLine && singleLine <= minimum) for (const [key, job] of jobs) {
           context.font = `${job.weight} ${bodyFont}`;
-          if (!job.column.render && !job.text.includes('\n') && context.measureText(job.text).width <= job.width - padding - 2) { cache.current.set(key, minimum); jobs.delete(key); }
+          if (!job.column.render && !job.text.includes('\n') && context.measureText(job.text).width <= job.width - padding - 2) { sizes.set(key, minimum); jobs.delete(key); }
         }
         const pending = [...jobs];
         // The measuring DOM is bounded; read each batch after writing it, then release it.
@@ -207,7 +224,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
             await loadElementFonts(host);
             if (cancelled(run)) return;
           }
-          elements.forEach((cell, i) => cache.current.set(batch[i]![0], Math.ceil(cell.getBoundingClientRect().height + rowBorder)));
+          elements.forEach((cell, i) => sizes.set(batch[i]![0], Math.ceil(cell.getBoundingClientRect().height + rowBorder)));
           if (batch.some(([, job]) => job.column.render)) flushSync(clearMeasurement);
           host.replaceChildren();
           if (start + 128 < pending.length && performance.now() - yieldedAt > 8) { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); yieldedAt = performance.now(); }
@@ -217,7 +234,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         for (const row of plannedRows) {
           let height = minimum;
           for (const cell of row.cells) {
-            cell.height ??= cache.current.get(cell.key)!;
+            cell.height ??= sizes.get(cell.key)!;
             height = Math.max(height, cell.height);
           }
           next.set(row.id, height);
@@ -277,6 +294,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (finalColumns.length !== displayed.length || finalColumns.some((column, i) => column.getColId() !== displayed[i]!.getColId() || column.getActualWidth() !== plannedWidths[i])) {
           prepared.current = null;
           schedule(); return;
+        }
+        if (plain && document.fonts.status === 'loaded' && fonts === document.fonts.ready) {
+          publishedTextSizes.current.set(rows, measurements);
         }
         appliedScope.current = scope; appliedIdentity.current = identity;
         node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, reused: false, minimum, rows: rows.length, width: node!.clientWidth });
