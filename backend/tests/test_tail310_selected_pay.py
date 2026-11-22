@@ -52,14 +52,14 @@ def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
     apply_stat_change(s, notice_id=a.id, field='stat_paid', value='50', changed_by='310测试')
 
     # SQL limit 反例：缩小展示 cap，无需造 5001 条；旧日期 a 不在展示行内。
-    monkeypatch.setattr(notices, 'notice_rows', lambda session: session.execute(
-        select(PaymentNotice).where(PaymentNotice.id.in_([a.id, b.id]))
-        .order_by(PaymentNotice.doc_date.desc()).limit(1)).scalars().all())
-    assert [n.id for n in notices.notice_rows(s)] == [b.id]
+    window = notices._notice_list_window
+    monkeypatch.setattr(notices, '_notice_list_window', lambda stmt, _limit:
+                        window(stmt.where(PaymentNotice.id.in_([a.id, b.id])), 1))
+    assert [n.id for n in notices.notice_display_rows(s)] == [b.id]
 
     def forbidden(*args, **kwargs):
         raise AssertionError('付款不得走展示/全量事实出口')
-    for module, name in ((list_view, 'build_rows'), (notices, 'notice_rows'),
+    for module, name in ((list_view, 'build_rows'), (notices, 'notice_rows'), (notices, 'notice_display_rows'),
                          (notices, 'stat_trace_index'), (flows, 'list_flows'), (flows, 'notice_flow_rows')):
         monkeypatch.setattr(module, name, forbidden)
     seen = []

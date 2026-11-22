@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Row, case, func, select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.core.db import any_ids
@@ -20,7 +20,7 @@ from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 M
     finish_run_record,
 )
 from app.mod03_notice.domain import StatTrace, adjust_stat
-from app.mod03_notice.models import EXCLUDE_BY_RULE, NoticeStatLog, PaymentNotice
+from app.mod03_notice.models import NoticeStatLog, PaymentNotice
 
 
 def get_notice(session: Session, notice_id: int, **kw) -> PaymentNotice | None:
@@ -307,15 +307,9 @@ def notice_todo_rows(session: Session) -> list[Row]:
 
 
 def notice_display_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[Row]:
-    """列表装配的只读投影。规则解释仍接收原始单据字段。"""
+    """列表装配的只读投影；JSON 原件仍由原解码器处理，包括历史转义值。"""
     n = PaymentNotice
-    # Keep the JSON value (including historical arrays/objects) until Python
-    # applies the same BillName display conversion as the single-object read.
-    fields = case(
-        ((n.excluded & (n.exclude_source == EXCLUDE_BY_RULE)) | (func.json_typeof(n.fields) != "object"), n.fields),
-        else_=func.json_build_object("BillName", n.fields["BillName"]),
-    ).label("fields")
-    stmt = select(n.id, n.doc_date, n.bill_no, fields, n.project_name, n.category,
+    stmt = select(n.id, n.doc_date, n.bill_no, n.fields, n.project_name, n.category,
                   n.biz_type, n.payee, n.input_by, n.amount_approved, n.stat_settle, n.stat_paid,
                   n.approve_status, n.excluded, n.exclude_source, n.i8_revoked, n.is_manual,
                   n.ownership_id, n.jc_supplier, n.planned_pay_method)

@@ -125,7 +125,7 @@ def test_display_projection_keeps_historical_names_and_full_rule_input(rollback_
         sources = []
         for i, fields in enumerate([{}, {"BillName": None}, {"BillName": False}, {"BillName": 17},
                                     {"BillName": ["甲", 2]}, {"BillName": {"乙": 2, "甲": 1}},
-                                    {"BillName": "规则用单据"}]):
+                                    {"BillName": "规则用单据"}, {"BillName": "旧" + chr(0) + "名称"}, {"unused": "旧" + chr(0) + "字段"}]):
             raw = {**fields, "source_only": "完整原始字段"}
             row = PaymentNotice(ph_id=f"test-display-name-{i}", doc_date="9999-12-31", fields=raw,
                                 excluded=i == 6, exclude_source=EXCLUDE_BY_RULE if i == 6 else "")
@@ -134,8 +134,7 @@ def test_display_projection_keeps_historical_names_and_full_rule_input(rollback_
         s.flush()
         ids = [r.id for r in sources]
         display = {row.id: row for row in repository.notice_display_rows(s) if row.id in ids}
-        assert all("source_only" not in display[r.id].fields for r in sources[:-1])
-        assert display[sources[-1].id].fields == sources[-1].fields
+        assert all(display[r.id].fields == r.fields for r in sources)
         expected = {row.notice_id: row for row in build_rows(s, notice_ids=ids)}
         actual = {row.notice_id: row for row in build_rows(s) if row.notice_id in ids}
         assert actual == expected
