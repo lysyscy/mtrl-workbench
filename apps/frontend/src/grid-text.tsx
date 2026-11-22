@@ -19,6 +19,7 @@ function clipped(root: HTMLElement | null) {
 
 export function TextPreview({text, children}: {text: string; children: ReactNode}) {
   const root = useRef<HTMLSpanElement>(null), timer = useRef(0), tooltipId = useId();
+  const touch = useRef<{id:number; x:number; y:number} | null>(null);
   const [preview, setPreview] = useState<'unused' | 'open' | 'closed'>('unused');
   useEffect(() => () => window.clearTimeout(timer.current), []);
   function enter() {
@@ -36,7 +37,7 @@ export function TextPreview({text, children}: {text: string; children: ReactNode
     if (preview !== 'open') return;
     const dismiss = (event: PointerEvent) => {
       const target = event.target;
-      if (event.pointerType === 'touch' && target instanceof Node && !root.current?.contains(target) && !document.getElementById(tooltipId)?.contains(target)) setPreview('closed');
+      if (target instanceof Node && !root.current?.contains(target) && !document.getElementById(tooltipId)?.contains(target)) setPreview('closed');
     };
     document.addEventListener('pointerdown', dismiss, true);
     return () => document.removeEventListener('pointerdown', dismiss, true);
@@ -44,11 +45,18 @@ export function TextPreview({text, children}: {text: string; children: ReactNode
   // Mount the popup on demand and keep the native editor in place.
   return <span ref={root} className="grid-text-preview" onPointerEnter={event => { if (event.pointerType !== 'touch') enter(); }}
     onPointerLeave={event => { if (event.pointerType !== 'touch') leave(); }}
-    onTouchStart={event => {
-      if (!root.current?.contains(event.target as Node)) return;
+    onPointerDown={event => {
+      if (event.pointerType !== 'touch' || !root.current?.contains(event.target as Node)) return;
       window.clearTimeout(timer.current);
-      if (preview === 'open') setPreview('closed');
-      else if (text && clipped(root.current)) setPreview('open');
+      touch.current=event.isPrimary?{id:event.pointerId,x:event.clientX,y:event.clientY}:null;
+    }}
+    onPointerCancel={() => { if (touch.current) { touch.current=null; if (preview==='open') setPreview('closed'); } }}
+    onPointerUp={event => {
+      const start=touch.current;
+      if (!start || start.id!==event.pointerId) return;
+      touch.current=null;
+      if (preview==='open') setPreview('closed');
+      else if (Math.hypot(event.clientX-start.x,event.clientY-start.y)<=8 && text && clipped(root.current)) setPreview('open');
     }}
     aria-describedby={preview === 'open' ? tooltipId : undefined}>
     {children}
