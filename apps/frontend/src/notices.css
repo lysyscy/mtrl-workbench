@@ -24,6 +24,8 @@
 .payment-confirmation{padding:10px 12px;margin:10px 0 0;color:var(--wn-d);background:var(--wn-l);border-radius:6px}
 .payment-terms{margin-top:14px;padding:12px;background:var(--wn-l);color:var(--tx);border:1px solid var(--wn-bd);border-radius:8px}
 .payment-terms-heading{display:flex;align-items:baseline;gap:10px}.payment-terms-heading strong{font-weight:600}.payment-terms p{margin:6px 0 10px;font-size:calc(12px * var(--fscale))}
+/* A warning batch has two independently scrolling grids in the same dialog. */
+.notice-pay-with-terms :is(.notice-pay-table,.payment-terms-table){will-change:scroll-position}
 .payment-terms-table{overflow:auto;max-height:26dvh}.payment-terms .money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.payment-terms time{white-space:nowrap}
 
 /* Notice-specific hierarchy uses the shared account appearance. */

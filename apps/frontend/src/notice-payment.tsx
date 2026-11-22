@@ -170,7 +170,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
   const warningIds = useMemo(() => shownContext?.rows.filter(item => item.term_warning).map(item => item.notice_id) ?? [], [shownContext]);
-  return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
+  return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
       {message && <p role="status" className="notice-feedback">{message}</p>}
       {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
