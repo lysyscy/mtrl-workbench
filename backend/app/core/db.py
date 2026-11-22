@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import Numeric, create_engine
+from sqlalchemy import Numeric, any_, create_engine, literal
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -22,6 +22,11 @@ from app.core.config import get_settings
 # 金额列类型：**全站唯一出口**（`numeric(18,2)`，元 / 2 位小数 —— 技术栈 §3.2）
 # ⚠️ 任何模型都不得自写 Numeric / Float / Integer 来表达金额
 MONEY = Numeric(18, 2)
+
+
+def any_ids(ids: list[int]):
+    """Bind an ID set as one PostgreSQL array for reads shared across domains."""
+    return any_(literal(ids))
 
 
 class Base(DeclarativeBase):

@@ -14,6 +14,7 @@ from uuid import uuid4
 from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
+from app.core.db import any_ids
 from app.core.identity import current_operator
 from app.core.money import to_money
 from app.mod03_notice.models import NoticeStatLog, PaymentNotice
@@ -52,7 +53,7 @@ def notice_flow_rows(s: Session, notice_ids: list[int] | None = None) -> list[Ro
         PaymentFlow.notice_id, PaymentFlow.id, PaymentFlow.flow_no, PaymentFlow.amount,
         PaymentFlow.pay_date, PaymentFlow.pay_method, PaymentFlow.status,
         PaymentFlow.revoke_reason, PaymentFlow.revoked_at,
-    ).where(PaymentFlow.notice_id.in_(notice_ids) if notice_ids is not None else PaymentFlow.notice_id.is_not(None))
+    ).where(PaymentFlow.notice_id == any_ids(notice_ids) if notice_ids is not None else PaymentFlow.notice_id.is_not(None))
     return list(s.execute(stmt.order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())))
 
 

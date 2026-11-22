@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
+from app.core.db import any_ids
 from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 MOD-02，此处再导出
     create_run_record,
     finish_run_record,
@@ -134,7 +135,7 @@ def stat_trace_index_of(session: Session, notice_ids: list[int]) -> dict[int, li
     if not ids:
         return {}
     rows = session.execute(
-        select(NoticeStatLog).where(NoticeStatLog.notice_id.in_(ids))
+        select(NoticeStatLog).where(NoticeStatLog.notice_id == any_ids(ids))
         .order_by(NoticeStatLog.changed_at, NoticeStatLog.id)
     ).scalars().all()
     return _trace_index(rows)

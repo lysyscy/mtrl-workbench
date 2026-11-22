@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.db import any_ids
 from app.core.errors import MustReportError
 from app.mod01_projects import service as PS
 from app.mod01_projects.domain import norm_full_name
@@ -761,7 +762,7 @@ def links_by_notice(session, notice_ids: list[int] | None = None) -> dict[int, l
     grouped: dict[int, list[int]] = {}
     stmt = select(JcPayment.notice_id, JcPayment.contract_id).where(JcPayment.notice_id.is_not(None))
     if notice_ids is not None:
-        stmt = stmt.where(JcPayment.notice_id.in_(notice_ids))
+        stmt = stmt.where(JcPayment.notice_id == any_ids(notice_ids))
     for nid, cid in session.execute(stmt).all():
         if nid is not None:
             grouped.setdefault(int(nid), []).append(int(cid))
@@ -775,5 +776,5 @@ def linked_suppliers(session, notice_ids: list[int] | None = None) -> dict[int, 
     stmt = select(JcPayment.notice_id, JcContract.supplier).join(
         JcContract, JcPayment.contract_id == JcContract.id).where(JcPayment.notice_id.is_not(None))
     if notice_ids is not None:
-        stmt = stmt.where(JcPayment.notice_id.in_(notice_ids))
+        stmt = stmt.where(JcPayment.notice_id == any_ids(notice_ids))
     return {int(nid): str(supplier or '') for nid, supplier in session.execute(stmt)}
