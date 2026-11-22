@@ -14,14 +14,14 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
+import { cacheFontMeasurement, pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
 import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
 import { contractApprovalStatuses, contractMoneyKeys, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
-import type { ContractRow } from './contracts-api';
+import type { ContractList, ContractRow } from './contracts-api';
 import { cents, money, receipt, searchKey } from './notices-api';
 import { ContractEditor, archiveNoHint, nextContractArchiveNo } from './contract-dialog';
 import { createInlineFieldQueue } from './inline-field-queue';
@@ -37,6 +37,18 @@ import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
 
 function decimalCents(value:bigint){const abs=value<0n?-value:value;return `${value<0n?'-':''}${abs/100n}.${String(abs%100n).padStart(2,'0')}`;}
+function contractAmountWidths(columns: ContractList['columns'], rows: ContractRow[], scale: number) {
+  return Object.fromEntries(columns.filter(column => (contractMoneyKeys as readonly string[]).includes(column.key)).map(column => {
+    const key = column.key as typeof contractMoneyKeys[number];
+    const header = column.label.replace('（自动）', '');
+    const values = rows.map(row => row[key] === null ? '未确定' : money(row[key] ?? '0'));
+    const extra = ['inv_sum', 'trade_inv_sum', 'pay_sum'].includes(key) ? 56 : 0;
+    const width = completeColumnWidth(values, header, scale, extra);
+    width.initialWidth = width.minWidth = Math.max(width.minWidth, numberColumnWidth(values, scale).minWidth + extra * scale);
+    return [key, width];
+  }));
+}
+
 type ContractSelection={shown:ContractRow[];picked:Set<number>;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
 // The header observes selection and filter results through context, so ticking a row never rebuilds the column definitions.
@@ -207,16 +219,17 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch','approve_status'].includes(c.key)?12:0;
     return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
   })),[rows,query.data?.columns,query.data?.payment_methods,scale]);
-  // Amount geometry depends on the rows and the totals row only: ticking a box must not re-measure seven money columns.
-  const moneyWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>(contractMoneyKeys as readonly string[]).includes(c.key)).map(c=>{
-    const key=c.key as typeof contractMoneyKeys[number];
-    const header=c.label.replace('（自动）','');
-    const values=[...rows,...totalRow].map(row=>row[key]===null?'未确定':money(row[key]??'0'));
-    const measured=numberColumnWidth(values,scale);
-    const amountWidth=completeColumnWidth(values,header,scale,['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?56:0);
-    amountWidth.minWidth=amountWidth.initialWidth=Math.max(amountWidth.minWidth,measured.minWidth+(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)?56*scale:0));
-    return [c.key,amountWidth];
-  })),[query.data?.columns,rows,totalRow,scale]);
+  // The contract values stay in scope across searches. Only the filtered totals
+  // change; take the same maximum over both sets at the current font and scale.
+  const sourceWidths = useMemo(() => cacheFontMeasurement(() =>
+    contractAmountWidths(query.data?.columns ?? [], rows, scale)), [query.data?.columns, rows, scale]);
+  const moneyWidths = useMemo(() => {
+    const base = sourceWidths();
+    if (!totalRow.length) return base;
+    const totals = contractAmountWidths(query.data?.columns ?? [], totalRow, scale);
+    return Object.fromEntries(Object.entries(base).map(([key, width]) =>
+      [key, totals[key]!.minWidth > width.minWidth ? totals[key]! : width]));
+  }, [sourceWidths, totalRow, query.data?.columns, scale]);
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
   const baseColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
