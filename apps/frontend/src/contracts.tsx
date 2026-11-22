@@ -38,11 +38,23 @@ import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
 
 function decimalCents(value:bigint){const abs=value<0n?-value:value;return `${value<0n?'-':''}${abs/100n}.${String(abs%100n).padStart(2,'0')}`;}
+const amountColumnIds = new Set<string>(contractMoneyKeys);
 function contractAmountWidths(columns: ContractList['columns'], rows: ContractRow[], scale: number) {
-  return Object.fromEntries(columns.filter(column => (contractMoneyKeys as readonly string[]).includes(column.key)).map(column => {
+  return Object.fromEntries(columns.filter(column => amountColumnIds.has(column.key)).map(column => {
     const key = column.key as typeof contractMoneyKeys[number];
     const header = column.label.replace('（自动）', '');
-    const values = rows.map(row => row[key] === null ? '未确定' : money(row[key] ?? '0'));
+    // A filtered total lies between the sum of the negatives and the sum of
+    // the positives, even when opposite entries cancel on the opening view.
+    let positive = 0n, negative = 0n;
+    const values = rows.map(row => {
+      const value = row[key];
+      if (value === null) return '未确定';
+      const amount = cents(value ?? '0');
+      if (amount > 0n) positive += amount;
+      else negative += amount;
+      return money(value ?? '0');
+    });
+    values.push(money(decimalCents(positive)), money(decimalCents(negative)));
     const extra = ['inv_sum', 'trade_inv_sum', 'pay_sum'].includes(key) ? 56 : 0;
     const width = completeColumnWidth(values, header, scale, extra);
     width.initialWidth = width.minWidth = Math.max(width.minWidth, numberColumnWidth(values, scale).minWidth + extra * scale);
@@ -257,27 +269,14 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch','approve_status'].includes(c.key)?12:0;
     return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
   })),[rows,archiveNumbers,query.data?.columns,query.data?.payment_methods,scale]);
-  // The contract values stay in scope across searches. Only the filtered totals
-  // change; take the same maximum over both sets at the current font and scale.
   const sourceWidths = useMemo(() => cacheFontMeasurement(() =>
     contractAmountWidths(query.data?.columns ?? [], rows, scale)), [query.data?.columns, rows, scale]);
-  // Retained columns adopt new sizing only on initial data, scale changes or
-  // an explicit width reset. Sample the current filter total at that point.
-  const displayedTotal = useRef(totalRow);
-  displayedTotal.current = totalRow;
-  const moneyWidths = useMemo(() => {
-    const base = sourceWidths();
-    const total = displayedTotal.current;
-    if (!total.length) return base;
-    const totals = contractAmountWidths(query.data?.columns ?? [], total, scale);
-    return Object.fromEntries(Object.entries(base).map(([key, width]) =>
-      [key, totals[key]!.minWidth > width.minWidth ? totals[key]! : width]));
-  }, [sourceWidths, query.data?.columns, scale, widths.layoutKey]);
+  const moneyWidths = useMemo(sourceWidths, [sourceWidths, widths.layoutKey]);
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
   const contractColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
-      const numeric=(contractMoneyKeys as readonly string[]).includes(c.key);
+      const numeric=amountColumnIds.has(c.key);
       const editKey = inlineKeys.find(key => key === c.key);
       const editorParams = {editKey, control: () => inlineControl.current};
       // Keep formatted amounts and totals intact before flexible text columns shrink.
@@ -307,7 +306,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     const width = column.field && moneyWidths[column.field];
     return width ? {...column, ...width} : column;
   }),[contractColumns,moneyWidths]);
-  const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey);
+  const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey,amountColumnIds);
   const activeWidths=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
   const widthColumns=useGridWidthColumns(activeWidths,widths.savedWidths,'material');
   const {busy:subBusy,uncertain:subUncertain,dirty:subDirty}=subtables.summary;
