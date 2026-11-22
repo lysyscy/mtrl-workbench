@@ -16,15 +16,16 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { cacheFontMeasurement, pageGridGeometry, textWidth, fixedWidth, numberColumnWidth, gridTheme } from './grid';
+import { pageGridGeometry, textWidth, fixedWidth, gridTheme } from './grid';
 import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
 import { contractApprovalStatuses, contractMoneyKeys, nextArchiveNumbers, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
-import type { ContractList, ContractRow } from './contracts-api';
-import { cents, money, receipt, searchKey } from './notices-api';
+import { amountColumnIds, contractWidthMeasurements } from './contract-column-widths';
+import type { ContractRow } from './contracts-api';
+import { cents, decimal, money, receipt, searchKey } from './notices-api';
 import { ContractEditor, archiveNoHint } from './contract-dialog';
 import { createInlineFieldQueue } from './inline-field-queue';
 import { BusinessModal } from './business-modal';
@@ -37,31 +38,6 @@ import { useContractSubtables } from './use-contract-subtables';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
-
-function decimalCents(value:bigint){const abs=value<0n?-value:value;return `${value<0n?'-':''}${abs/100n}.${String(abs%100n).padStart(2,'0')}`;}
-const amountColumnIds = new Set<string>(contractMoneyKeys);
-function contractAmountWidths(columns: ContractList['columns'], rows: ContractRow[], scale: number) {
-  return Object.fromEntries(columns.filter(column => amountColumnIds.has(column.key)).map(column => {
-    const key = column.key as typeof contractMoneyKeys[number];
-    const header = column.label.replace('（自动）', '');
-    // A filtered total lies between the sum of the negatives and the sum of
-    // the positives, even when opposite entries cancel on the opening view.
-    let positive = 0n, negative = 0n;
-    const values = rows.map(row => {
-      const value = row[key];
-      if (value === null) return '未确定';
-      const amount = cents(value ?? '0');
-      if (amount > 0n) positive += amount;
-      else negative += amount;
-      return money(value ?? '0');
-    });
-    values.push(money(decimalCents(positive)), money(decimalCents(negative)));
-    const extra = ['inv_sum', 'trade_inv_sum', 'pay_sum'].includes(key) ? 56 : 0;
-    const width = completeColumnWidth(values, header, scale, extra);
-    width.initialWidth = width.minWidth = Math.max(width.minWidth, numberColumnWidth(values, scale).minWidth + extra * scale);
-    return [key, width];
-  }));
-}
 
 type ContractSelection={shown:ContractRow[];picked:Set<number>;pending:boolean;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
@@ -158,7 +134,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       }));
     return matches.length === scope.length ? scope : matches;
   }, [needle, scope, projectNames, searchable]);
-  const totalRow=useMemo(()=>shown.length?[{id:-1,material:'合计',...Object.fromEntries(contractMoneyKeys.map(key=>[key,decimalCents(shown.reduce((sum,row)=>sum+cents(row[key]??'0'),0n))]))} as ContractRow]:[],[shown]);
+  const totalRow=useMemo(()=>shown.length?[{id:-1,material:'合计',...Object.fromEntries(contractMoneyKeys.map(key=>[key,decimal(shown.reduce((sum,row)=>sum+cents(row[key]??'0'),0n))]))} as ContractRow]:[],[shown]);
   const selected = useMemo(() => rows.filter(row => picked.has(row.id)), [rows, picked]);
   const hidden = useMemo(() => {
     if (!selected.length) return 0;
@@ -272,18 +248,9 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const selection=useMemo<ContractSelection>(()=>({shown,picked,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked,searchBusy]);
   const scale=Number(me?.ui_scale_css??1);
   const widths=useGridWidths('contracts',root,scale,active&&!blocked);
-  const completeWidths=useMemo(()=>Object.fromEntries((query.data?.columns??[]).filter(c=>['project_seq','date','contract_no','approve_status','payment_term','payment_method','tag','arch','arch_no','ret_date'].includes(c.key)).map(c=>{
-    const values=rows.map(row=>String(row[c.key as keyof ContractRow]??''));
-    if(c.key==='approve_status')values.push(...contractApprovalStatuses);
-    if(c.key==='payment_method')values.push('未约定',...(query.data?.payment_methods??[]));
-    if(c.key==='arch_no')values.push(...archiveNumbers.values());
-    if(c.key==='ret_date')values.push('2000-12-31');
-    const extra=c.key==='payment_method'?44:c.key==='ret_date'?44:['payment_term','arch_no'].includes(c.key)?20:['tag','arch','approve_status'].includes(c.key)?12:0;
-    return [c.key,completeColumnWidth(values,c.key==='tag'?'纳入状态':c.label.replace('（自动）',''),scale,extra)];
-  })),[rows,archiveNumbers,query.data?.columns,query.data?.payment_methods,scale]);
-  const sourceWidths = useMemo(() => cacheFontMeasurement(() =>
-    contractAmountWidths(query.data?.columns ?? [], rows, scale)), [query.data?.columns, rows, scale]);
-  const moneyWidths = useMemo(sourceWidths, [sourceWidths, widths.layoutKey]);
+  const measureWidths = useMemo(() => contractWidthMeasurements(query.data?.columns ?? [], query.data?.payment_methods ?? [], scale),
+    [query.data?.columns, query.data?.payment_methods, scale]);
+  const {completeWidths, moneyWidths} = useMemo(() => measureWidths(rows, archiveNumbers), [measureWidths, rows, archiveNumbers, widths.layoutKey]);
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
   const contractColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
