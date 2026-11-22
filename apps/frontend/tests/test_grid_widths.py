@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page, login
-from live_data import open_page, contract_sample
+from live_data import open_page, contract_sample, reveal_contract_column
 
 
 def header(page, grid, column):
@@ -75,6 +75,8 @@ def test_save_preserves_narrow_manual_columns_on_full_list(server,browser_page,a
     context.add_init_script('localStorage.setItem('+json.dumps(storage_key(me,route))+','+json.dumps(json.dumps({'version':1,'widths':widths}))+')')
     try:
         open_page(page,server,route,title);table=page.locator(grid)
+        if route == 'contracts':
+            reveal_contract_column(page, column)
         field=table.locator('.ag-row:not(.ag-row-pinned) [col-id='+column+'] input:not(:disabled)').first
         if route=='notices':
             eligible={str(r['notice_id']) for r in api.get('/api/m03/notice-list?period=').json()['items'] if Decimal(r['amount_approved'])>0}

@@ -19,6 +19,25 @@ def grid_row(page, grid, key):
     return page.locator(grid + ' [row-id=' + json.dumps(str(key), ensure_ascii=False) + ']').first
 
 
+def reveal_contract_column(page, column):
+    """Move through the native horizontal viewport until AG mounts the business column."""
+    bar = page.locator('.contracts-grid .ag-body-horizontal-scroll-viewport')
+    found = bar.evaluate("""async (bar, column) => {
+        const grid = bar.closest('.ag-root-wrapper');
+        const header = () => grid.querySelector('.ag-header-cell[col-id="' + CSS.escape(column) + '"]');
+        if (header()) return true;
+        const end = bar.scrollWidth - bar.clientWidth;
+        const step = Math.max(1, Math.floor(bar.clientWidth / 2));
+        for (let x = 0; ; x = Math.min(x + step, end)) {
+            bar.scrollLeft = x;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (header()) return true;
+            if (x === end) return false;
+        }
+    }""", column)
+    assert found, f'合同列未能横滚到达：{column}'
+
+
 def open_page(page, base, route, title, *, authenticated=True):
     if authenticated:
         login(page, base)

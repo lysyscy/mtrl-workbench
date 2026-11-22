@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from playwright.sync_api import expect
 from test_preview import server,browser_page
-from live_data import get,open_page,contract_sample,grid_row
+from live_data import get,open_page,contract_sample,grid_row, reveal_contract_column
 
 
 def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page, api, disposable):
@@ -145,6 +145,7 @@ def test_project_filter_advance_empty_archive_after_number_edit(server, browser_
     page.get_by_title('未存档', exact=True).last.click()
     target = grid_row(page, '.contracts-grid', row['id'])
     expect(target).to_be_visible()
+    reveal_contract_column(page, 'arch_no')
     target.get_by_label(label + ' 存档号', exact=True).fill('QA-123')
     target.get_by_role('button', name='推进存档').click()
     expect(target).not_to_be_visible()
@@ -155,6 +156,7 @@ def test_project_filter_advance_empty_archive_after_number_edit(server, browser_
 def test_real_contract_field_bad_receipt_locks_until_readback(server,browser_page,api,disposable):
     page,_=browser_page;row,label=contract_sample(api);open_page(page,server,'contracts','集采台账')
     page.get_by_label('搜索',exact=True).fill(label)
+    reveal_contract_column(page, 'payment_term')
     term=page.get_by_label(label+' 账期',exact=True);writes=[]
     def damaged(route):
         response=route.fetch();assert response.ok and response.json()['ok'] is True
@@ -171,6 +173,7 @@ def test_real_contract_inline_typing_and_readback_keep_next_input_stable(server,
     page,_=browser_page;row,label=contract_sample(api);open_page(page,server,'contracts','集采台账')
     page.get_by_label('搜索',exact=True).fill(label)
     term=page.get_by_label(label+' 账期',exact=True);remark=page.get_by_label(label+' 备注',exact=True)
+    reveal_contract_column(page, 'remark')
     original_remark=remark.input_value();value='32天' if row['payment_term']=='31±0天' else '31天'
     term.click();node=term.element_handle()
     for text in (value[:1],value[:2],value):
