@@ -62,7 +62,7 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
 
 // Repeated small views use AG's native row/header auto height; inputs stay business-owned.
 // Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
-export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false}:BusinessGridProps<T>) {
+export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,fitAfterFonts=false}:BusinessGridProps<T> & {fitAfterFonts?: boolean}) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
   const scale=suppliedScale??(Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1);
@@ -80,7 +80,8 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
     const nextFrame=()=>new Promise<void>(resolve=>{frame=requestAnimationFrame(()=>resolve());});
     void (async()=>{try {
       await loadElementFonts(node);if(cancelled||api.isDestroyed())return;
-      widths.fit();api.resetRowHeights();
+      // A deferred first fit includes flex columns just as the native first-data strategy does.
+      widths.fit(fitAfterFonts);api.resetRowHeights();
       const renderedRows=()=>{
         if(domLayout!=='autoHeight')return true;
         const ids=new Set([...node.querySelectorAll('.ag-row[row-id]')].map(row=>row.getAttribute('row-id')));
@@ -93,12 +94,12 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
       setReady(true);setError('');
     } catch(failure) {if(!cancelled)setError(failure instanceof Error?failure.message:'字体读取失败，请重试。');}})();
     return()=>{cancelled=true;cancelAnimationFrame(frame);};
-  },[api,rendered,retry,active,ready,rows,rowId,domLayout,widths.fit]);
+  },[api,rendered,retry,active,ready,rows,rowId,domLayout,widths.fit,fitAfterFonts]);
   const {onGridReady,onFirstDataRendered,...options}=grid;
   return <GridWidthContext.Provider value={widths}><div className={`business-grid-view ${className}`}>
     <div ref={root} className={'business-grid'+(singleLine?' grid-single-line':'')} role="region" aria-label={label} data-layout-state={error?'error':ready?'ready':'preparing'} inert={!ready} style={{...style,visibility:ready?style?.visibility:'hidden'}}>
       <AgGridReact<T> theme={businessTheme} {...pageGridGeometry(scale)} defaultColDef={defaults} suppressCellFocus suppressColumnVirtualisation
-        suppressScrollOnNewData animateRows={false} {...options} domLayout={domLayout} context={context} columnDefs={materialized} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} autoSizeStrategy={widths.strategy}
+        suppressScrollOnNewData animateRows={false} {...options} domLayout={domLayout} context={context} columnDefs={materialized} rowData={rows} pinnedBottomRowData={totalRows} getRowId={p=>rowId(p.data)} {...(fitAfterFonts ? {} : {autoSizeStrategy:widths.strategy})}
         onGridReady={e=>{widths.attach(e.api);setApi(e.api);onGridReady?.(e);}} onFirstDataRendered={e=>{setRendered(n=>n||1);onFirstDataRendered?.(e);}}/>
     </div>{error&&<p role="alert">{error}<Button onClick={()=>setRetry(n=>n+1)}>重试表格加载</Button></p>}
   </div></GridWidthContext.Provider>;

@@ -49,7 +49,7 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
   }, [owner, table, root]);
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
-  const fit=useCallback(()=>binding.current?.fit(),[]);
+  const fit=useCallback((includeFlex = false)=>binding.current?.fit(includeFlex),[]);
   const columns=useCallback(<T,>(definitions:(ColDef<T>|ColGroupDef<T>)[])=>widthModeColumns(manualGridColumns(definitions),manualIds),[manualIds]);
   return {attach, strategy,columns,savedWidths:preferences.getWidths(),custom:Object.keys(preferences.getWidths()).length>0,error:preferences.getError(),layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
 }

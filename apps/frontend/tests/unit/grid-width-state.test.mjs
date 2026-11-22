@@ -103,6 +103,21 @@ test('manual business widths use native limits; fixed columns, other owners and 
 });
 
 
+test('the first content fit includes flexible columns and respects saved manual widths', async () => {
+  const view = fixture(memoryStorage());
+  const fitted = [];
+  view.api.autoSizeColumns = columns => fitted.push(columns.map(column => column.getColId()));
+  view.binding.fit();
+  assert.ok(!fitted.at(-1).includes('name'));
+  view.drag('amount', 64);
+  await Promise.resolve();
+  view.binding.fit(true);
+  assert.ok(fitted.at(-1).includes('name'));
+  assert.ok(!fitted.at(-1).includes('amount'));
+  assert.equal(view.width('amount'), 64);
+  view.binding.dispose();
+});
+
 test('a divider click or cancelled resize keeps automatic sizing and saved preferences',async()=>{
   const storage=memoryStorage(),grid=fixture(storage);
   grid.drag('name',180);

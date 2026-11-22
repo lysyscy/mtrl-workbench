@@ -105,9 +105,9 @@ export function bindGridWidths(api: GridApi, options: {
     publish(false,receive);
     options.dragFinished?.();
   };
-  const fit = () => {
+  const fit = (includeFlex = false) => {
     if (api.isDestroyed()) return;
-    const columns = api.getAllDisplayedColumns().filter(column => !Object.hasOwn(shared.widths, column.getColId()) && !column.getFlex() && !column.getColDef().suppressAutoSize);
+    const columns = api.getAllDisplayedColumns().filter(column => !Object.hasOwn(shared.widths, column.getColId()) && (includeFlex || !column.getFlex()) && !column.getColDef().suppressAutoSize);
     if (columns.length) api.autoSizeColumns(columns, true);
   };
   const resetNative = () => {

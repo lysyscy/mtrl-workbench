@@ -48,5 +48,5 @@ export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warning
     {field:'reason',headerName:'不可付原因',minWidth:160*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
     {colId:'actions',headerName:'操作',...completeColumnWidth(['移出'],'操作',scale,16),cellRenderer:Actions},
   ],[signature,scale]);
-  return <PaymentEditing.Provider value={editing}><ReadGrid singleLine table="notice-payment" label="本次付款清单" className="notice-pay-table" domLayout="autoHeight" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale} grid={{getRowClass:p=>p.data?.notice&&warningIds.includes(p.data.notice.notice_id)?'payment-term-warning':''}}/></PaymentEditing.Provider>;
+  return <PaymentEditing.Provider value={editing}><ReadGrid singleLine fitAfterFonts table="notice-payment" label="本次付款清单" className="notice-pay-table" domLayout="autoHeight" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale} grid={{getRowClass:p=>p.data?.notice&&warningIds.includes(p.data.notice.notice_id)?'payment-term-warning':''}}/></PaymentEditing.Provider>;
 });
