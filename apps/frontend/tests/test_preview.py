@@ -119,7 +119,7 @@ def test_real_read_failure_retry_and_session_expiry(server, browser_page, projec
     context.clear_cookies()
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.get_by_text('未登录，只读', exact=True)).to_be_visible()
-    expect(page.get_by_role('button', name='＋ 手工建档', exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='+ 手工建档', exact=True)).to_be_disabled()
 
 
 def test_actual_permission_rejection_and_invalid_cookie(server, real_preview):

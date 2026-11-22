@@ -92,7 +92,7 @@ def test_inventory_period_popup_closes_when_leaving_page(server, browser_page):
 
 def test_real_unsaved_dialog_confirms_discard_and_keeps_input(server,browser_page):
     page,_=browser_page;login(page,server)
-    page.get_by_role('button',name='＋ 手工建档',exact=True).click();dialog=page.get_by_role('dialog')
+    page.get_by_role('button',name='+ 手工建档',exact=True).click();dialog=page.get_by_role('dialog')
     textbox=dialog.get_by_role('textbox').first;textbox.fill('未保存输入')
     dialog.press('Escape');expect(dialog.get_by_role('heading',name='放弃未保存的修改？')).to_be_visible()
     dialog.get_by_role('button',name='继续编辑',exact=True).click();expect(textbox).to_have_value('未保存输入')

@@ -265,7 +265,7 @@ function ExclusionRules({ query, writable, blocked, selected, onPublished }: {
     <div className="rules-head"><h2>{headings.notice}{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
       <div className="rules-head-tools">{data?.sourceLabel.startsWith('出厂默认') && <span className="muted">出厂默认</span>}
         <Button htmlType="button" className="primary" disabled={writeDisabled || !empty}
-          onClick={() => openForm({ id: null, kind: empty, values: '', meaning: '' })}>＋ 增加规则</Button></div></div>
+          onClick={() => openForm({ id: null, kind: empty, values: '', meaning: '' })}>+ 增加规则</Button></div></div>
     <ReadStatusLane phase={readState} announce="正在读取剔除规则…" className="rules-read-status">
       {!addition && (readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="规则更新失败，保留上次结果。" />}
       {recovery && <p className="notice" role="alert"><span className="read-failure-text">新增结果待核对。请先处理本次新增，再更改规则。</span>

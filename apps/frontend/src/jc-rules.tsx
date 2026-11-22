@@ -78,7 +78,7 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
       <h2>集采合同抓取剔除{rows && <span className="rules-count">（{rows.length} 条）</span>}</h2>
       <div className="rules-head-tools">
         <Button disabled={!active} onClick={() => setReceiptOpen(true)}>最近抓取结果</Button>
-        <Button className="primary" disabled={!canWrite} onClick={() => open({ type: 'add', draft: blank })}>＋ 新增剔除规则</Button>
+        <Button className="primary" disabled={!canWrite} onClick={() => open({ type: 'add', draft: blank })}>+ 新增剔除规则</Button>
       </div>
     </div>
     <div className="rules-filter">

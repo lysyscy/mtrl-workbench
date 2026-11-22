@@ -33,7 +33,7 @@ def test_delayed_real_project_response_preserves_search(server, browser_page, pr
         field = page.get_by_label('项目搜索', exact=True)
         expect(field).to_be_visible()
         field.fill(row['disp'])
-        expect(page.get_by_role('button',name='＋ 手工建档',exact=True)).to_be_disabled()
+        expect(page.get_by_role('button',name='+ 手工建档',exact=True)).to_be_disabled()
         expect(page.locator('.projects-page .result')).to_have_count(0)
         page.wait_for_function('document.readyState === "complete"')
         assert pending

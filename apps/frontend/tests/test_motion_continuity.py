@@ -6,7 +6,7 @@ from test_preview import browser_page, login, server  # noqa: F401
 def test_closing_dialog_allows_immediate_fresh_reopen(server, browser_page):
     page, _ = browser_page
     login(page, server)
-    trigger = page.get_by_role('button', name='＋ 手工建档', exact=True)
+    trigger = page.get_by_role('button', name='+ 手工建档', exact=True)
     trigger.click()
     page.get_by_role('textbox', name='项目全名', exact=True).fill('已放弃的动效验证草稿')
     page.get_by_role('dialog').get_by_role('button', name='取消', exact=True).click()
@@ -26,7 +26,7 @@ def test_closing_dialog_allows_immediate_fresh_reopen(server, browser_page):
 def test_live_reduced_motion_keeps_dialog_draft_and_close_protocol(server, browser_page):
     page, _ = browser_page
     login(page, server)
-    page.get_by_role('button', name='＋ 手工建档', exact=True).click()
+    page.get_by_role('button', name='+ 手工建档', exact=True).click()
     field = page.get_by_role('textbox', name='项目全名', exact=True)
     field.fill('切换动态设置时保留')
     page.emulate_media(reduced_motion='reduce')
@@ -43,7 +43,7 @@ def test_live_reduced_motion_keeps_dialog_draft_and_close_protocol(server, brows
 def test_leaving_dialog_releases_hit_target_and_mid_exit_reduction(server, browser_page):
     page, _ = browser_page
     login(page, server)
-    page.get_by_role('button', name='＋ 手工建档', exact=True).click()
+    page.get_by_role('button', name='+ 手工建档', exact=True).click()
     dialog = page.get_by_role('dialog')
     box = dialog.bounding_box()
     assert box
@@ -57,7 +57,7 @@ def test_leaving_dialog_releases_hit_target_and_mid_exit_reduction(server, brows
     expect(page.get_by_role('dialog')).to_have_count(0)
     page.emulate_media(reduced_motion='reduce')
     expect(page.locator('.business-modal-root')).to_have_count(0, timeout=1500)
-    page.get_by_role('button', name='＋ 手工建档', exact=True).click()
+    page.get_by_role('button', name='+ 手工建档', exact=True).click()
     # AntD's reduced-motion path focuses its first control (the close button).
     assert page.get_by_role('dialog').evaluate('e => e.contains(document.activeElement)')
     field = page.get_by_role('textbox', name='项目全名', exact=True)

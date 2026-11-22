@@ -8,7 +8,7 @@ from live_data import get,open_page
 def test_real_users_counts_and_anonymous_controls(server,browser_page,api):
     page,_=browser_page;data=get(api,'/api/m15/users');assert data['counts']['total']>=len(data['users'])
     open_page(page,server,'users','用户管理',authenticated=False)
-    expect(page.get_by_role('button',name='＋ 新增账号',exact=True)).to_be_disabled()
+    expect(page.get_by_role('button',name='+ 新增账号',exact=True)).to_be_disabled()
     assert page.request.post(server+'/api/m15/actions/create',data={}).status==401
     expect(page.locator('.users-block')).to_be_visible()
 

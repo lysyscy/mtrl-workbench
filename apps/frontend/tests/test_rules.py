@@ -12,11 +12,11 @@ def test_actual_rules_and_anonymous_write_protection(server,browser_page,api):
     assert data['ok'] and data['rules']
     open_page(page,server,'rules','规则配置',authenticated=False)
     expect(page.locator('.rules-block').first).to_be_visible()
-    expect(page.get_by_role('button',name='＋ 增加规则',exact=True)).to_be_disabled()
+    expect(page.get_by_role('button',name='+ 增加规则',exact=True)).to_be_disabled()
     assert page.request.post(server+'/api/m14/rules',data={}).status==401
     page.get_by_role('navigation', name='规则所属业务').get_by_role('button', name='集采台账').click()
     expect(page.get_by_role('heading', name='集采合同抓取剔除', exact=False)).to_be_visible()
-    expect(page.get_by_role('button', name='＋ 新增剔除规则', exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='+ 新增剔除规则', exact=True)).to_be_disabled()
     assert page.request.delete(server+'/api/m14/jc-ignore/1').status==401
 
 
@@ -29,7 +29,7 @@ def test_procurement_rule_create_search_filter_delete_and_receipt(server, browse
     nav = page.get_by_role('navigation', name='规则所属业务')
     expect(nav.get_by_role('button')).to_have_text(['付款通知书', '集采台账'])
     nav.get_by_role('button', name='集采台账').click()
-    page.get_by_role('button', name='＋ 新增剔除规则').click()
+    page.get_by_role('button', name='+ 新增剔除规则').click()
     add = page.get_by_role('dialog', name='新增集采剔除规则')
     add.get_by_label('匹配条件').select_option('contract')
     add.get_by_label('完整合同编号').fill(number)
@@ -142,7 +142,7 @@ def test_actual_rule_add_lost_response_never_resubmits(server, browser_page, api
 
     open_page(page, server, 'rules', '规则配置')
     page.route('**/api/m14/rules', fault)
-    new = page.get_by_role('button', name='＋ 增加规则', exact=True)
+    new = page.get_by_role('button', name='+ 增加规则', exact=True)
     new.click()
     form = page.get_by_role('dialog', name='新增剔除规则', exact=True)
     form.get_by_label('命中值', exact=False).fill(f' {value}，二号｜{value} ')
@@ -210,7 +210,7 @@ def test_rejected_rule_stays_editable_and_confirmed_rule_retries_only_the_read(s
             route.continue_()
 
     page.route('**/api/m14/rules', fault)
-    new = page.get_by_role('button', name='＋ 增加规则', exact=True)
+    new = page.get_by_role('button', name='+ 增加规则', exact=True)
     new.click()
     form = page.get_by_role('dialog', name='新增剔除规则', exact=True)
     values = form.get_by_label('命中值', exact=False)

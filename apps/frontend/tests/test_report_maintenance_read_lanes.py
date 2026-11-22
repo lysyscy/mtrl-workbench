@@ -207,7 +207,7 @@ def test_users_list_reports_its_own_read_and_gates_the_actions(server, browser_p
     expect(page.locator('.users-count')).to_have_count(0)
     expect(page.locator('.users-table:not(.users-read-reserve)')).to_have_count(0)
     # An action that needs the roster stays unavailable.
-    expect(page.get_by_role('button', name='＋ 新增账号', exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='+ 新增账号', exact=True)).to_be_disabled()
     before = page.locator('.users-read-reserve').bounding_box()
 
     fail_held(held, '账号列表读取暂时失败')
@@ -245,7 +245,7 @@ def test_rules_blocks_read_independently_and_report_in_place(server, browser_pag
     expect(failure.get_by_role('button', name='重试读取')).to_be_visible()
     expect(first.locator('.rules-read-reserve .read-placeholder-quiet')).to_have_count(1)
     # Adding a rule needs the kinds that the failed read would have supplied.
-    expect(first.get_by_role('button', name='＋ 增加规则', exact=True)).to_be_disabled()
+    expect(first.get_by_role('button', name='+ 增加规则', exact=True)).to_be_disabled()
 
     tabs = page.get_by_role('navigation', name='规则所属业务')
     tabs.get_by_role('button', name='集采台账').click()

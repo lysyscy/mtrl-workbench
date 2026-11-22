@@ -71,7 +71,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">
           <Button htmlType="submit" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'transfer' }); setError(''); }}>转让管理员</Button>
-          <Button htmlType="submit" className="primary" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'add' }); setError(''); }}>＋ 新增账号</Button>
+          <Button htmlType="submit" className="primary" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'add' }); setError(''); }}>+ 新增账号</Button>
         </div></div>
       {current && <p className="muted users-note">当前登录 {current.name || current.account}（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : '，只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
       <ReadStatusLane phase={readState} announce="正在读取账号列表…" className="users-read-status">
