@@ -407,9 +407,9 @@ def all_notice_rows(session):
     return repository.all_notice_rows(session)
 
 
-def debt_notice_rows(session):
+def debt_notice_rows(session, *, project_id: int | None = None):
     from app.mod03_notice import repository
-    return repository.debt_notice_rows(session)
+    return repository.debt_notice_rows(session, project_id=project_id)
 
 
 def stat_paid_of_many(session, ids):

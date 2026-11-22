@@ -358,9 +358,9 @@ def notice_ids_rows(s: Session, notice_ids: list[int]) -> list[PaymentNotice]:
     return notices.get_notices_by_ids(s, notice_ids)
 
 
-def debt_notice_rows(s: Session):
+def debt_notice_rows(s: Session, *, project_id: int | None = None):
     from app.mod03_notice import service as notices
-    return notices.debt_notice_rows(s)
+    return notices.debt_notice_rows(s, project_id=project_id)
 
 
 __all__ = [

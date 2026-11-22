@@ -77,7 +77,8 @@ def test_no_opening_preserves_old_months_and_export(session, cat, auto, tmp_path
             by_month = {r[1]: r for r in values}
             assert by_month["2024-07"][3] == 10
             assert by_month["未填单据日期付款"][3] == 25.12
-            assert "2025-11及之前" not in by_month
+            november = "2025-11及之前" if cat == "material" else "2025-11"
+            assert by_month[november][3] == 0  # Other historical months are still separate rows.
             assert D(str(by_month["合计："][3])) == D("55.12")
         finally:
             workbook.close()

@@ -89,7 +89,7 @@ def writable_mech_values(row, values):
     return writable
 
 
-def load_mech(s: Session, *, with_sources: bool = True) -> list[dict]:
+def load_mech(s: Session, *, with_sources: bool = True, warehouse: str | None = None) -> list[dict]:
     """Effective six-column amounts and independently editable cell sources.
 
     `with_sources=False` 供只用原值的装配（报表矩阵）跳过来源签名：它既不读 `sources`
@@ -99,7 +99,10 @@ def load_mech(s: Session, *, with_sources: bool = True) -> list[dict]:
     columns = ((ProcMechManual,) if with_sources else
                (ProcMechManual.ym, ProcMechManual.warehouse_name, ProcMechManual.project_id,
                 *(getattr(ProcMechManual, column) for column in MECH_KEYS)))
-    result = s.execute(select(*columns))
+    stmt = select(*columns)
+    if warehouse is not None:
+        stmt = stmt.where(ProcMechManual.warehouse_name == warehouse)
+    result = s.execute(stmt)
     for row in result.scalars() if with_sources else result.all():
         base = {'ym': row.ym or '', 'warehouse': row.warehouse_name or '', 'project_id': row.project_id,
                 **{column: getattr(row, column) for column in MECH_KEYS}}

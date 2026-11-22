@@ -344,13 +344,15 @@ def all_notice_rows(session: Session) -> list[PaymentNotice]:
     return list(session.execute(select(PaymentNotice).order_by(PaymentNotice.id.asc())).scalars().all())
 
 
-def debt_notice_rows(session: Session) -> list[Row]:
-    """欠款事实窄投影，保留全部行及顺序，避免重复解码无关原始 JSON。"""
+def debt_notice_rows(session: Session, *, project_id: int | None = None) -> list[Row]:
+    """欠款事实窄投影；项目台账仅读指定归属，其余读者保留全量顺序。"""
     stmt = select(
         PaymentNotice.id, PaymentNotice.doc_date, PaymentNotice.category,
         PaymentNotice.stat_settle, PaymentNotice.stat_paid,
         PaymentNotice.excluded, PaymentNotice.ownership_id,
     ).order_by(PaymentNotice.id.asc())
+    if project_id is not None:
+        stmt = stmt.where(PaymentNotice.ownership_id == project_id)
     return list(session.execute(stmt))
 
 

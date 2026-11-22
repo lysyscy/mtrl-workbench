@@ -64,10 +64,10 @@ list_flows = repo.list_flows            # 完整流水的兼容出口（含已�
 # ---------------------------------------------------------------- 输入行视图
 
 
-def notice_debt_views(s: Session) -> list[NoticeDebtView]:
+def notice_debt_views(s: Session, *, project_id: int | None = None) -> list[NoticeDebtView]:
     """付款通知书 → 欠款/台账视图；付款统计只借其归属和剔除信息。"""
     out: list[NoticeDebtView] = []
-    for n in repo.debt_notice_rows(s):
+    for n in repo.debt_notice_rows(s, project_id=project_id):
         cat = str(n.category or "").strip() or CATEGORY_MATERIAL
         out.append(
             NoticeDebtView(
@@ -291,12 +291,20 @@ def build_debt_live(s: Session, *, facts: dom.DebtFacts | None = None, **kw) -> 
     return build_debt(s, **kw)
 
 
-def mechanical_settlements(s: Session) -> dict[int, dict[str, Decimal]]:
+def mechanical_settlements(
+    s: Session, *, project_id: int | None = None, projects: dict[int, Project] | None = None,
+) -> dict[int, dict[str, Decimal]]:
     from app.mod06_proc import service as proc
-    index = {project_key(p): pid for pid, p in project_index(s).items() if project_key(p)}
+    projects = project_index(s) if projects is None else projects
+    index = {project_key(p): pid for pid, p in projects.items() if project_key(p)}
     if not index:
         return {}
-    return _mechanical_settlements_of(index, proc.load_mech(s))
+    warehouse = None
+    if project_id is not None:
+        warehouse = project_key(projects.get(project_id))
+        if index.get(warehouse) != project_id:
+            return {}
+    return _mechanical_settlements_of(index, proc.load_mech(s, with_sources=False, warehouse=warehouse))
 
 
 def _mechanical_settlements_of(index: dict, rows: list[dict]) -> dict[int, dict[str, Decimal]]:
@@ -477,9 +485,11 @@ def build_ledger(
     - 空月也出行（三列记 0）
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
-    rows = notice_debt_views(s)
+    project_id = int(project_id)
+    rows = notice_debt_views(s, project_id=project_id)
     records = repo.list_openings(s, project_id=project_id)
-    mech_settle = mechanical_settlements(s).get(int(project_id), {})
+    projects = project_index(s)
+    mech_settle = mechanical_settlements(s, project_id=project_id, projects=projects).get(project_id, {})
     sides = []
     for cat in dom.LEDGER_SIDES:
         monthly = dom.monthly_aggregate(rows, cat, int(project_id))
@@ -526,7 +536,7 @@ def build_ledger(
         sides.append({"category": cat, "label": CATEGORY_LABELS[cat],
                       "rows": shown, "display_rows": shown, "opening_id": None,
                       "has_manual_input": cat == CATEGORY_MATERIAL})
-    return {"project_id": int(project_id), "project_options": project_options(s), "sides": sides,
+    return {"project_id": int(project_id), "project_options": project_options(s, projects), "sides": sides,
             "historical_cutoff": history.CUTOFF, "shared_project_selector": dom.SHARED_PROJECT_SELECTOR,
             "shared_export_entry": dom.SHARED_EXPORT_ENTRY,
             "has_switch_caliber_button": dom.HAS_SWITCH_CALIBER_BUTTON}

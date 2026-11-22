@@ -38,7 +38,8 @@ def test_history_manual_auto_and_export_are_independent(session, tmp_path, monke
         assert spec['tail'][0][1]['D'] == Decimal('6000')
         assert spec['tail'][0][1]['E'] == Decimal('4000')
         assert '未填' in data['rows'][0]['month_label']
-        assert [r[1]['B'] for r in spec['rows']] == [data['rows'][0]['month_label'], '2025-11', '2025-12']
+        november = '2025-11及之前' if cat == 'material' else '2025-11'
+        assert [r[1]['B'] for r in spec['rows']] == [data['rows'][0]['month_label'], november, '2025-12']
         assert sum(Decimal(r['payment']) for r in data['rows'] if r['counts_in_total']) == Decimal('6000')
         assert data['rows'][1]['record_id'] == opening.id
         # 核对完整导出调用者写出的实际单元格，非仅拼装spec。
@@ -51,7 +52,7 @@ def test_history_manual_auto_and_export_are_independent(session, tmp_path, monke
             ws = wb[ledger_export.SHEET_OF_CATEGORY[cat]]
             exported = {r[1].value: r[3].value for r in ws.iter_rows()}
             assert exported[data['rows'][0]['month_label']] == 2000
-            assert exported['2025-11'] == 4000
+            assert exported[november] == 4000
             assert not any(' · ' in str(label) for label in exported)
             tail = next(r for r in ws.iter_rows() if r[1].value == '合计：')
             assert tail[3].value == 6000

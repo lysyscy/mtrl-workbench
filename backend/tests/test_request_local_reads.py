@@ -30,12 +30,10 @@ def test_m05_reuses_openings_and_keeps_ids_and_amounts(monkeypatch):
 def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch):
     openings = [SimpleNamespace(category=CATEGORY_MATERIAL, project_id=7, cutoff_ym='2026-01', settle_amount=Decimal('9'), paid_amount=Decimal('4'), id=31, entry_kind='manual', remark='')]
     calls = []
-    monkeypatch.setattr(M5, "notice_debt_views", lambda _s: [])
+    monkeypatch.setattr(M5, "notice_debt_views", lambda _s, *, project_id: [])
     monkeypatch.setattr(M5.repo, 'list_openings', lambda _s, project_id=None: calls.append(project_id) or openings)
-    monkeypatch.setattr(M5, "project_options", lambda _s: [])
+    monkeypatch.setattr(M5, "project_index", lambda _s: {})
     monkeypatch.setattr(M5.repo, "remarks_map", lambda *args, **kwargs: {})
-    monkeypatch.setattr("app.mod01_projects.service.all_projects", lambda _s: [])
-    monkeypatch.setattr(M5, "mechanical_settlements", lambda _s: {})
 
     ledger = M5.build_ledger(None, project_id=7, end_ym="2026-02")
 
@@ -68,6 +66,37 @@ def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
 
     assert result["ok"] is False
     assert closed == [True]
+
+
+def test_ledger_scopes_notice_ownership_and_mechanical_warehouse_independently(rollback_db):
+    from app.core.db import session_scope
+    from app.mod01_projects.models import Project
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod06_proc.models import ProcMechManual
+
+    with session_scope() as session:
+        left = Project(warehouse_name="月账甲仓", name_full="甲")
+        right = Project(warehouse_name="月账乙仓", name_full="乙")
+        session.add_all([left, right])
+        session.flush()
+        session.add_all([
+            PaymentNotice(ph_id="月账甲单", ownership_id=left.id, category="", doc_date="2025-03-11",
+                          stat_settle=Decimal("23.51"), stat_paid=Decimal("1.34")),
+            PaymentNotice(ph_id="月账乙单", ownership_id=right.id, category="material", doc_date="2025-03-12",
+                          stat_settle=Decimal("72.80"), stat_paid=Decimal("6.75")),
+            # Historical mechanical rows can have no project ID or an ID unrelated to their warehouse.
+            ProcMechManual(warehouse_name=left.warehouse_name, project_id=right.id, ym="2025-03",
+                           mech_0=Decimal("99"), mech_2=Decimal("13.27"), mech_3=Decimal("1.81")),
+            ProcMechManual(warehouse_name=right.warehouse_name, ym="2025-03", mech_2=Decimal("5.00")),
+        ])
+        session.flush()
+        for project, settle, paid, mechanical in [(left, "23.51", "1.34", "15.08"), (right, "72.80", "6.75", "5.00")]:
+            ledger = M5.build_ledger(session, project_id=project.id, end_ym="2025-03")
+            material, machine = ledger["sides"]
+            march = next(row for row in material["rows"] if row["month"] == "2025-03")
+            assert (march["other_expense"], march["payment"]) == (settle, paid)
+            assert next(row for row in machine["rows"] if row["month"] == "2025-03")["other_expense"] == mechanical
+            assert {left.id, right.id} <= {option["id"] for option in ledger["project_options"]}
 
 
 def test_debt_projection_keeps_all_facts_and_reads_fresh_values():
