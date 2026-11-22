@@ -55,8 +55,10 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
     ⚠️ **筛选后的行数就是 `count`**；判据要求「筛选后行数 = **独立复算**、**复位后回到全量**」⇒
        本函数**不缓存、不带隐式默认筛选**（不给参数 = 全量）。
     """
-    sequences = D.project_sequences(list_contracts(s))
-    rows = list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
+    rows = list_contracts(s)
+    sequences = D.project_sequences(rows)
+    if tags or arch or supplier or project_key:
+        rows = list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
     inv_map = R.invoices_of_many(s, [r["id"] for r in rows])
     pay_map = R.payments_of_many(s, [r["id"] for r in rows])
 

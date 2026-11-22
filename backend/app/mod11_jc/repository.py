@@ -140,9 +140,10 @@ def invoices_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
     ids = [int(i) for i in contract_ids]
     if not ids:
         return {}
-    stmt = select(JcInvoice).where(JcInvoice.contract_id.in_(ids)).order_by(JcInvoice.contract_id, JcInvoice.id)
+    stmt = (select(JcInvoice.contract_id, JcInvoice.id, JcInvoice.kind, JcInvoice.invoice_date, JcInvoice.amount)
+            .where(JcInvoice.contract_id.in_(ids)).order_by(JcInvoice.contract_id, JcInvoice.id))
     out: dict[int, list[dict]] = {i: [] for i in ids}
-    for r in s.execute(stmt).scalars().all():
+    for r in s.execute(stmt):
         out.setdefault(r.contract_id, []).append(
             {"id": r.id, "kind": r.kind, "date": r.invoice_date, "amount": r.amount}
         )
@@ -157,9 +158,10 @@ def payments_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
     from app.mod03_notice import service as notices
     from app.mod05_flow import service as flows
 
-    rows = list(s.execute(select(JcPayment).where(
-        JcPayment.contract_id.in_(ids)
-    ).order_by(JcPayment.contract_id, JcPayment.id)).scalars().all())
+    stmt = (select(JcPayment.contract_id, JcPayment.id, JcPayment.source, JcPayment.notice_id,
+                   JcPayment.pay_date, JcPayment.amount)
+            .where(JcPayment.contract_id.in_(ids)).order_by(JcPayment.contract_id, JcPayment.id))
+    rows = s.execute(stmt).all()
     notice_ids = sorted({int(r.notice_id) for r in rows if r.notice_id is not None})
     # 两个主人各批量读取一次，调用次数不随合同/通知书数量增长。
     stats = notices.stat_paid_of_many(s, notice_ids)
