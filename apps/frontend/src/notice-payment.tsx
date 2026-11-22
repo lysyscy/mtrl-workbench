@@ -166,6 +166,8 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     lock.current=true;
     try { await sendPayment(); } finally { lock.current=false; }
   }
+  const draftAmount = useCallback((row: NoticeRow) => amount(draft(row).amount), [draft]);
+  const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
   const warningIds = useMemo(() => shownContext?.rows.filter(item => item.term_warning).map(item => item.notice_id) ?? [], [shownContext]);
   return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
@@ -178,11 +180,11 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
         {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
         {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
         {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
-      ]}/> : <PaymentGrid scale={Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} />}
+      ]}/> : <PaymentGrid scale={scale} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} />}
       {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
       {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
       {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
-      {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} project={id => rows.find(row => row.notice_id === id)?.project_display || '—'} amount={id => { const row = rows.find(row => row.notice_id === id); return row ? amount(draft(row).amount) : null; }} />}
+      {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} notices={rows} amount={draftAmount} scale={scale} />}
       {phase === 'confirm' && <p className="payment-confirmation" role="alert">{checked?.available ? '该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？' : '本次未完成账期判断，请按合同人工核对后决定是否继续付款。'}</p>}
 
     </>}
