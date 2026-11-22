@@ -217,7 +217,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const batchReason = searchBusy ? '正在更新筛选结果' : hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
   function openPayment() {
     if (batchUnavailable || !selectedPay.length || draft) return;
-    const next = {...payOverrides};
+    const updates: Record<number, PayOverride> = {};
     for (const row of selectedPay) {
       const input = payDrafts.current[row.notice_id];
       if (!input || input.basis !== `${row.amount_approved}:${row.amount_paid}`) continue;
@@ -230,10 +230,11 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         requestAnimationFrame(() => pageRoot.current?.querySelector<HTMLInputElement>(`[data-pay-notice="${row.notice_id}"]`)?.focus());
         return;
       }
-      next[row.notice_id] = {...input,value};
+      updates[row.notice_id] = {...input,value};
     }
     for (const row of selectedPay) delete payDrafts.current[row.notice_id];
-    setPayError('');setPayOverrides(next);setPayIds([...picked]);
+    if (Object.keys(updates).length) setPayOverrides(old => ({...old,...updates}));
+    setPayError('');setPayIds([...picked]);
   }
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
     void resetNoticeTodos(client);
