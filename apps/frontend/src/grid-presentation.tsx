@@ -58,7 +58,7 @@ export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClass
   const {visible} = presentation, {root, definitions, context, geometry, preparation, widths, rows, totals} = presentation[details];
   useFirstReadGrid(preparation.state === 'error' ? 'error' : preparation.state === 'ready' && visible ? 'ready' : 'preparing');
   const {onGridReady, ...options} = grid;
-  const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
+  const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible || container.inert} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
       data-layout-state={preparation.state} data-layout-error={preparation.error || undefined} aria-busy={preparation.state !== 'ready'}>
       <AgGridReact<T> {...options} autoSizeStrategy={widths.strategy} columnDefs={definitions} rowData={rows} pinnedBottomRowData={totals} context={context} rowHeight={geometry.rowHeight} headerHeight={geometry.headerHeight}
         onGridReady={event => { widths.attach(event.api); preparation.attach(event.api); onGridReady?.(event); }} />

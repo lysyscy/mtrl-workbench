@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef } from 'react';
+import { createContext, useContext, useMemo, useRef } from 'react';
 import { ApiError, uncertainWrite } from './api';
 import { saveNoticeAmount, money, noticeAmountLabels, noticeAmountMatches } from './notices-api';
 import type { NoticeRow } from './notices-api';
@@ -35,21 +35,22 @@ export function useNoticeCellSaves({ rows, enabled, canWrite, read }: {
     acknowledge: (current, submitted) => { attempt.current = null; return current.revision === submitted.revision ? undefined : current; },
     saved: () => '',
   }, { key: 'notice-cells', label: '通知书金额' });
-  const cells: Cells = {
-    drafts: saves.drafts, disabled: !enabled || !canWrite || saves.uncertain, save: saves.save,
-    change: (row, field, value) => saves.update((drafts, writing) => {
+  const { save, update, drafts, uncertain } = saves;
+  const cells = useMemo<Cells>(() => ({
+    drafts, disabled: !enabled || !canWrite || uncertain, save,
+    change: (row, field, value) => update((drafts, writing) => {
       const key = keyOf(row.notice_id, field), next = { ...drafts };
       if (!writing && value === row[field]) delete next[key];
       else next[key] = { id: row.notice_id, field, value, revision: ++revision.current, error: '' };
       return next;
     }),
-    cancel: key => saves.update((drafts, writing) => {
+    cancel: key => update((drafts, writing) => {
       const next = { ...drafts }, submitted = attempt.current;
       if (writing && submitted && key === keyOf(submitted.id, submitted.field)) next[key] = submitted;
       else delete next[key];
       return next;
     }),
-  };
+  }), [drafts, enabled, canWrite, uncertain, save, update]);
   function confirm() {
     if (!saves.verified || saves.busy || !enabled) return;
     saves.confirm('');
