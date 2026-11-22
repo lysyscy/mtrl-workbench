@@ -27,7 +27,7 @@ from app.core.errors import MustReportError
 from app.core.period import default_period
 from app.mod03_notice import repository as repo
 from app.mod03_notice.list_data import PERIOD_DEFAULT_KEY, build_page_data
-from app.mod03_notice.list_view import CATEGORY_ALL, NoticeFilters
+from app.mod03_notice.list_view import CATEGORY_ALL, NoticeFilters, home_todo_counts
 from app.mod03_notice.models import EXCLUDE_BY_MANUAL, EXCLUDE_NONE
 from app.mod03_notice.notice_actions import (
     change_category,
@@ -473,6 +473,11 @@ def _api_item(rec: dict) -> dict:
         "is_overpaid": bool(row.is_overpaid),
     })
     return out
+
+
+@api_router.get("/api/m03/notice-todos")
+def get_home_todos(session: Session = DBSession) -> dict[str, int]:
+    return home_todo_counts(session)
 
 
 @api_router.get("/api/m03/notice-list")

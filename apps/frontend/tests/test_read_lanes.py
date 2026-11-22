@@ -209,7 +209,7 @@ def test_home_keeps_its_tiles_while_the_todo_read_is_in_flight(server, browser_p
     page, _ = browser_page
     login(page, server)
     held = []
-    page.route('**/api/m03/notice-list?*', lambda route: held.append(route))
+    page.route('**/api/m03/notice-todos', lambda route: held.append(route))
     page.goto(server + '/preview', wait_until='domcontentloaded')
     expect(page.locator('.home-todos')).to_be_visible()
     assert held, 'The actual todo read was not held'
@@ -221,7 +221,7 @@ def test_home_keeps_its_tiles_while_the_todo_read_is_in_flight(server, browser_p
     before = page.locator('.home-todos').bounding_box()
     for route in held:
         route.continue_()
-    page.unroute('**/api/m03/notice-list?*')
+    page.unroute('**/api/m03/notice-todos')
 
     expect(page.locator('.home-tile-count-reading')).to_have_count(0)
     expect(page.locator('.home-read-lane [role=status]')).to_have_count(0)

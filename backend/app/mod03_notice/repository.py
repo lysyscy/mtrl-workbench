@@ -296,14 +296,23 @@ def list_notices(session: Session, *, bill_type: str | None = None, limit: int =
 NOTICE_LIST_LIMIT = 5000
 
 
+def _notice_list_window(stmt, limit: int):
+    return stmt.order_by(PaymentNotice.doc_date.desc(), PaymentNotice.id.desc()).limit(limit)
+
+
+def notice_todo_rows(session: Session) -> list[Row]:
+    stmt = select(PaymentNotice.id, PaymentNotice.ownership_id, PaymentNotice.category,
+                  PaymentNotice.i8_revoked, PaymentNotice.excluded, PaymentNotice.amount_approved)
+    return list(session.execute(_notice_list_window(stmt, NOTICE_LIST_LIMIT)))
+
+
 def notice_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[PaymentNotice]:
     """全部通知书行（按单据日期倒序）—— **列表页的取数出口**（剔除/撤单行**也返回**）。
 
     ⚠️ 剔除与撤单行的「默认隐藏」是**筛选层**的事（`list_view.filter_rows`），不是取数层 ——
        取数层必须给全，否则计数与「分类 = 剔除」视图都算不出来。
     """
-    stmt = select(PaymentNotice).order_by(PaymentNotice.doc_date.desc(), PaymentNotice.id.desc())
-    return list(session.execute(stmt.limit(limit)).scalars().all())
+    return list(session.execute(_notice_list_window(select(PaymentNotice), limit)).scalars().all())
 
 
 def upsert_notice(session: Session, *, ph_id: str, **fields) -> PaymentNotice:

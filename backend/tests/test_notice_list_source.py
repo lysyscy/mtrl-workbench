@@ -54,3 +54,64 @@ def test_开了给全开关就多出剔除与撤单行():
     # ⛔ 反面：`False` 时它们必须**不在**里面（页面视图的默认隐藏不能因此失效）
     assert not [r for r in off if r.in_exclude_view], \
         "`include_archived=False` 时剔除/撤单行不该出现（页面视图的默认隐藏被弄坏了）"
+
+
+def test_home_todos_match_list_window_through_payment_and_link_changes(rollback_db, monkeypatch):
+    from decimal import Decimal
+    from app.mod01_projects.models import Project
+    from app.mod03_notice import repository
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod03_notice.notice_api_router import get_home_todos, get_notice_list
+    from app.mod05_flow.models import PaymentFlow
+    from app.mod11_jc.models import JcContract, JcPayment
+
+    # Exercise the real cap/order on a small, tied-date window in the rollback schema.
+    window = repository._notice_list_window
+    def test_window(stmt, limit):
+        assert limit == repository.NOTICE_LIST_LIMIT
+        return window(stmt.where(PaymentNotice.ph_id.startswith("test-home-todo-")), 7)
+    monkeypatch.setattr(repository, "_notice_list_window", test_window)
+
+    with session_scope() as s:
+        def check(ownership, jc, void, count=7):
+            expected = {"notice_count": count, "ownership": ownership, "jc": jc, "void": void}
+            assert get_home_todos(session=s) == expected
+            items = get_notice_list(period="", project=[], category="", approve_status="", pay_status="",
+                                    sort="", dir=0, session=s)["items"]
+            live = [row for row in items if not row["is_excluded"] and
+                    (not row["is_revoked"] or Decimal(row["amount_paid"]) > 0 or row["has_link"])]
+            assert (len(items), sum(row["ownership_id"] is None for row in live),
+                    sum(row["category"] == "jc" and not row["has_link"] and row["pay_status"] == "未付清"
+                        for row in live), sum(row["is_revoked"] for row in live)) == (count, ownership, jc, void)
+
+        check(0, 0, 0, 0)
+        project = Project(warehouse_name="首页待办测试仓", name_full="测试项目", phid="test-home-todo-project")
+        s.add(project)
+        s.flush()
+        contract = JcContract(project_id=project.id)
+        s.add(contract)
+        def notice(name, **fields):
+            row = PaymentNotice(ph_id="test-home-todo-" + name, doc_date="2026-11-22",
+                                amount_approved=10, amount_paid=100, stat_paid=100, **fields)
+            s.add(row)
+            s.flush()
+            return row
+        notice("outside", category="jc")
+        unpaid = notice("unpaid", category=" jc ")
+        paid = notice("paid", category="jc", ownership_id=project.id)
+        revoked = notice("reversed", category="jc", i8_revoked=True)
+        joint = notice("joint", category="material", i8_revoked=True)
+        linked = notice("linked", category="jc", i8_revoked=True)
+        notice("excluded", category="jc", excluded=True)
+        notice("assigned", category="material", ownership_id=project.id)
+        link = JcPayment(contract_id=contract.id, source="notice", notice_id=linked.id)
+        s.add_all([link, PaymentFlow(notice_id=joint.id, amount=1),
+                   PaymentFlow(notice_id=revoked.id, amount=10, status="revoked"),
+                   PaymentFlow(notice_id=paid.id, amount=10, status="")])
+        s.flush()
+        check(3, 1, 2)
+        unpaid.ownership_id = project.id
+        s.delete(link)
+        s.add(PaymentFlow(notice_id=unpaid.id, amount=10))
+        s.flush()
+        check(1, 0, 1)

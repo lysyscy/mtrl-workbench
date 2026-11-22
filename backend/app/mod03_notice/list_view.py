@@ -176,6 +176,10 @@ class NoticeRow:
 # ---------------------------------------------------------------- 装配（薄层：唯一查库处）
 
 
+def _row_category(value) -> str:
+    return str(value or "").strip() or CATEGORY_MATERIAL
+
+
 def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_ids: list[int] | None = None) -> list[NoticeRow]:
     """读 `payment_notice` ＋ 流水 ＋ 手改留痕 → 列表行。
 
@@ -222,7 +226,7 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
                 bill_no=str(n.bill_no or ""),
                 bill_name=str((n.fields or {}).get("BillName") or ""),
                 project_name=str(n.project_name or ""),
-                category=str(n.category or "").strip() or CATEGORY_MATERIAL,
+                category=_row_category(n.category),
                 biz_type=str(n.biz_type or ""),
                 payee=str(n.payee or ""),
                 input_by=str(n.input_by or ""),
@@ -247,6 +251,32 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
             )
         )
     return rows
+
+
+def home_todo_counts(session) -> dict[str, int]:
+    """首页三个入口共用通知书列表的有效行、付款状态和最新单据范围。"""
+    from app.mod03_notice.repository import notice_todo_rows
+
+    notices = notice_todo_rows(session)
+    # Only these rows can depend on payment or linkage for a home tile. Apply
+    # this cut after the list window so archived rows still occupy their place.
+    ids = [n.id for n in notices if not n.excluded and (n.i8_revoked or _row_category(n.category) == CATEGORY_JC)]
+    flows_of = _flows_by_notice(session, ids)
+    links_of = _links_by_notice(session, ids)
+    counts = {"notice_count": len(notices), "ownership": 0, "jc": 0, "void": 0}
+    for n in notices:
+        row = NoticeRow(notice_id=n.id, ownership_id=n.ownership_id, category=_row_category(n.category),
+                        excluded=n.excluded, i8_revoked=n.i8_revoked, has_link=bool(links_of(n.id)),
+                        amount_approved=n.amount_approved, amount_paid=effective_total(flows_of(n.id)))
+        if not row.is_live:
+            continue
+        if not row.ownership_id:
+            counts["ownership"] += 1
+        if row.category == CATEGORY_JC and not row.has_link and row.pay_status == PAY_STATUS_UNPAID:
+            counts["jc"] += 1
+        if row.i8_revoked:
+            counts["void"] += 1
+    return counts
 
 
 def _traces_by_notice(session, notice_ids: list[int] | None = None):
