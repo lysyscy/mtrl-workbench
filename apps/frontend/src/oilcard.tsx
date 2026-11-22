@@ -101,9 +101,10 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const [cardStatus, setCardStatus] = useState('active');
   const [focusPrimaryId, setFocusPrimaryId] = useState<number | null>(null);
   const [archiving, setArchiving] = useState<{ account: OilAccount; card: OilCard } | null>(null);
-  const [ledgerVisited, setLedgerVisited] = useState(false), [ledgerLocked, setLedgerLocked] = useState(false);
+  const [visited, setVisited] = useState(() => new Set<typeof tab>(['overview']));
+  const [ledgerLocked, setLedgerLocked] = useState(false);
   const [ledgerUncertain, setLedgerUncertain] = useState(false);
-  const [linkageVisited, setLinkageVisited] = useState(false), [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
+  const [linkageLocked, setLinkageLocked] = useState(false), [linkageUncertain, setLinkageUncertain] = useState(false);
   const [pending, setPending] = useState<PendingAccount | null>(null), pendingRef = useRef(pending); pendingRef.current = pending;
   const [historyAccount, setHistoryAccount] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
@@ -285,7 +286,10 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const projectsWait = projects.isPending && !projects.data;
   const dependencyPhase = data && (projects.data || projects.isError) ? 'content' : !data && query.isError ? 'error' : 'pending';
   const renderRemark = useCallback((kind: ArchiveKind, row: OilCard | OilAccount) => <ArchiveEditor kind={kind} row={row} field="remark" />, []);
-  function chooseTab(value: typeof tab) { if (value === 'ledger') setLedgerVisited(true); if (value === 'linkage') setLinkageVisited(true); setTab(value); }
+  function chooseTab(value: typeof tab) {
+    setVisited(previous => previous.has(value) ? previous : new Set(previous).add(value));
+    setTab(value);
+  }
   return <section className={`oilcard-page${tab === 'ledger' || tab === 'archives' ? ' oilcard-page-bounded' : ''}`} aria-label="油卡管理">
     <div data-page-chrome className="oilcard-workspace-bar"><div className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'archives', label: '账户与油卡' }] as const).map(item => <button type="button" className="oilcard-tab" key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} onClick={() => chooseTab(item.value)}>{item.label}{tab === item.value && <WorkspaceMarker className="oilcard-tab-marker" layoutId="oilcard-workspace-tab" />}</button>)}</div><OilTotalExport disabled={disabled || busy || ledgerLocked || linkageLocked} active={active && !blocked} /></div>
     {!me && <p className="state">登录后可维护油卡档案。</p>}
@@ -301,9 +305,9 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       <div className="workspace-panels">
       {(tab === 'ledger' || tab === 'linkage') && (!data || projectsWait) && <div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}
       <WorkspacePanel id="oilcard-panel-overview" labelledBy="oilcard-tab-overview" active={tab === 'overview'}><PageActivity.Provider value={active && tab === 'overview'}><OilReconciliationSheet archives={data} dependencyPhase={dependencyPhase} projects={projects.data ?? []} active={active && tab === 'overview'} blocked={blocked} scale={scale} remark={renderRemark} sortDisabled={structuralDisabled} movePrimary={(previous, order) => reorder('primary', null, previous, order)} /></PageActivity.Provider></WorkspacePanel>
-      {ledgerVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-ledger" labelledBy="oilcard-tab-ledger" active={tab === 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></WorkspacePanel>}
-      {linkageVisited && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} accounts={data.accounts} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
-      <WorkspacePanel id="oilcard-panel-archives" labelledBy="oilcard-tab-archives" active={tab === 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
+      {visited.has('ledger') && data && !projectsWait && <WorkspacePanel id="oilcard-panel-ledger" labelledBy="oilcard-tab-ledger" active={tab === 'ledger'}><PageActivity.Provider value={active && tab === 'ledger'}><OilLedgerSheet me={me} archives={data} projects={projects.data ?? []} active={active && tab === 'ledger'} blocked={blocked} scale={scale} archiveLocked={busy || uncertain || linkageLocked || query.isError || projects.isError} onWriteLock={setLedgerLocked} onUncertain={setLedgerUncertain} /></PageActivity.Provider></WorkspacePanel>}
+      {visited.has('linkage') && data && !projectsWait && <WorkspacePanel id="oilcard-panel-linkage" labelledBy="oilcard-tab-linkage" active={tab === 'linkage'}><PageActivity.Provider value={active && tab === 'linkage'}><OilLinkageSheet me={me} projects={projects.data ?? []} accounts={data.accounts} active={active && tab === 'linkage'} blocked={blocked} scale={scale} otherLocked={busy || uncertain || ledgerLocked || query.isError || projects.isError} onWriteLock={setLinkageLocked} onUncertain={setLinkageUncertain} /></PageActivity.Provider></WorkspacePanel>}
+      {visited.has('archives') && <WorkspacePanel id="oilcard-panel-archives" labelledBy="oilcard-tab-archives" active={tab === 'archives'}><PageActivity.Provider value={active && tab === 'archives'}>
         {data && <div className="oilcard-archive-relations">
           <div data-page-chrome className="oilcard-receive-actions">
             <label>按主卡核对<Select aria-label="按主卡核对" allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="输入卡号或尾号"
@@ -329,7 +333,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
         {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="normal" grid={{ ...cardDrag.grid,
           rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary', 'grid-row-dragging': p => p.node.id === cardDrag.rowId },
         }} />}</FirstReadRegion></section></div>
-      </PageActivity.Provider></WorkspacePanel>
+      </PageActivity.Provider></WorkspacePanel>}
       </div>
     </ArchiveCells.Provider>
     <DialogPresence>{archiving && <OilArchiveAccountDialog account={archiving.account} card={archiving.card} busy={busy} error={error}

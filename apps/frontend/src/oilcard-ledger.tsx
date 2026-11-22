@@ -31,7 +31,7 @@ import type { OilEntryDraft as Draft } from './oilcard-ledger-edits';
 type Field = keyof EntryFields;
 type TableRow = OilEntry & { total?: boolean };
 const labels: Record<Field, string> = { date_text: '日期', kind: '类型', project_id: '项目', account_id: '用卡账户', amount: '金额', remark: '备注' };
-interface Cells { drafts: Record<string, Draft>; entries: ReadonlyMap<string, OilEntry>; archives: OilArchives; projects: Project[]; disabled: boolean; busy: boolean; structuralDisabled: boolean; remove: (row: OilEntry) => void; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
+interface Cells { drafts: Record<string, Draft>; entries: ReadonlyMap<string, OilEntry>; archives: OilArchives; projects: Project[]; disabled: boolean; editorDisabled: boolean; busy: boolean; structuralDisabled: boolean; remove: (row: OilEntry) => void; change: (key: string, field: Field, value: string) => void; save: (key: string) => void }
 const LedgerCells = createContext<Cells | null>(null);
 
 function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
@@ -41,7 +41,7 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
   if (node.rowPinned) return field === 'date_text' ? '合计' : field === 'amount' ? money(row.amount) : '';
   const draft = state.drafts[row.request_id], current = draft ?? state.entries.get(row.request_id);
   if (!current) return null;
-  return <EntryEditor current={current} field={field} draft={draft} disabled={state.disabled || !current.id && state.busy}
+  return <EntryEditor current={current} field={field} draft={draft} disabled={state.editorDisabled || !current.id && state.busy}
     projects={state.projects} archives={state.archives} change={state.change} save={state.save} />;
 }
 
@@ -136,7 +136,11 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   draftRef.current = drafts;
   useEffect(() => { onWriteLock(busy || uncertain || invoiceLocked); }, [busy, uncertain, invoiceLocked, onWriteLock]);
   useEffect(() => { onUncertain(uncertain || invoiceUncertain); }, [uncertain, invoiceUncertain, onUncertain]);
-  const disabled = !active || blocked || !me || uncertain || invoiceLocked || !query.data || query.isError || archiveLocked;
+  // Inactive sheets are inert. Toggling every native control during the visual
+  // exit would re-render each calendar and select; writes still check activity.
+  const editorDisabled = blocked || !me || uncertain || invoiceLocked || !query.data || query.isError || archiveLocked;
+  const disabled = !active || editorDisabled;
+  const editingAllowed = useRef(false); editingAllowed.current = !disabled;
   const structuralDisabled = disabled || busy || Object.keys(drafts).length > 0;
   const filterOptions = useMemo<Record<Field, ValueFilterOptions<TableRow>>>(() => {
     const saved = (row: TableRow) => savedRows.current.get(row.request_id);
@@ -159,7 +163,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     if (draft && draft.project_id && draft.account_id && draft.amount.trim()) queueSave(key);
   }, [queueSave]);
   const change = useCallback((key: string, field: Field, value: string) => {
-    if (disabled) return;
+    if (!editingAllowed.current) return;
     updateDrafts((ds, writing) => {
       const result = editOilEntry(ds, current.current?.entries ?? [], key, field, value, archives.accounts, writing);
       draftRef.current = result;
@@ -169,7 +173,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       const draft = draftRef.current[key];
       if (draft?.project_id && draft.account_id && draft.amount.trim()) queueSave(key);
     }
-  }, [disabled, archives.accounts, updateDrafts, queueSave]);
+  }, [archives.accounts, updateDrafts, queueSave]);
   function add() {
     if (structuralDisabled) return;
     const request_id = randomUUID();
@@ -265,7 +269,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       {Object.entries(drafts).filter(([, draft]) => draft.error).map(([key, draft]) => <p className="oilcard-draft-error" key={key}>充值记录 {draft.id || '草稿'}：{draft.error}<Button size="small" disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => saves.save(key, true)}>重试保存</Button><Button size="small" disabled={blocked || busy || uncertain} onMouseDown={e => e.preventDefault()} onClick={() => saves.update(ds => { const next = { ...ds }; delete next[key]; draftRef.current = next; return next; })}>放弃本次输入</Button></p>)}
       </div>
       <FirstReadRegion className="oilcard-grid-slot" phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={10} quiet={readState === 'error'} /></div>}>
-      {query.data ? <LedgerCells.Provider value={{ drafts, entries: byRequest, archives, projects, disabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} measurement={measurement} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
+      {query.data ? <LedgerCells.Provider value={{ drafts, entries: byRequest, archives, projects, disabled, editorDisabled, busy, structuralDisabled, remove, change, save }}><BusinessGrid table="oilcard-ledger" label="油卡充值台账" rows={rows} columns={columns} totals={totals} measurement={measurement} rowId={row => row.request_id} scale={scale} domLayout="normal" initialScroll="bottom" grid={{
         enableFilterHandlers: true, popupParent: document.body, alwaysShowHorizontalScroll: true, onFilterChanged: e => setFilters(e.api.getFilterModel() as Record<string, ValueFilterModel>),
         postSortRows: ({ nodes }) => { const draft = nodes.findIndex(node => node.data?.id === 0); if (draft >= 0) nodes.push(...nodes.splice(draft, 1)); },
         onRowDataUpdated: ({ api }) => {
