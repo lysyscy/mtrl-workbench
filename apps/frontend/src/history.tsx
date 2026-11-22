@@ -1,3 +1,4 @@
+import { resetNoticeTodos } from './notice-todos';
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
@@ -100,6 +101,7 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
       if (!record(result) || result.ok !== true) throw new ApiError('操作结果未确认。');
       confirmed = true; setConfirmation(null);
+      void resetNoticeTodos(client);
       await client.invalidateQueries({}, { throwOnError: true });
       if (alive.current) setFeedback(direction === 'undo' ? '已撤销。' : '已重做。');
     } catch (error) {

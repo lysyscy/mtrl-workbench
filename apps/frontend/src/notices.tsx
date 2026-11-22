@@ -1,3 +1,4 @@
+import { resetNoticeTodos } from './notice-todos';
 import { DialogPresence } from './workspace-motion';
 import { useGridSearch } from './grid-search';
 import Input from 'antd/es/input';
@@ -214,6 +215,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     setPayError('');setPayOverrides(next);setPayIds([...picked]);
   }
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
+    void resetNoticeTodos(client);
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['notices'],exact:true});
     const data = await client.fetchQuery({...noticeListQuery,staleTime:0});

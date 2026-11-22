@@ -1,3 +1,4 @@
+import { noticeTodosKey } from './notice-todos';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
@@ -17,7 +18,7 @@ function readHomeTodos(value: unknown): HomeTodos {
 // The summary uses the same capped notice set and effective payment facts as
 // the destination. Membership under 'notices' also keeps invalidation shared.
 export function HomePage({ blocked, active }: { blocked: boolean; active: boolean }) {
-  const query = useQuery({ queryKey: ['notices', 'home-todos'], enabled: !blocked && active, queryFn: async ({ signal }) => readHomeTodos(await requestJson('/api/m03/notice-todos', { signal })), refetchOnMount: 'always' });
+  const query = useQuery({ queryKey: noticeTodosKey, enabled: !blocked && active, queryFn: async ({ signal }) => readHomeTodos(await requestJson('/api/m03/notice-todos', { signal })), refetchOnMount: 'always' });
   const readState = readPhase(query, query.data?.notice_count === 0);
   // Counts stay unknowable until a read settles: an unfinished or failed first
   // read leaves the tile's number slot empty instead of claiming zero.

@@ -1,3 +1,4 @@
+import { resetNoticeTodos } from './notice-todos';
 import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import App from 'antd/es/app';
@@ -28,7 +29,10 @@ export function useContractSubtables(accountId: number | undefined, enabled: boo
         client.fetchQuery({ queryKey: ['contracts'], staleTime: 0, queryFn: async ({ signal }) => readContracts(await requestJson('/api/m11/list', { signal })) }),
       ]);
     },
-    reference: async (id, noticeId) => { await contractWrite('/api/m11/link', { notice_id: noticeId, contract_id: id }); },
+    reference: async (id, noticeId) => {
+      await contractWrite('/api/m11/link', { notice_id: noticeId, contract_id: id });
+      void resetNoticeTodos(client);
+    },
     announce: content => { void message.success({ key: 'contract-subtable-success', content, duration: 3 }); },
   });
   const workspace = ref.current;

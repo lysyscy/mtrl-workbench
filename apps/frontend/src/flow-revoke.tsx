@@ -1,3 +1,4 @@
+import { resetNoticeTodos } from './notice-todos';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { useRef, useState } from 'react';
@@ -25,6 +26,7 @@ export function FlowRevoke({ flow, blocked, close, completed }: { flow: Flow; bl
       const effect=record(result.jc_effect) ? result.jc_effect : null;
       completed(flow.notice_id,`已撤销流水 ${flow.flow_no || '—'}。${effect ? `集采付款金额 ${money(String(effect.before))} → ${money(String(effect.after))} 元。${effect.protected ? '已保留人工统计付款金额。' : ''}` : ''}`);
       close();
+      void resetNoticeTodos(client);
       try { await client.invalidateQueries({predicate:query=>query.queryKey[0]!=='flow-revoke'}, {throwOnError:true}); }
       catch { completed(flow.notice_id,'撤销已完成，部分页面重读失败，请重试读取；勿重复撤销。'); }
     } catch (failure) { setError(failure instanceof Error ? failure.message : '撤销失败，请重试。'); }
