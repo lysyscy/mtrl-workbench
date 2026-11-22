@@ -141,17 +141,15 @@ def invoices_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
     if not ids:
         return {}
     stmt = (select(JcInvoice.contract_id, JcInvoice.id, JcInvoice.kind, JcInvoice.invoice_date, JcInvoice.amount)
-            .where(JcInvoice.contract_id.in_(ids)).order_by(JcInvoice.contract_id, JcInvoice.id))
+            .where(JcInvoice.contract_id == any_ids(ids)).order_by(JcInvoice.contract_id, JcInvoice.id))
     out: dict[int, list[dict]] = {i: [] for i in ids}
-    for r in s.execute(stmt):
-        out.setdefault(r.contract_id, []).append(
-            {"id": r.id, "kind": r.kind, "date": r.invoice_date, "amount": r.amount}
-        )
+    for contract_id, invoice_id, kind, date, amount in s.execute(stmt):
+        out[contract_id].append({"id": invoice_id, "kind": kind, "date": date, "amount": amount})
     return out
 
 
-def payments_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict]]:
-    """批量取付款子表（同上：做一次，别 N 次）。"""
+def payments_of_many(s: Session, contract_ids: list[int], *, include_dates: bool = True) -> dict[int, list[dict]]:
+    """批量取付款子表。列表只汇总金额和关联，不需要实付日期。"""
     ids = [int(i) for i in contract_ids]
     if not ids:
         return {}
@@ -160,22 +158,21 @@ def payments_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
 
     stmt = (select(JcPayment.contract_id, JcPayment.id, JcPayment.source, JcPayment.notice_id,
                    JcPayment.pay_date, JcPayment.amount)
-            .where(JcPayment.contract_id.in_(ids)).order_by(JcPayment.contract_id, JcPayment.id))
+            .where(JcPayment.contract_id == any_ids(ids)).order_by(JcPayment.contract_id, JcPayment.id))
     rows = s.execute(stmt).all()
     notice_ids = sorted({int(r.notice_id) for r in rows if r.notice_id is not None})
     # 两个主人各批量读取一次，调用次数不随合同/通知书数量增长。
     stats = notices.stat_paid_of_many(s, notice_ids)
-    dates = flows.latest_effective_dates(s, notice_ids)
+    dates = flows.latest_effective_dates(s, notice_ids) if include_dates else {}
     out: dict[int, list[dict]] = {i: [] for i in ids}
-    for r in rows:
-        stat_paid = stats.get(r.notice_id)
-        actual_date = dates.get(r.notice_id)
-        linked = r.source == SRC_NOTICE
-        out.setdefault(r.contract_id, []).append({
-            "id": r.id, "date": (actual_date or "") if linked else r.pay_date,
-            "amount": Decimal(str(stat_paid or 0)) if linked else r.amount,
-            "source": r.source, "notice_id": r.notice_id,
-        })
+    for contract_id, payment_id, source, notice_id, pay_date, amount in rows:
+        linked = source == SRC_NOTICE
+        payment = {"id": payment_id}
+        if include_dates:
+            payment["date"] = (dates.get(notice_id) or "") if linked else pay_date
+        payment.update(amount=Decimal(str(stats.get(notice_id) or 0)) if linked else amount,
+                       source=source, notice_id=notice_id)
+        out[contract_id].append(payment)
     return out
 
 

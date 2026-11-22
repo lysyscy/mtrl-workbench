@@ -59,8 +59,9 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
     sequences = D.project_sequences(rows)
     if tags or arch or supplier or project_key:
         rows = list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
-    inv_map = R.invoices_of_many(s, [r["id"] for r in rows])
-    pay_map = R.payments_of_many(s, [r["id"] for r in rows])
+    ids = [r["id"] for r in rows]
+    inv_map = R.invoices_of_many(s, ids)
+    pay_map = R.payments_of_many(s, ids, include_dates=False)
 
     out: list[dict] = []
     totals = {k: D.ZERO for k in D.SUM_KEYS}
@@ -80,7 +81,8 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
         row["notice_ids"] = [int(p["notice_id"]) for p in (pay_map.get(r["id"]) or [])
                              if p.get("notice_id") is not None]
         for k in D.SUM_KEYS:
-            totals[k] = totals[k] + Decimal(str(row.get(k) or 0))
+            value = row.get(k)
+            totals[k] += value if isinstance(value, Decimal) else Decimal(str(value or 0))
         out.append(row)
 
     return {

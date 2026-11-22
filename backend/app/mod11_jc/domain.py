@@ -216,7 +216,8 @@ def subtable_result_conflict(request_id: str) -> dict:
 def _sum(rows: list[dict] | None, key: str = "amount") -> Decimal:
     total = ZERO
     for r in rows or ():
-        total += Decimal(str(r.get(key) or 0))
+        value = r.get(key)
+        total += value if isinstance(value, Decimal) else Decimal(str(value or 0))
     return total.quantize(Decimal("0.01"))
 
 
@@ -235,12 +236,16 @@ def pay_sum(payments: list[dict] | None) -> Decimal:
     return _sum(payments)
 
 
+def _settlement_kind(trade_co) -> str:
+    return KIND_TRADE if str(trade_co or "").strip() else KIND_SUPPLIER
+
+
 def settle_amount(*, trade_co, invoices: list[dict] | None) -> Decimal:
     """**结算金额**（§6.4.4 / 判据 `001-10`）：**有**贸易公司 → 贸易发票合计；**无** → 供应商发票合计。
 
     ⭐ **两条路互不串用**（判据原文）：有贸易公司时，供应商发票子表里有多少钱**都不影响**结算。
     """
-    if str(trade_co or "").strip():
+    if _settlement_kind(trade_co) == KIND_TRADE:
         return trade_invoice_sum(invoices)
     return supplier_invoice_sum(invoices)
 
@@ -259,7 +264,7 @@ def contract_amounts(*, trade_co, invoices: list[dict] | None, payments: list[di
     inv = supplier_invoice_sum(invoices)
     tinv = trade_invoice_sum(invoices)
     pay = pay_sum(payments)
-    settle = settle_amount(trade_co=trade_co, invoices=invoices)
+    settle = tinv if _settlement_kind(trade_co) == KIND_TRADE else inv
     return {
         "inv_sum": inv,
         "trade_inv_sum": tinv,
