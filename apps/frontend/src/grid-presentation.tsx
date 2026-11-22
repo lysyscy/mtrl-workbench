@@ -20,16 +20,16 @@ const details = Symbol('grid-presentation');
 // A page supplies business columns and scope; this module owns their rendering,
 // measurement and publication as one lifecycle. Observations support page labels
 // and existing actions without exposing attach/portal/retry ordering to callers.
-export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, ...layout}: {
+export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, growingMinimums, ...layout}: {
   columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: GridMeasurement<T>;
   root: RefObject<HTMLDivElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean;
   table: string; rows: T[]; totals: T[]; rowId: (row: T) => string; scope: string; identity: string; scale: number;
-  rowMinimum?: number;
+  rowMinimum?: number; growingMinimums?: ReadonlySet<string>;
 }) {
   const widths = useGridWidths(table, layout.root, scale, layout.active);
   // The first real result must replace placeholder sizing. Keep the key stable
   // through ordinary non-empty saves so existing editing widths stay untouched.
-  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`);
+  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`, growingMinimums);
   const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
   const widthColumns=useGridWidthColumns(materialized,widths.savedWidths);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);

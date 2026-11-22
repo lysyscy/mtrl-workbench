@@ -36,7 +36,10 @@ function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<
     // A larger incoming amount can outgrow the automatic minimum on a
     // retained grid. Manual bounds still belong to the width owner.
     if (growingMinimums?.has(column.colId ?? String(column.field)) && column.minWidth !== undefined
-        && column.minWidth > (next.minWidth ?? 0)) next.minWidth = column.minWidth;
+        && column.minWidth > (next.minWidth ?? 0)) {
+      next.minWidth = column.minWidth;
+      if (next.maxWidth !== undefined && next.maxWidth < column.minWidth) next.maxWidth = column.minWidth;
+    }
     if(prior.context?.manualWidthBounds)next.context={...next.context,manualWidthBounds:prior.context.manualWidthBounds};
     return next;
   });
