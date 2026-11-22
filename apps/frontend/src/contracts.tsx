@@ -261,13 +261,18 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   // change; take the same maximum over both sets at the current font and scale.
   const sourceWidths = useMemo(() => cacheFontMeasurement(() =>
     contractAmountWidths(query.data?.columns ?? [], rows, scale)), [query.data?.columns, rows, scale]);
+  // Retained columns adopt new sizing only on initial data, scale changes or
+  // an explicit width reset. Sample the current filter total at that point.
+  const displayedTotal = useRef(totalRow);
+  displayedTotal.current = totalRow;
   const moneyWidths = useMemo(() => {
     const base = sourceWidths();
-    if (!totalRow.length) return base;
-    const totals = contractAmountWidths(query.data?.columns ?? [], totalRow, scale);
+    const total = displayedTotal.current;
+    if (!total.length) return base;
+    const totals = contractAmountWidths(query.data?.columns ?? [], total, scale);
     return Object.fromEntries(Object.entries(base).map(([key, width]) =>
       [key, totals[key]!.minWidth > width.minWidth ? totals[key]! : width]));
-  }, [sourceWidths, totalRow, query.data?.columns, scale]);
+  }, [sourceWidths, query.data?.columns, scale, widths.layoutKey]);
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
   const contractColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
