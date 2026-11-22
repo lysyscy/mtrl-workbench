@@ -39,17 +39,19 @@ function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<
 }
 export function useRetainedGridColumns<T>(columns: (ColDef<T>|ColGroupDef<T>)[], root: RefObject<HTMLElement | null>, layoutKey: string|number = '') {
   const [displayed, setDisplayed] = useState(()=>initialSizing(columns));
-  const applied=useRef(layoutKey);
+  const applied = useRef({ columns, layoutKey });
   useLayoutEffect(() => {
+    if (applied.current.columns === columns && applied.current.layoutKey === layoutKey) return;
     const node = root.current; let frame = 0;
     const publish = () => {
       if (node?.contains(document.activeElement) && document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]),select,textarea')) return;
-      const changed=applied.current!==layoutKey;
+      const changed = applied.current.layoutKey !== layoutKey;
       setDisplayed(previous=>changed?initialSizing(columns):retainSizing(initialSizing(columns),previous));
-      applied.current=layoutKey;
+      applied.current = { columns, layoutKey };
+      node?.removeEventListener('focusout', released);
     };
     const released = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(publish); };
-    publish(); node?.addEventListener('focusout', released);
+    node?.addEventListener('focusout', released); publish();
     return () => { cancelAnimationFrame(frame); node?.removeEventListener('focusout', released); };
   }, [columns, root, layoutKey]);
   return displayed;

@@ -13,6 +13,7 @@ import { useRetainedGridColumns } from './grid-layout';
 import { PageActivity } from './page-activity';
 import { useFirstReadGrid } from './read-region';
 const businessTheme=gridTheme.withParams({autoHeightMinBodyHeight:36});
+const businessColumnDefaults = { sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true };
 const readColumnDefaults={sortable:false,resizable:true,suppressMovable:true,wrapText:true,autoHeight:true,wrapHeaderText:true,autoHeaderHeight:true};
 type BusinessGridProps<T>={
   table: string; rows: T[]; columns: (ColDef<T> | ColGroupDef<T>)[]; rowId: (row: T) => string;
@@ -54,7 +55,7 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
     <PreparedGrid presentation={presentation} className={'business-grid '+gridClassName+(singleLine?' grid-single-line':'')} style={style} role="region" aria-label={label}
       grid={{theme: businessTheme, domLayout, groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight, getRowId: p => rowId(p.data),
         suppressColumnVirtualisation: true, suppressCellFocus: true,suppressScrollOnNewData:true,animateRows:false,
-        defaultColDef: {sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true},
+        defaultColDef: businessColumnDefaults,
         ...grid, onGridReady: event => { api.current = event.api; grid.onGridReady?.(event); }}} />
   </div>;
 }
