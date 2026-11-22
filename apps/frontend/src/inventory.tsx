@@ -12,7 +12,7 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
-import { contentWidth, fixedWidth, gridTheme, numberColumnWidth, fullTextWidth } from './grid';
+import { cacheFontMeasurement, contentWidth, fixedWidth, gridTheme, numberColumnWidth, fullTextWidth } from './grid';
 import { cents, money } from './notices-api';
 import { coarseRows, effectiveValues, emptyFilter, fields, filterOn, filterRows, getInventory, sumRows } from './inventory-api';
 import type { Field, Filters, InventoryRow } from './inventory-api';
@@ -82,18 +82,8 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
   // Clearing column filters returns to this same immutable coarse result.
-  // A new font loading cycle replaces fonts.ready; never retain fallback widths from a pending load.
-  const coarseWidths = useMemo(() => {
-    let cached: { font: string; ready: Promise<FontFaceSet>; widths: ReturnType<typeof inventoryWidths> } | undefined;
-    return () => {
-      const css = getComputedStyle(document.documentElement);
-      const font = `${css.fontFamily}:${css.getPropertyValue('--font-ui-size')}`, ready = document.fonts.ready;
-      if (cached?.font === font && cached.ready === ready && document.fonts.status === 'loaded') return cached.widths;
-      const widths = inventoryWidths(coarse, coarseTotals, scale);
-      if (document.fonts.status === 'loaded' && ready === document.fonts.ready) cached = { font, ready, widths };
-      return widths;
-    };
-  }, [coarse, coarseTotals, scale]);
+  const coarseWidths = useMemo(() => cacheFontMeasurement(() => inventoryWidths(coarse, coarseTotals, scale)),
+    [coarse, coarseTotals, scale]);
   const widths = useMemo(() => rows === coarse ? coarseWidths() : inventoryWidths(rows, totals, scale), [rows, totals, scale, coarse, coarseWidths]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),

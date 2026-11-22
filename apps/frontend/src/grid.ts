@@ -62,6 +62,20 @@ export function numberColumnWidth(values: readonly unknown[], scale = Number(get
   return contentWidth(minimum, Math.max(minimum, 180), scale, stretch);
 }
 
+// The caller owns the immutable values and scale. A new font loading cycle
+// replaces fonts.ready, so a pending fallback measurement is never saved.
+export function cacheFontMeasurement<T>(measure: () => T) {
+  let saved: { family: string; size: string; ready: Promise<FontFaceSet>; value: T } | undefined;
+  return () => {
+    const css = getComputedStyle(document.documentElement);
+    const family = css.fontFamily, size = css.getPropertyValue('--font-ui-size'), ready = document.fonts.ready;
+    if (saved?.family === family && saved.size === size && saved.ready === ready && document.fonts.status === 'loaded') return saved.value;
+    const value = measure();
+    if (document.fonts.status === 'loaded' && ready === document.fonts.ready) saved = { family, size, ready, value };
+    return value;
+  };
+}
+
 // Auto-size sees rendered rows; full identifiers also protect offscreen values.
 export function fullTextWidth(values:readonly string[],scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1) {
   const css=getComputedStyle(document.documentElement),context=document.createElement('canvas').getContext('2d')!;

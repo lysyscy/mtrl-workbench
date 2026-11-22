@@ -2,13 +2,13 @@ import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, cents, decimal, money, projectLabel, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { BusinessGrid } from './business-grid';
-import { contentWidth, fullTextWidth } from './grid';
+import { cacheFontMeasurement, contentWidth, fullTextWidth } from './grid';
 import { valueFilterColumn } from './grid-value-filter';
 import type { ValueFilterOptions } from './grid-value-filter';
 import { valueFilterPasses } from './grid-value-filter-model';
@@ -36,16 +36,23 @@ const LedgerCells = createContext<Cells | null>(null);
 
 function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
   const state = useContext(LedgerCells)!;
-  const [focused, setFocused] = useState(false);
   if (!row) return null;
   const field = colDef?.field as Field;
   if (node.rowPinned) return field === 'date_text' ? '合计' : field === 'amount' ? money(row.amount) : '';
   const draft = state.drafts[row.request_id], current = draft ?? state.entries.get(row.request_id);
   if (!current) return null;
+  return <EntryEditor current={current} field={field} draft={draft} disabled={state.disabled || !current.id && state.busy}
+    projects={state.projects} archives={state.archives} change={state.change} save={state.save} />;
+}
+
+// The context follows every draft. Editors in other rows still have identical
+// values, options and actions, and need not rebuild their selects and calendars.
+const EntryEditor = memo(function EntryEditor({ current, field, draft, disabled, projects, archives, change: changeField, save: saveRow }:
+  Pick<Cells, 'projects' | 'archives' | 'change' | 'save'> & { current: OilEntry; field: Field; draft: Draft | undefined; disabled: boolean }) {
+  const [focused, setFocused] = useState(false);
   const label = `${labels[field]}：${current.id ? `充值记录 #${current.id}` : '新增充值'}`;
-  const disabled = state.disabled || !current.id && state.busy;
-  const change = (value: string) => state.change(row.request_id, field, value);
-  const save = () => state.save(row.request_id);
+  const change = (value: string) => changeField(current.request_id, field, value);
+  const save = () => saveRow(current.request_id);
   if (field === 'date_text') return <DateText label={label} value={current.date_text} disabled={disabled} change={(value, commit) => { change(value); if (commit) save(); }} save={save} />;
   let options: { value: string; label: string }[] | undefined;
   if (field === 'kind') {
@@ -53,10 +60,10 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
     if (current.kind === 'refund') return <span title={`关联原充值 #${current.related_entry_id}`}>退款</span>;
     options = [{ value: 'recharge', label: '充值' }, { value: 'adjustment', label: '调整' }];
   }
-  if (field === 'project_id') options = [{ value: '', label: '请选择项目' }, ...state.projects.filter(p => p.project_type !== 'shell').map(p => ({ value: String(p.id), label: `${projectLabel(p)}${p.status === 'archived' ? '（项目归档）' : ''}` }))];
+  if (field === 'project_id') options = [{ value: '', label: '请选择项目' }, ...projects.filter(p => p.project_type !== 'shell').map(p => ({ value: String(p.id), label: `${projectLabel(p)}${p.status === 'archived' ? '（项目归档）' : ''}` }))];
   if (field === 'account_id') {
-    const candidates = state.archives.accounts.filter(account => account.project_id === current.project_id);
-    const original = state.archives.accounts.find(account => account.id === current.account_id);
+    const candidates = archives.accounts.filter(account => account.project_id === current.project_id);
+    const original = archives.accounts.find(account => account.id === current.account_id);
     options = [{ value: '', label: '请选择账户' }, ...candidates.map(account => ({ value: String(account.id), label: `${account.name}${account.status === 'archived' ? '（归档）' : ''}` })), ...(original && !candidates.some(account => account.id === original.id) ? [{ value: String(original.id), label: `${original.name}（历史关联）` }] : [])];
   }
   if (current.kind === 'refund' && (field === 'project_id' || field === 'account_id')) return options?.find(option => option.value === String(current[field]))?.label || String(current[field]);
@@ -64,7 +71,7 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
   return <Input aria-label={label} className={field === 'amount' ? 'oilcard-amount record-value' : 'record-value'}
     value={field === 'amount' && !draft && !focused ? money(current.amount) : String(current[field])} disabled={disabled} status={draft?.error ? 'error' : ''}
     onFocus={() => setFocused(true)} onChange={e => change(e.target.value)} onBlur={() => { setFocused(false); save(); }} onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />;
-}
+});
 
 function EntryActions({ data: row, node }: ICellRendererParams<TableRow>) {
   const state = useContext(LedgerCells)!;
@@ -125,7 +132,7 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     }
     return result;
   }
-  const { drafts, busy, uncertain, verified, error } = saves;
+  const { drafts, busy, uncertain, verified, error, save: queueSave, update: updateDrafts } = saves;
   draftRef.current = drafts;
   useEffect(() => { onWriteLock(busy || uncertain || invoiceLocked); }, [busy, uncertain, invoiceLocked, onWriteLock]);
   useEffect(() => { onUncertain(uncertain || invoiceUncertain); }, [uncertain, invoiceUncertain, onUncertain]);
@@ -147,22 +154,22 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     const options = filterOptions[field as Field];
     return !options || valueFilterPasses(model, options.value(row), options.kind);
   })).reduce((total, row) => total + cents(row.amount), 0n)), [query.data, filters, filterOptions]);
-  function save(key: string) {
+  const save = useCallback((key: string) => {
     const draft = draftRef.current[key];
-    if (draft && draft.project_id && draft.account_id && draft.amount.trim()) saves.save(key);
-  }
-  function change(key: string, field: Field, value: string) {
+    if (draft && draft.project_id && draft.account_id && draft.amount.trim()) queueSave(key);
+  }, [queueSave]);
+  const change = useCallback((key: string, field: Field, value: string) => {
     if (disabled) return;
-    saves.update((ds, writing) => {
+    updateDrafts((ds, writing) => {
       const result = editOilEntry(ds, current.current?.entries ?? [], key, field, value, archives.accounts, writing);
       draftRef.current = result;
       return result;
     });
     if (field === 'kind' || field === 'project_id' || field === 'account_id') {
       const draft = draftRef.current[key];
-      if (draft?.project_id && draft.account_id && draft.amount.trim()) saves.save(key);
+      if (draft?.project_id && draft.account_id && draft.amount.trim()) queueSave(key);
     }
-  }
+  }, [disabled, archives.accounts, updateDrafts, queueSave]);
   function add() {
     if (structuralDisabled) return;
     const request_id = randomUUID();
@@ -208,7 +215,9 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     });
     return [...amounts, money(decimal(positive)), money(decimal(negative))];
   }, [entries]);
-  const amountWidth = fullTextWidth(amountTexts, scale).minWidth;
+  const measureAmountWidth = useMemo(() => cacheFontMeasurement(() => fullTextWidth(amountTexts, scale).minWidth),
+    [amountTexts, scale]);
+  const amountWidth = measureAmountWidth();
   // Measure equal editors once per column and width. Refunds display plain labels,
   // while draft amounts and pinned totals can render differently from saved input.
   const measurement = useMemo(() => ({
