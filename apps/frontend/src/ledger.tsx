@@ -272,8 +272,11 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     busy: () => acting.current,
     value: (s, row, field) => state(s, row).drafts[field]?.text ?? row[field],
     draft: (s, row, field, text, base) => {
-      const edit = state(s, row); const own = edit.own.get(row.token);
-      edit.drafts[field] = { text, base: edit.drafts[field]?.base ?? own?.[field] ?? base, version: ++serial.current, queued: false, month: edit.drafts[field]?.month ?? own?.month ?? row.month }; changed();
+      const edit = state(s, row), previous = edit.drafts[field], own = edit.own.get(row.token);
+      edit.drafts[field] = { text, base: previous?.base ?? own?.[field] ?? base, version: ++serial.current,
+        queued: false, month: previous?.month ?? own?.month ?? row.month };
+      // The cell already displays its text. Only a new draft changes the page's guards.
+      if (!previous) changed();
     },
     commit: (s, row, field) => {
       if (messages.current.get(s.key)?.reload) return;
