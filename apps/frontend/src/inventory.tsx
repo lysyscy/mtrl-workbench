@@ -1,3 +1,4 @@
+import { useAmountComparator } from './use-amount-comparator';
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
@@ -13,7 +14,7 @@ import type { Identity } from './api';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { cacheFontMeasurement, contentWidth, fixedWidth, gridTheme, numberColumnWidth, fullTextWidth } from './grid';
-import { cents, money } from './notices-api';
+import { money } from './notices-api';
 import { coarseRows, effectiveValues, emptyFilter, fields, filterOn, filterRows, getInventory, sumRows } from './inventory-api';
 import type { Field, Filters, InventoryRow } from './inventory-api';
 import { InventoryAdjust } from './inventory-adjust';
@@ -85,25 +86,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarseWidths = useMemo(() => cacheFontMeasurement(() => inventoryWidths(coarse, coarseTotals, scale)),
     [coarse, coarseTotals, scale]);
   const widths = useMemo(() => rows === coarse ? coarseWidths() : inventoryWidths(rows, totals, scale), [rows, totals, scale, coarse, coarseWidths]);
-  // Sort keys belong to this immutable response. Repeated comparisons of the
-  // same amount reuse its exact cent value, including on subsequent sorts.
-  const compareAmounts = useMemo(() => {
-    const parsed = new Map<string, bigint>();
-    function sortValue(text: string) {
-      let value = parsed.get(text);
-      if (value === undefined) {
-        value = cents(text);
-        parsed.set(text, value);
-      }
-      return value;
-    }
-    return (a: string, b: string) => {
-      if (a === b) return 0;
-      if (!a || !b) return a ? 1 : b ? -1 : 0;
-      const left = sortValue(a), right = sortValue(b);
-      return left < right ? -1 : left > right ? 1 : 0;
-    };
-  }, [displayedRows]);
+  const compareAmounts = useAmountComparator(displayedRows);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num' && !['doc_no','doc_date','biz_type'].includes(field),
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:compareAmounts} : {}),

@@ -1,3 +1,4 @@
+import { useAmountComparator } from './use-amount-comparator';
 import { DialogPresence } from './workspace-motion';
 import { useGridSearch } from './grid-search';
 import { AnimatePresence } from 'motion/react';
@@ -125,6 +126,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const query=useQuery({queryKey:['contracts'],enabled:!blocked&&active,refetchOnMount:'always',queryFn:async({signal})=>readContracts(await requestJson('/api/m11/list',{signal}))});
   const projects=useQuery({queryKey:['projects','all'],enabled:!blocked&&active,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
+  const compareAmounts = useAmountComparator(rows);
   const archiveNumbers=useMemo(()=>nextArchiveNumbers(rows),[rows]);
   const nextArchiveNo=(row:ContractRow)=>archiveNumbers.get(row.project_key)??'1';
   const projectRows=useMemo(()=>projects.data??[],[projects.data]);
@@ -294,7 +296,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       const bounded=c.key==='material'?{initialWidth:260*scale,...textWidth(220,360,scale,0)}:c.key==='remark'?textWidth(110,210,scale,.7):textWidth(120,c.key==='supplier'?260:240,scale,1);
       return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??(numeric?{}:bounded)),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
         ...(editKey === 'payment_method' ? {loadingCellRenderer: ContractInlineCell, loadingCellRendererParams: {...editorParams, scrolling:true}} : {}),
-        comparator:numeric?(a:string|null,b:string|null)=>cents(a??'0')<cents(b??'0')?-1:cents(a??'0')>cents(b??'0')?1:0:undefined,
+        comparator:numeric?(a:string|null,b:string|null)=>compareAmounts(a??'0',b??'0'):undefined,
         cellRenderer:editKey ? ContractInlineCell : (p:ICellRendererParams<ContractRow>)=>{
           if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
           const row=p.data!;
@@ -309,7 +311,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         }} as ColDef<ContractRow>;
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
-  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,selectionColumn]);
+  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,selectionColumn,compareAmounts]);
   // Keep business renderers mounted when only an amount width changes.
   const baseColumns=useMemo(()=>contractColumns.map(column=>{
     const width = column.field && moneyWidths[column.field];

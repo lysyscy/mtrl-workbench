@@ -1,3 +1,4 @@
+import { useAmountComparator } from './use-amount-comparator';
 import { resetNoticeTodos } from './notice-todos';
 import { DialogPresence } from './workspace-motion';
 import { useGridSearch } from './grid-search';
@@ -159,6 +160,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { if (query.data) setPayOverrides(old => { const entries=Object.entries(old).filter(([id,draft]) => query.data.some(row => row.notice_id===Number(id) && draft.basis===`${row.amount_approved}:${row.amount_paid}`));return entries.length===Object.keys(old).length ? old : Object.fromEntries(entries); }); }, [query.data]);
   const rows = useMemo(() => (query.data ?? []).map(r => { const p = projects.data?.find(p => p.id === r.ownership_id); return { ...r, pay_amount: paymentValue(r,payOverrides), project_display: p ? projectLabel(p) : r.ownership_id ? r.project_display : '未建档' }; }), [query.data, projects.data, payOverrides]);
+  const compareAmounts = useAmountComparator(rows);
   const scope = useMemo(() => rows.filter(r => (!pasteScope || pasteScope.includes(r.notice_id)) && scopeHit(r, filters)), [rows, filters, pasteScope]);
   const needle = searchKey(search);
   const shown = useMemo(() => {
@@ -315,7 +317,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     { field: 'category_label', headerName: '分类', wrapText: true, cellRenderer: (p: ICellRendererParams<NoticeRow>) => { if (p.node.rowPinned) return ''; const r = p.data!, label = archiveLabel(r); return label ? <span><span className={`notice-tag ${r.is_excluded ? r.exclude_source : 'revoked'}`} title={r.exclude_rule_hint}>{label}</span>{r.is_revoked && (cents(r.amount_paid) > 0n || r.has_link) && <span className="notice-tag rule notice-revoke-hint">请先撤销付款 / 解绑关联</span>}</span> : <Select className="notice-category-select" aria-label={`${r.bill_no}分类`} value={r.category} disabled={current.current.unavailable} onChange={value => void current.current.action('/api/m03/actions/category', { ids: [r.notice_id], category: value })} options={Object.entries(categories).map(([value,label])=>({value,label}))} popupMatchSelectWidth={false} labelRender={option=><EnumTag kind="category" value={String(option.label)}/>}/>; } },
     ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(key==='biz_type'||key==='input_by' ? {} : key==='bill_name' ? textWidth(128,280,scale,2) : key==='payee' ? textWidth(112,240,scale,2) : textWidth(180,280,scale,1)),
       ...(key === 'jc_supplier' ? { cellRenderer: (p: ICellRendererParams<NoticeRow>) => { const r=p.data!; if(p.node.rowPinned || (r.category !== 'jc' || r.is_excluded || r.is_revoked) && !r.has_link) return '—'; return <Button data-contract-notice={r.notice_id} className="notice-association-trigger" htmlType="button" aria-label={`${r.bill_no}供应商与合同关联`} disabled={current.current.unavailable} onClick={() => current.current.open('link',r)}><EllipsisText text={r.jc_supplier || '选择供应商与合同'}/><small>{r.has_link ? '已关联合同' : '未关联合同'}</small></Button>; } } : key==='bill_name'||key==='payee' ? {cellRenderer:(p:ICellRendererParams<NoticeRow>)=><EllipsisText text={String(p.value??'')}/>} : {}) })),
-    ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], cellClass: 'money', comparator: (a: string, b: string) => cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0,
+    ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], cellClass: 'money', comparator: compareAmounts,
       cellRenderer: (p: ICellRendererParams<NoticeRow>) => {
         const row = p.data!;
         if (p.node.rowPinned) return <span>{money(row[key])}</span>;
@@ -342,7 +344,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       if (column.colId === 'actions') return <div className="notice-row-actions"><Button htmlType="submit" disabled={current.current.unavailable} onClick={() => void current.current.saveDraft()}>保存</Button><Button htmlType="submit" disabled={current.current.unavailable} onClick={current.current.cancelDraft}>取消</Button></div>;
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
-  }), [scale,Boolean(draft),selectionColumn]);
+  }), [scale,Boolean(draft),selectionColumn, compareAmounts]);
   const columns = useMemo(() => baseColumns.map(column => {
     const width = widths[column.colId ?? String(column.field)];
     return width ? { ...column, ...width } : column;
