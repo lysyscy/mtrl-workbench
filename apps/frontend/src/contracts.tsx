@@ -231,15 +231,16 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       }
     }finally{fieldQueue.current.release();lock.current=false;setBusy(false);}
   }
-  const inlineDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError||!projects.data||projects.isError||busy&&!fieldQueue.current.running;
-  // 行操作只在身份/权限/待核实期间禁用：存档号 blur 保存进行中不得让"推进存档"在点击中途变灰。
-  const actionDisabled=blocked||!active||!me||uncertain||query.isPending||query.isError||!projects.data||projects.isError;
+  // A retained page is inert. Keep its cells at their business access state so
+  // returning to the same data does not remount every inline control.
+  const actionDisabled=(active&&blocked)||!me||uncertain||query.isPending||query.isError||!projects.data||projects.isError;
+  const inlineDisabled=actionDisabled||busy&&!fieldQueue.current.running;
   const paymentMethodsKey=JSON.stringify(query.data?.payment_methods??[]);
   const nextArch=(arch:string)=>!arch||arch==='未存档'?'资产处':arch==='资产处'?'已存档':'未存档';
   const advancing=useRef(false);
   // 一次点击完成：先存这一行的存档号草稿（排队等它真的写入并刷新），再推进存档；任一失败/未知都不推进。
   async function advance(row:ContractRow) {
-    if(actionDisabled||advancing.current)return;
+    if(blocked||!active||actionDisabled||advancing.current)return;
     advancing.current=true;
     try{
       const draft=inlineDraftRef.current[`${row.id}:arch_no`];
@@ -250,11 +251,20 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   }
   const inlineControl=useRef<InlineControl>({disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:nextArchiveNo,advance});
   inlineControl.current={disabled:inlineDisabled,methods:query.data?.payment_methods??[],drafts:inlineDrafts,change:changeInline,save:saveField,remark:openRemark,next:nextArchiveNo,advance};
-  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['remark','arch_no','ret_date','payment_term','payment_method']});},[active,inlineDisabled,paymentMethodsKey]);
-  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['arch_no']});},[active,rows]);
-  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['actions']});},[active,actionDisabled]);
-  // The select column definition is stable now, so ticking a row refreshes only its checkbox cells.
-  useEffect(()=>{if(active)grid.current?.refreshCells({force:true,columns:['select']});},[active,picked,shown]);
+  const painted = useRef({inlineDisabled, actionDisabled, paymentMethodsKey, rows, picked, shown});
+  useEffect(() => {
+    const api = grid.current;
+    if (!active || !api || api.isDestroyed()) return;
+    const before = painted.current;
+    painted.current = {inlineDisabled, actionDisabled, paymentMethodsKey, rows, picked, shown};
+    const columns = new Set<string>();
+    if (inlineDisabled !== before.inlineDisabled) for (const key of inlineKeys) columns.add(key);
+    if (paymentMethodsKey !== before.paymentMethodsKey) columns.add('payment_method');
+    if (rows !== before.rows) columns.add('arch_no');
+    if (actionDisabled !== before.actionDisabled) columns.add('actions');
+    if (picked !== before.picked || shown !== before.shown) columns.add('select');
+    if (columns.size) api.refreshCells({force:true, columns:[...columns]});
+  }, [active, inlineDisabled, actionDisabled, paymentMethodsKey, rows, picked, shown]);
   const state=useRef({unavailable,actionDisabled,picked,shown,tag,advance});state.current={unavailable,actionDisabled,picked,shown,tag,advance};
   // The select header reads the live selection through context, so ticking a row no longer rebuilds every column.
   const selection=useMemo<ContractSelection>(()=>({shown,picked,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked,searchBusy]);
@@ -300,8 +310,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
   ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,selectionColumn]);
-  // Filtered totals can change a width suggestion. Keep the React renderers for
-  // surviving rows mounted when only that numeric suggestion changes.
+  // Keep business renderers mounted when only an amount width changes.
   const baseColumns=useMemo(()=>contractColumns.map(column=>{
     const width = column.field && moneyWidths[column.field];
     return width ? {...column, ...width} : column;
