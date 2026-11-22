@@ -115,17 +115,41 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const projects=useQuery({queryKey:['projects','all'],enabled:!blocked&&active,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const rows=useMemo(()=>query.data?.rows??[],[query.data?.rows]);
   const projectRows=useMemo(()=>projects.data??[],[projects.data]);
-  const needle=searchKey(search);
-  const shown=useMemo(()=>rows.filter(row=>(!filters.tag||row.tag===filters.tag)&&(!filters.arch||(row.arch||'未存档')===filters.arch)&&(!filters.approval||(row.approve_status??'无状态')===filters.approval)&&(!filters.projects.length||projectRows.some(p=>filters.projects.includes(p.id)&&p.warehouse_name===row.project_key))&&(!needle||[
-    projectRows.find(p=>p.warehouse_name===row.project_key)?.disp??'',
-    ...(query.data?.columns??[]).filter(column=>column.key!=='ops').flatMap(column=>{
-      const value=row[column.key as keyof ContractRow];
-      const text=value===null&&(contractMoneyKeys as readonly string[]).includes(column.key)?'未确定':String(value??'');
-      return column.type==='date'?[text,text.replaceAll('-','/')]:[text];
-    }),
-  ].some(value=>searchKey(value).includes(needle)))),[rows,projectRows,filters,needle,query.data?.columns]);
+  const projectNames = useMemo(() => {
+    const names = new Map<string | null, string>();
+    for (const project of projectRows) {
+      if (!names.has(project.warehouse_name)) names.set(project.warehouse_name, project.disp);
+    }
+    return names;
+  }, [projectRows]);
+  const scope = useMemo(() => {
+    const warehouses = new Set(projectRows.filter(project => filters.projects.includes(project.id)).map(project => project.warehouse_name));
+    return rows.filter(row =>
+      (!filters.tag || row.tag === filters.tag) &&
+      (!filters.arch || (row.arch || '未存档') === filters.arch) &&
+      (!filters.approval || (row.approve_status ?? '无状态') === filters.approval) &&
+      (!filters.projects.length || warehouses.has(row.project_key)));
+  }, [rows, projectRows, filters]);
+  const searchable = useMemo(() => (query.data?.columns ?? []).filter(column => column.key !== 'ops'), [query.data?.columns]);
+  const needle = searchKey(search);
+  const shown = useMemo(() => {
+    if (!needle) return scope;
+    const matches = scope.filter(row => searchKey(projectNames.get(row.project_key) ?? '').includes(needle) ||
+      searchable.some(column => {
+        const value = row[column.key as keyof ContractRow];
+        const text = value === null && (contractMoneyKeys as readonly string[]).includes(column.key) ? '未确定' : String(value ?? '');
+        const normalized = searchKey(text);
+        return normalized.includes(needle) || (column.type === 'date' && normalized.replaceAll('-', '/').includes(needle));
+      }));
+    return matches.length === scope.length ? scope : matches;
+  }, [needle, scope, projectNames, searchable]);
   const totalRow=useMemo(()=>shown.length?[{id:-1,material:'合计',...Object.fromEntries(contractMoneyKeys.map(key=>[key,decimalCents(shown.reduce((sum,row)=>sum+cents(row[key]??'0'),0n))]))} as ContractRow]:[],[shown]);
-  const selected=rows.filter(row=>picked.has(row.id)),hidden=selected.filter(row=>!shown.some(v=>v.id===row.id)).length;
+  const selected = useMemo(() => rows.filter(row => picked.has(row.id)), [rows, picked]);
+  const hidden = useMemo(() => {
+    if (!selected.length) return 0;
+    const visible = new Set(shown.map(row => row.id));
+    return selected.filter(row => !visible.has(row.id)).length;
+  }, [selected, shown]);
   const unavailable=blocked||!active||!me||busy||uncertain||query.isPending||query.isError||query.isFetching||!projects.data||projects.isError;
   useHistoryGuard('contracts',()=>busy||lock.current||subtables.summary.busy?'集采合同正在处理，请稍候。':uncertain||subtables.summary.uncertain?'合同操作结果待核实，请先重读。':subtables.summary.dirty?'合同子表有未保存输入，请先处理。':Object.keys(inlineDraftRef.current).length?'合同收发登记有未保存输入，请先处理。':'');
   useEffect(()=>{const valid=new Set(rows.map(row=>row.id));setPicked(old=>{const next=new Set([...old].filter(id=>valid.has(id)));return next.size===old.size?old:next;});},[rows]);
@@ -257,7 +281,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         cellRenderer:['remark','arch_no','ret_date','payment_term','payment_method'].includes(c.key)?ContractInlineCell:(p:ICellRendererParams<ContractRow>)=>{
           if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
           const row=p.data!;
-          if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectRows.find(p=>p.warehouse_name===row.project_key)?.disp||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
+          if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectNames.get(row.project_key)||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
           if(c.key==='tag'||c.key==='arch')return <Tag className={`status-tag ${c.key==='tag'?(row.tag==='纳入台账'?'status-positive':'status-neutral'):(row.arch==='已存档'?'status-positive':row.arch==='资产处'?'status-pending':'status-neutral')}`}>{String(p.value||'未存档')}</Tag>;
           if(c.key==='approve_status'){
             if(row.approve_status===null)return <span className="muted">—</span>;
@@ -269,7 +293,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         }} as ColDef<ContractRow>;
     }),
     {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
-  ],[query.data?.columns,trade,scale,projectRows,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
+  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,moneyWidths,selectionColumn]);
   const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey);
   const activeWidths=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
   const widthColumns=useGridWidthColumns(activeWidths,widths.savedWidths,'material');
