@@ -27,33 +27,34 @@ const contractEntries = {
   settle: moneyText, pay_sum: moneyText, debt: moneyText, payment_term: v.string(), payment_method: v.string(),
   remark: v.string(), tag: v.string(), arch: v.string(), arch_no: v.string(), ret_date: v.string(),
 };
-const contractSchema = v.intersect([v.object(contractEntries), nonArrayObject]);
-const rowSchema = v.intersect([v.object({
-  ...contractEntries, project_key: v.string(), notice_ids: v.array(positiveId),
+const contractSchema = v.object(contractEntries);
+// contractRow validates the shared fields before either list or detail checks.
+const rowFields = v.object({
+  project_key: v.string(), notice_ids: v.array(positiveId),
   approve_status: v.nullable(v.picklist(contractApprovalStatuses)),
-}), nonArrayObject]);
+});
 const invoiceSchema = v.intersect([v.object({ id: positiveId, kind: v.string(), date: v.string(), amount: moneyText }), nonArrayObject]);
-const detailSchema = v.intersect([v.object({ ...contractEntries, supplier_invoices: v.array(invoiceSchema), trade_invoices: v.array(invoiceSchema) }), nonArrayObject]);
-const listSchema = v.intersect([v.object({
-  rows: v.array(v.unknown()),
+const detailFields = v.object({ supplier_invoices: v.array(invoiceSchema), trade_invoices: v.array(invoiceSchema) });
+const listSchema = v.object({
+  rows: v.custom<unknown[]>(Array.isArray),
   columns: v.array(v.intersect([v.object({ key: v.string(), label: v.string(), type: v.string() }), nonArrayObject])),
   tags: v.array(v.string()), payment_methods: v.array(v.string()),
-}), nonArrayObject]);
+});
 export type ContractBase = v.InferOutput<typeof contractSchema>;
-export type ContractRow = v.InferOutput<typeof rowSchema>;
+export type ContractRow = ContractBase & v.InferOutput<typeof rowFields>;
 export type ContractInvoice = v.InferOutput<typeof invoiceSchema>;
-export type ContractDetail = v.InferOutput<typeof detailSchema>;
+export type ContractDetail = ContractBase & v.InferOutput<typeof detailFields>;
 export type ContractList = Omit<v.InferOutput<typeof listSchema>, 'rows'> & { rows: ContractRow[] };
 function contractRow(value: unknown): ContractBase {
   if (record(value) && value.ret_date === null) value = { ...value, ret_date: '' };
-  if (!v.is(contractSchema, value)) throw new ApiError('合同读取不完整，请重读。');
+  if (!record(value) || !v.is(contractSchema, value)) throw new ApiError('合同读取不完整，请重读。');
   return value;
 }
 export function readContracts(value: unknown): ContractList {
-  if (!v.is(listSchema, value)) throw new ApiError('合同列表读取不完整，请重读。');
+  if (!record(value) || !v.is(listSchema, value)) throw new ApiError('合同列表读取不完整，请重读。');
   const rows = value.rows.map((x: unknown) => {
     const row = contractRow(x);
-    if (!v.is(rowSchema, row)) throw new ApiError('合同归属或关联读取不完整，请重读。');
+    if (!v.is(rowFields, row)) throw new ApiError('合同归属或关联读取不完整，请重读。');
     return row;
   });
   return { rows, columns: value.columns, tags: value.tags, payment_methods: value.payment_methods };
@@ -61,7 +62,7 @@ export function readContracts(value: unknown): ContractList {
 export function readContractDetail(value: unknown): ContractDetail {
   if (!record(value) || !record(value.data)) throw new ApiError('合同详情读取不完整，请重读。');
   const row = contractRow(value.data);
-  if (!v.is(detailSchema, row)) throw new ApiError('合同发票依据读取不完整，请重读。');
+  if (!v.is(detailFields, row)) throw new ApiError('合同发票依据读取不完整，请重读。');
   return { ...value.data, ...row };
 }
 export function contractFields(row: ContractBase): ContractFields {
