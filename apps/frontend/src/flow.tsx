@@ -1,3 +1,4 @@
+import { useAmountComparator } from './use-amount-comparator';
 import { DialogPresence } from './workspace-motion';
 import App from 'antd/es/app';
 import Input from 'antd/es/input';
@@ -94,6 +95,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       && (!filter.status || filter.status === row.status)
       && (!needle || Object.values(row).some(value => value !== null && searchKey(String(value)).includes(needle))));
   }, [flows.data, filter]);
+  const compareAmounts = useAmountComparator(rows);
   const summary = useMemo(() => {
     let count = 0, sum = 0n;
     for (const row of rows) if (row.status === 'effective') { count++; sum += cents(row.amount); }
@@ -114,12 +116,12 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     {field:'doc_no',tooltipField:'doc_no',headerName:'单据编码',wrapText:true,...contentWidth(144,210,scale),colSpan:p=>p.node?.rowPinned?2:1,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?p.value:p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
     {field:'doc_date',tooltipField:'doc_date',headerName:'通知书日期',wrapText:true,...contentWidth(96,150,scale)},{field:'bill_name',headerName:'通知书名称',...contentWidth(144,320,scale,1),wrapText:true},
     {field:'project_display',headerName:'付款项目',...contentWidth(100,280,scale,1),wrapText:true},{field:'payee',headerName:'收款单位',...contentWidth(144,320,scale,1),wrapText:true},{field:'category_label',headerName:'分类',...contentWidth(60,90,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="category" value={p.value}/>},
-    {field:'amount_approved',headerName:'审批金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.node?.rowPinned?'':p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>Number(a??0)-Number(b??0)},
-    {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',wrapText:true,...contentWidth(96,150,scale)},{field:'amount',headerName:'付款金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:(a,b)=>Number(a)-Number(b)},
+    {field:'amount_approved',headerName:'审批金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.node?.rowPinned?'':p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>compareAmounts(a??'0',b??'0')},
+    {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',wrapText:true,...contentWidth(96,150,scale)},{field:'amount',headerName:'付款金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:compareAmounts},
     {field:'pay_method',headerName:'实际付款方式',...contentWidth(96,150,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="payMethod" value={p.value}/>},{field:'remark',headerName:'备注',...contentWidth(70,320,scale,1),wrapText:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',wrapText:true,...contentWidth(112,160,scale)},
     {field:'status_label',headerName:'状态',...contentWidth(76,100,scale),wrapText:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:p.data?<span><Tag className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</Tag>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
     {colId:'actions',headerName:'操作',...contentWidth(64,100,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>{ if (current.current.writable) current.current.open(p.data!); }}>撤销</Button>:null},
-  ]; return list; },[scale,amountWidth]);
+  ]; return list; },[scale,amountWidth,compareAmounts]);
   const measurement = useMemo(() => ({signature:(row:Flow,id:string,pinned:boolean)=>JSON.stringify([pinned,id==='actions'?row.status:id==='status_label'?[row.status_label,row.revoke_reason,row.status]:(row as unknown as Record<string,unknown>)[id]])}), []);
   const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: summary as Flow[], columns, measurement, rowId: flowRowId, scale, scope: JSON.stringify(filter), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
   useEffect(()=>{api.current?.refreshCells({force:true,columns:['actions']});},[writable]);
