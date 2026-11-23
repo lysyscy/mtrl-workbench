@@ -196,7 +196,9 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const selectedAmounts = useMemo(() => ({ approved: money(total(selectedPay, 'amount_approved')), due: money(total(selectedPay, 'pay_amount')) }), [selectedPay]);
   const publishedNotices = useMemo(() => new Map(query.data?.map(row => [row.notice_id, row])), [query.data]);
   const scale = Number(me?.ui_scale_css) || 1;
-  const measureNumbers = useMemo(cachedNumberColumnWidths, [query.data]);
+  // Each sample checks the actual texts and current font. A successful reread
+  // can reuse unchanged amounts and identifiers within the same account.
+  const measureNumbers = useMemo(cachedNumberColumnWidths, [me?.account]);
   const scopeDisplay = useMemo(() => {
     const summary = noticeSummary(scope);
     return { summary, widths: cacheFontMeasurement(() => noticeWidths(scope, summary, scale, measureNumbers)) };
