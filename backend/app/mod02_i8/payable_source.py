@@ -32,5 +32,5 @@ def fetch_payables(client):
     return [{'id': str(r['PhId']), 'code': r['BillNo'], 'contract_no': r.get('PhidCnt_EXName') or '',
              'contract_phid': str(r.get('PhidCnt') or ''), 'project': r.get('PhidPc_EXName') or '',
              'supplier': r.get('PhidBalComp_EXName') or '', 'amount': Decimal(str(r.get('AppAmtVatFc') or 0))}
-            for r in records if str(r.get('AsrFlag')) == '1' and str(r.get('WfFlag')) == '2'
+            for r in records if str(r.get('WfFlag')) == '2'
             and r.get('PhidFcur_EXName') == '人民币' and Decimal(str(r.get('ExchRate') or 0)) == 1]

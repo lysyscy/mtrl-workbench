@@ -39,7 +39,7 @@ def test_推荐只读候选发票一次且序号不随候选范围变化(rollbac
     assert result['rows'][0]['project_seq'] == 2
     invoices = [(sql, params) for sql, params in queries if 'FROM jc_invoice' in sql]
     assert len(invoices) == 1
-    assert set(invoices[0][1].values()) == {cid}
+    assert list(invoices[0][1].values()) == [[cid]]
     with session_scope() as s:
         assert R.payment_of_notice(s, nid) is None
 
@@ -48,13 +48,17 @@ def test_批量预览查询次数不随通知书数量增长(rollback_db):
     with session_scope() as s:
         project = _project(s, '__候选批量__')
         contract = _contract(s, project_id=project.id, supplier='甲'); contract.contract_no = 'CGHT1'
+        prior = _notice(s, ph='__候选批量历史__', approved='0.02')
+        prior.ownership_id = project.id
+        S.act_link_notice(s, notice_id=prior.id, contract_id=contract.id)
         notices = [_notice(s, ph='__候选批量__'+str(i), approved='100.01') for i in range(24)]
         for notice in notices:
             notice.ownership_id = project.id; notice.jc_supplier = '甲'
             notice.project_name = '项目全名'; notice.approve_status = '已批'
         s.flush(); ids = [n.id for n in notices]
-    one, one_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids[:1], [source()]))
-    many, many_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids, [source()]))
+    payables = [source(amount='100.03')]
+    one, one_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids[:1], payables))
+    many, many_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids, payables))
     assert one['ready'] == 1 and many['ready'] == 24
     assert len(many_queries) == len(one_queries)
     assert [row['notice_id'] for row in many['rows']] == ids

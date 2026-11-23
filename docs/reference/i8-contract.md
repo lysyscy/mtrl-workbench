@@ -278,7 +278,7 @@ IPP 成功表示打印机已接收。回执保留设备返回的作业号、作�
 
 ## 采购合同应付与附件（2026-10-20 Edge CDP只读核实）
 
-列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额，AsrFlag=1、WfFlag=2为已批结束。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
+列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额。批量关联取 WfFlag=2、币种为人民币且汇率为 1 的应付，包含 AsrFlag=0 的已完成流程。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
 
 详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件目录使用 **GET** `/JFileSrv/reactAttach/tableAttachInit`，query带asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7；返回code/data/message，code=200时从data.attachmentRecordList取文件列表，asrFid是文件键，asrName是文件名（2026-10-23浏览器会话只读核实，POST不受支持）。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。已核样本不代表全历史覆盖。
 

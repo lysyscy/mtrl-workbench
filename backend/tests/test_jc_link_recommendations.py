@@ -44,6 +44,7 @@ def test_api_scopes_candidates_serializes_invoices_and_does_not_link(rollback_db
         b = _contract(s, project_id=p.id, supplier='甲供应商')
         blank = _contract(s, project_id=p.id, supplier='甲供应商')
         a.contract_date = '2026-10-01'; b.contract_date = '2025-01-01'; blank.contract_date = ''
+        blank.contract_no = 'CGHT2026100089'
         a.contract_amt = Decimal('150.02'); b.contract_amt = Decimal('90.00')
         b.trade_co = '贸易公司'; b.trade_contract_amt = Decimal('200.02')
         R.insert_invoice(s, contract_id=b.id, kind='trade', invoice_date='2026-10-10', amount='100.01')
@@ -52,6 +53,7 @@ def test_api_scopes_candidates_serializes_invoices_and_does_not_link(rollback_db
         for c in (a, b, wrong, wrong_supplier):
             R.insert_invoice(s, contract_id=c.id, kind='supplier', invoice_date='2026-10-10', amount='100.01')
         n = _notice(s, ph='__推荐只读__', approved='100.01')
+        n.fields = {'Remark': '扣除合同 CGHT2026100089 的质保金'}
         n.ownership_id = p.id; n.jc_supplier = '甲供应商'; s.flush()
         ids = {a.id, b.id, blank.id}; ordered = [b.id, a.id, blank.id]; nid = n.id
         count = s.scalar(select(func.count()).select_from(JcPayment))
@@ -65,6 +67,7 @@ def test_api_scopes_candidates_serializes_invoices_and_does_not_link(rollback_db
     assert by_id[ordered[1]]['supplier_uninvoiced'] == '50.01'
     assert by_id[ordered[1]]['trade_uninvoiced'] is None
     assert by_id[ordered[2]]['supplier_uninvoiced'] == '100.00'
+    assert [r['kind'] for r in by_id[ordered[2]]['recommendation']['reasons']] == ['contract_no']
     assert all(r['recommendation']['reasons'][0]['kind'] == 'invoice' for r in data['rows'] if r['invoices'])
     assert data['current_contract_id'] is None and 'selected_id' not in data
     with session_scope() as s:

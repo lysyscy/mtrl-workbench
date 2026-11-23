@@ -359,6 +359,7 @@ __all__ = [
     "settle_amount", "debt_amount", "contract_amounts",
     "normalize_tag", "tag_after_fetch",
     "link_hint", "dedup_blocked", "pick_candidates", "recommend_link",
+    "auto_link_evidence",
     "MSG_REQUEST_BAD", "MSG_REQUEST_TAKEN",
     "request_key", "request_hash", "subtable_operation_of", "subtable_operation_missing",
     "subtable_result_conflict",
@@ -377,13 +378,86 @@ def project_sequences(rows: list[dict]) -> dict[int, int]:
     return result
 
 
-def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_notices):
+def _contract_mentions(text: str) -> set[str]:
+    text = str(text or '').upper()
+    full = re.findall(r'(?<![A-Z0-9])CGHT(?:XX)?-?\d+(?:-\d+)*(?![A-Z0-9])', text)
+    tails = re.findall(r'合同[号编号：:\s]*(\d{8,})(?!\d)', text)
+    return set(full) | {f'CGHT{digits}' for digits in tails}
+
+
+def _auto_link_evidence(contract, codes, reason):
+    return {'contract_id': contract['id'], 'contract_no': contract['contract_no'],
+            'payable_codes': codes, 'reason': reason}
+
+
+def auto_link_evidence(*, amount, project_key, supplier, title, remark, contracts, payables, prior_approved):
+    """同项目先认明确合同号，再按供应商与应付金额确定唯一合同。"""
+    from app.mod03_notice.sup_match import match_of, pool_of
+
+    supplier = supplier.strip()
+    mentions = _contract_mentions(f'{title}\n{remark}')
+    mentioned = [c for c in contracts if c['contract_no'].upper() in mentions]
+    included = [c for c in contracts if c['tag'] == TAG_IN]
+    if mentioned:
+        targets = [c for c in mentioned if c['tag'] == TAG_IN]
+        if not targets:
+            return {'reason': '通知书提及的合同未纳入台账，保留人工处理'}
+        if len(targets) != 1 or len({c['contract_no'].upper() for c in mentioned}) != 1:
+            return {'reason': '通知书提及的合同不唯一，保留人工处理'}
+        target = targets[0]
+        target_supplier = target['supplier'].strip()
+        if supplier and supplier != target_supplier:
+            return {'reason': '通知书提及的合同与已填供应商不一致，保留人工处理'}
+        number = target['contract_no']
+        codes = [p['code'] for p in payables if p['contract_no'] == number and p['supplier'].strip() == target_supplier]
+        return _auto_link_evidence(target, codes or [number], '通知书明确提及本合同号')
+
+    suppliers = {supplier} if supplier else set(match_of(title, pool_of(contracts, project_key=project_key))['cands'])
+    if not suppliers:
+        suppliers = {c['supplier'].strip() for c in included} - {''}
+    candidates = [c for c in included if c['supplier'].strip() in suppliers and c['contract_no']]
+    eligible = [p for p in payables if p['supplier'].strip() in suppliers]
+    hits = [p for p in eligible if p['amount'] == amount]
+    numbers = {p['contract_no'] for p in hits}
+    if len(numbers) == 1 and '' not in numbers:
+        pairs = {(p['supplier'].strip(), p['contract_no']) for p in hits}
+        targets = [c for c in candidates if (c['supplier'].strip(), c['contract_no']) in pairs]
+        if len(targets) == 1:
+            target = targets[0]
+            codes = [p['code'] for p in hits if p['supplier'].strip() == target['supplier'].strip()]
+            return _auto_link_evidence(target, codes, '应付合同来源唯一')
+
+    installments = [c for c in candidates if prior_approved.get(c['id'])]
+    if installments:
+        by_amount: dict[tuple[str, str, Decimal], list[str]] = {}
+        for p in eligible:
+            key = (p['supplier'].strip(), p['contract_no'], p['amount'])
+            by_amount.setdefault(key, []).append(p['code'])
+        matches = []
+        for c in installments:
+            sup, cno = c['supplier'].strip(), c['contract_no']
+            priors = prior_approved.get(c['id'], ())
+            total_prior = sum(priors, ZERO)
+            remaining_prior = sum((a for a in priors if not by_amount.get((sup, cno, a))), ZERO)
+            codes = []
+            for base in dict.fromkeys((total_prior, remaining_prior)):
+                if base > 0:
+                    codes.extend(by_amount.get((sup, cno, base + amount), ()))
+            if codes:
+                matches.append((c, list(dict.fromkeys(codes))))
+        if len(matches) == 1:
+            target, codes = matches[0]
+            return _auto_link_evidence(target, codes, '与已关联通知书合计对应唯一应付合同')
+    return {'reason': '无唯一应付及本地合同对应，保留人工处理'}
+
+
+def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_notices, remark: str = ''):
     """返回证据，不返回选择；供应商票与贸易公司票分别展示、按付款侧匹配。"""
     target = Decimal(str(amount or 0))
     side = 'trade' if trade_co else 'supplier'
     rows = [r for r in invoices if r['kind'] == side]
     reasons = []
-    if contract_no and contract_no.upper() in re.findall(r'(?<![A-Z0-9])CGHT\d+(?![A-Z0-9])', str(title).upper()):
+    if contract_no and contract_no.upper() in _contract_mentions(f'{title}\n{remark}'):
         reasons.append({'kind': 'contract_no', 'text': '通知书明确提及本合同号'})
     matched = next(([r] for r in rows if Decimal(str(r['amount'])) == target and target > 0), None)
     if not matched and target > 0:
