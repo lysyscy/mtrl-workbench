@@ -93,6 +93,14 @@ export async function requestFile(path: string, signal?: AbortSignal, method: 'G
   return { blob: await response.blob(), filename };
 }
 
+// Decode into the final buffer without building an intermediate array of characters.
+export function decodeBase64(text: string) {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

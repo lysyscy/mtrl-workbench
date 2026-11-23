@@ -1,4 +1,4 @@
-import { ApiError, record, requestJson } from './api';
+import { ApiError, decodeBase64, record, requestJson } from './api';
 import { body } from './notices-api';
 
 export async function loadContractExport(kind: 'ordinary' | 'print', selection: number[] | string[], signal: AbortSignal) {
@@ -10,7 +10,7 @@ export async function loadContractExport(kind: 'ordinary' | 'print', selection: 
     throw new ApiError('导出文件不完整，请重试；仍失败请联系维护人员。');
   }
   let bytes: Uint8Array<ArrayBuffer>;
-  try { bytes = Uint8Array.from(atob(value.content_b64), char => char.charCodeAt(0)); }
+  try { bytes = decodeBase64(value.content_b64); }
   catch { throw new ApiError('导出文件不完整，请重试；仍失败请联系维护人员。'); }
   if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 3 || bytes[3] !== 4) {
     throw new ApiError('导出文件不完整，请重试；仍失败请联系维护人员。');

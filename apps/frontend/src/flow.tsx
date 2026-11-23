@@ -11,7 +11,7 @@ import type { ComponentProps } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, record, requestJson, readProjects } from './api';
+import { ApiError, decodeBase64, record, requestJson, readProjects } from './api';
 import { LedgerPage } from './ledger';
 import { ProjectPicker } from './ledger-controls';
 import { body, cents, currentMonth, decimal, money, searchKey } from './notices-api';
@@ -148,7 +148,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       const ids:number[]=[];api.current?.forEachNodeAfterFilterAndSort(node=>{if(node.data)ids.push(node.data.id);});
       const data=await requestJson('/api/m05/flows/export',{method:'POST',...body({ids})});
       if(!record(data)||typeof data.content_b64!=='string'||typeof data.filename!=='string')throw new ApiError('导出结果不完整，请重试。');
-      const bytes=Uint8Array.from(atob(data.content_b64),c=>c.charCodeAt(0));saveBlob(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),data.filename);void message.success(`已导出 ${data.rows} 条付款流水。`);
+      const bytes=decodeBase64(data.content_b64);saveBlob(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),data.filename);void message.success(`已导出 ${data.rows} 条付款流水。`);
     } catch(failure){setError(failure instanceof Error?failure.message:'导出失败，请重试。');}finally{setExporting(false);}
   }
   function chooseProject(key:string) {

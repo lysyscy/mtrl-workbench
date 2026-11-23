@@ -17,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { AgGridReactProps } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams, PostSortRowsParams } from 'ag-grid-community';
-import { ApiError, confirmWrite, uncertainWrite, projectLabel, record, requestJson } from './api';
+import { ApiError, decodeBase64, confirmWrite, uncertainWrite, projectLabel, record, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { cacheFontMeasurement, cachedNumberColumnWidths, contentWidth, fixedWidth, gridTheme, textWidth } from './grid';
@@ -411,7 +411,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     if (actionsUnavailable || !shown.length || lock.current) return;
     const ids: number[] = []; api.current?.forEachNodeAfterFilterAndSort(node => { if (node.data) ids.push(node.data.notice_id); });
     lock.current = true; setBusy(true); setError('');
-    try { const value = await requestJson('/api/m03/notices/export', { method: 'POST', ...body({ ids }) }); if (!record(value) || typeof value.filename !== 'string' || typeof value.content_b64 !== 'string') throw new ApiError('导出结果不完整，请重试。'); const blob = new Blob([Uint8Array.from(atob(value.content_b64), c => c.charCodeAt(0))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = value.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setExportOpen(false); announce(`已导出 ${value.rows} 条通知书。`); }
+    try { const value = await requestJson('/api/m03/notices/export', { method: 'POST', ...body({ ids }) }); if (!record(value) || typeof value.filename !== 'string' || typeof value.content_b64 !== 'string') throw new ApiError('导出结果不完整，请重试。'); const blob = new Blob([decodeBase64(value.content_b64)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = value.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setExportOpen(false); announce(`已导出 ${value.rows} 条通知书。`); }
     catch (failure) { setError(failure instanceof Error ? failure.message : '导出失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }

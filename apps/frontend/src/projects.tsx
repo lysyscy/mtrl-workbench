@@ -15,7 +15,7 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, readProjects, record, requestJson, uncertainWrite } from './api';
+import { ApiError, decodeBase64, readProjects, record, requestJson, uncertainWrite } from './api';
 import type { Identity, Project } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { SESSION_MODE_BROWSER, sessionPayload } from './i8-browser-relay';
@@ -184,7 +184,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     await run(async () => {
       const result = object<{ content_b64: string; filename: string }>(await requestJson('/api/m01/projects/export', { method: 'POST', ...body({ ids }) }), x => typeof x.content_b64 === 'string' && typeof x.filename === 'string' && !/[\\/:]/.test(x.filename));
       if (!mounted.current) return;
-      const blob = new Blob([Uint8Array.from(atob(result.content_b64), c => c.charCodeAt(0))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = new Blob([decodeBase64(result.content_b64)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, `已按显示顺序导出 ${ids.length} 个项目。`);
   }
