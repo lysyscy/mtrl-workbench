@@ -154,7 +154,24 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const draftRef = useRef<Draft | null>(null), pendingFocus = useRef(0);
   const [draftUncertain, setDraftUncertain] = useState(false), [draftChecked, setDraftChecked] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null), [maintenance, setMaintenance] = useState<NoticeDialogState | null>(null), [focusId,setFocusId] = useState(0);
-  useEffect(() => { if (!active) return; const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),period:'全部',paid:''});setSearch('');setPasteScope(null);} }, [params.get('notice'), active]);
+  const noticeId = active ? Number(params.get('notice')) : 0;
+  const linkedNotice = useMemo(() => noticeId > 0 ? query.data?.find(row => row.notice_id === noticeId) : undefined, [noticeId, query.data]);
+  const landedNotice = useRef<{ id: number; found: boolean } | null>(null);
+  const todo = params.get('todo');
+  useEffect(() => {
+    if (!(noticeId > 0)) { landedNotice.current = null; return; }
+    if (!linkedNotice && (query.isFetching || !query.isSuccess)) return;
+    const landed = landedNotice.current;
+    if (landed?.id === noticeId && (landed.found || !linkedNotice)) return;
+    landedNotice.current = { id: noticeId, found: Boolean(linkedNotice) };
+    pendingFocus.current = linkedNotice ? noticeId : 0;
+    setFocusId(pendingFocus.current);
+    if (todo !== 'jc' && todo !== 'ownership' && todo !== 'void') {
+      setFilters({ ...defaults(), paid: '', category: linkedNotice && !live(linkedNotice) ? 'exclude' : '' });
+      setSearch('');
+      setPasteScope(null);
+    }
+  }, [noticeId, linkedNotice, query.isFetching, query.isSuccess, todo]);
   // Home todo tiles land here with ?todo=: conflicting old filters are reset so the
   // landed scope matches the tile count exactly (jc via plain filters, the other two
   // via the removable pending chip).
@@ -414,7 +431,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       {cellSaves.error && <p className="notice" role="alert">{cellSaves.error}<Button disabled={cellSaves.busy} onMouseDown={event=>event.preventDefault()} onClick={()=>{cellSaves.update(()=>({}));if(!cellSaves.uncertain)cellSaves.clearFeedback();}}>取消金额修改</Button></p>}
       {cellSaves.uncertain && <div className="notice-feedback"><Button disabled={blocked || cellSaves.busy} onClick={() => void cellSaves.reread('')}>重读核对金额</Button><Button disabled={blocked || cellSaves.busy || !cellSaves.verified} onClick={() => cellSaves.confirm()}>已核对，继续编辑</Button></div>}
       {cellSaves.uncertain && cellSaves.readback.map(item=><p key={item.key} className="notice" role="status">{item.bill}，{item.field}：当前输入 {item.input}，系统 {item.actual}{item.submitted !== null && `，本次提交 ${item.submitted}`}</p>)}
-      <ReadStatusLane phase={readState} announce="正在读取付款通知书…" className="notice-read-status">{(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained={readState === 'stale' ? '列表更新失败，保留上次结果。' : undefined} />}{projects.isError && <ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。" />}</ReadStatusLane>
+      <ReadStatusLane phase={readState} announce="正在读取付款通知书…" className="notice-read-status">{noticeId > 0 && !linkedNotice && query.isSuccess && !query.isFetching && <p role="status">当前通知书列表中未找到这张单据。</p>}{(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained={readState === 'stale' ? '列表更新失败，保留上次结果。' : undefined} />}{projects.isError && <ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。" />}</ReadStatusLane>
       {placeheld ? <div className="notice-grid notice-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : (
         <PublishedNotices.Provider value={publishedNotices}>
           <NoticeDraftDisabled.Provider value={busy || blocked}>

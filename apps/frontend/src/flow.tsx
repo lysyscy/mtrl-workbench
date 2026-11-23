@@ -72,7 +72,8 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   const [filter,setFilter]=useState(initial), [search,setSearch]=useState(''), [revoke,setRevoke]=useState<Flow|null>(null), [feedback,setFeedback]=useState(''), [error,setError]=useState(''), [exporting,setExporting]=useState(false);
   const [gran,setGran]=useState('week'),[year,setYear]=useState(Number(currentMonth().slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(currentMonth().slice(5))/3)),[bucket,setBucket]=useState('');
   const api=useRef<GridApi<Flow>|null>(null), gridRoot=useRef<HTMLDivElement>(null), flowSection=useRef<HTMLElement>(null), locatePending=useRef(false), searchComposing=useRef(false);
-  const [searchPending, startSearch] = useTransition();
+  const [publishingSearch, startSearch] = useTransition();
+  const searchPending = publishingSearch || search !== filter.keyword;
   const applyKeyword = (keyword: string) => startSearch(() => setFilter(previous => previous.keyword === keyword ? previous : { ...previous, keyword }));
   const guard=props.exportGuard;
   const enabled=props.active && !props.blocked;
