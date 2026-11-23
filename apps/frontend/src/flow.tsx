@@ -66,6 +66,20 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
     </div>
   </div>;
 }
+// Extending a normalized search can only remove rows from its last result.
+function searchWithinFlows(scope: Flow[]) {
+  let previous = '', matches = scope;
+  return (needle: string) => {
+    if (needle === previous) return matches;
+    const candidates = needle.includes(previous) ? matches : scope;
+    const next = needle ? candidates.filter(row => Object.values(row).some(value =>
+      value !== null && searchKey(String(value)).includes(needle))) : scope;
+    previous = needle;
+    matches = next.length === scope.length ? scope : next;
+    return matches;
+  };
+}
+
 export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuard: string }) {
   const [params] = useSearchParams();
   const { message } = App.useApp();
@@ -87,15 +101,16 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     for (const id of filter.projects) ids.add(id);
     return (projectQuery.data ?? []).filter(project => ids.has(project.id));
   }, [projectQuery.data, flows.data, filter.projects]);
-  const rows = useMemo(() => {
-    const needle = searchKey(filter.keyword), selected = new Set(filter.projects);
+  const scope = useMemo(() => {
+    const selected = new Set(filter.projects);
     return (flows.data ?? []).filter(row => timeMatches(filter.period, row.pay_date)
       && (!selected.size || selected.has(row.project_id ?? 0))
       && (!filter.notice || filter.notice === row.notice_id)
       && (!filter.method || filter.method === row.pay_method)
-      && (!filter.status || filter.status === row.status)
-      && (!needle || Object.values(row).some(value => value !== null && searchKey(String(value)).includes(needle))));
-  }, [flows.data, filter]);
+      && (!filter.status || filter.status === row.status));
+  }, [flows.data, filter.period, filter.projects, filter.notice, filter.method, filter.status]);
+  const find = useMemo(() => searchWithinFlows(scope), [scope]);
+  const rows = useMemo(() => find(searchKey(filter.keyword)), [find, filter.keyword]);
   const compareAmounts = useAmountComparator(rows);
   const summary = useMemo(() => {
     let count = 0, sum = 0n;
@@ -124,7 +139,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
     {colId:'actions',headerName:'操作',...contentWidth(64,100,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>{ if (current.current.writable) current.current.open(p.data!); }}>撤销</Button>:null},
   ]; return list; },[scale,amountWidth,compareAmounts]);
   const measurement = useMemo(() => ({signature:(row:Flow,id:string,pinned:boolean)=>JSON.stringify([pinned,id==='actions'?row.status:id==='status_label'?[row.status_label,row.revoke_reason,row.status]:(row as unknown as Record<string,unknown>)[id]])}), []);
-  const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: summary as Flow[], columns, measurement, rowId: flowRowId, scale, scope: JSON.stringify(filter), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
+  const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: summary as Flow[], columns, measurement, rowId: flowRowId, scale, scope: JSON.stringify({...filter, keyword:rows === scope ? '' : filter.keyword}), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
   useEffect(()=>{api.current?.refreshCells({force:true,columns:['actions']});},[writable]);
   async function exportFlows() {
     if(exporting||searchPending||!props.me||!enabled||flows.isError)return;
