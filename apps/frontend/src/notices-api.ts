@@ -35,10 +35,13 @@ export { currentMonth } from './business-time';
 export function receipt(value: unknown): string { if (!record(value) || typeof value.message !== 'string') throw new ApiError('操作回执不完整，请重新读取列表核对。'); return value.message.replace(/<[^>]*>/g, '').replace(/\*\*/g, ''); }
 
 export function matchNoticeCodes(raw: string, rows: NoticeRow[]) {
-  const tokens = raw.split(/[\s,，;；、]+/).filter(Boolean), counts = new Map<string,number>(), byCode = new Map<string,NoticeRow[]>();
+  const tokens = raw.split(/[\s,，;；、/／\\|]+/).filter(Boolean), counts = new Map<string,number>(), byCode = new Map<string,NoticeRow[]>();
   const result = { total: tokens.length, ids: [] as number[], invalid: [] as string[], missing: [] as string[], ambiguous: [] as string[], duplicates: [] as string[], paid: [] as string[], blocked: [] as NoticeRow[] };
   for (const token of tokens) {
-    const code = token.replace(/^["“](.+)["”]$/, '$1').toUpperCase();
+    const code = token
+      .replace(/^["“'‘(（\[【]+/, '')
+      .replace(/["”'’)）\]】]+$/, '')
+      .toUpperCase();
     if (!/^FKTZS\d{4}(?:0[1-9]|1[0-2])\d{4}$/.test(code)) result.invalid.push(token);
     else counts.set(code, (counts.get(code) ?? 0) + 1);
   }

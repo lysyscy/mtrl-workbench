@@ -21,6 +21,28 @@ test('notice_code_exception_algorithm_without_browser', async () => {
   console.log('Pure notice-code exception cases passed; no browser or HTTP listener');
 });
 
+test('matches Excel multiline cells and slash-separated notice codes in paste order', () => {
+  const rows = [
+    row(1, 'FKTZS2026101024'), row(2, 'FKTZS2026102389'),
+    row(3, 'FKTZS2026100629'), row(4, 'FKTZS2026102395'),
+  ].reverse();
+  const multiline = matchNoticeCodes('"FKTZS2026101024/\nFKTZS2026102389"', rows);
+  const singleLine = matchNoticeCodes('FKTZS2026100629/FKTZS2026102395', rows);
+
+  assert.deepEqual(multiline.ids, [1, 2]);
+  assert.deepEqual(multiline.invalid, []);
+  assert.deepEqual(singleLine.ids, [3, 4]);
+  assert.deepEqual(singleLine.invalid, []);
+});
+
+test('accepts alternate separators and surrounding quotes or brackets', () => {
+  const rows = [1, 2, 3, 4].map(id => row(id, `FKTZS202610000${id}`));
+  const result = matchNoticeCodes('【“FKTZS2026100001”】／(FKTZS2026100002)\\[FKTZS2026100003]|‘FKTZS2026100004’', rows);
+
+  assert.deepEqual(result.ids, [1, 2, 3, 4]);
+  assert.deepEqual(result.invalid, []);
+});
+
 test('pasted notice numbers determine the grid prefix and the print scope order', () => {
   const rows = [1, 2, 3, 4, 5].map(id => row(id, `FKTZS202610000${id}`));
   const pasteOrder = new Set(matchNoticeCodes('FKTZS2026100003 FKTZS2026100001 FKTZS2026100003', rows).ids);
