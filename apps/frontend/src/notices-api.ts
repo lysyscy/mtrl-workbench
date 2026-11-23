@@ -1,5 +1,6 @@
 import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 import Decimal from 'decimal.js';
+import type { GridApi } from 'ag-grid-community';
 import type { MoneyKey, NoticeRow } from './notice-list';
 export type { MoneyKey, NoticeRow } from './notice-list';
 export { live, moneyKeys, readNotices } from './notice-list';
@@ -50,4 +51,26 @@ export function matchNoticeCodes(raw: string, rows: NoticeRow[]) {
     else { const row = hits[0]!; if (row.is_excluded || row.is_revoked) result.blocked.push(row); else { result.ids.push(row.notice_id); if (row.pay_status === '已付清') result.paid.push(code); } }
   }
   return result;
+}
+
+export function prioritizeNoticeRows<Row>(rows: Row[], ids: ReadonlySet<number>, idOf: (row: Row) => number | undefined): void {
+  if (!ids.size) return;
+  const positions = new Map<number | undefined, number>();
+  for (const id of ids) positions.set(id, positions.size);
+  const position = (row: Row) => positions.get(idOf(row)) ?? positions.size;
+  rows.sort((a, b) => position(a) - position(b));
+}
+
+export function noticePrintRows(
+  selected: readonly NoticeRow[],
+  pasteOrder: ReadonlySet<number>,
+  grid: Pick<GridApi<NoticeRow>, 'forEachNodeAfterFilterAndSort'> | null,
+): NoticeRow[] {
+  const order = new Set(pasteOrder);
+  grid?.forEachNodeAfterFilterAndSort(({data}) => {
+    if (data) order.add(data.notice_id);
+  });
+  const rows = [...selected];
+  prioritizeNoticeRows(rows, order, row => row.notice_id);
+  return rows;
 }
