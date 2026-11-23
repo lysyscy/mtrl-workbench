@@ -155,3 +155,12 @@ def test_empty_scope_is_empty_and_never_queries(scoped, monkeypatch):
     assert _links_by_notice(s, [])(a) == []
     monkeypatch.undo()
     assert build_rows(s, notice_ids=[]) == [], '空选被当成全量了'
+
+
+def test_通知书导出选择沿用同一显示窗口(scoped, monkeypatch):
+    session, a, b, _ = scoped
+    expected = [row.id for row in notices.notice_display_rows(session, limit=1)]
+    assert expected[0] in {a, b}
+    monkeypatch.setattr(notices, "NOTICE_LIST_LIMIT", 1)
+    assert notices.selected_display_ids(session, {a, b, 10**60}) == expected
+    assert notices.selected_display_ids(None, set()) == []

@@ -579,7 +579,7 @@ def export_notices(req: ExportIn, session: Session = DBSession) -> dict:
     **列** = 页面表头 `NT_THEAD` 去掉「勾选 / 操作」⇒ 16 列；**取值** = **页面显示的那个值**
     （逐列口径见 `report_export/nt_export.py` 的模块头）。
 
-    ⚠️ **取数是"全量捞一遍再按 id 挑"**：本端点的"筛选"**全靠传入的 id**
+    先从页面同一批可见 ID 中取交集，本端点的筛选由传入的 ID 决定
        ⇒ 所以这里的 `NoticeFilters` 是**全开**的（`period=""` 全部 / 无项目 / 无分类 /
        无审批状态 / 无付款状态 / `include_archived=True`），⛔ **不是**页面的默认筛选。
        若这里跟着页面默认走（默认隐藏剔除行），用户切到「分类 = 剔除」导出的就会**是空的** ——
@@ -595,14 +595,20 @@ def export_notices(req: ExportIn, session: Session = DBSession) -> dict:
     from app import export_registry as EXP
     X = EXP.get("nt")
 
-    # ⚠️ **取数层给全量**（见 docstring）—— 每一档都显式写出来，⛔ 别用 `notice_filters()` 的默认值
+    # 已选择的剔除、撤单和历史行都沿用页面的装配口径。
     filters = NoticeFilters(
         period="", project_ids=(), category=CATEGORY_ALL,
         approve_status="", pay_status="", include_archived=True,
     )
-    data = build_page_data(session, filters=filters)
-    by_id = {int(rec["notice_id"]): rec for rec in (data.get("rows") or ())}
-    ids = [int(i) for i in (req.ids or [])]
+    ids = req.ids
+    # For broad exports the existing narrow column projection is cheaper than
+    # loading most of the same notices as individually selected ORM records.
+    wanted = set(ids)
+    selected = repo.selected_display_ids(session, wanted) if len(wanted) < repo.NOTICE_LIST_LIMIT // 2 else None
+    records = []
+    if selected is None or selected:
+        records = build_page_data(session, filters=filters, notice_ids=selected).get("rows") or []
+    by_id = {int(rec["notice_id"]): rec for rec in records}
     # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
     pairs = [(_rec, _export_row(_rec)) for _rec in (by_id[i] for i in ids if i in by_id)]
     out = [r for _, r in pairs]

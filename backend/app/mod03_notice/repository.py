@@ -302,6 +302,14 @@ def _notice_list_window(stmt, limit: int):
     return stmt.order_by(PaymentNotice.doc_date.desc(), PaymentNotice.id.desc()).limit(limit)
 
 
+def selected_display_ids(session: Session, ids: set[int]) -> list[int]:
+    """Keep selected IDs inside the list's date/ID window, including archived rows."""
+    if not ids:
+        return []
+    window = _notice_list_window(select(PaymentNotice.id), NOTICE_LIST_LIMIT)
+    return [row.id for row in session.execute(window) if row.id in ids]
+
+
 def notice_todo_rows(session: Session) -> list[Row]:
     stmt = select(PaymentNotice.id, PaymentNotice.ownership_id, PaymentNotice.category,
                   PaymentNotice.i8_revoked, PaymentNotice.excluded, PaymentNotice.amount_approved)
