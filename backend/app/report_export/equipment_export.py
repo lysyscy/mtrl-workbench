@@ -64,14 +64,18 @@ def main_sheet(ws, items, turnover, transfer_sheet, scrap_sheet):
     put(ws, 2, MAIN_HEADER)
     for n, r in enumerate(items, 3):
         dt = r["purchase_date"]
-        put(ws, n, [r["code"], r["name"], r["spec"], r["unit"], dt or r["purchase_date_text"],
-                    dt.strftime("%Y%m%d") if dt else None, r["purchase_project"], r["purchase_price"],
+        date_text = r["purchase_date_text"] or (dt.strftime("%Y%m%d") if dt else None)
+        lists_inventory = r.get("source_lists_inventory")
+        if lists_inventory is None:
+            lists_inventory = r["inventory_item_id"] is not None
+        put(ws, n, [r["code"], r["name"], r["spec"], r["unit"], dt,
+                    date_text, r["purchase_project"], r["purchase_price"],
                     STATE[r["status"]], r["current_project"], r["remark"], SCOPE[r["asset_scope"]],
                     None, {"yes": "是", "no": "否", "pending": "待核"}[r["in_rental"]],
-                    "是" if r["inventory_item_id"] else "否", r["rental_source_row"], r["inventory_source_row"],
+                    "是" if lists_inventory else "否", r["rental_source_row"], r["inventory_source_row"],
                     r["source_info"], r["current_project"], r["quantity"], None])
         # Stable identifiers may contain a sequence suffix or an earlier name/date.
-        if dt and r["code"] == f"{r['name']}-{dt:%Y%m%d}":
+        if dt and date_text == dt.strftime("%Y%m%d") and r["code"] == f"{r['name']}-{date_text}":
             set_formula(ws[f"A{n}"], TextFormula(f'=CONCATENATE(B{n},"-",F{n})', r["code"]))
         status = STATE[r["status"]]
         set_formula(ws[f"I{n}"], TextFormula(f'=IF(COUNTIF(\'{scrap_sheet}\'!A:A,A{n})>=1,"报废","{status}")', status))
@@ -107,12 +111,9 @@ def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
             lookup = f"VLOOKUP(A{n},'{main}'!A:U,{source},FALSE)"
             expr = f'=IFERROR(IF(ISBLANK(INDEX(\'{main}\'!A:U,MATCH(A{n},\'{main}\'!A:A,0),{source})),"",{lookup}),"")'
             value = item[key]
-            if key == "purchase_date":
-                if isinstance(value, date):
-                    value = to_excel(value)
-                    ws[f"E{n}"].number_format = "yyyy-mm-dd"
-                else:
-                    value = item["purchase_date_text"]
+            if key == "purchase_date" and isinstance(value, date):
+                value = to_excel(value)
+                ws[f"E{n}"].number_format = "yyyy-mm-dd"
             formula = TextFormula(expr, value) if isinstance(value, str) else Formula(expr, value)
             set_formula(ws[f"{col}{n}"], formula)
         if not scrap and not turnover:

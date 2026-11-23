@@ -4,19 +4,22 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 import json
+import hashlib
+import os
 import runpy
 from unittest.mock import Mock
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 import pytest
-from sqlalchemy import event, inspect, select
+from sqlalchemy import event, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.mod16_equipment.models import EquipmentItem, EquipmentTransfer
+from app.mod16_equipment.importer import import_equipment_baseline, parse_rental
+from app.mod16_equipment.models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine, RentalMonth
 
 from app.core import session
 from app.main import create_app
@@ -223,6 +226,7 @@ def test_early_month_view_and_transfer_across_months(client):
 def test_migration_round_trip_in_isolated_schema(rollback_db):
     filename = Path(__file__).resolve().parents[1] / "alembic/versions/equip261123_equipment_ledger.py"
     revision = runpy.run_path(str(filename))
+    baseline = runpy.run_path(str(filename.with_name("equipbase261123_historical_transfers.py")))
     schema = rollback_db.exec_driver_sql("select current_schema()").scalar_one()
     assert schema.startswith("backend_verify_")
 
@@ -231,9 +235,11 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
 
     initial = tables()
     with Operations.context(MigrationContext.configure(rollback_db)):
+        baseline["downgrade"]()
         revision["downgrade"]()
         assert tables() == {name for name in initial if not name.startswith("m16_")}
         revision["upgrade"]()
+        baseline["upgrade"]()
     assert tables() == initial
 
 class RecordingAdapter:
@@ -517,3 +523,117 @@ def test_transfer_retry_reconciles_unknown_save_without_reposting(client):
         result = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [transfer["id"]]})
         assert result["transfers"][0]["status"] == expected
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH]
+
+
+def save_source(path, sheets):
+    book = Workbook()
+    book.remove(book.active)
+    for name, records in sheets.items():
+        ws = book.create_sheet(name)
+        for row in records:
+            ws.append(row)
+    book.save(path)
+    return path
+
+
+@pytest.fixture
+def baseline_paths(tmp_path):
+    item_header = "工机具编号 名称 规格型号 单位 信息化用购买日期 购买日期 购买项目 购买价格 当前状态 当前所在项目 备注 在账 - 列租赁表 列资产账 租赁底稿行 盘点来源行 来源 接续所在项目 数量 核对说明".split()
+    transfer = "工机具编号 名称 规格型号 单位 购买日期 购买项目 购买价格 调出项目 调入项目 调拨日期 备注".split()
+    scrap = transfer[:7] + ["所在项目", "报废日期", "报废原因", "备注"]
+    item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "甲", 2, "在用", "乙",
+            None, "是", None, "是", "是", "4", "5", "分布原第 3 行", None, 3]
+    distribution = save_source(tmp_path / "d.xlsx", {
+        "工机具基础信息": [[], item_header, item, ["乙-01", "样机乙", *item[2:11], "固定资产", None, "是", "否",
+                                           None, None, None, None, 1]],
+        "调拨记录": [transfer, ["甲-01", *[None]*6, "甲", "乙", "2026年初", "原备注"]],
+        "报废记录": [scrap, ["乙-01", *[None]*5, 2, "乙", 20261101, "损坏"]],
+        "周转材料": [[], item_header, ["转-01", "样阀", *item[2:14], "否", None, None, None, None, 1]],
+        "周转材料调拨记录": [transfer], "周转材料报废记录": [scrap]})
+    header = [None]*4 + ["单价", "帐面数", None, "盘点数", None, None, None, "盈亏原因"]
+    inventory = save_source(tmp_path / "i.xlsx", {"2025年年终盘点流动资产": [[], [], header, [],
+        [1, "样机", None, "台", 2, 3, 6, 3, 6]], "周转材料": [[], [], header]})
+    rental_header = "项目 设备名称 规格型号 单位 数量 租赁单价（元） 本月收费 金额（元） 变化／待核 类别 原值（元） 自定义单价（元） 底稿行 上期金额 早期草稿金额 对应设备编号".split()
+    rental = save_source(tmp_path / "r.xlsx", {"本月租赁": [[], [], [], [], rental_header,
+        ["乙", "样机", None, "台", 3, 5, "计费", 15, None, "设备", None, 5, 4, None, None, "甲-01"],
+        ["丙", "样机", None, "台", 1, 0, "金额留空", None, None, "设备", 0, None, 5, None, None, "甲-01、乙-01"]]})
+    return dict(distribution_path=distribution, inventory_path=inventory, rental_path=rental)
+
+
+def test_baseline_apply_and_excel_readback(client, baseline_paths):
+    preview = import_equipment_baseline(None, **baseline_paths, dry_run=True)
+    assert preview == dict(equipment_count=2, turnover_count=1, transfer_count=1, scrap_count=1,
+        inventory_tool_count=1, inventory_tool_book_total=6, inventory_turnover_count=0,
+        rental_line_count=2, rental_grand_total=15, linked_inventory_count=1, linked_rental_count=1)
+    with session_scope() as db:
+        assert import_equipment_baseline(db, **baseline_paths) == preview
+    with session_scope() as db:
+        with pytest.raises(ValueError, match="台账非空"):
+            import_equipment_baseline(db, **baseline_paths)
+        item = db.scalar(select(EquipmentItem).where(EquipmentItem.code == "甲-01"))
+        assert db.get(InventoryItem, item.inventory_item_id).source_row == "5"
+        assert item.quantity == 3 and item.source_info == "分布原第 3 行"
+        assert db.scalar(select(EquipmentScrap)).reason == "损坏"
+        transfer = db.scalar(select(EquipmentTransfer))
+        assert transfer.transfer_date is None and "2026年初" in transfer.remark
+        a, b = db.scalars(select(RentalLine).order_by(RentalLine.project_sort_order)).all()
+        assert a.equipment_id == item.id and a.custom_unit_price == 5
+        assert b.equipment_id is None and b.billing_status == "blank" and b.amount is None
+    assert request(client, "GET", "/i8-sync/issues") == {"equipment": [], "transfers": []}
+    with session_scope() as db:
+        turnover_id = db.scalar(select(EquipmentItem.id).where(EquipmentItem.item_category == "turnover"))
+    edited = request(client, "PATCH", f"/equipment/{turnover_id}", {"remark": "核对"})
+    assert edited["inventory_item_id"] is None
+    exported = workbook(client, "distribution", data_only=True)
+    assert [exported["周转材料"][cell].value for cell in ("L3", "O3")] == ["是", "否"]
+    dist = exported["工机具基础信息"]
+    assert (dist["E3"].value.date(), dist["F3"].value, dist["T3"].value) == (date(2025, 1, 2), "202501", 3)
+    inv = workbook(client, "inventory", data_only=True)["流动资产盘点表"]
+    assert inv["G5"].value == 6
+    rent = workbook(client, f"rental?month={MONTH}", data_only=True).active
+    assert rent["G4"].value == 15 and rent["G11"].value is None
+
+
+def test_legacy_rental_sheet(tmp_path):
+    path = save_source(tmp_path / "legacy.xlsx", {"分公司9月份 (2)": [
+        ["租赁费明细（费用划转）", *[None]*10, "原值"], ["单位：测试项目"], ["序号", "名称"],
+        [1, "样机", None, "台", 1, 17, None, "设备", "原分布", None, None, 20],
+        [2], [None, "合计："]]})
+    line, = parse_rental(path)
+    assert (line["project_name"], line["source_row"], line["custom_unit_price"]) == ("测试项目", "4", 17)
+    assert line["billing_status"] == "blank" and line["amount"] is None
+
+
+def test_optional_tail501_baseline(rollback_db):
+    if not os.getenv("M16_BASELINE_PATHS"):
+        pytest.skip("按需提供三本接续原件的路径")
+    assert rollback_db.exec_driver_sql("SELECT current_schema()").scalar_one().startswith("backend_verify_")
+    paths = {key: Path(value) for key, value in json.loads(os.environ["M16_BASELINE_PATHS"]).items()}
+    def hashes():
+        return [hashlib.sha256(p.read_bytes()).digest() for p in paths.values()]
+    original = hashes()
+    try:
+        preview = import_equipment_baseline(None, **paths, dry_run=True)
+        with session_scope() as db:
+            assert import_equipment_baseline(db, **paths) == preview
+        with session_scope() as db:
+            def count(model, *filters):
+                return db.scalar(select(func.count()).select_from(model).where(*filters))
+            tool = InventoryItem.category == "tool"
+            observed = dict(equipment_count=count(EquipmentItem, EquipmentItem.item_category == "equipment"),
+                turnover_count=count(EquipmentItem, EquipmentItem.item_category == "turnover"),
+                transfer_count=count(EquipmentTransfer), scrap_count=count(EquipmentScrap), inventory_tool_count=count(InventoryItem, tool),
+                inventory_turnover_count=count(InventoryItem, InventoryItem.category == "turnover"),
+                inventory_tool_book_total=db.scalar(select(func.sum(InventoryItem.book_amount)).where(tool)),
+                rental_line_count=count(RentalLine), rental_grand_total=db.scalar(select(func.sum(RentalLine.amount))),
+                linked_inventory_count=count(EquipmentItem, EquipmentItem.inventory_item_id.is_not(None)),
+                linked_rental_count=count(RentalLine, RentalLine.equipment_id.is_not(None)))
+            assert observed == preview == dict(equipment_count=377, turnover_count=3, transfer_count=295, scrap_count=0,
+                inventory_tool_count=146, inventory_turnover_count=6, inventory_tool_book_total=Decimal("758371.4324"),
+                rental_line_count=128, rental_grand_total=Decimal("19781.0367"), linked_inventory_count=254, linked_rental_count=88)
+            assert count(EquipmentItem, EquipmentItem.asset_scope == "fixed_asset") == 7
+            assert count(RentalMonth, RentalMonth.month == MONTH) == 1
+            assert count(RentalLine, RentalLine.billing_status == "blank", RentalLine.amount.is_(None)) == 97
+            assert count(RentalLine, RentalLine.custom_unit_price.is_not(None)) == 17
+    finally:
+        assert hashes() == original

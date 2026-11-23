@@ -97,12 +97,14 @@ def update(db, key, changes):
     item = require(db, EquipmentItem, key)
     if item.status == "scrapped":
         raise DataConflictError("已报废设备不能直接修改")
-    old_flag = item.in_rental
+    old_flag, old_scope = item.in_rental, item.asset_scope
     for name, value in changes.items():
         setattr(item, name, value)
     item.updated_by = current_operator()
     if "purchase_date" in changes:
         item.purchase_date_text = None
+    if old_scope != item.asset_scope:
+        item.source_lists_inventory = None
     linked = db.get(InventoryItem, item.inventory_item_id) if item.inventory_item_id else None
     fields = {"name": "name", "spec": "spec", "unit": "unit", "purchase_price": "unit_price"}
     edited = {dst: changes[src] for src, dst in fields.items() if src in changes}
@@ -117,7 +119,8 @@ def update(db, key, changes):
             item.inventory_item_id = asset_row(db, item, item.quantity).id
         else:
             save_inventory(db, edited, linked.id)
-    elif not linked and item.asset_scope == "current_asset":
+    # An imported on-book item may be excluded from inventory or have only a group match.
+    elif not linked and item.asset_scope == "current_asset" and item.source_lists_inventory is None:
         item.inventory_item_id = asset_row(db, item, item.quantity).id
     if old_flag != "yes" and item.in_rental == "yes":
         start_rental(db, item, date.today().strftime("%Y-%m"))

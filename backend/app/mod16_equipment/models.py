@@ -69,6 +69,7 @@ class EquipmentItem(Base):
     source_info: Mapped[str | None] = mapped_column(sa.Text())
     rental_source_row: Mapped[str | None] = mapped_column(sa.Text())
     inventory_source_row: Mapped[str | None] = mapped_column(sa.Text())
+    source_lists_inventory: Mapped[bool | None] = mapped_column(sa.Boolean())
     inventory_item_id: Mapped[int | None] = mapped_column(sa.Integer(), sa.ForeignKey('m16_inventory_items.id'))
     scrap_date: Mapped[date | None] = mapped_column(sa.Date())
     scrap_reason: Mapped[str | None] = mapped_column(sa.Text())
@@ -82,7 +83,7 @@ class EquipmentTransfer(Base):
     __tablename__ = 'm16_equipment_transfers'
     __table_args__ = (
         sa.CheckConstraint("item_category IN ('equipment', 'turnover')", name='ck_m16_equipment_transfers_item_category'),
-        sa.CheckConstraint("i8_sync_status IN ('synced', 'pending', 'conflict', 'failed')", name='ck_m16_equipment_transfers_i8_sync_status'),
+        sa.CheckConstraint("i8_sync_status IN ('synced', 'pending', 'conflict', 'failed', 'not_applicable')", name='ck_m16_equipment_transfers_i8_sync_status'),
         sa.CheckConstraint("rental_attribution IN ('pending', 'from_project', 'to_project', 'not_applicable')", name='ck_m16_equipment_transfers_rental_attribution'),
         sa.CheckConstraint("rental_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'", name='ck_m16_transfer_month'),
     )
