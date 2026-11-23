@@ -94,6 +94,24 @@ def test_signature_download_propagates_session_expiry_through_image_content_type
         SignatureStore(Client())._download("/signed.png?s=fixture")
 
 
+@pytest.mark.parametrize(("status", "media_type", "payload", "reason"), [
+    (404, "text/plain", b"private body", "HTTP 404"),
+    (200, "application/private-token", b"BM" + bytes(120), "媒体类型不受支持"),
+    (200, "application/octet-stream", b"private body", "缺少栅格图片文件头"),
+])
+def test_signature_download_logs_only_safe_rejection_reason(monkeypatch, status, media_type, payload, reason):
+    from app.mod03_notice.print import signatures
+
+    class Client:
+        def request(self, *args, **kwargs):
+            return httpx.Response(status, headers={"content-type": media_type}, content=payload)
+
+    messages = []
+    monkeypatch.setattr(signatures.logger, "warning", lambda fmt, *args: messages.append(fmt.format(*args)))
+    assert SignatureStore(Client())._download("/private-path.png?s=private-token") == b""
+    assert len(messages) == 1 and reason in messages[0] and "private" not in messages[0]
+
+
 # ---------------------------------------------------------------- 模板侧节点名
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import struct
@@ -37,7 +38,10 @@ from tests.m03_helpers import make_notice, sign_cell, template, text_cell
 BASE = "https://i8.example.test"
 DEVICE = "notice-batch-test"
 PATH = "/api/m03/print-batches"
-IMAGE = b"\x89PNG\r\n\x1a\n" + b"data" * 30
+IMAGE = base64.b64decode(  # 8 × 8 grayscale PNG
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAUElEQVR4nGNgYGRiZmFlY2fg4OTi5uHl42cQEBQS"
+    "FhEVE2eQkJSSlpGVk2dQUFRSVlFVU2fQ0NTS1tHV02cwMDQyNjE1M2ewsLSytrG1swcAu/gH4WRyo/YAAAAASUVORK5CYII="
+)
 
 
 @pytest.fixture
@@ -154,7 +158,7 @@ def reply_for(pending):
     raise AssertionError(f"unexpected path {target.path}")
 
 
-def pump(broker, *, second_image=None):
+def pump(broker, *, second_image=None, image_type="image/png"):
     requests = []
     stop = Event()
     pending_second = Event()
@@ -171,7 +175,7 @@ def pump(broker, *, second_image=None):
                 requests.append((pending.method, path))
                 relay_failure = None
                 if path.startswith("/sig/"):
-                    status, content_type, content = 200, "image/png", IMAGE
+                    status, content_type, content = 200, image_type, IMAGE
                     if path == "/sig/ph-2.png" and second_image:
                         pending_second.set()
                         assert release_second.wait(5)
@@ -190,7 +194,7 @@ def pump(broker, *, second_image=None):
                     status, content_type, content = 200, "application/json", json.dumps(reply_for(pending)).encode()
                 broker.complete(
                     "notice-test-user", DEVICE, pending.ticket, status=status,
-                    headers={"content-type": content_type}, body=content, declared_length=len(content),
+                    headers={"content-type": content_type} if content_type is not None else {}, body=content, declared_length=len(content),
                     generation=pending.generation, relay_failure=relay_failure,
                 )
         except Exception as exc:
@@ -304,10 +308,14 @@ def test_explicit_mode_and_http_conflict_token_are_scoped(setup_batch, path, mod
     assert env.logins == [False, True] and not env.sent
 
 
-@pytest.mark.parametrize("path", ["/batch", "/print-batches/prepare"])
-def test_pdf_download_retry_never_dispatches(setup_batch, path):
+@pytest.mark.parametrize(("path", "image_type"), [
+    ("/batch", None),
+    ("/print-batches/prepare", "application/octet-stream"),
+    ("/print-batches/prepare", "binary/octet-stream"),
+])
+def test_pdf_download_retry_never_dispatches(setup_batch, path, image_type):
     env = setup_batch
-    relay = pump(env.broker)
+    relay = pump(env.broker, image_type=image_type)
     try:
         response = env.api.post(f"/api/m03{path}", json=body(ids=(1,), mode="pdf"))
         assert response.status_code in (200, 202), response.text

@@ -455,7 +455,9 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
           return { failed: 'i8 会话已失效，本批已停止。', code: 'session-ended' };
         }
       }
-      if (!raster || !/^image\/.+/.test(mediaType)) return noImage;
+      const imageType = /^image\/.+/.test(mediaType);
+      const genericBinary = ['', 'application/octet-stream', 'binary/octet-stream'].includes(mediaType);
+      if (!raster || (!imageType && !genericBinary)) return noImage;
       signatureBytes = bytes;
     }
   } catch (error) {

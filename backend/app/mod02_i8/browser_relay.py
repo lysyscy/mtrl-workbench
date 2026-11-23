@@ -170,6 +170,10 @@ def signature_image_mime(blob: bytes) -> str:
     return next((mime for magic, mime in _SIGNATURE_IMAGE_MAGIC if blob.startswith(magic)), "")
 
 
+class SignatureImageError(ExternalServiceError):
+    """Only fixed failure categories and HTTP status may enter the download log."""
+
+
 def require_signature_image(response: httpx.Response) -> None:
     """Reject login pages and non-image responses without exposing signed URLs."""
     status = response.status_code
@@ -179,11 +183,15 @@ def require_signature_image(response: httpx.Response) -> None:
     if status in (401, 403) or (200 <= status < 300 and media_type == "text/html"):
         raise StrictSessionEnded("i8 签名图返回登录或会话异常页面，本批已停止。请核对 i8 会话后重试。")
     if not 200 <= status < 300:
-        raise ExternalServiceError(f"签名图下载失败（HTTP {status}）。")
-    if not signature_image_mime(response.content) or not media_type.startswith("image/") or media_type == "image/":
-        if I8Client._is_session_invalid(response) or "no sessioninfo" in response.text.lower():
-            raise StrictSessionEnded("i8 会话已失效，本批已停止。请核对 i8 会话后重试。")
-        raise ExternalServiceError("i8 签名图响应不是图片。")
+        raise SignatureImageError(f"HTTP {status}")
+    raster = signature_image_mime(response.content)
+    if not raster and (I8Client._is_session_invalid(response) or "no sessioninfo" in response.text.lower()):
+        raise StrictSessionEnded("i8 会话已失效，本批已停止。请核对 i8 会话后重试。")
+    image_type = media_type.startswith("image/") and media_type != "image/"
+    if not image_type and media_type not in ("", "application/octet-stream", "binary/octet-stream"):
+        raise SignatureImageError(f"HTTP {status}，媒体类型不受支持")
+    if not raster:
+        raise SignatureImageError(f"HTTP {status}，缺少栅格图片文件头")
 
 
 def assert_readonly(method: str, url: str) -> None:

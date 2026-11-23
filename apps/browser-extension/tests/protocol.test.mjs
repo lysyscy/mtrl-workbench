@@ -778,6 +778,23 @@ test('签名图片限定同源 GET、安全路径和带签名参数的栅格图�
   assert.equal(calls[0].init.redirect, 'manual');
 });
 
+test('同一张 PNG 在通用二进制或缺失媒体类型下仍完整回传', async () => {
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAUElEQVR4nGNgYGRiZmFlY2fg4OTi5uHl42cQEBQS' +
+    'FhEVE2eQkJSSlpGVk2dQUFRSVlFVU2fQ0NTS1tHV02cwMDQyNjE1M2ewsLSytrG1swcAu/gH4WRyo/YAAAAASUVORK5CYII=', 'base64');
+  let headers;
+  const relay = boot({fetchImpl: async () => reply({headers, bytes: png})});
+  await relay.bind();
+  const request = exec({method: 'GET', url: I8 + '/sig/test.png?s=demo'});
+  for (headers of [{}, {'Content-Type': 'Application/Octet-Stream; charset=binary'}, {'Content-Type': 'binary/octet-stream'}]) {
+    const answer = await relay.call(request);
+    assert.equal(answer.declared_length, png.length);
+    assert.equal(answer.body_b64, png.toString('base64'));
+  }
+  headers = {'Content-Type': 'text/plain'};
+  assert.equal((await relay.call(request)).body_b64, '');
+});
+
 test('签名图只回传图片字节，登录页和跳转不能当图片', async () => {
   let sent = 0;
   let type = 'basic';
@@ -825,7 +842,7 @@ test('signature 200 with an i8 expiry body returns a strict session-ended signal
   })});
   await relay.bind();
   const request = exec({method: 'GET', url: I8 + '/sig/test.png?s=demo'});
-  for (mediaType of ['application/json', 'image/png']) {
+  for (mediaType of ['application/json', 'image/png', 'application/octet-stream', '']) {
     for (payload of ['{"Code":"401"}', '{"Code":401}', '{"code":401}', 'No SessionInfo found']) {
       const answer = await relay.call(request);
       assert.equal(answer.ok, false);

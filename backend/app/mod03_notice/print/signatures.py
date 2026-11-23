@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import MustReportError
-from app.mod02_i8.browser_relay import is_signature_image_target, require_signature_image, signature_image_mime
+from app.mod02_i8.browser_relay import SignatureImageError, is_signature_image_target, require_signature_image, signature_image_mime
 from app.mod02_i8.browser_session import StrictSessionStopped, StrictTargetMismatch, _origin_of
 from app.mod02_i8.client import I8OnlineConflictError
 from app.mod02_i8.login import I8AuthFailedError
@@ -227,11 +227,9 @@ class SignatureStore:
         blob = self._read_cache(key)
         if not _valid_image(blob):
             blob = self._download(url)
-            if blob:
-                self._write_cache(key, blob)
-        if not _valid_image(blob):
-            logger.warning("签名图取不到或图片格式无效（{} 字节）", len(blob or b""))
-            return ""
+            if not blob:
+                return ""
+            self._write_cache(key, blob)
         uri = _to_data_uri(blob)
         self._mem[key] = uri
         return uri
@@ -243,10 +241,16 @@ class SignatureStore:
             require_signature_image(resp)
         except (StrictSessionStopped, I8OnlineConflictError, I8AuthFailedError):
             raise
+        except SignatureImageError as exc:
+            logger.warning("签名图下载失败（{}）", exc.message)
+            return b""
         except Exception as exc:  # noqa: BLE001
             logger.warning("签名图下载失败（{}）", type(exc).__name__)
             return b""
-        return resp.content if _valid_image(resp.content) else b""
+        if len(resp.content) < SIG_MIN_BYTES:
+            logger.warning("签名图下载失败（图片过小，{} 字节）", len(resp.content))
+            return b""
+        return resp.content
 
     def _cache_path(self, key: str) -> Path | None:
         return (self._dir / f"{key}.bin") if self._dir else None
