@@ -34,6 +34,22 @@
 
 直连 Cookie 按 i8 原点和 i8 账号复用。旧缓存须带匹配的原点才能使用。取消在线冲突确认时，页面立即作废本地确认，再提交当前令牌至 POST /api/m02/session/kick-cancel，由服务端按工作台账号撤销。撤回未确认时，页面提示短期令牌将自动失效。
 
+## 设备台账与流动资产调拨（协同办公自定义表单）
+
+2026-11-23 在第四工程公司（组织主键 `3700000000000014`）的 i8 登录会话内完成列表、设备详情只读探测。此处的业务码分别为 `sbzx`（流动资产设备台账）和 `ldzcdb`（流动资产调拨）。原生 EAM 菜单另有资产台账和调拨。
+
+| 方法及路径 | 请求与结果 | 验证范围 |
+|---|---|---|
+| `POST /sup/customServer/getList` | 表单字段为 `customBusCode`、`containerId=p_form_<业务码>_m_list`、从 0 起的 `page`、行偏移 `start`、页长 `limit`，以及该组织列表的 `clientfilter`、`queryfilter`。返回 `total` 与行数组 `data`。 | 两表已只读实测。设备每页 100 条，3 页共 285 个唯一 `phid`。调拨列表同范围复查为 0 条，调拨列表行结构待验证。 |
+| `GET /sup/customServer/getInfo` | 查询参数为设备主键 `id`、`oType=edit`、`customBusCode=sbzx` 和页面由主键生成的 `encryptPrimaryKey`。详情主表在 `data.p_form_sbzx_m`。 | 设备详情已只读实测。打开修改页未提交保存。 |
+| `POST /sup/customServer/save` | 前端定义使用 `customBusCode`、`data`、`billNoStatus=1` 和 `isContinue`。后者的初始警告选项为 `warn`、`validateWarn`、`checkProjOrgWarn`，值均为字符串 `0`。 | **待首次真实写入实测验证。** 已核前端组装，服务端必填校验、成功回执、调拨生效时点和历史引用变化均未验证。 |
+
+设备主表 `p_form_sbzx_m.form` 的 `key` 为 `phid`，新增数据放入 `newRow` 对象，修改数据放入含原主键的 `modifiedRow` 对象。`u_device_code` 为设备编码，修改页允许编辑，最长 50 字符。`bill_no` 为独立的单据编号。`bill_name` 为设备名称，`phid_org` 为管理组织，`u_use_org` 为使用组织，`phid_pc` / `phid_pc_EXName` 分别为使用项目主键和名称。购置日期 `u_indata` 在界面显示为 `YYYY-MM-DD`，接口值带零点时间 `YYYY-MM-DD 00:00:00`。
+
+调拨主表 `p_form_ldzcdb_m.form` 带组织 `phid_org` 和调出项目 `phid_pc`。调拨明细变更放入 `p_form_ldzcdb_d.table`。其中 `u_sbmc` 是设备名称选择控件，`u_sbbm` 是设备编码，`phid_pc` 是调出项目，`u_inproj` 是必填的调入项目。当前适配器按设备主键填写选择控件，按项目主键填写调出和调入。明细新增行序列化、选择控件实际接受的值以及保存响应 `status=success` 均只做过模拟传输测试。
+
+工作台封装见 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。API 默认保留本地待同步，启用须显式注入传输和已核实的项目、单位映射。适配器按完整组织列表精确匹配设备编码，调拨前核项目名称和主键，有冲突时记录双方快照。保存后重查同一设备的项目；调拨回执未知或回读未确认时，已记录的重试只回查。真实写入与会话选择须另行授权，现有浏览器只读通道的范围见下文。
+
 ## 抓取回执
 
 集采、付款通知书、收发结存和库存共用回执摘要。摘要显示本批次的状态、范围、时间、分组统计及待处理提示。各业务按自身口径提供数字。结存和库存的「刷新已有」统计更新过的源行，包含数值相同的行。付款通知书的归属未定行本次不写入，规则剔除行仍按通知书原规则处理。
