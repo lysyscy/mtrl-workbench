@@ -189,7 +189,9 @@ def adjust_notice_stat(
 def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False) -> list[PaymentNotice]:
     if not ids:
         return []
-    stmt = select(PaymentNotice).where(PaymentNotice.id.in_(ids))
+    # Read-only batches can span a whole export; bind their IDs as one array.
+    match = PaymentNotice.id.in_(ids) if for_update else PaymentNotice.id == any_ids(ids)
+    stmt = select(PaymentNotice).where(match)
     if for_update:
         # 整批按稳定主键先锁后读；NO KEY UPDATE与统计重算一致，兼容流水外键的KEY SHARE。
         stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=True).execution_options(populate_existing=True)

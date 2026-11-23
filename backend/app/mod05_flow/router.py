@@ -128,14 +128,10 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
     from app import export_registry as EXP
     X = EXP.get("fl")
 
-    # ⭐⭐ `TAIL-283`：这里**必须显式传空** ⇒ **全量**。`load()` 不传 = 后端默认**当月** ——
-    #    而页面上翻到历史月份、或把「付款年月」摆到「年 / 全部」看到的那些行，
-    #    id 传进来了却**挑不到行** ⇒ 屏幕上看得见、导出来是空的（原注释写"空参=全量"，
-    #    与运行代码**正相反**，本次连同注释一起改对）。
-    data = load(year_month="")
-    all_rows = data.get("rows") or []
-    by_id = {int(r["id"]): r for r in all_rows if r.get("id") is not None}
-    ids = [int(i) for i in (payload.ids or [])]
+    # 空年月包含历史流水；按传入的 ID 限定读取，再按页面顺序出行。
+    ids = payload.ids
+    data = load(year_month="", flow_ids=list(dict.fromkeys(ids))) if ids else {}
+    by_id = {int(r["id"]): r for r in data.get("rows") or [] if r.get("id") is not None}
     # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
     picked = [by_id[i] for i in ids if i in by_id]
 

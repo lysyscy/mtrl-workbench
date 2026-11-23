@@ -163,6 +163,7 @@ def test_导出全量装配并逐格对上页面列():
     body = r.json()
     assert body["ok"] is True and body["rows"] == 3
     assert seen.get("year_month") == "", "导出没显式要全量 ⇒ 历史月份的流水会导不出来"
+    assert seen["flow_ids"] == [73, 71, 72], "导出应只读取所选流水"
 
     cells = _cells(body)
     idx = _idx()

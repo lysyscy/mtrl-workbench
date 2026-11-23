@@ -152,14 +152,19 @@ def build_flows(
     pay_method: str | None = None,
     project_id: int | None = None,
     keyword: str = "",
+    flow_ids: list[int] | None = None,
 ) -> dict:
     """流水页数据：筛选（**即时生效**）+ 指标 + 合计。
 
     ⚠️ 默认月 = **北京时间当月**（`domain.default_flow_period`）；列表**不分页**（`FLOW_PAGINATED=False`）。
     """
-    notices = {int(n.id): n for n in repo.notice_rows(s)}
+    flows = repo.list_flows(s, flow_ids)
+    notice_rows = repo.notice_rows(s) if flow_ids is None else repo.notice_ids_rows(
+        s, list({f.notice_id for f in flows if f.notice_id is not None})
+    )
+    notices = {int(n.id): n for n in notice_rows}
     projects = project_index(s)
-    raw = [_flow_dict(f, notices, projects) for f in repo.list_flows(s)]
+    raw = [_flow_dict(f, notices, projects) for f in flows]
 
     # ⚠️ 约定：`None` = 用默认（北京时间当月）；`""` = **全部月份**（与路由同一语义）
     ym = dom.default_flow_period() if year_month is None else year_month

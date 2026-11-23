@@ -33,9 +33,13 @@ from app.mod05_flow.models import (
 # ---------------------------------------------------------------- 付款流水
 
 
-def list_flows(s: Session) -> list[PaymentFlow]:
-    """全部流水（**按付款日期倒序**，同日按 id 倒序）—— 供完整流水消费者读取。"""
+def list_flows(s: Session, ids: list[int] | None = None) -> list[PaymentFlow]:
+    """流水按付款日期、ID 倒序；导出可限定为屏幕选中的 ID。"""
+    if ids == []:
+        return []
     stmt = select(PaymentFlow).order_by(PaymentFlow.pay_date.desc(), PaymentFlow.id.desc())
+    if ids is not None:
+        stmt = stmt.where(PaymentFlow.id == any_ids(ids))
     return list(s.execute(stmt).scalars().all())
 
 
