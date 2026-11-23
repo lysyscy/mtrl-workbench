@@ -159,3 +159,7 @@
 单号列按文字测量行高。实际单元格沿用原链接，可点击和原生拖选。隔离 Chromium、CPU 2 倍降速、36,000 条合成流水中当月 25,200 条，隐藏期间收到首批数据后回页，配对实测从 6,210 ms 降至 1,660 ms。最慢帧分别为 788 和 794 ms，仍是接续项。正式前端构建通过。100% 和 120% 缩放下对照了长中英文、连字符、换行、空单号和无来源单号；行高、文字、链接目标和列宽一致，手动缩窄再复位的宽度也一致。对照记录在本轮本机证据目录的 ui-flow-hidden-return-final-{original,plain}.json、ui-flow-link-{wrapped,zoom}-{original,plain}.json。
 
 接续候选保存在原性能工作树 `.artifacts/runs/perf-study/work/`。分段排版 `pending-grid-plan-slices.patch` 已有测量，仍须验证中断、空闲调度和焦点；隐藏页延迟建表 `pending-flow-first-hidden.patch` 只完成构建，仍须浏览器验证。两项均已自业务源码撤出。此处按指令收尾。
+
+## 共性整改
+
+[逐项核对与对照](shared-audit.md)覆盖 `d7f50ce2..c2208bcb` 的全部 91 个提交。本轮以 `c2208bcb` 为基线，三张表（付款流水、通知书、集采）共用 `grid-search.ts` 结果收窄，付款弹窗接入 `grid.ts` 既有字体与数字列测量缓存。96 行含极端金额付款弹窗重开已完成基线/候选四轮交错复测（`reports/payment-wide-reopen-paired.json`），首帧/完整就绪/最长帧、十列手调与复位、精确合计、草稿、焦点及跨屏原生拖选均通过。回页长帧的发生阶段不同，原两份未验证候选继续留在本机工作树。

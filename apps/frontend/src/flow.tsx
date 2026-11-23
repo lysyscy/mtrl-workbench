@@ -1,4 +1,5 @@
 import { useAmountComparator } from './use-amount-comparator';
+import { searchWithinRows } from './grid-search';
 import { DialogPresence } from './workspace-motion';
 import App from 'antd/es/app';
 import Input from 'antd/es/input';
@@ -66,20 +67,6 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
     </div>
   </div>;
 }
-// Extending a normalized search can only remove rows from its last result.
-function searchWithinFlows(scope: Flow[]) {
-  let previous = '', matches = scope;
-  return (needle: string) => {
-    if (needle === previous) return matches;
-    const candidates = needle.includes(previous) ? matches : scope;
-    const next = needle ? candidates.filter(row => Object.values(row).some(value =>
-      value !== null && searchKey(String(value)).includes(needle))) : scope;
-    previous = needle;
-    matches = next.length === scope.length ? scope : next;
-    return matches;
-  };
-}
-
 export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuard: string }) {
   const [params] = useSearchParams();
   const { message } = App.useApp();
@@ -109,7 +96,8 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       && (!filter.method || filter.method === row.pay_method)
       && (!filter.status || filter.status === row.status));
   }, [flows.data, filter.period, filter.projects, filter.notice, filter.method, filter.status]);
-  const find = useMemo(() => searchWithinFlows(scope), [scope]);
+  const find = useMemo(() => searchWithinRows(scope, (row, needle) =>
+    Object.values(row).some(value => value !== null && searchKey(String(value)).includes(needle))), [scope]);
   const rows = useMemo(() => find(searchKey(filter.keyword)), [find, filter.keyword]);
   const compareAmounts = useAmountComparator(rows);
   const summary = useMemo(() => {

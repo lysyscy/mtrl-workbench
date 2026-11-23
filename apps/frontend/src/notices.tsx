@@ -1,7 +1,7 @@
 import { useAmountComparator } from './use-amount-comparator';
 import { resetNoticeTodos } from './notice-todos';
 import { DialogPresence } from './workspace-motion';
-import { useGridSearch } from './grid-search';
+import { searchWithinRows, useGridSearch } from './grid-search';
 import Input from 'antd/es/input';
 import App from 'antd/es/app';
 import Select from 'antd/es/select';
@@ -198,11 +198,14 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const compareAmounts = useAmountComparator(rows);
   const scope = useMemo(() => rows.filter(r => (!pasteScope || pasteScope.includes(r.notice_id)) && scopeHit(r, filters)), [rows, filters, pasteScope]);
   const needle = searchKey(search);
-  const shown = useMemo(() => {
-    if (!needle) return scope;
-    const matches = scope.filter(r => [r.doc_date,r.bill_no,r.project_display,r.project_name,r.category_label,r.bill_name,r.biz_type,r.payee,r.jc_supplier,r.input_by,r.approve_status,r.pay_status,archiveLabel(r),r.is_manual ? '手动' : '',r.is_overpaid ? '超付' : '',r.category === 'jc' ? r.has_link ? '已关联 查看 / 更改关联' : '关联集采合同' : '',...moneyKeys.map(k => r[k])].some(x => searchKey(x).includes(needle)));
-    return matches.length === scope.length ? scope : matches;
-  }, [scope, needle]);
+  const find = useMemo(() => searchWithinRows(scope, (row, needle) => [
+    row.doc_date, row.bill_no, row.project_display, row.project_name, row.category_label,
+    row.bill_name, row.biz_type, row.payee, row.jc_supplier, row.input_by, row.approve_status,
+    row.pay_status, archiveLabel(row), row.is_manual ? '手动' : '', row.is_overpaid ? '超付' : '',
+    row.category === 'jc' ? row.has_link ? '已关联 查看 / 更改关联' : '关联集采合同' : '',
+    ...moneyKeys.map(key => row[key]),
+  ].some(value => searchKey(value).includes(needle))), [scope]);
+  const shown = useMemo(() => find(needle), [find, needle]);
   // Business scope changes trim selection; searching and virtual windows never do.
   useEffect(() => { const valid = new Set(scope.filter(selectable).map(r => r.notice_id)); setPicked(old => { const next = new Set([...old].filter(id => valid.has(id))); return next.size === old.size ? old : next; }); }, [filters]);
   useEffect(() => { const valid = new Set(rows.filter(selectable).map(r => r.notice_id)); setPicked(old => { const next = new Set([...old].filter(id => valid.has(id))); return next.size === old.size ? old : next; }); }, [rows]);

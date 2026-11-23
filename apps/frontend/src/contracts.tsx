@@ -1,6 +1,6 @@
 import { useAmountComparator } from './use-amount-comparator';
 import { DialogPresence } from './workspace-motion';
-import { useGridSearch } from './grid-search';
+import { searchWithinRows, useGridSearch } from './grid-search';
 import { AnimatePresence } from 'motion/react';
 import Button from 'antd/es/button';
 import App from 'antd/es/app';
@@ -123,17 +123,15 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   }, [rows, projectRows, filters]);
   const searchable = useMemo(() => (query.data?.columns ?? []).filter(column => column.key !== 'ops'), [query.data?.columns]);
   const needle = searchKey(search);
-  const shown = useMemo(() => {
-    if (!needle) return scope;
-    const matches = scope.filter(row => searchKey(projectNames.get(row.project_key) ?? '').includes(needle) ||
+  const find = useMemo(() => searchWithinRows(scope, (row, needle) =>
+    searchKey(projectNames.get(row.project_key) ?? '').includes(needle) ||
       searchable.some(column => {
         const value = row[column.key as keyof ContractRow];
         const text = value === null && (contractMoneyKeys as readonly string[]).includes(column.key) ? '未确定' : String(value ?? '');
         const normalized = searchKey(text);
         return normalized.includes(needle) || (column.type === 'date' && normalized.replaceAll('-', '/').includes(needle));
-      }));
-    return matches.length === scope.length ? scope : matches;
-  }, [needle, scope, projectNames, searchable]);
+      })), [scope, projectNames, searchable]);
+  const shown = useMemo(() => find(needle), [find, needle]);
   const totalRow=useMemo(()=>shown.length?[{id:-1,material:'合计',...Object.fromEntries(contractMoneyKeys.map(key=>[key,decimal(shown.reduce((sum,row)=>sum+cents(row[key]??'0'),0n))]))} as ContractRow]:[],[shown]);
   const selected = useMemo(() => rows.filter(row => picked.has(row.id)), [rows, picked]);
   const hidden = useMemo(() => {
