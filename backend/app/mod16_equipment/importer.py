@@ -12,6 +12,24 @@ from sqlalchemy import select
 from app.core.money import ledger_product
 from .common import ledger_lock, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine, RentalMonth
+from .projects import ProjectRef, project_index
+
+
+PROJECT_ALIASES = {
+    "晋江污泥处理项目": "晋江污泥项目",
+    "福建南平项目": "南平项目",
+    "焦作佰利磷酸铁": "焦作佰利项目",
+    "沭阳锅炉项目": "沭阳热电厂",
+    "沭阳热电厂项目": "沭阳热电厂",
+    "泗阳4#锅炉": "泗阳#4",
+    "泗阳项目": "泗阳#4",
+    "灵宝项目": "灵宝二期",
+    "太康龙源纸业项目": "龙源纸业项目",
+    "大唐雷州项目": "大唐雷州",
+    "乌兰察布储能": "乌兰察布项目",
+    "乌兰察布储能项目": "乌兰察布项目",
+    "鄂旗项目": "乌兰察布项目",
+}
 
 
 def text(value):
@@ -43,6 +61,31 @@ def source_date(value, epoch):
         y, m, d = map(int, match.groups())
         return date(y, m, d)
     return None
+
+
+def transfer_date_note(value, epoch):
+    if not isinstance(value, str):
+        parsed = source_date(value, epoch)
+        return parsed, None if parsed else text(value)
+    value = value.strip()
+    match = re.fullmatch(r"(\d{4})(\d{2})(\d{2})(\D.*)?", value, re.DOTALL)
+    if not match:
+        match = re.fullmatch(r"(\d{4})[-./](\d{1,2})[-./](\d{1,2})(\D.*)?", value, re.DOTALL)
+    if not match:
+        return None, text(value)
+    year, month, day, note = match.groups()
+    try:
+        parsed = date(int(year), int(month), int(day))
+    except ValueError:
+        return None, text(value)
+    return parsed, text(note.strip(" \t\r\n；;,，:：")) if note else None
+
+
+def match_project(value, by_name):
+    matches = by_name.get(PROJECT_ALIASES.get(value, value), ())
+    if len(matches) == 1:
+        return ProjectRef(value, matches[0], value if value == "鄂旗项目" else None)
+    return ProjectRef(value, custom=value or None)
 
 
 def parse_distribution(path):
@@ -79,10 +122,8 @@ def parse_distribution(path):
                     item = items[code]
                     record = dict(code=code, item_category=category, quantity=item["quantity"])
                     if is_transfer:
-                        dt = source_date(r[9], book.epoch)
-                        note = text(r[10])
-                        if r[9] is not None and (dt is None or isinstance(r[9], str)):
-                            note = "\n".join(filter(None, [note, f"调拨日期原文 {r[9]}"]))
+                        dt, date_note = transfer_date_note(r[9], book.epoch)
+                        note = "；".join(dict.fromkeys(filter(None, [date_note, text(r[10])]))) or None
                         transfers.append(dict(record, transfer_date=dt, from_project=text(r[7]), to_project=text(r[8]),
                             remark=note, rental_attribution="not_applicable", i8_sync_status="not_applicable"))
                     else:
@@ -113,7 +154,6 @@ def parse_inventory(path):
 
 def parse_rental(path):
     lines = []
-    project_order, row_counts = {}, Counter()
     with closing(load_workbook(path, read_only=True, data_only=True)) as book:
         if "本月租赁" in book:
             headers = {0: "项目", 1: "设备名称", 4: "数量", 5: "租赁单价（元）", 6: "本月收费", 7: "金额（元）",
@@ -148,11 +188,6 @@ def parse_rental(path):
                     custom_unit_price=price if price != ledger_product(original, Decimal(".05")) else None,
                     billing_status="blank" if r[6] is None else "normal", category_label=text(r[7]) or "",
                     distribution_note=text(r[8]), source_row=str(n)))
-    for line in lines:
-        project = line["project_name"]
-        line["project_sort_order"] = project_order.setdefault(project, len(project_order))
-        line["row_sort_order"] = row_counts[project]
-        row_counts[project] += 1
     return lines
 
 
@@ -194,6 +229,14 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         for model in (InventoryItem, EquipmentItem, EquipmentTransfer, EquipmentScrap, RentalMonth, RentalLine):
             if session.scalar(select(model.id).limit(1)) is not None:
                 raise ValueError(f"台账非空，拒绝重复导入 ({model.__tablename__})")
+        by_name = defaultdict(list)
+        for project in project_index(session).values():
+            by_name[project.disp].append(project.id)
+        for records, prefixes in ((items.values(), ("purchase_project", "current_project")),
+                                  (transfers, ("from_project", "to_project")), (scraps, ("original_project",))):
+            for record in records:
+                for prefix in prefixes:
+                    record.update(match_project(record[prefix], by_name).fields(prefix))
         assets = {k: InventoryItem(**r) for k, r in inventory.items()}
         session.add_all(list(assets.values()) + [RentalMonth(month=rental_month)])
         session.flush()
@@ -205,8 +248,16 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         for model, history in ((EquipmentTransfer, transfers), (EquipmentScrap, scraps)):
             for record in history:
                 session.add(model(equipment_id=equipment_rows[record.pop("code")].id, **record))
+        project_order, row_counts = {}, Counter()
         for i, line in enumerate(lines):
             line.pop("code")
-            equipment_id = equipment_rows[rental_links[i]].id if i in rental_links else None
-            session.add(RentalLine(month=rental_month, equipment_id=equipment_id, **line))
+            item = equipment_rows.get(rental_links.get(i))
+            project = (ProjectRef.from_row(item, "current_project") if item and item.current_project_id is not None
+                       else match_project(line["project_name"], by_name))
+            key = project.key()
+            line.update(project.fields("project", label="project_name"))
+            session.add(RentalLine(month=rental_month, equipment_id=item.id if item else None,
+                                   project_sort_order=project_order.setdefault(key, len(project_order)),
+                                   row_sort_order=row_counts[key], **line))
+            row_counts[key] += 1
     return summary

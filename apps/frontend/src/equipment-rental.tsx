@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
@@ -11,6 +11,8 @@ import { equipmentApi as api, exportEquipment } from './equipment-api';
 import type { Billing, Choice, Pending, RentGroup, RentalLine } from './equipment-api';
 import {
   DateField,
+  decimalInput,
+  formatNum,
   LedgerModal,
   LoadState,
   options,
@@ -60,7 +62,8 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
   const busy = write.isPending;
   if (!data) return null;
   const row = data,
-    current = row[field] ?? '',
+    numeric = field !== 'distribution_note',
+    current = numeric ? decimalInput(row[field] ?? '') : row[field] ?? '',
     shown = field === 'custom_unit_price' ? row.unit_price : current;
   const label = { quantity: '数量', custom_unit_price: '租赁单价', distribution_note: '分布' }[field];
   async function save() {
@@ -90,13 +93,13 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
       <Input
         size="small"
         aria-label={row.name + ' ' + label}
-        value={draft ?? shown ?? ''}
+        value={draft ?? (numeric && shown ? formatNum(shown) : shown ?? '')}
         title={field === 'custom_unit_price' ? '清空自定单价后按原值的 5% 计价' : label}
         disabled={context.locked || busy}
         onFocus={() => {
           if (draft === null) setDraft(current);
         }}
-        placeholder={field === 'custom_unit_price' ? (row.unit_price ?? '原值 × 5%') : ''}
+        placeholder={field === 'custom_unit_price' ? (row.unit_price === null ? '原值 × 5%' : formatNum(row.unit_price)) : ''}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void save()}
         onPressEnter={(e) => e.currentTarget.blur()}
@@ -179,11 +182,13 @@ const columns: ColDef<RentalLine>[] = [
   { field: 'unit', headerName: '单位' },
   { field: 'quantity', headerName: '数量', cellRenderer: Quantity },
   { field: 'unit_price', headerName: '租赁单价(元)', cellRenderer: Price },
-  { field: 'amount', headerName: '金额(元)' },
+  { field: 'amount', headerName: '金额(元)', valueFormatter: ({ value }) => formatNum(value) },
   { field: 'category_label', headerName: '类别' },
   { field: 'distribution_note', headerName: '分布', cellRenderer: Note },
   { colId: 'billing', headerName: '本月计租', minWidth: 220, autoHeight: true, cellRenderer: Decision },
 ];
+const groupKey = (group: RentGroup) => group.project_id === null ? 'name:' + group.project_name : 'id:' + group.project_id;
+
 function ProjectGrid({
   group,
   month,
@@ -198,23 +203,25 @@ function ProjectGrid({
   const drag = useGridRowDrag<RentalLine>({
     disabled: context.locked || only,
     sourceId: (r) => r.id,
-    targetId: (s, t) => (s.project_name === t.project_name ? t.id : null),
+    targetId: (_source, target) => target.id,
     orderFor: () => group.lines.map((r) => r.id),
-    save: (_, __, ids) => context.act(() => api.reorder(month, group.project_name, ids)),
+    save: (_, __, ids) => context.act(() => api.reorder(month, group.project_id, group.project_name, ids)),
   });
-  const rows = rowsInOrder(group.lines, drag.preview?.order, (r) => r.id).filter(
-    (r) => !only || r.pending_action_type !== 'none'
-  );
+  const order = drag.preview?.order;
+  const rows = useMemo(() => {
+    const ordered = rowsInOrder(group.lines, order, r => r.id);
+    return only ? ordered.filter(r => r.pending_action_type !== 'none') : ordered;
+  }, [group.lines, order, only]);
   if (!rows.length) return null;
   return (
     <section className="equipment-project">
       <h3>
         {group.project_name}
-        <span>项目小计　{group.subtotal ?? '—'} 元</span>
+        <span>项目小计　{formatNum(group.subtotal)} 元</span>
       </h3>
       <BusinessGrid
         table="equipment-rental"
-        scope={month + group.project_name}
+        scope={month + groupKey(group)}
         rows={rows}
         columns={columns}
         rowId={rowId}
@@ -245,7 +252,7 @@ export function Rental() {
       }),
   };
   return (
-    <>
+    <div className="equipment-sheet">
       <div data-page-chrome className="equipment-toolbar">
         <DateField
           month
@@ -263,7 +270,7 @@ export function Rental() {
           value={project}
           options={[
             { value: '', label: '全部项目' },
-            ...(data?.projects ?? []).map((g) => ({ value: g.project_name, label: g.project_name })),
+            ...(data?.projects ?? []).map(g => ({ value: groupKey(g), label: g.project_name })),
           ]}
           onChange={setProject}
         />
@@ -288,12 +295,12 @@ export function Rental() {
       <LoadState query={query} />
       {action.error && <p role="alert">{action.error}</p>}
       {data && (
-        <>
+        <div className="equipment-rental-scroll" tabIndex={0} role="region" aria-label="月租赁明细">
           {data.projects
-            .filter((g) => !project || g.project_name === project)
+            .filter(g => !project || groupKey(g) === project)
             .map((g) => (
               <ProjectGrid
-                key={month + g.project_name}
+                key={month + groupKey(g)}
                 group={g}
                 month={month}
                 only={only}
@@ -301,9 +308,9 @@ export function Rental() {
               />
             ))}
           <div className="equipment-total">
-            本月总计　{data.grand_total ?? '—'} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
+            本月总计　{formatNum(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
           </div>
-        </>
+        </div>
       )}
       {confirm && (
         <LedgerModal
@@ -327,6 +334,6 @@ export function Rental() {
           {action.error && <p role="alert">{action.error}</p>}
         </LedgerModal>
       )}
-    </>
+    </div>
   );
 }

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.core.db import session_scope
 from .common import encoded, ledger_lock, record, require
 from .models import EquipmentItem, EquipmentTransfer
+from .projects import ProjectRef, project_index
 
 
 ISSUES = ("pending", "failed", "conflict")
@@ -32,18 +33,21 @@ class SyncResult:
     conflict: dict | None = None
 
 
-def transfer_precondition(snapshot, code, from_project, to_project, *, project_name=None):
+def transfer_precondition(snapshot, code, from_project, to_project, *, project_name=None, project_id=None):
     if snapshot is None:
         return SyncResult("pending", "未查到 i8 设备，调拨待同步")
-    if snapshot["current_project"] != (project_name or from_project):
+    matches = (snapshot["current_project"] == (project_name or from_project) if project_id is None
+               else str(snapshot.get("phid_pc")) == project_id)
+    if not matches:
         local = {"code": code, "from_project": from_project, "to_project": to_project}
         return SyncResult("conflict", "i8 当前项目与本地调出项目不一致，请核对", snapshot,
                           {"snapshot": snapshot, "local": local, "from_project": from_project})
     return None
 
 
-def checked_project(snapshot, project, matches=True):
-    if snapshot and snapshot["current_project"] == project and matches:
+def checked_project(snapshot, project, matches=True, *, project_id=None):
+    if snapshot and matches and (snapshot["current_project"] == project if project_id is None
+                                 else str(snapshot.get("phid_pc")) == project_id):
         return SyncResult("synced", "已同步并核对 i8 所在项目", snapshot)
     return SyncResult("failed", "i8 写入后未核对成功，请核对后重试", snapshot)
 
@@ -156,11 +160,13 @@ class I8CustomFormEquipmentAdapter:
             raise ValueError("i8 设备编码须为 1 至 50 个字符")
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
-        project_id = self.project_ids[project]
+        linked_phid = data.get("current_project_phid")
+        project_id = self.project_ids[project] if linked_phid is None else linked_phid
         project_name = self.project_names.get(project, project)
         if not project_id:
             raise ValueError("缺少 i8 项目标识")
-        if before and (before["current_project"] != project_name or str(before["phid_pc"]) != project_id):
+        if before and (str(before["phid_pc"]) != project_id or
+                       (linked_phid is None and before["current_project"] != project_name)):
             return equipment_conflict(before)
         purchase_date = data.get("purchase_date")
         row = {"u_device_code": code, "bill_name": data["name"], "phid_pc": project_id,
@@ -176,7 +182,7 @@ class I8CustomFormEquipmentAdapter:
             changes = {key: value for key, value in row.items()
                        if not _field_matches(key, before.get(key), value)}
             if not changes:
-                return checked_project(before, project_name)
+                return checked_project(before, project_name, project_id=linked_phid)
             version = original.get("ng_record_ver")
             if type(version) is not int or version < 0:
                 raise ValueError("i8 设备缺少有效记录版本")
@@ -199,16 +205,19 @@ class I8CustomFormEquipmentAdapter:
                 type(after["ng_record_ver"]) is int and after["ng_record_ver"] > version))
             and all(_field_matches(key, after.get(key), value) for key, value in row.items())
         )
-        return checked_project(after, project_name, matches)
+        return checked_project(after, project_name, matches, project_id=linked_phid)
 
-    def create_transfer(self, code, from_project, to_project, *, transfer_date=None, remark=None):
+    def create_transfer(self, code, from_project, to_project, *, transfer_date=None, remark=None,
+                        from_project_phid=None, to_project_phid=None):
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
         source_name = self.project_names.get(from_project, from_project)
-        stop = transfer_precondition(before, code, from_project, to_project, project_name=source_name)
+        stop = transfer_precondition(before, code, from_project, to_project, project_name=source_name,
+                                     project_id=from_project_phid)
         if stop:
             return stop
-        origin, destination = self.project_ids[from_project], self.project_ids[to_project]
+        origin = self.project_ids[from_project] if from_project_phid is None else from_project_phid
+        destination = self.project_ids[to_project] if to_project_phid is None else to_project_phid
         if not origin or not destination:
             raise ValueError("缺少 i8 调拨项目标识")
         if str(before["phid_pc"]) != origin or str(before["phid_org"]) != self.ORG:
@@ -220,6 +229,8 @@ class I8CustomFormEquipmentAdapter:
         if transfer_date is None:
             raise ValueError("缺少 i8 调拨日期")
         operator_id, operator_name = self.transfer_operator
+        if from_project_phid is not None and before["current_project"]:
+            source_name = before["current_project"]
         destination_name = self.project_names.get(to_project, to_project)
         header = {
             "phid_fill_psn": operator_id, "phid_fill_psn_EXName": operator_name,
@@ -251,7 +262,7 @@ class I8CustomFormEquipmentAdapter:
         }
         evidence = {"awaiting_readback": True, "code": code, "phid": before["phid"],
                     "to_project": to_project, "destination_id": destination, "origin_id": origin,
-                    "destination_name": destination_name}
+                    "destination_name": destination_name, "destination_linked": to_project_phid is not None}
         try:
             evidence["bill_phid"] = self._save("ldzcdb", payload)
         except SaveRejected:
@@ -279,9 +290,10 @@ class I8CustomFormEquipmentAdapter:
             return SyncResult("failed", "i8 调拨单未核对成功，重试时只回查", after, evidence)
         same_device = after is not None and str(after["phid"]) == str(evidence["phid"])
         destination_name = evidence.get("destination_name", evidence["to_project"])
+        destination_id = evidence["destination_id"]
         if (same_device and str(after["phid_pc"]) == evidence["destination_id"]
-                and after["current_project"] == destination_name):
-            return checked_project(after, destination_name)
+                and (evidence.get("destination_linked") or after["current_project"] == destination_name)):
+            return checked_project(after, destination_name, project_id=destination_id)
         if bill and same_device and str(after["phid_pc"]) == evidence["origin_id"]:
             receipt = evidence | {"bill_no": bill["bill_no"]}
             return SyncResult("pending", f"i8 调拨单 {bill['bill_no']} 已保存，设备项目待更新", after, receipt)
@@ -296,39 +308,61 @@ def _field_matches(key, actual, wanted):
     return str(actual) == str(wanted)
 
 
-def _sync_legacy(adapter, data, transfer):
+def _sync_legacy(adapter, data, transfer_projects=None):
     code, project = data["code"], data["current_project"]
     snapshot = adapter.snapshot(code)
-    if transfer is None:
+    if transfer_projects is None:
         if snapshot and snapshot["current_project"] != project:
             return equipment_conflict(snapshot)
         adapter.save_equipment(data)
     else:
-        project = transfer.to_project
-        stop = transfer_precondition(snapshot, code, transfer.from_project, project)
+        origin, project = transfer_projects
+        stop = transfer_precondition(snapshot, code, origin, project)
         if stop:
             return stop
-        adapter.transfer(code, transfer.from_project, project)
+        adapter.transfer(code, origin, project)
     return checked_project(adapter.snapshot(code), project)
 
 
-def synchronize(item, transfer=None, adapter: Adapter | I8CustomFormEquipmentAdapter | None = None):
+def i8_project(ref, projects):
+    if ref.id is None:
+        return ref.display(projects), None
+    project = projects.get(ref.id)
+    if project is None or not project.phid.strip():
+        raise ValueError("关联的项目档案缺少 i8 项目标识")
+    return project.disp, project.phid.strip()
+
+
+def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEquipmentAdapter | None = None,
+                *, initial_project=None):
     target = transfer if transfer is not None else item
     result = SyncResult("pending", UNAVAILABLE)
     if adapter is not None:
         try:
-            data = record(item)
-            data["purchase_date"] = item.purchase_date.isoformat() if item.purchase_date else None
-            if isinstance(adapter, I8CustomFormEquipmentAdapter):
-                if transfer is None:
+            if transfer is None:
+                ref = initial_project or ProjectRef.from_row(item, "current_project")
+                name, phid = i8_project(ref, projects)
+                data = record(item) | ref.fields("current_project")
+                data.update(current_project=name, current_project_phid=phid,
+                            purchase_date=item.purchase_date.isoformat() if item.purchase_date else None)
+                if isinstance(adapter, I8CustomFormEquipmentAdapter):
                     result = adapter.create_equipment(data)
-                elif (prior := json.loads(transfer.i8_conflict_json or "{}")).get("awaiting_readback"):
+                else:
+                    result = _sync_legacy(adapter, data)
+            else:
+                prior = json.loads(transfer.i8_conflict_json or "{}")
+                if isinstance(adapter, I8CustomFormEquipmentAdapter) and prior.get("awaiting_readback"):
                     result = adapter.verify_transfer(prior)
                 else:
-                    result = adapter.create_transfer(item.code, transfer.from_project, transfer.to_project,
-                                                     transfer_date=transfer.transfer_date, remark=transfer.remark)
-            else:
-                result = _sync_legacy(adapter, data, transfer)
+                    origin, origin_phid = i8_project(ProjectRef.from_row(transfer, "from_project"), projects)
+                    destination, destination_phid = i8_project(ProjectRef.from_row(transfer, "to_project"), projects)
+                    if isinstance(adapter, I8CustomFormEquipmentAdapter):
+                        result = adapter.create_transfer(item.code, origin, destination,
+                                                         transfer_date=transfer.transfer_date, remark=transfer.remark,
+                                                         from_project_phid=origin_phid, to_project_phid=destination_phid)
+                    else:
+                        result = _sync_legacy(adapter, {"code": item.code, "current_project": destination},
+                                              (origin, destination))
             item.i8_snapshot_json = encoded(result.snapshot) if result.snapshot is not None else None
             if transfer is not None:
                 transfer.i8_conflict_json = encoded(result.conflict) if result.conflict else None
@@ -357,15 +391,15 @@ def _drain(key, adapter):
         pending = db.scalars(select(EquipmentTransfer).where(
             EquipmentTransfer.equipment_id == key, EquipmentTransfer.i8_sync_status.in_(ISSUES)
         ).order_by(EquipmentTransfer.transfer_date, EquipmentTransfer.id)).all()
+        projects = project_index(db) if adapter is not None else {}
         # The first outstanding transfer retains the project before the local move.
         # This also respects an explicitly supplied initial current project.
         revision = item.updated_at
         db.expunge_all()
     equipment, transfers = [], []
     if item.i8_sync_status in ISSUES:
-        if pending:
-            item.current_project = pending[0].from_project
-        equipment.append(synchronize(item, adapter=adapter))
+        origin = ProjectRef.from_row(pending[0], "from_project") if pending else None
+        equipment.append(synchronize(item, projects, adapter=adapter, initial_project=origin))
         with session_scope() as db:
             ledger_lock(db)
             saved = require(db, EquipmentItem, key)
@@ -377,7 +411,7 @@ def _drain(key, adapter):
         if item.i8_sync_status != "synced":
             return {"equipment": equipment, "transfers": [receipt(r) for r in pending]}
     for index, row in enumerate(pending):
-        result = synchronize(item, row, adapter)
+        result = synchronize(item, projects, row, adapter)
         with session_scope() as db:
             ledger_lock(db)
             saved = require(db, EquipmentTransfer, row.id)

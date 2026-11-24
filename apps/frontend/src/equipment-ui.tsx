@@ -4,10 +4,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from 'antd/es/button';
 import DatePicker from 'antd/es/date-picker';
 import dayjs from 'dayjs';
+import type { ColDef } from 'ag-grid-community';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import type { SyncStatus } from './equipment-api';
 import { uncertainWrite } from './api';
+import { valueFilterColumn } from './grid-value-filter';
+import type { FilterValue, ValueFilterKind } from './grid-value-filter-model';
 
 export const EquipmentAccess = createContext({ enabled: false, writable: false });
 export const useAccess = () => useContext(EquipmentAccess);
@@ -25,12 +28,44 @@ export const options = (labels: Record<string, string>) =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
 export const rowId = (row: { id: number }) => String(row.id);
 export const issue = (status: SyncStatus) => ['pending', 'conflict', 'failed'].includes(status);
-export function SyncTag({ status }: { status: SyncStatus }) {
-  return issue(status) ? (
-    <span className={'status-tag ' + (status === 'pending' ? 'status-pending' : 'status-negative')}>
-      {syncLabels[status]}
-    </span>
-  ) : null;
+export function SyncTag({ status, showNormal = false }: { status: SyncStatus; showNormal?: boolean }) {
+  if (!showNormal && !issue(status)) return null;
+  const tone = status === 'pending' ? 'status-pending' : issue(status) ? 'status-negative' : 'status-neutral';
+  return <span className={'status-tag ' + tone}>{syncLabels[status]}</span>;
+}
+
+export function decimalInput(value: string) {
+  return value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value;
+}
+
+export function formatNum(value: FilterValue) {
+  if (value == null || value === '') return '—';
+  const [whole, fraction] = decimalInput(String(value)).split('.');
+  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction ? grouped + '.' + fraction : grouped;
+}
+
+export const decimalField = {
+  formatter: (value: string | undefined, info: { userTyping: boolean; input: string }) =>
+    info.userTyping ? info.input : value == null || value === '' ? '' : formatNum(value),
+  parser: (value?: string) => value?.replaceAll(',', '') ?? '',
+};
+
+export function ledgerColumn<T>(
+  column: ColDef<T>,
+  value: (row: T) => FilterValue,
+  kind: ValueFilterKind = 'text'
+) {
+  return valueFilterColumn<T>({
+    ...column,
+    sortable: true,
+    valueGetter: ({ data }) => data ? value(data) : null,
+    ...(kind === 'number' ? { valueFormatter: ({ value }) => formatNum(value) } : {}),
+  }, { kind, value, ...(kind === 'number' ? { format: formatNum } : {}) });
+}
+
+export function projectTitle(disp: string | null, custom: string | null, display: string) {
+  return disp && custom && disp !== custom ? '归属系统项目：' + disp : display;
 }
 export function syncReceipt(results: { status: SyncStatus }[]) {
   return options(syncLabels)
@@ -107,12 +142,14 @@ export function LedgerModal({
   title,
   busy = false,
   dirty = false,
+  compact = false,
   close,
   children,
 }: {
   title: string;
   busy?: boolean;
   dirty?: boolean;
+  compact?: boolean;
   close: () => void;
   children: ReactNode;
 }) {
@@ -121,7 +158,7 @@ export function LedgerModal({
     <BusinessModal
       open
       titleId="equipment-dialog"
-      className="equipment-dialog"
+      className={compact ? 'equipment-dialog equipment-dialog-compact' : 'equipment-dialog'}
       requestClose={closing.requestClose}
     >
       <DialogContents titleId="equipment-dialog" title={title} closing={closing}>

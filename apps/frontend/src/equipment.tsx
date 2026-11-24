@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useCallback, useContext, useState } from 'react';
 import { PageActivity } from './page-activity';
 import { MotionAccess } from './workspace-motion';
 import Tabs from 'antd/es/tabs';
@@ -11,14 +11,16 @@ import { Inventory } from './equipment-inventory';
 export function EquipmentPage({ me, blocked }: { me: Identity | null; blocked: boolean }) {
   const visible = useContext(MotionAccess);
   const [tab, setTab] = useState('distribution');
+  const goToRental = useCallback(() => setTab('rental'), []);
   const sections = [
-    { key: 'distribution', label: '设备分布', page: <Distribution /> },
+    { key: 'distribution', label: '设备分布', page: <Distribution goToRental={goToRental} /> },
     { key: 'rental', label: '租赁表', page: <Rental /> },
     { key: 'inventory', label: '盘点表', page: <Inventory /> },
   ];
   return (
-    <section className="equipment-page" aria-label="设备台账">
+    <section className="equipment-page equipment-page-bounded" aria-label="设备台账">
       <Tabs
+        className="equipment-top-tabs"
         activeKey={tab}
         onChange={setTab}
         items={sections.map(({ key, label, page }) => ({

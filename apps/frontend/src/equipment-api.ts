@@ -54,8 +54,14 @@ const equipmentItem = schema.object({
   purchase_date: nullableText,
   purchase_date_text: nullableText,
   purchase_project: text,
+  purchase_project_id: schema.nullable(id),
+  purchase_project_disp: nullableText,
+  purchase_project_custom: nullableText,
   purchase_price: nullableText,
   current_project: text,
+  current_project_id: schema.nullable(id),
+  current_project_disp: nullableText,
+  current_project_custom: nullableText,
   status: schema.picklist(['in_use', 'damaged', 'pending_scrap', 'scrapped']),
   asset_scope: schema.picklist(['current_asset', 'fixed_asset', 'off_book']),
   in_rental: schema.picklist(['yes', 'no', 'pending']),
@@ -67,6 +73,9 @@ const equipmentItem = schema.object({
   rental_source_row: nullableText,
   inventory_source_row: nullableText,
   inventory_item_id: schema.nullable(id),
+  inventory_name: nullableText,
+  inventory_book_qty: nullableText,
+  inventory_count_qty: nullableText,
   scrap_date: nullableText,
   scrap_reason: nullableText,
   created_at: text,
@@ -81,7 +90,13 @@ const equipmentTransfer = schema.object({
   equipment_id: id,
   item_category: itemCategory,
   from_project: text,
+  from_project_id: schema.nullable(id),
+  from_project_disp: nullableText,
+  from_project_custom: nullableText,
   to_project: text,
+  to_project_id: schema.nullable(id),
+  to_project_disp: nullableText,
+  to_project_custom: nullableText,
   transfer_date: nullableText,
   quantity: text,
   remark: nullableText,
@@ -101,6 +116,9 @@ const equipmentScrap = schema.object({
   item_category: itemCategory,
   scrap_date: text,
   original_project: text,
+  original_project_id: schema.nullable(id),
+  original_project_disp: nullableText,
+  original_project_custom: nullableText,
   quantity: text,
   purchase_price: nullableText,
   reason: nullableText,
@@ -125,6 +143,9 @@ const rentalLine = schema.object({
   id,
   month: text,
   project_name: text,
+  project_id: schema.nullable(id),
+  project_disp: nullableText,
+  project_custom: nullableText,
   project_sort_order: schema.number(),
   row_sort_order: schema.number(),
   equipment_id: schema.nullable(id),
@@ -160,6 +181,8 @@ export type EquipmentPatch = Partial<
     | 'spec'
     | 'unit'
     | 'purchase_project'
+    | 'purchase_project_id'
+    | 'purchase_project_custom'
     | 'purchase_date'
     | 'purchase_price'
     | 'asset_scope'
@@ -169,9 +192,10 @@ export type EquipmentPatch = Partial<
 >;
 export type Create = EquipmentPatch &
   Preview & {
-    purchase_project: string;
     expected_codes: string[];
     current_project?: string;
+    current_project_id?: number | null;
+    current_project_custom?: string | null;
     target_month?: string;
     custom_unit_price?: string | null;
   };
@@ -185,11 +209,14 @@ const codes = schema.array(schema.pipe(text, schema.nonEmpty()));
 const preview = schema.object({ codes: schema.pipe(codes, schema.nonEmpty()) });
 const syncResults = schema.array(schema.object({ id, status: syncStatus, message: nullableText }));
 const rentGroup = schema.object({
+  project_id: schema.nullable(id),
   project_name: text,
   lines: schema.array(rentalLine),
   subtotal: nullableText,
 });
 export type RentGroup = schema.InferOutput<typeof rentGroup>;
+const projectOption = schema.object({ id, disp: text, status: text, phid: text, warehouse_name: nullableText });
+export type EquipmentProjectOption = schema.InferOutput<typeof projectOption>;
 const monthly = schema.object({
   month: text,
   status: rentalMonth.entries.status,
@@ -243,6 +270,7 @@ const write = <S extends ResponseSchema>(contract: S, path: string, method: stri
   checked(contract, url(path), { method, ...body(values) });
 
 export const equipmentApi = {
+  projectOptions: () => get(schema.object({ items: schema.array(projectOption) }), '/project-options'),
   preview: (v: Preview) => write(preview, '/equipment/preview', 'POST', v),
   previewGet: (v: Preview) => get(preview, '/equipment/preview', v),
   create: (v: Create) =>
@@ -299,7 +327,8 @@ export const equipmentApi = {
   transfer: (v: {
     equipment_ids: number[];
     expected_from_projects?: Record<number, string>;
-    to_project: string;
+    to_project_id: number | null;
+    to_project_custom: string | null;
     transfer_date: string;
     remark?: string | null;
   }) =>
@@ -338,9 +367,10 @@ export const equipmentApi = {
   patchLine: (id: number, v: RentPatch) => write(rentalLine, '/rental/lines/' + id, 'PATCH', v),
   resolve: (id: number, choice: Choice) =>
     write(rentalLine, '/rental/lines/' + id + '/resolve', 'POST', { choice }),
-  reorder: (month: string, project_name: string, ordered_line_ids: number[]) =>
+  reorder: (month: string, project_id: number | null, project_name: string, ordered_line_ids: number[]) =>
     write(schema.object({ ordered_line_ids: ids }), '/rental/reorder', 'PUT', {
       month,
+      project_id,
       project_name,
       ordered_line_ids,
     }),

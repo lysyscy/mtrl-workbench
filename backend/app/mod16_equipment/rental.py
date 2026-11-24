@@ -9,6 +9,7 @@ from app.core.errors import DataConflictError
 from app.core.identity import current_operator
 from .common import encoded, product, record, require, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, RentalLine, RentalMonth
+from .projects import ProjectRef, project_index
 
 
 def meta(line):
@@ -26,7 +27,7 @@ def category_label(item):
     return "周转材料" if item.item_category == "turnover" else "大型工机具"
 
 
-def carry_line(old, month, item=None):
+def carry_line(db, old, month, item=None):
     carry = meta(old)
     if item and item.in_rental == "no" and month >= date.today().strftime("%Y-%m"):
         return None
@@ -37,8 +38,12 @@ def carry_line(old, month, item=None):
         values.pop(key)
     if item is not None:
         values["category_label"] = category_label(item)
-    values.update(month=month, pending_action_type="none",
-                  project_name=carry.get("next_project", old.project_name))
+    if "next_transfer_id" in carry:
+        transfer = require(db, EquipmentTransfer, carry["next_transfer_id"])
+        values.update(ProjectRef.from_row(transfer, "to_project").fields("project", label="project_name"))
+    elif "next_project" in carry:
+        values.update(ProjectRef(carry["next_project"]).fields("project", label="project_name"))
+    values.update(month=month, pending_action_type="none")
     if old.billing_status == "skip_month":
         values["billing_status"] = "normal"
     new = RentalLine(**values)
@@ -57,7 +62,7 @@ def month_row(db, month):
     prior = db.scalar(select(func.max(RentalMonth.month)).where(RentalMonth.month < month))
     if prior:
         for old, item in lines_with_equipment(db, prior):
-            new = carry_line(old, month, item)
+            new = carry_line(db, old, month, item)
             if new is not None:
                 db.add(new)
         db.flush()
@@ -76,29 +81,26 @@ def lines_with_equipment(db, month):
                                                 RentalLine.row_sort_order, RentalLine.id))
 
 
-def ordered_lines(db, month, project=None):
-    query = select(RentalLine).where(RentalLine.month == month)
-    if project is not None:
-        query = query.where(RentalLine.project_name == project)
-    return db.scalars(query.order_by(RentalLine.project_sort_order, RentalLine.project_name,
-                                     RentalLine.row_sort_order, RentalLine.id)).all()
-
-
 def position(db, month, project):
-    siblings = ordered_lines(db, month, project)
-    if siblings:
-        return siblings[0].project_sort_order, siblings[-1].row_sort_order + 1
+    same_project = RentalLine.project_id == project.id
+    if project.id is None:
+        label = func.coalesce(func.nullif(func.trim(RentalLine.project_custom), ""), RentalLine.project_name)
+        same_project = same_project & (label == project.key())
+    sibling = db.scalar(select(RentalLine).where(RentalLine.month == month, same_project)
+                        .order_by(RentalLine.row_sort_order.desc()).limit(1))
+    if sibling:
+        return sibling.project_sort_order, sibling.row_sort_order + 1
     highest = db.scalar(select(func.max(RentalLine.project_sort_order)).where(RentalLine.month == month))
     return (0 if highest is None else highest + 1), 0
 
 
 def move(db, line, project):
-    if line.project_name != project:
+    if ProjectRef.from_row(line, "project").key() != project.key():
         line.project_sort_order, line.row_sort_order = position(db, line.month, project)
-        line.project_name = project
+    line.project_name, line.project_id, line.project_custom = project.legacy, project.id, project.custom
 
 
-def action(db, item, month, kind, details, custom_price=None):
+def action(db, item, month, kind, details, custom_price=None, *, project=None):
     draft(db, month)
     closed = db.scalar(select(RentalMonth.month).where(
         RentalMonth.month > month, RentalMonth.status == "confirmed").order_by(RentalMonth.month).limit(1))
@@ -106,9 +108,10 @@ def action(db, item, month, kind, details, custom_price=None):
         raise DataConflictError(f"该变动影响后续已确认租赁月份 {closed}，请核对日期")
     line = db.scalar(select(RentalLine).where(RentalLine.month == month, RentalLine.equipment_id == item.id))
     if line is None:
-        project = details.get("from_project", item.current_project)
+        project = project or ProjectRef.from_row(item, "current_project")
         group, order = position(db, month, project)
-        line = RentalLine(month=month, equipment_id=item.id, project_name=project, project_sort_order=group,
+        line = RentalLine(month=month, equipment_id=item.id, **project.fields("project", label="project_name"),
+                          project_sort_order=group,
                           category_label=category_label(item), row_sort_order=order, name=item.name, spec=item.spec, unit=item.unit,
                           quantity=item.quantity, original_value=item.purchase_price, custom_unit_price=custom_price,
                           pending_action_type="none", billing_status="skip_month" if kind == "new_purchase_start" else "normal")
@@ -128,30 +131,40 @@ def action(db, item, month, kind, details, custom_price=None):
             existing = db.scalar(select(RentalLine.id).where(RentalLine.month == later, RentalLine.equipment_id == item.id))
             if existing:
                 break
-            new = carry_line(line, later)
+            new = carry_line(db, line, later)
             if new is None:
                 break
-            new.project_sort_order, new.row_sort_order = position(db, later, new.project_name)
+            new.project_sort_order, new.row_sort_order = position(db, later, ProjectRef.from_row(new, "project"))
             db.add(new)
             db.flush()
     return line
 
 
+def line_record(line, projects):
+    return record(line) | ProjectRef.from_row(line, "project").response("project", projects, rental=True)
+
+
 def view(db, month, project=None):
     row = month_row(db, month)
+    archive = project_index(db)
     groups = {}
     pending = 0
     amounts = []
     for line, item in lines_with_equipment(db, month):
         pending += line.pending_action_type != "none"
-        if project is None or line.project_name == project:
-            values = record(line)
+        ref = ProjectRef.from_row(line, "project")
+        if project is None or ref.rental_name(archive) == project:
+            values = line_record(line, archive)
             if item:
                 values["category_label"] = category_label(item)
-            groups.setdefault(line.project_name, []).append(values)
+            group = groups.setdefault(ref.key(), {"project_id": ref.id, "project_name": values["project_name"],
+                                                 "lines": []})
+            group["lines"].append(values)
             amounts.append(line.amount)
-    projects = [{"project_name": name, "lines": lines, "subtotal": total(x["amount"] for x in lines)}
-                for name, lines in groups.items()]
+    projects = list(groups.values())
+    for group in projects:
+        group["lines"].sort(key=lambda line: (line["row_sort_order"], line["id"]))
+        group["subtotal"] = total(line["amount"] for line in group["lines"])
     return {"month": month, "status": row.status, "pending_count": pending, "projects": projects,
             "grand_total": total(amounts), "printable_project_count": sum((g["subtotal"] or 0) > 0 for g in projects)}
 
@@ -180,7 +193,7 @@ def patch(db, key, changes):
         setattr(line, name, value)
     recalculate(line)
     db.flush()
-    return record(line)
+    return line_record(line, project_index(db))
 
 
 def resolve(db, key, choice):
@@ -188,12 +201,13 @@ def resolve(db, key, choice):
     draft(db, line.month)
     data = meta(line)
     kind = line.pending_action_type
-    following = {k: data[k] for k in ("next_project", "stop_next") if k in data}
+    following = {k: data[k] for k in ("next_project", "next_transfer_id", "stop_next") if k in data}
     if kind == "transfer_attribution" and choice in ("from_project", "to_project"):
-        move(db, line, data[choice])
         transfer = require(db, EquipmentTransfer, data["transfer_id"])
+        move(db, line, ProjectRef.from_row(transfer, choice))
         transfer.rental_attribution = choice
         following["next_project"] = transfer.to_project
+        following["next_transfer_id"] = transfer.id
     elif kind == "new_purchase_start" and choice in ("this_month", "next_month"):
         line.billing_status = "normal" if choice == "this_month" else "skip_month"
     elif kind == "scrap_stop" and choice in ("stop_this_month", "charge_this_month"):
@@ -221,17 +235,25 @@ def resolve(db, key, choice):
             if other.pending_action_type != "none" or "next_project" in meta(other):
                 break
             draft(db, other.month)
-            move(db, other, transfer.to_project)
+            move(db, other, ProjectRef.from_row(transfer, "to_project"))
     recalculate(line)
     db.flush()
-    return record(line)
+    return line_record(line, project_index(db))
 
 
 def reorder(db, request):
     draft(db, request.month)
-    lines = {line.id: line for line in ordered_lines(db, request.month, request.project_name)}
+    archive = project_index(db)
+    lines, keys = {}, set()
+    for line, _ in lines_with_equipment(db, request.month):
+        ref = ProjectRef.from_row(line, "project")
+        if "project_id" in request.model_fields_set and ref.id != request.project_id:
+            continue
+        if ref.rental_name(archive) == request.project_name:
+            lines[line.id] = line
+            keys.add(ref.key())
     ids = request.ordered_line_ids
-    if set(ids) != lines.keys() or len(ids) != len(lines):
+    if len(keys) != 1 or set(ids) != lines.keys() or len(ids) != len(lines):
         raise DataConflictError("排序须包含该项目本月全部明细且无重复")
     for order, key in enumerate(ids):
         lines[key].row_sort_order = order

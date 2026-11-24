@@ -18,7 +18,9 @@ from sqlalchemy import event, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.mod16_equipment.importer import import_equipment_baseline, parse_rental
+from app.mod01_projects.models import Project
+from app.mod16_equipment import rental
+from app.mod16_equipment.importer import import_equipment_baseline, parse_rental, transfer_date_note
 from app.mod16_equipment.models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine, RentalMonth
 
 from app.core import session
@@ -48,6 +50,13 @@ def request(c, method, path, data=None, status=200):
 
 def add(c, **kw):
     return request(c, "POST", "/equipment", BASE | kw)
+
+
+def archive_project(db, disp, **fields):
+    project = Project(**({"disp": disp, "warehouse_name": f"测试仓-{disp}", "phid": f"i8-{disp}"} | fields))
+    db.add(project)
+    db.flush()
+    return project.id
 
 
 def resolve(c, key, choice):
@@ -91,6 +100,72 @@ def test_numbering_receipt_precision_filters_and_inventory_edits(client):
     patched = request(c, "PATCH", f"/inventory/{manual['id']}", dict(unit_price="1.4321", diff_qty=-1, diff_reason="待核"))
     assert Decimal(patched["diff_amount"]) == Decimal("-1.4321")
     assert Decimal(request(c, "GET", "/inventory?category=turnover")["count_amount"]) == Decimal("1.4321")
+
+
+def test_project_options_excludes_shells_and_orders_by_status_ord_and_id(client):
+    with session_scope() as db:
+        archived = archive_project(db, "归档", status="archived", ord=-1)
+        later = archive_project(db, "在建乙", ord=10)
+        first = archive_project(db, "在建甲", ord=2)
+        tie = archive_project(db, "在建丙", ord=2)
+        shell = archive_project(db, "小微壳", project_type="shell", warehouse_name=None)
+    options = request(client, "GET", "/project-options")["items"]
+    new = [row for row in options if row["id"] in {archived, later, first, tie, shell}]
+    assert [row["id"] for row in new] == [first, tie, later, archived]
+    assert new[0] == dict(id=first, disp="在建甲", status="active", phid="i8-在建甲", warehouse_name="测试仓-在建甲")
+    add_data = BASE | {"purchase_project_id": shell}
+    request(client, "POST", "/equipment", add_data, 409)
+
+
+def test_project_display_and_rental_identity_across_transfer_and_scrap(client):
+    with session_scope() as db:
+        project_id = archive_project(db, "乌兰察布项目")
+        purchase_id = archive_project(db, "南平项目")
+    result = add(client, purchase_project=None, purchase_project_id=purchase_id, current_project_id=project_id,
+                 current_project_custom="  鄂旗项目  ", quantity=2)
+    first, second = result["equipment"]
+    first_line, second_line = result["rental_line_ids"]
+    unlinked = add(client, purchase_project=None, purchase_project_custom="宜阳仓库")["equipment"][0]
+    assert (first["purchase_project"], first["purchase_project_disp"], first["purchase_project_custom"]) == (
+        "南平项目", "南平项目", None)
+    assert (first["current_project"], first["current_project_disp"], first["current_project_custom"]) == (
+        "鄂旗项目", "乌兰察布项目", "鄂旗项目")
+    assert (unlinked["current_project"], unlinked["current_project_id"], unlinked["current_project_disp"],
+            unlinked["current_project_custom"]) == ("宜阳仓库", None, None, "宜阳仓库")
+    with session_scope() as db:
+        db.get(Project, project_id).disp = "乌兰察布储能新名"
+        db.get(Project, purchase_id).disp = "南平新名"
+    item = request(client, "GET", "/equipment?project=鄂旗项目")["items"][0]
+    assert item["purchase_project"] == "南平新名" and item["current_project_disp"] == "乌兰察布储能新名"
+    assert (item["inventory_name"], item["inventory_book_qty"], item["inventory_count_qty"]) == ("试验焊机", "2.0000", "2.0000")
+    edited = request(client, "PATCH", f"/equipment/{first['id']}", {"purchase_project": "南平新名", "remark": "核对"})
+    assert edited["purchase_project_id"] == purchase_id and edited["purchase_project_custom"] is None
+    groups = {g["project_name"]: g for g in request(client, "GET", f"/rental?month={MONTH}")["projects"]}
+    linked = groups["乌兰察布储能新名"]
+    assert linked["project_id"] == project_id
+    assert [(l["id"], l["project_custom"]) for l in linked["lines"]] == [(first_line, "鄂旗项目"), (second_line, "鄂旗项目")]
+    assert groups["宜阳仓库"]["project_id"] is None
+    request(client, "PUT", "/rental/reorder", dict(month=MONTH, project_name="乌兰察布储能新名",
+            project_id=project_id, ordered_line_ids=[second_line, first_line]))
+    for line in (first_line, second_line):
+        resolve(client, line, "this_month")
+    transfer, = request(client, "POST", "/transfers", dict(equipment_ids=[first["id"]],
+        expected_from_projects={first["id"]: "鄂旗项目"}, to_project_id=purchase_id,
+        transfer_date="2026-11-25"))["transfers"]
+    assert (transfer["from_project"], transfer["from_project_id"], transfer["from_project_disp"]) == (
+        "鄂旗项目", project_id, "乌兰察布储能新名")
+    assert (transfer["to_project"], transfer["to_project_id"]) == ("南平新名", purchase_id)
+    assert resolve(client, first_line, "from_project")["project_id"] == project_id
+    later, = request(client, "GET", "/rental?month=2026-12&project=南平新名")["projects"]
+    assert later["lines"][0]["equipment_id"] == first["id"] and later["project_id"] == purchase_id
+    scrap, = request(client, "POST", "/scraps", dict(equipment_id=second["id"], scrap_date="2026-11-28"))["scraps"]
+    assert (scrap["original_project"], scrap["original_project_id"], scrap["original_project_disp"],
+            scrap["original_project_custom"]) == ("鄂旗项目", project_id, "乌兰察布储能新名", "鄂旗项目")
+    with session_scope() as db:
+        db.delete(db.get(Project, project_id))
+    detail = request(client, "GET", f"/equipment/{second['id']}")
+    assert detail["equipment"]["current_project_id"] is None and detail["equipment"]["current_project"] == "鄂旗项目"
+    assert detail["scrap"]["original_project_id"] is None and detail["scrap"]["original_project_disp"] is None
 
 
 def test_transfer_scrap_pending_queue_and_exports(client):
@@ -227,6 +302,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     filename = Path(__file__).resolve().parents[1] / "alembic/versions/equip261123_equipment_ledger.py"
     revision = runpy.run_path(str(filename))
     baseline = runpy.run_path(str(filename.with_name("equipbase261123_historical_transfers.py")))
+    project_links = runpy.run_path(str(filename.with_name("equipproj261124_project_links.py")))
     schema = rollback_db.exec_driver_sql("select current_schema()").scalar_one()
     assert schema.startswith("backend_verify_")
 
@@ -235,11 +311,15 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
 
     initial = tables()
     with Operations.context(MigrationContext.configure(rollback_db)):
+        project_links["downgrade"]()
+        columns = inspect(rollback_db).get_columns("m16_equipment_items", schema=schema)
+        assert "current_project_id" not in {column["name"] for column in columns}
         baseline["downgrade"]()
         revision["downgrade"]()
         assert tables() == {name for name in initial if not name.startswith("m16_")}
         revision["upgrade"]()
         baseline["upgrade"]()
+        project_links["upgrade"]()
     assert tables() == initial
 
 class RecordingAdapter:
@@ -558,6 +638,27 @@ def test_custom_adapter_injected_at_normal_sync_entry(client):
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, SAVE_PATH]
 
 
+def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client):
+    with session_scope() as db:
+        origin_id = archive_project(db, "乌兰察布项目", phid="ARCHIVE-1")
+        destination_id = archive_project(db, "南平项目", phid="ARCHIVE-2")
+    item, = add(client, name="样机", purchase_project=None, purchase_project_id=origin_id,
+                purchase_project_custom="鄂旗项目", purchase_price=0, in_rental="no")["equipment"]
+    before = equipment_row("i8 乌兰察布全名", "ARCHIVE-1")
+    after = equipment_row("i8 南平全名", "ARCHIVE-2")
+    adapter, calls = custom_adapter(page(), save_receipt("E1"), page(before), page(before),
+                                    save_receipt("B1"), page(transfer_bill() | {"phid_pc": "ARCHIVE-1"}), page(after))
+    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    transfer, = request(client, "POST", "/transfers", dict(equipment_ids=[item["id"]], to_project_id=destination_id,
+        to_project_custom="南平现场", transfer_date="2026-11-25"))["transfers"]
+    assert transfer["i8_sync_status"] == "synced" and transfer["to_project"] == "南平现场"
+    saves = [json.loads(call.kwargs["data"]["data"]) for call in calls.call_args_list if call.args[0] == SAVE_PATH]
+    equipment_save, transfer_save = saves
+    assert equipment_save["p_form_sbzx_m"]["form"]["newRow"]["phid_pc"] == "ARCHIVE-1"
+    assert transfer_save["p_form_ldzcdb_m"]["form"]["newRow"]["phid_pc"] == "ARCHIVE-1"
+    assert transfer_save["p_form_ldzcdb_d"]["table"]["newRow"][0]["row"]["u_inproj"] == "ARCHIVE-2"
+
+
 def test_transfer_retry_reconciles_unknown_save_without_reposting(client):
     key = add(client, in_rental="no")["equipment"][0]["id"]
     code = request(client, "GET", f"/equipment/{key}")["equipment"]["code"]
@@ -612,13 +713,13 @@ def baseline_paths(tmp_path):
     item_header = "工机具编号 名称 规格型号 单位 信息化用购买日期 购买日期 购买项目 购买价格 当前状态 当前所在项目 备注 在账 - 列租赁表 列资产账 租赁底稿行 盘点来源行 来源 接续所在项目 数量 核对说明".split()
     transfer = "工机具编号 名称 规格型号 单位 购买日期 购买项目 购买价格 调出项目 调入项目 调拨日期 备注".split()
     scrap = transfer[:7] + ["所在项目", "报废日期", "报废原因", "备注"]
-    item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "甲", 2, "在用", "乙",
+    item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "晋江污泥处理项目", 2, "在用", "鄂旗项目",
             None, "是", None, "是", "是", "4", "5", "分布原第 3 行", None, 3]
     distribution = save_source(tmp_path / "d.xlsx", {
         "工机具基础信息": [[], item_header, item, ["乙-01", "样机乙", *item[2:11], "固定资产", None, "是", "否",
                                            None, None, None, None, 1]],
-        "调拨记录": [transfer, ["甲-01", *[None]*6, "甲", "乙", "2026年初", "原备注"]],
-        "报废记录": [scrap, ["乙-01", *[None]*5, 2, "乙", 20261101, "损坏"]],
+        "调拨记录": [transfer, ["甲-01", *[None]*6, "酒钢项目", "乌兰察布储能项目", "20260811张永军", "原备注"]],
+        "报废记录": [scrap, ["乙-01", *[None]*5, 2, "福建南平项目", 20261101, "损坏"]],
         "周转材料": [[], item_header, ["转-01", "样阀", *item[2:14], "否", None, None, None, None, 1]],
         "周转材料调拨记录": [transfer], "周转材料报废记录": [scrap]})
     header = [None]*4 + ["单价", "帐面数", None, "盘点数", None, None, None, "盈亏原因"]
@@ -626,8 +727,8 @@ def baseline_paths(tmp_path):
         [1, "样机", None, "台", 2, 3, 6, 3, 6]], "周转材料": [[], [], header]})
     rental_header = "项目 设备名称 规格型号 单位 数量 租赁单价（元） 本月收费 金额（元） 变化／待核 类别 原值（元） 自定义单价（元） 底稿行 上期金额 早期草稿金额 对应设备编号".split()
     rental = save_source(tmp_path / "r.xlsx", {"本月租赁": [[], [], [], [], rental_header,
-        ["乙", "样机", None, "台", 3, 5, "计费", 15, None, "设备", None, 5, 4, None, None, "甲-01"],
-        ["丙", "样机", None, "台", 1, 0, "金额留空", None, None, "设备", 0, None, 5, None, None, "甲-01、乙-01"]]})
+        ["乌兰察布储能", "样机", None, "台", 3, 5, "计费", 15, None, "设备", None, 5, 4, None, None, "甲-01"],
+        ["宜阳仓库", "样机", None, "台", 1, 0, "金额留空", None, None, "设备", 0, None, 5, None, None, "甲-01、乙-01"]]})
     return dict(distribution_path=distribution, inventory_path=inventory, rental_path=rental)
 
 
@@ -637,6 +738,9 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
         inventory_tool_count=1, inventory_tool_book_total=6, inventory_turnover_count=0,
         rental_line_count=2, rental_grand_total=15, linked_inventory_count=1, linked_rental_count=1)
     with session_scope() as db:
+        jinjiang = archive_project(db, "晋江污泥项目")
+        wulanchabu = archive_project(db, "乌兰察布项目")
+        nanping = archive_project(db, "南平项目")
         assert import_equipment_baseline(db, **baseline_paths) == preview
     with session_scope() as db:
         with pytest.raises(ValueError, match="台账非空"):
@@ -644,12 +748,19 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
         item = db.scalar(select(EquipmentItem).where(EquipmentItem.code == "甲-01"))
         assert db.get(InventoryItem, item.inventory_item_id).source_row == "5"
         assert item.quantity == 3 and item.source_info == "分布原第 3 行"
-        assert db.scalar(select(EquipmentScrap)).reason == "损坏"
+        assert (item.purchase_project_id, item.purchase_project_custom) == (jinjiang, None)
+        assert (item.current_project_id, item.current_project_custom) == (wulanchabu, "鄂旗项目")
+        scrap = db.scalar(select(EquipmentScrap))
+        assert (scrap.reason, scrap.original_project_id, scrap.original_project_custom) == ("损坏", nanping, None)
         transfer = db.scalar(select(EquipmentTransfer))
-        assert transfer.transfer_date is None and "2026年初" in transfer.remark
+        assert (transfer.transfer_date, transfer.remark) == (date(2026, 8, 11), "张永军；原备注")
+        assert (transfer.from_project_id, transfer.from_project_custom) == (None, "酒钢项目")
+        assert (transfer.to_project_id, transfer.to_project_custom) == (wulanchabu, None)
         a, b = db.scalars(select(RentalLine).order_by(RentalLine.project_sort_order)).all()
         assert a.equipment_id == item.id and a.custom_unit_price == 5
+        assert (a.project_id, a.project_custom) == (wulanchabu, "鄂旗项目")
         assert b.equipment_id is None and b.billing_status == "blank" and b.amount is None
+        assert (b.project_id, b.project_custom) == (None, "宜阳仓库")
     assert request(client, "GET", "/i8-sync/issues") == {"equipment": [], "transfers": []}
     with session_scope() as db:
         turnover_id = db.scalar(select(EquipmentItem.id).where(EquipmentItem.item_category == "turnover"))
@@ -659,10 +770,23 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
     assert [exported["周转材料"][cell].value for cell in ("L3", "O3")] == ["是", "否"]
     dist = exported["工机具基础信息"]
     assert (dist["E3"].value.date(), dist["F3"].value, dist["T3"].value) == (date(2025, 1, 2), "202501", 3)
+    transfer_sheet = exported["调拨记录"]
+    assert (transfer_sheet["J2"].value.date(), transfer_sheet["K2"].value) == (date(2026, 8, 11), "张永军；原备注")
     inv = workbook(client, "inventory", data_only=True)["流动资产盘点表"]
     assert inv["G5"].value == 6
     rent = workbook(client, f"rental?month={MONTH}", data_only=True).active
     assert rent["G4"].value == 15 and rent["G11"].value is None
+
+
+@pytest.mark.parametrize(("source", "parsed", "note"), [
+    ("20251029统计", date(2025, 10, 29), "统计"),
+    ("20260811张永军", date(2026, 8, 11), "张永军"),
+    ("2025.10.29 备注", date(2025, 10, 29), "备注"),
+    ("2025-10-29", date(2025, 10, 29), None),
+    ("2026年初", None, "2026年初"),
+])
+def test_transfer_date_note(source, parsed, note):
+    assert transfer_date_note(source, None) == (parsed, note)
 
 
 def test_legacy_rental_sheet(tmp_path):
@@ -686,6 +810,10 @@ def test_optional_tail501_baseline(rollback_db):
     try:
         preview = import_equipment_baseline(None, **paths, dry_run=True)
         with session_scope() as db:
+            for name in ("乌兰察布项目", "晋江污泥项目", "南平项目", "焦作佰利项目", "沭阳热电厂", "泗阳#4",
+                         "灵宝二期", "龙源纸业项目", "大唐雷州", "新疆慧能项目", "内蒙宜化项目", "安徽国风项目",
+                         "广东茂名项目", "宜昌项目"):
+                archive_project(db, name)
             assert import_equipment_baseline(db, **paths) == preview
         with session_scope() as db:
             def count(model, *filters):
@@ -706,5 +834,6 @@ def test_optional_tail501_baseline(rollback_db):
             assert count(RentalMonth, RentalMonth.month == MONTH) == 1
             assert count(RentalLine, RentalLine.billing_status == "blank", RentalLine.amount.is_(None)) == 97
             assert count(RentalLine, RentalLine.custom_unit_price.is_not(None)) == 17
+            assert rental.view(db, MONTH)["grand_total"] == Decimal("19781.0367")
     finally:
         assert hashes() == original

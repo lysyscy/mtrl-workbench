@@ -9,7 +9,44 @@ from app.core.identity import current_operator
 from . import rental
 from .common import batch, product, record, require, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine
+from .projects import ProjectRef, project_index, requested_project
 from .sync import ISSUES, UNAVAILABLE
+
+
+def project_options(db):
+    rows = sorted(project_index(db).values(), key=lambda row: (row.is_archived, row.ord, row.id))
+    return {"items": [{"id": row.id, "disp": row.disp, "status": row.status, "phid": row.phid,
+                       "warehouse_name": row.warehouse_name} for row in rows]}
+
+
+PROJECT_FIELDS = {
+    EquipmentItem: ("purchase_project", "current_project"),
+    EquipmentTransfer: ("from_project", "to_project"),
+    EquipmentScrap: ("original_project",),
+}
+
+
+def distribution_record(row, projects):
+    values = record(row)
+    for prefix in PROJECT_FIELDS[type(row)]:
+        values.update(ProjectRef.from_row(row, prefix).response(prefix, projects))
+    return values
+
+
+def equipment_record(item, projects, inventory):
+    return distribution_record(item, projects) | {
+        "inventory_name": inventory.name if inventory else None,
+        "inventory_book_qty": inventory.book_qty if inventory else None,
+        "inventory_count_qty": inventory.count_qty if inventory else None,
+    }
+
+
+def saved_records(db, model, ids):
+    rows = [require(db, model, key) for key in ids]
+    projects = project_index(db)
+    if model is EquipmentItem:
+        return equipment_records(db, rows, projects, include_transfer_status=False)
+    return [distribution_record(row, projects) for row in rows]
 
 
 def codes(db, request):
@@ -65,14 +102,21 @@ def start_rental(db, item, month, custom=None):
 
 
 def create(db, req):
+    projects = project_index(db)
+    purchase = requested_project(projects, req.purchase_project, req.purchase_project_id, req.purchase_project_custom)
+    current = purchase
+    if req.current_project or req.current_project_id is not None or req.current_project_custom:
+        current = requested_project(projects, req.current_project, req.current_project_id, req.current_project_custom)
     allocated = codes(db, req)
     if req.expected_codes is not None and req.expected_codes != allocated:
         raise DataConflictError("编号已被占用或录入内容已变化，请刷新编号预览", detail="expected_codes")
     inv = asset_row(db, req, req.quantity) if req.asset_scope == "current_asset" else None
-    data = req.model_dump(exclude={"quantity", "custom_unit_price", "target_month", "current_project", "expected_codes"})
+    data = req.model_dump(exclude={"quantity", "custom_unit_price", "target_month", "expected_codes"})
+    data.update(purchase.fields("purchase_project"))
+    data.update(current.fields("current_project"))
     items, lines = [], []
     for code in allocated:
-        item = EquipmentItem(**data, code=code, i8_sync_message=UNAVAILABLE, current_project=req.current_project or req.purchase_project,
+        item = EquipmentItem(**data, code=code, i8_sync_message=UNAVAILABLE,
                              quantity=Decimal(1) if req.item_category == "equipment" else req.quantity,
                              inventory_item_id=inv.id if inv else None)
         db.add(item)
@@ -80,7 +124,7 @@ def create(db, req):
         if req.in_rental == "yes":
             line = start_rental(db, item, req.target_month or req.purchase_date.strftime("%Y-%m"), req.custom_unit_price)
             lines.append(line.id)
-        items.append(record(item))
+        items.append(equipment_record(item, projects, inv))
     return {"codes": allocated, "equipment": items, "inventory_item": record(inv),
             "rental_line_ids": lines}
 
@@ -98,6 +142,18 @@ def update(db, key, changes):
     if item.status == "scrapped":
         raise DataConflictError("已报废设备不能直接修改")
     old_flag, old_scope = item.in_rental, item.asset_scope
+    projects = project_index(db)
+    dual_fields = {"purchase_project_id", "purchase_project_custom"} & changes.keys()
+    previous = ProjectRef.from_row(item, "purchase_project")
+    if dual_fields:
+        project = requested_project(projects, changes.get("purchase_project"),
+                                    changes.get("purchase_project_id", previous.id),
+                                    changes.get("purchase_project_custom", previous.custom))
+        changes = changes | project.fields("purchase_project")
+    elif "purchase_project" in changes:
+        label = changes["purchase_project"]
+        project = previous if label == previous.display(projects) else requested_project(projects, label)
+        changes = changes | project.fields("purchase_project")
     for name, value in changes.items():
         setattr(item, name, value)
     item.updated_by = current_operator()
@@ -129,13 +185,15 @@ def update(db, key, changes):
     if changes:
         item.i8_sync_status, item.i8_sync_message = "pending", "设备资料已修改，待同步"
     db.flush()
-    return record(item)
+    return equipment_record(item, projects, db.get(InventoryItem, item.inventory_item_id) if item.inventory_item_id else None)
 
 
-def equipment_records(db, items):
+def equipment_records(db, items, projects, *, include_transfer_status=True):
     """Show the earliest unresolved sync step without losing the equipment's own retry state."""
-    values = {item.id: record(item) for item in items}
-    if values:
+    inventory_ids = {item.inventory_item_id for item in items if item.inventory_item_id is not None}
+    inventories = {row.id: row for row in db.scalars(select(InventoryItem).where(InventoryItem.id.in_(inventory_ids)))} if inventory_ids else {}
+    values = {item.id: equipment_record(item, projects, inventories.get(item.inventory_item_id)) for item in items}
+    if values and include_transfer_status:
         pending = db.scalars(select(EquipmentTransfer).where(
             EquipmentTransfer.equipment_id.in_(values), EquipmentTransfer.i8_sync_status.in_(ISSUES)
         ).order_by(EquipmentTransfer.transfer_date, EquipmentTransfer.id))
@@ -150,7 +208,7 @@ def equipment_records(db, items):
 def equipment(db, item_category=None, project=None, status=None, include_scrapped=False,
               asset_scope=None, in_rental=None, sync_issue_only=False, keyword=None):
     query = select(EquipmentItem)
-    for col, value in ((EquipmentItem.item_category, item_category), (EquipmentItem.current_project, project),
+    for col, value in ((EquipmentItem.item_category, item_category),
                        (EquipmentItem.status, status), (EquipmentItem.asset_scope, asset_scope),
                        (EquipmentItem.in_rental, in_rental)):
         if value is not None:
@@ -160,46 +218,55 @@ def equipment(db, item_category=None, project=None, status=None, include_scrappe
     if sync_issue_only:
         query = query.where(or_(EquipmentItem.i8_sync_status.in_(ISSUES), EquipmentItem.id.in_(
             select(EquipmentTransfer.equipment_id).where(EquipmentTransfer.i8_sync_status.in_(ISSUES)))))
-    if keyword:
-        query = query.where(or_(*(c.icontains(keyword, autoescape=True) for c in (
-            EquipmentItem.code, EquipmentItem.name, EquipmentItem.spec, EquipmentItem.current_project))))
+    projects = project_index(db)
     rows = db.scalars(query.order_by(EquipmentItem.id)).all()
+    if project is not None or keyword:
+        rows = [item for item in rows if matches_equipment(item, projects, project, keyword)]
     pending = db.scalar(select(func.count()).select_from(RentalLine).where(
-        RentalLine.equipment_id.in_(query.with_only_columns(EquipmentItem.id)),
+        RentalLine.equipment_id.in_([item.id for item in rows]),
         RentalLine.pending_action_type != "none"))
-    values = equipment_records(db, rows)
+    values = equipment_records(db, rows, projects)
     return {"items": values, "summary": {
         "active_count": sum(r.status != "scrapped" for r in rows),
         "pending_sync_count": sum(r["i8_sync_status"] in ("pending", "failed") for r in values),
         "conflict_count": sum(r["i8_sync_status"] == "conflict" for r in values), "pending_rental_count": pending}}
 
 
-def history(db, model, item_category=None, project=None, keyword=None, sync_status=None, equipment_id=None):
+def matches_equipment(item, projects, project, keyword):
+    label = ProjectRef.from_row(item, "current_project").display(projects)
+    return (project is None or label == project) and (not keyword or any(
+        keyword.casefold() in value.casefold() for value in (item.code, item.name, item.spec, label) if value))
+
+
+def history(db, model, item_category=None, project=None, keyword=None, sync_status=None, equipment_id=None, *, projects=None):
     query = select(model, EquipmentItem).join(EquipmentItem, model.equipment_id == EquipmentItem.id)
     if equipment_id:
         query = query.where(model.equipment_id == equipment_id)
     if item_category:
         query = query.where(model.item_category == item_category)
-    if project:
-        query = query.where(or_(model.from_project == project, model.to_project == project)
-                            if model is EquipmentTransfer else model.original_project == project)
     if sync_status:
         query = query.where(model.i8_sync_status == sync_status)
     if keyword:
         query = query.where(or_(*(c.icontains(keyword, autoescape=True) for c in (
             EquipmentItem.code, EquipmentItem.name, EquipmentItem.spec))))
-    return [record(row) | {"code": item.code, "name": item.name, "spec": item.spec, "unit": item.unit}
-            for row, item in db.execute(query.order_by(model.id))]
+    projects = project_index(db) if projects is None else projects
+    rows = []
+    for row, item in db.execute(query.order_by(model.id)):
+        values = distribution_record(row, projects)
+        if not project or any(values[field] == project for field in PROJECT_FIELDS[model]):
+            rows.append(values | {"code": item.code, "name": item.name, "spec": item.spec, "unit": item.unit})
+    return rows
 
 
 def detail(db, key, month):
     item = require(db, EquipmentItem, key)
-    scraps = history(db, EquipmentScrap, equipment_id=key)
-    display = equipment_records(db, [item])[0]
-    return {"equipment": display, "transfers": history(db, EquipmentTransfer, equipment_id=key),
+    projects = project_index(db)
+    scraps = history(db, EquipmentScrap, equipment_id=key, projects=projects)
+    display = equipment_records(db, [item], projects)[0]
+    return {"equipment": display, "transfers": history(db, EquipmentTransfer, equipment_id=key, projects=projects),
             "scrap": scraps[0] if scraps else None,
             "inventory_item": record(db.get(InventoryItem, item.inventory_item_id)) if item.inventory_item_id else None,
-            "rental_lines": [record(r) for r in db.scalars(select(RentalLine).where(
+            "rental_lines": [rental.line_record(r, projects) for r in db.scalars(select(RentalLine).where(
                 RentalLine.equipment_id == key, RentalLine.month == month))],
             "i8_sync": {"status": display["i8_sync_status"], "message": display["i8_sync_message"],
                         "snapshot_json": item.i8_snapshot_json}}
@@ -214,43 +281,55 @@ def active_batch(db, ids):
 
 def transfer(db, req):
     items = active_batch(db, req.equipment_ids)
+    projects = project_index(db)
+    destination = requested_project(projects, req.to_project, req.to_project_id, req.to_project_custom)
     month = req.transfer_date.strftime("%Y-%m")
     lines, records = [], []
     for item in items:
-        if req.expected_from_projects is not None and req.expected_from_projects.get(item.id) != item.current_project:
+        origin = ProjectRef.from_row(item, "current_project")
+        origin_label = origin.display(projects)
+        if req.expected_from_projects is not None and req.expected_from_projects.get(item.id) != origin_label:
             raise DataConflictError("设备所在项目已变化，请刷新后重新选择")
         newer = db.scalar(select(EquipmentTransfer.id).where(EquipmentTransfer.equipment_id == item.id,
                           EquipmentTransfer.transfer_date > req.transfer_date).limit(1))
         if newer:
             raise DataConflictError("调拨日期早于该设备已有调拨，请核对日期")
-        if item.current_project == req.to_project:
+        if origin.key() == destination.key() and origin_label == destination.display(projects):
             raise DataConflictError("调入项目与设备当前项目相同")
-        old = item.current_project
-        item.current_project, item.updated_by = req.to_project, current_operator()
-        row = EquipmentTransfer(i8_sync_message=UNAVAILABLE, equipment_id=item.id, item_category=item.item_category, from_project=old,
-                                to_project=req.to_project, transfer_date=req.transfer_date, quantity=item.quantity,
+        for field, value in destination.fields("current_project").items():
+            setattr(item, field, value)
+        item.updated_by = current_operator()
+        same_system_project = origin.id is not None and origin.id == destination.id
+        row = EquipmentTransfer(i8_sync_status="not_applicable" if same_system_project else "pending",
+                                i8_sync_message=None if same_system_project else UNAVAILABLE,
+                                equipment_id=item.id, item_category=item.item_category,
+                                **origin.fields("from_project"), **destination.fields("to_project"),
+                                transfer_date=req.transfer_date, quantity=item.quantity,
                                 remark=req.remark, rental_month=month if item.in_rental == "yes" else None,
                                 rental_attribution="pending" if item.in_rental == "yes" else "not_applicable")
         db.add(row)
         db.flush()
         if item.in_rental == "yes":
             lines.append(rental.action(db, item, month, "transfer_attribution", {
-                "transfer_id": row.id, "from_project": old, "to_project": req.to_project,
+                "transfer_id": row.id, "from_project": origin_label, "to_project": destination.display(projects),
                 "transfer_date": req.transfer_date,
-                "suggested_side": "from_project" if req.transfer_date.day >= 25 else "to_project"}).id)
+                "suggested_side": "from_project" if req.transfer_date.day >= 25 else "to_project"},
+                project=origin).id)
         records.append(row)
-    return {"equipment_ids": req.equipment_ids, "transfers": [record(r) for r in records],
+    return {"equipment_ids": req.equipment_ids, "transfers": [distribution_record(r, projects) for r in records],
             "rental_line_ids": lines}
 
 
 def scrap(db, req):
     ids = req.equipment_ids or [req.equipment_id]
+    projects = project_index(db)
     lines, records = [], []
     for item in active_batch(db, ids):
         item.status, item.scrap_date, item.scrap_reason = "scrapped", req.scrap_date, req.reason
         item.updated_by = current_operator()
         row = EquipmentScrap(equipment_id=item.id, item_category=item.item_category, scrap_date=req.scrap_date,
-                             original_project=item.current_project, quantity=item.quantity, purchase_price=item.purchase_price,
+                             **ProjectRef.from_row(item, "current_project").fields("original_project"),
+                             quantity=item.quantity, purchase_price=item.purchase_price,
                              reason=req.reason, rental_stop_status="pending" if item.in_rental == "yes" else "not_applicable")
         db.add(row)
         db.flush()
@@ -259,14 +338,15 @@ def scrap(db, req):
         if item.in_rental == "yes":
             lines.append(rental.action(db, item, req.scrap_date.strftime("%Y-%m"), "scrap_stop",
                                       {"scrap_id": row.id, "scrap_date": req.scrap_date}).id)
-        records.append(record(row))
+        records.append(distribution_record(row, projects))
     return {"equipment_ids": ids, "scraps": records, "rental_line_ids": lines}
 
 
 def issues(db):
-    return {"equipment": [record(r) for r in db.scalars(select(EquipmentItem).where(
-        EquipmentItem.i8_sync_status.in_(ISSUES)).order_by(EquipmentItem.id))],
-        "transfers": [record(r) for r in db.scalars(select(EquipmentTransfer).where(
+    projects = project_index(db)
+    items = db.scalars(select(EquipmentItem).where(EquipmentItem.i8_sync_status.in_(ISSUES)).order_by(EquipmentItem.id)).all()
+    return {"equipment": equipment_records(db, items, projects, include_transfer_status=False),
+        "transfers": [distribution_record(r, projects) for r in db.scalars(select(EquipmentTransfer).where(
             EquipmentTransfer.i8_sync_status.in_(ISSUES)).order_by(EquipmentTransfer.id))]}
 
 

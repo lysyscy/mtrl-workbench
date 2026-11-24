@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
 import Button from 'antd/es/button';
 import Form from 'antd/es/form';
@@ -10,6 +10,8 @@ import { BusinessGrid } from './business-grid';
 import { equipmentApi as api, exportEquipment } from './equipment-api';
 import type { InventoryCategory, InventoryItem, InventoryValues } from './equipment-api';
 import {
+  decimalField,
+  ledgerColumn,
   LedgerModal,
   LoadState,
   options,
@@ -79,7 +81,7 @@ function InventoryForm({
               label={label}
               rules={[{ required: key === 'book_qty' || key === 'count_qty', message: '请填写' + label }]}
             >
-              <InputNumber stringMode precision={4} {...(key === 'unit_price' ? { min: '0' } : {})} />
+              <InputNumber stringMode {...decimalField} precision={4} {...(key === 'unit_price' ? { min: '0' } : {})} />
             </Form.Item>
           ))}
           <Form.Item name="diff_reason" label="盈亏原因">
@@ -110,27 +112,27 @@ const columns: (ColDef<Row> | ColGroupDef<Row>)[] = [
     headerName: '序号',
     valueGetter: (p) => (p.node?.rowPinned ? '' : (p.node?.rowIndex ?? 0) + 1),
   },
-  { field: 'name', headerName: '名称' },
-  { field: 'spec', headerName: '规格' },
-  { field: 'unit', headerName: '单位' },
-  { field: 'unit_price', headerName: '单价' },
+  ledgerColumn<Row>({ field: 'name', headerName: '名称' }, row => row.name),
+  ledgerColumn<Row>({ field: 'spec', headerName: '规格' }, row => row.spec),
+  ledgerColumn<Row>({ field: 'unit', headerName: '单位' }, row => row.unit),
+  ledgerColumn<Row>({ field: 'unit_price', headerName: '单价' }, row => row.unit_price, 'number'),
   {
     headerName: '帐面数',
     children: [
-      { field: 'book_qty', headerName: '数量' },
-      { field: 'book_amount', headerName: '金额' },
+      ledgerColumn<Row>({ field: 'book_qty', headerName: '数量' }, row => row.book_qty, 'number'),
+      ledgerColumn<Row>({ field: 'book_amount', headerName: '金额' }, row => row.book_amount, 'number'),
     ],
   },
   {
     headerName: '盘点数',
     children: [
-      { field: 'count_qty', headerName: '数量' },
-      { field: 'count_amount', headerName: '金额' },
+      ledgerColumn<Row>({ field: 'count_qty', headerName: '数量' }, row => row.count_qty, 'number'),
+      ledgerColumn<Row>({ field: 'count_amount', headerName: '金额' }, row => row.count_amount, 'number'),
     ],
   },
-  { field: 'diff_qty', headerName: '盈亏数量' },
-  { field: 'diff_amount', headerName: '盈亏金额' },
-  { field: 'diff_reason', headerName: '盈亏原因' },
+  ledgerColumn<Row>({ field: 'diff_qty', headerName: '盈亏数量' }, row => row.diff_qty, 'number'),
+  ledgerColumn<Row>({ field: 'diff_amount', headerName: '盈亏金额' }, row => row.diff_amount, 'number'),
+  ledgerColumn<Row>({ field: 'diff_reason', headerName: '盈亏原因' }, row => row.diff_reason),
 ];
 export function Inventory() {
   const [category, setCategory] = useState<InventoryCategory>('tool'),
@@ -141,8 +143,15 @@ export function Inventory() {
     { writable } = useAccess(),
     data = query.data;
   const item = data?.items.find((i) => i.id === selected);
+  const totals = useMemo<Row[]>(() => data ? [{
+    id: -1,
+    name: '合计',
+    book_amount: data.book_amount,
+    count_amount: data.count_amount,
+    diff_amount: differenceTotal(data.items),
+  }] : [], [data]);
   return (
-    <>
+    <div className="equipment-sheet">
       <Segmented
         value={category}
         options={options(categories)}
@@ -176,25 +185,23 @@ export function Inventory() {
           columns={columns}
           rowId={rowId}
           domLayout="normal"
-          style={{ height: '62vh' }}
+          className="equipment-grid-slot"
           grid={{
+            enableFilterHandlers: true,
+            popupParent: document.body,
             rowSelection: { mode: 'singleRow', checkboxes: false, enableClickSelection: true },
             onSelectionChanged: (e) => setSelected(e.api.getSelectedRows()[0]?.id ?? null),
-          }}
-          totals={[
-            {
-              id: -1,
-              name: '合计',
-              book_amount: data.book_amount,
-              count_amount: data.count_amount,
-              diff_amount: differenceTotal(data.items),
+            onFilterChanged: ({ api }) => {
+              const row = api.getSelectedNodes()[0];
+              if (row && row.rowIndex === null) row.setSelected(false);
             },
-          ]}
+          }}
+          totals={totals}
         />
       )}
       {edit !== undefined && (
         <InventoryForm category={category} item={edit} close={() => setEdit(undefined)} />
       )}
-    </>
+    </div>
   );
 }

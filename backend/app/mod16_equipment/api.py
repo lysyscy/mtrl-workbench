@@ -36,8 +36,7 @@ def save_and_sync(fn, request, adapter, model, field):
     if adapter is not None:
         for row in rows:
             sync_queue(row["equipment_id"] if model is EquipmentTransfer else row["id"], adapter)
-        with session_scope() as db:
-            rows = result[field] = [record(db.get(model, row["id"])) for row in rows]
+        rows = result[field] = call(service.saved_records, model, [row["id"] for row in rows])
     result["i8_sync"] = [{"id": r["id"], "status": r["i8_sync_status"], "message": r["i8_sync_message"]}
                          for r in rows]
     return jsonable_encoder(result, custom_encoder={Decimal: str})
@@ -46,6 +45,11 @@ def save_and_sync(fn, request, adapter, model, field):
 @router.get("/equipment/preview")
 def preview_get(request: S.Preview = Query()):
     return {"codes": call(service.codes, request)}
+
+
+@router.get("/project-options")
+def project_options():
+    return call(service.project_options)
 
 
 @router.post("/equipment/preview")

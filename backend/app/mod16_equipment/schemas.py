@@ -18,6 +18,7 @@ Scope = Literal["current_asset", "fixed_asset", "off_book"]
 RentalFlag = Literal["yes", "no", "pending"]
 Billing = Literal["normal", "skip_month", "stopped", "blank"]
 Ids = Annotated[list[Annotated[int, Field(gt=0)]], Field(min_length=1)]
+ProjectId = Annotated[int, Field(gt=0)]
 
 
 class Input(BaseModel):
@@ -43,8 +44,12 @@ class EquipmentCreate(Preview):
     expected_codes: list[str] | None = None
     spec: str | None = None
     unit: str | None = None
-    purchase_project: Name
+    purchase_project: Name | None = None
+    purchase_project_id: ProjectId | None = None
+    purchase_project_custom: str | None = None
     current_project: Name | None = None
+    current_project_id: ProjectId | None = None
+    current_project_custom: str | None = None
     purchase_price: Price | None = None
     custom_unit_price: Price | None = None
     asset_scope: Scope = "current_asset"
@@ -59,7 +64,9 @@ class EquipmentPatch(Input):
     spec: str | None = None
     unit: str | None = None
     purchase_date: date | None = None
-    purchase_project: Name = Field(default_factory=lambda: "")
+    purchase_project: Name | None = None
+    purchase_project_id: ProjectId | None = None
+    purchase_project_custom: str | None = None
     purchase_price: Price | None = None
     status: Status = "in_use"
     asset_scope: Scope = "current_asset"
@@ -70,7 +77,9 @@ class EquipmentPatch(Input):
 class Transfer(Input):
     expected_from_projects: dict[int, str] | None = None
     equipment_ids: Ids
-    to_project: Name
+    to_project: Name | None = None
+    to_project_id: ProjectId | None = None
+    to_project_custom: str | None = None
     transfer_date: date
     remark: str | None = None
 
@@ -136,4 +145,5 @@ class MonthInput(Input):
 
 class Reorder(MonthInput):
     project_name: Name
+    project_id: ProjectId | None = None
     ordered_line_ids: Ids
