@@ -140,10 +140,13 @@ export function Inventory({ scale, goToDistribution }: {
         valueGetter: p => p.node?.rowPinned ? '' : (p.node?.rowIndex ?? 0) + 1 },
       ledgerColumn<Row>({
         field: 'name', headerName: '名称', ...contentWidth(108, 175, scale, 0.7),
-        cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.linked_equipment_ids?.length ? (
-          <button type="button" className="equipment-row-link" title="定位到设备分布"
-            onClick={() => goToDistribution(data.linked_equipment_ids!)}>{data.name}</button>
-        ) : data?.name,
+        cellRenderer: ({ data }: ICellRendererParams<Row>) => {
+          const linked = data?.linked_equipment_ids;
+          return linked?.length ? (
+            <button type="button" className="equipment-row-link" title="定位到设备分布"
+              onClick={() => goToDistribution(linked)}>{data?.name}</button>
+          ) : data?.name;
+        },
       }, row => row.name),
       ledgerColumn<Row>({ field: 'spec', headerName: '规格', ...contentWidth(92, 165, scale, 0.5) }, row => row.spec),
       ledgerColumn<Row>({ field: 'unit', headerName: '单位', ...contentWidth(52, 66, scale) }, row => row.unit),

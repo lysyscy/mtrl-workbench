@@ -1,6 +1,7 @@
 export type RentalTarget = { equipmentId: number; projectId: number | null; projectName: string };
 
-export const equipmentFlashDuration = 1400;
+// Leave one paint after the two 700 ms CSS cycles before removing the class.
+export const equipmentFlashDuration = 1500;
 
 export function scrollToEquipmentTarget(target: HTMLElement, block: ScrollLogicalPosition = 'start') {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

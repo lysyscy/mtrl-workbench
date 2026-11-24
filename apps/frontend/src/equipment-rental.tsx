@@ -303,7 +303,7 @@ export function Rental({ target, scale, goToDistribution }: {
       if (root.querySelector('.business-grid[data-layout-state="preparing"]')) return false;
       const card = document.getElementById(projectAnchor(group));
       const row = card?.querySelector<HTMLElement>(line
-        ? `.ag-center-cols-container .ag-row[row-id="${line.id}"]`
+        ? `.ag-row[row-id="${line.id}"]`
         : 'h3');
       if (!row || (line && row.closest('[inert]'))) return false;
       resolved.current = target;
