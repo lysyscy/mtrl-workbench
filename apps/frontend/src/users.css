@@ -10,7 +10,8 @@
 /* Reserve the account table during its first read. Only a failure adds a line under the heading. */
 .users-read-status{--read-status-pad:0;margin:0 0 calc(10px * var(--fscale))}
 .users-read-reserve{padding:0;min-height:calc(240px * var(--fscale));max-height:none}
-.users-table{max-height:60dvh;border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
+.users-table{border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
+.users-table .ag-root-wrapper{border:0}
 .users-actions{white-space:nowrap}
 .users-actions .ant-btn+.ant-btn{margin-left:calc(6px * var(--fscale))}
 .users-page input:not([type=checkbox]),.users-page select{font:inherit;font-size:calc(12.5px * var(--fscale));line-height:1.5;padding:calc(4px * var(--fscale)) calc(7px * var(--fscale));min-height:calc(28px * var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);min-width:0;width:100%}

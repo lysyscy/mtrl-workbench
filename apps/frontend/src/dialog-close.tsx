@@ -43,7 +43,7 @@ export function DiscardConfirmation({ titleId, headingRef, closing }: { titleId:
   return <div className="dialog-discard"><DialogHeading ref={headingRef} tabIndex={-1} id={titleId}>放弃未保存的修改？</DialogHeading><p>本次输入和选择尚未保存。</p><div className="dialog-actions"><Button htmlType="button" disabled={closing.busy} onClick={closing.resume}>继续编辑</Button><Button htmlType="button" className="primary" disabled={closing.busy} onClick={closing.discard}>放弃并关闭</Button></div></div>;
 }
 
-export function DialogContents({ title, titleId: requestedTitleId, closing, children }: { title: ReactNode; titleId: string; closing: DialogCloseState; children: ReactNode }) {
+export function DialogContents({ title, titleId: requestedTitleId, closing, footer, children }: { title: ReactNode; titleId: string; closing: DialogCloseState; footer?: ReactNode; children: ReactNode }) {
   const titleId = useContext(BusinessModalTitle) ?? requestedTitleId;
   const decisionTitle = useRef<HTMLHeadingElement>(null), previousFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -56,9 +56,9 @@ export function DialogContents({ title, titleId: requestedTitleId, closing, chil
   }, [closing.confirming]);
   return <>
     {closing.confirming && <DiscardConfirmation titleId={titleId} headingRef={decisionTitle} closing={closing} />}
-    <div hidden={closing.confirming}>
+    <div className="dialog-frame" hidden={closing.confirming}>
       <div className="dialog-close-heading"><h2 id={closing.confirming ? undefined : titleId}>{title}</h2><Button htmlType="button" className="dialog-close-button" aria-label="关闭弹窗" disabled={closing.busy} onClick={closing.requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
-      {children}
+      {footer !== undefined ? <><div className="dialog-body">{children}</div><div className="dialog-footer">{footer}</div></> : children}
     </div>
   </>;
 }

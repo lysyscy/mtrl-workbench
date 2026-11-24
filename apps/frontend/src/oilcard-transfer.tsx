@@ -34,10 +34,11 @@ export function OilTransferDialog({ archives, projects, disabled, busy, error, c
     });
   }
   const valid = outgoing.project && outgoing.account && incoming.project && incoming.account && outgoing.account !== incoming.account && amount.trim();
-  return <BusinessModal open className="oilcard-transfer-dialog" titleId="oilcard-transfer-title" requestClose={closing.requestClose}><DialogContents title="转账" titleId="oilcard-transfer-title" closing={closing}>
-    <form onSubmit={e => { e.preventDefault(); if (!locked && valid) void submit({ request_id: requestId.current,
+  return <BusinessModal open layout="scroll-body" className="oilcard-transfer-dialog" titleId="oilcard-transfer-title" requestClose={closing.requestClose}><DialogContents title="转账" titleId="oilcard-transfer-title" closing={closing}>
+    <form className="dialog-form" onSubmit={e => { e.preventDefault(); if (!locked && valid) void submit({ request_id: requestId.current,
       out_project_id: outgoing.project, out_account_id: outgoing.account, in_project_id: incoming.project, in_account_id: incoming.account,
       amount, date_text: date, out_remark: outgoing.remark, in_remark: incoming.remark }); }}>
+      <div className="dialog-body">
       <div className="oilcard-transfer-sides">{([{ side: 'out', label: '转出', data: outgoing }, { side: 'in', label: '转入', data: incoming }] as const).map(item => <fieldset key={item.side}><legend>{item.label}</legend>
         <label>项目<Select aria-label={`${item.label}项目`} value={item.data.project || undefined} disabled={locked} placeholder="请选择项目" showSearch={{ optionFilterProp: 'label' }} onChange={value => changeEndpoint(item.side, 'project', String(value))} options={projects.filter(project => project.project_type !== 'shell').map(project => ({ value: project.id, label: `${projectLabel(project)}${project.status === 'archived' ? '（项目归档）' : ''}` }))} /></label>
         <label>用卡账户<Select aria-label={`${item.label}用卡账户`} value={item.data.account || undefined} disabled={locked || !item.data.project} placeholder="请选择账户" showSearch={{ optionFilterProp: 'label' }} onChange={value => changeEndpoint(item.side, 'account', String(value))} options={archives.accounts.filter(account => account.project_id === item.data.project).map(account => ({ value: account.id, label: `${account.name}${account.status === 'archived' ? '（归档）' : ''}` }))} /></label>
@@ -47,6 +48,7 @@ export function OilTransferDialog({ archives, projects, disabled, busy, error, c
         <OilDateText caption="日期" label="转账日期" value={date} disabled={locked} change={setDate} save={() => {}} /></div>
       {outgoing.account > 0 && outgoing.account === incoming.account && <p className="notice" role="alert">转入和转出请选择不同用卡账户。</p>}
       {error && <p className="notice" role="alert">{error}</p>}
+      </div>
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" htmlType="submit" disabled={locked || !valid}>登记转账</Button></div>
     </form></DialogContents></BusinessModal>;
 }

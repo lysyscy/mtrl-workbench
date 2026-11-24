@@ -57,7 +57,7 @@ export function BigPage(props: Props) {
   const [ym,setYm] = useState(reportMonth), [visited,setVisited] = useState(() => [ym]);
   const projects = useQuery({queryKey:['projects','all'],enabled:props.active && !props.blocked,queryFn:async({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   function choose(value: string) {setYm(value);setVisited(old => old.includes(value) ? old : [...old,value]);}
-  return <section className="big-page" aria-label="月度会大表">
+  return <section className="big-page page-shell page-shell--flow" data-page-layout="flow" aria-label="月度会大表">
     <div data-page-chrome className="big-period"><label>核算月<TimePicker label="大表核算月" value={ym} onChange={choose} modes={['月']} disabled={props.blocked} /></label></div>
     {visited.map(month => <div className="big-month" key={month} hidden={month !== ym} inert={month !== ym}><BigMonth {...props} ym={month} active={props.active && month === ym} projects={projects.data ?? []} projectsRead={projects} /></div>)}
   </section>;
@@ -195,7 +195,7 @@ function ProjectOrder({data,projects,busy,disabled,paused,save,close}:{data:BigD
   const closing=useDialogClose({busy,dirty,close,active:!paused});
   function move(index:number,offset:number) {const next=[...order];[next[index],next[index+offset]]=[next[index+offset]!,next[index]!];setOrder(next);setSelected(next.filter(wh=>selected.includes(wh)));}
   const missing=data.candidates.some(c=>!available.some(p=>p.warehouse_name===c.warehouse));
-  return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title={`${data.month}，选择项目与排序`} titleId="big-order-title" closing={closing}>
+  return <BusinessModal open={!paused} layout="pane" requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title={`${data.month}，选择项目与排序`} titleId="big-order-title" closing={closing}>
     <ProjectSelectionOrder projects={ordered} selected={selected.flatMap(wh=>available.filter(p=>p.warehouse_name===wh).map(p=>p.id))} choose={ids=>setSelected(ids.flatMap(id=>{const p=available.find(p=>p.id===id);return p?.warehouse_name?[p.warehouse_name]:[];}))} move={move} disabled={busy || disabled || missing} label="大表项目选择与顺序" />
     <p className="big-order-summary">{selected.length} 个项目，页面与导出同序</p>
     {missing && <p className="notice" role="alert">项目档案已变化，请关闭后重读再选。</p>}

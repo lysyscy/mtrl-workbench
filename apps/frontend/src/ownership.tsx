@@ -202,9 +202,10 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
   }
 
   const titleId = 'ownership-dialog-title';
-  return <BusinessModal open={!blocked} className="project-dialog notice-dialog" titleId={titleId} requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-dialog" titleId={titleId} requestClose={closing.requestClose}>
     <DialogContents title="指定项目归属" titleId={titleId} closing={closing}>
-      <form onSubmit={event => { event.preventDefault(); void submit(); }}>
+      <form className="dialog-form" onSubmit={event => { event.preventDefault(); void submit(); }}>
+        <div className="dialog-body">
         <p>{document.number}，{document.name}，{document.project}</p>
         {query.isPending && <p role="status">正在读取…</p>}
         {query.isError && <p className="notice" role="alert">{query.error.message}<Button disabled={disabled} onClick={() => void query.refetch()}>重读候选</Button></p>}
@@ -241,6 +242,7 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
         </>}
         {!disabled && <OwnershipProjectLink document={document} showNumber />}
         {error && <p className="notice" role="alert">{error}</p>}
+        </div>
         <div className="dialog-actions">
           {readback ? <Button className="primary" disabled={busy || blocked} onClick={() => void reread()}>重读核对</Button>
             : <><Button disabled={busy} onClick={closing.requestClose}>取消</Button>

@@ -1,6 +1,6 @@
 import { BusinessModal } from './business-modal';
 import { DialogPresence } from './workspace-motion';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from 'antd/es/button';
@@ -146,7 +146,7 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
       restore();
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</Button>
-    {createPortal(<DialogPresence>{open && <BusinessModal open={open && !paused} className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
+    {createPortal(<DialogPresence>{open && <BusinessModal open={open && !paused} layout="pane" className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
       <p>{description}</p>
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}
@@ -158,7 +158,7 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
         <p>{summary(chosen.length)}</p>
-        <><Button disabled={busy} onClick={()=>choose([...chosen].sort((a,b)=>projectLabel(a).localeCompare(projectLabel(b),'zh')).map(item=>item.id))}>项目排序</Button><ReadGrid table={'export-project-order-'+kind} className="export-table" label="导出项目顺序" domLayout="autoHeight" rows={chosen} rowId={item=>String(item.id)} columns={[
+        <><Button disabled={busy} onClick={()=>choose([...chosen].sort((a,b)=>projectLabel(a).localeCompare(projectLabel(b),'zh')).map(item=>item.id))}>项目排序</Button><BoundedGrid fill minRows={4} table={'export-project-order-'+kind} className="export-table" label="导出项目顺序" rows={chosen} rowId={item=>String(item.id)} columns={[
           {colId:'sequence',headerName:'顺序',valueGetter:p=>chosen.findIndex(item=>item.id===p.data!.id)+1},
           {colId:'project',headerName:'项目',valueGetter:p=>projectLabel(p.data!)},
           {colId:'actions',headerName:'调整顺序',cellRenderer:({data:item}:{data:Project})=>{const index=chosen.findIndex(p=>p.id===item.id);return <><Button aria-label={'上移'+projectLabel(item)} disabled={busy||index===0} onClick={()=>move(index,-1)}>上移</Button> <Button aria-label={'下移'+projectLabel(item)} disabled={busy||index===chosen.length-1} onClick={()=>move(index,1)}>下移</Button></>; }},

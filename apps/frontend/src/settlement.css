@@ -12,7 +12,7 @@
 .settlement-page .ant-btn,.settlement-toolbar .ant-select,.settlement-toolbar .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font:inherit}
 .settlement-page .ant-btn{padding-inline:calc(12px * var(--fscale))}
 .settlement-summary{margin:0;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);line-height:1.55;font-variant-numeric:tabular-nums}
-.settlement-grid{height:min(60dvh,640px);min-height:calc(260px * var(--fscale));width:100%;min-width:0;border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden;scrollbar-color:var(--bd3) var(--sf2)}
+.settlement-grid{width:100%;min-width:0;border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden;scrollbar-color:var(--bd3) var(--sf2)}
 .settlement-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
 .settlement-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
 .settlement-grid .ag-cell{display:flex;align-items:center;padding-inline:calc(8px * var(--fscale));line-height:1.55}
@@ -37,14 +37,13 @@
 .business-modal .settlement-export-dialog{width:min(calc(640px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .settlement-export-dialog h2{margin:0;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4}
 .settlement-export-dialog p,.settlement-export-list{line-height:1.55;overflow-wrap:anywhere}
-.settlement-export-list{max-height:40dvh;overflow:auto;padding-inline-start:calc(24px * var(--fscale));scrollbar-color:var(--bd3) var(--sf2)}
+.settlement-export-list{padding-inline-start:calc(24px * var(--fscale))}
 .settlement-export-list li+li{margin-top:calc(8px * var(--fscale))}
 .settlement-export-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font:inherit}
 .settlement-export-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
 @media(max-width:800px){.settlement-toolbar{align-items:flex-start}.settlement-toolbar label{flex-wrap:wrap}.settlement-tabs .ant-segmented-item-label{padding-inline:calc(10px * var(--fscale))}.business-modal .settlement-export-dialog{padding:calc(16px * var(--fscale))}}
 
 /* Only these reports expand with their rows; inventory shares the base grid styles. */
-.settlement-page .settlement-grid{height:auto;min-height:0}
 .settlement-page .settlement-grid:not(.is-empty) .ag-grid-scrolling-rows{min-height:0}
 .settlement-page .settlement-annual .money{white-space:nowrap}
 
@@ -53,4 +52,4 @@
 /* Each report reserves its table independently. Only a failure adds a line under its toolbar. */
 .settlement-read-status{--read-status-pad:calc(16px * var(--fscale))}
 .settlement-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
-.settlement-grid.settlement-read-reserve{min-height:calc(260px * var(--fscale));height:auto}
+.settlement-grid.settlement-read-reserve{min-height:calc(260px * var(--fscale))}

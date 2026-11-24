@@ -7,7 +7,8 @@ import type { NoticeRow } from './notices-api';
 import { cents, decimal, money } from './notices-api';
 import { cacheFontMeasurement, cachedNumberColumnWidths, numberColumnWidth, fullTextWidth, textWidth } from './grid';
 import { completeColumnWidth, EllipsisText } from './grid-text';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
+import type { BoundedGridMetrics } from './bounded-grid';
 
 interface PayView { id:string; notice:NoticeRow|null; bill:string; project:string; approval:string; approved:string; paid:string; due:string; pay:string; reason:string }
 interface Editing { disabled:boolean; waiting:boolean; methods:string[]; draft:(row:NoticeRow)=>{amount:string;pay_method:string}; update:(row:NoticeRow,field:'amount'|'pay_method',value:string)=>void; remove:(id:number)=>void }
@@ -23,7 +24,7 @@ function Method({data}:ICellRendererParams<PayView>) {
 }
 function Amount({data}:ICellRendererParams<PayView>){const edit=useContext(PaymentEditing),row=data!.notice;return row?<input aria-label={row.bill_no+'本次付款金额'} inputMode="decimal" disabled={edit.disabled||Boolean(data!.reason)||edit.waiting} value={edit.draft(row).amount} onChange={e=>edit.update(row,'amount',e.target.value)}/>:data!.pay;}
 function Actions({data}:ICellRendererParams<PayView>){const edit=useContext(PaymentEditing);return data!.notice?<Button disabled={edit.disabled} onClick={()=>edit.remove(data!.notice!.notice_id)}>移出</Button>:null;}
-export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warningIds,scale,...editing}:Editing&{scale:number;rows:NoticeRow[];due:(row:NoticeRow)=>string;normalize:(value:string)=>string|null;warningIds:number[]}){
+export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warningIds,scale,height,onMetrics,...editing}:Editing&{scale:number;rows:NoticeRow[];due:(row:NoticeRow)=>string;normalize:(value:string)=>string|null;warningIds:number[];height?:number|undefined;onMetrics?:(metrics:BoundedGridMetrics)=>void}){
   const initialViews = useMemo(() => rows.map(row => {
     const available = due(row);
     return {id:String(row.notice_id), notice:row, bill:row.bill_no, project:row.project_display, approval:row.approve_status||'未批',
@@ -70,5 +71,5 @@ export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warning
     {field:'reason',headerName:'不可付原因',minWidth:160*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
     {colId:'actions',headerName:'操作',...actions,cellRenderer:Actions},
   ],[signature,scale]);
-  return <PaymentEditing.Provider value={editing}><ReadGrid singleLine fitAfterFonts table="notice-payment" label="本次付款清单" className="notice-pay-table" domLayout="autoHeight" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale} grid={{getRowClass:p=>p.data?.notice&&warningIds.includes(p.data.notice.notice_id)?'payment-term-warning':''}}/></PaymentEditing.Provider>;
+  return <PaymentEditing.Provider value={editing}><BoundedGrid singleLine fitAfterFonts minRows={4} height={height} onMetrics={onMetrics} table="notice-payment" label="本次付款清单" className="notice-pay-table" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale} grid={{getRowClass:p=>p.data?.notice&&warningIds.includes(p.data.notice.notice_id)?'payment-term-warning':''}}/></PaymentEditing.Provider>;
 });

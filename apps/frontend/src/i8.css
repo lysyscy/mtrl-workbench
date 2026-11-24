@@ -8,8 +8,8 @@
 .i8-record-tools label:has([aria-label=动作]){width:calc(112px * var(--fscale))}
 .i8-record-tools .ant-select{width:100%;min-width:0;height:calc(32px * var(--fscale))}
 .i8-latest{max-height:none}
-.i8-records{max-height:55dvh}
 .i8-latest,.i8-records{border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
+.i8-records .ag-root-wrapper{border:0}
 .i8-error{margin-top:8px}
 .i8-error>summary{cursor:pointer;color:var(--dg-d);border:1px solid var(--dg-bd);border-radius:var(--radius-pill);background:var(--sf);padding:calc(4px * var(--fscale)) calc(10px * var(--fscale));width:max-content;max-width:100%}
 .i8-error>summary:hover{background:var(--dg-l)}

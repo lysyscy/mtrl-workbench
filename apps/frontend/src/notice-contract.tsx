@@ -5,7 +5,7 @@ import Radio from 'antd/es/radio';
 import { Virtuoso } from 'react-virtuoso';
 import { BusinessModal } from './business-modal';
 import { DialogHeading, DiscardConfirmation } from './dialog-close';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { contentWidth, numberColumnWidth } from './grid';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -36,7 +36,7 @@ function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplie
     {hasTradeSide(candidate) && <p className="contract-trade-name">{name}，{trade ? candidate.trade_co || '名称未填' : candidate.supplier}</p>}
     <div className="contract-amounts"><div><span>{name}合同金额</span><strong>{trade && candidate.trade_contract_amt === null ? '未确定' : `${money(trade ? candidate.trade_contract_amt! : candidate.contract_amt)} 元`}</strong></div><div><span>{name}发票总金额</span><strong>{money(trade ? candidate.trade_inv_sum : candidate.inv_sum)} 元</strong></div></div>
     <p className="contract-uninvoiced">{uninvoiced === null ? '未开票金额未确定' : <>{cents(uninvoiced) < 0n ? '超开票' : '未开票'} {money(uninvoiced.replace(/^-/,''))} 元</>}</p>
-    <ReadGrid table="notice-candidate-invoices" className="contract-invoices" label={`${contractName(candidate)}${name}发票明细`} domLayout="autoHeight" rows={invoices} rowId={invoice=>String(invoice.id)} grid={{overlayNoRowsTemplate:'未录入发票'}} columns={[
+    <BoundedGrid maxHeight="calc(240px * var(--fscale))" minRows={3} table="notice-candidate-invoices" className="contract-invoices" label={`${contractName(candidate)}${name}发票明细`} rows={invoices} rowId={invoice=>String(invoice.id)} grid={{overlayNoRowsTemplate:'未录入发票'}} columns={[
       {field:'date',headerName:`${name}发票日期`,...contentWidth(110,180,scale),valueFormatter:p=>p.value||'日期未填'},
       {field:'amount',headerName:'金额（元）',...numberColumnWidth(invoices.map(invoice=>money(invoice.amount)),scale,false,1),cellClass:'money',valueFormatter:p=>money(p.value)},
     ]} />
@@ -106,7 +106,7 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     } catch (failure) { setError(`结果仍待核实，请重读核对。${failure instanceof Error ? failure.message : ''}`); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
+  return <BusinessModal open={!blocked} layout="pane" className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
       <div className="contract-fixed-header"><div className="contract-dialog-heading"><DialogHeading id="contract-dialog-title">供应商与合同关联</DialogHeading><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       <nav className="association-steps" aria-label="关联步骤"><span aria-current={step === 1 ? 'step' : undefined}>1，确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2，选择合同</span><small>确认前不会改变现有关联</small></nav>
       {step === 2 && <div className="contract-notice"><div><strong>{row.bill_name || row.bill_no}</strong><span>{row.project_display}，{row.bill_no}，{data?.supplier || row.jc_supplier || '供应商未录入'}</span></div><div className="contract-notice-amount"><span>通知书审批金额</span><strong>{money(data?.notice_amount ?? row.amount_approved)}<small> 元</small></strong></div></div>}

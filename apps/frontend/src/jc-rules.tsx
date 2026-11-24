@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { confirmWrite, record, requestJson, uncertainWrite } from './api';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { JcFetchReceipt } from './jc-fetch-receipt';
@@ -97,7 +97,7 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
       {feedback && <p className="rules-receipt" role="status">{feedback}</p>}
       {visible.length === 0 ? <p className="state">{rows?.length ? '没有此类型的规则' : '暂无剔除规则'}</p>
-        : <ReadGrid table="jc-ignore-rules" className="rules-table" label="集采剔除规则" domLayout="autoHeight" rows={visible} rowId={row => String(row.id)} columns={[
+        : <BoundedGrid maxHeight="52dvh" minRows={4} table="jc-ignore-rules" className="rules-table" label="集采剔除规则" rows={visible} rowId={row => String(row.id)} columns={[
           {colId:'condition',headerName:'匹配条件',valueGetter:p=>jcCondition(p.data!),cellRenderer:({data:row}:{data:JcRule})=>
             <div id={`rule-procurement-${row.id}`} className={selected === row.id ? 'rules-located' : undefined}>
               <span className="rules-condition-kind">{jcRuleKinds[row.kind]}</span>{jcCondition(row)}

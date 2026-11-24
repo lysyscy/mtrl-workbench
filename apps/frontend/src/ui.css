@@ -63,13 +63,6 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}
 .workspace .page-view .contracts-grid .ant-btn{padding-block:0}
 
-/* Fill the page's remaining space instead of leaving a fixed 62dvh table above unused space. */
-.workspace .page-view :is(.process-page,.inventory-page,.notices-page){display:flex;flex-direction:column;height:100%;min-height:min-content}
-.workspace .page-view :is(.process-page,.inventory-page,.notices-page)>:not(.process-grid):not(.process-matrix-scroll):not(.inventory-grid):not(.notice-card){flex-shrink:0}
-.workspace .page-view .notices-page .notice-card{display:flex;flex-direction:column;flex:1;min-height:min-content}
-.workspace .page-view .notice-card>:not(.notice-grid){flex-shrink:0}
-.workspace .page-view :is(.notice-grid,.process-grid,.inventory-grid){flex:1 0 calc(240px * var(--fscale));height:auto;min-height:calc(240px * var(--fscale))}
-
 /* Existing values stay legible when permission or pending state prevents editing.
    Opt in data fields only: disabled actions and new-entry forms keep their state. */
 :where(.workspace,.business-modal) :is(input,textarea).record-value:is(:disabled,[readonly]){color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1}

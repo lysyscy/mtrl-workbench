@@ -116,7 +116,7 @@ export function OilPdfReceiveDialog({ mode, archives, projects, invoices, upload
     });
   const title = mode === 'pdf' ? '上传PDF收票' : '发票归属核对';
   const blocked = preparing || busy || disabled || uncertain;
-  return <BusinessModal open className="oilcard-receive-dialog" titleId="oilcard-pdf-receive" requestClose={closing.requestClose}>
+  return <BusinessModal open layout="pane" className="oilcard-receive-dialog" titleId="oilcard-pdf-receive" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="oilcard-pdf-receive" closing={closing}>
       {error && <p role="alert" className="notice">{error}</p>}
       {uncertain && <p role="alert" className="notice">结果待核实，请重新读取，再确认本次结果。</p>}

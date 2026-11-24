@@ -1,6 +1,7 @@
 /* Stable order on direct entry and SPA navigation; business JS stays lazy. */
 @import './style.css';
 @import './ui.css';
+@import './page-layout.css';
 @import './appearance-preferences.css';
 @import './big.css';
 @import './contract-subtables.css';

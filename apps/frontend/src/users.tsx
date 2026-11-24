@@ -6,7 +6,7 @@ import { ApiError, record, requestJson } from './api';
 import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
@@ -66,7 +66,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
   const readState = readPhase(query);
   const placeheld = data === undefined;
 
-  return <section className="users-page" aria-label="用户管理" data-page-chrome>
+  return <section className="users-page page-shell page-shell--flow" data-page-layout="flow" aria-label="用户管理" data-page-chrome>
     <div className="users-block">
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">
@@ -79,7 +79,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
       </ReadStatusLane>
       {placeheld ? <div className="users-table users-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : data && <>
         <Feedback receipt={receipt} error={error} />
-        <ReadGrid table="users" className="users-table" label="账号列表" domLayout="autoHeight" rows={data.users} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
+        <BoundedGrid maxHeight="60dvh" minRows={4} table="users" className="users-table" label="账号列表" rows={data.users} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
           {field:'account',headerName:'登录账号'},
           {field:'name',headerName:'姓名',cellRenderer:({data:user}:{data:UserRow})=><>{user.name}{current?.id===user.id&&<span className="muted">（当前登录）</span>}</>},
           {field:'role',headerName:'角色',cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.role==='admin'?'status-info':'status-neutral')}>{user.role==='admin'?'管理员':'普通用户'}</span>},

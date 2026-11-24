@@ -33,8 +33,12 @@
 /* 明细高度交给表格自己：普通布局下表格内部滚动，表头与合计行由 AG 固定在表格里，不靠外层容器滚动。
    --subtable-detail-max 是可用高度上限；正常条数按行数算自然高度铺开，超过上限才出现明细内滚动。
    弹窗内的高度跟视口与字号算：84dvh 是弹窗体上限，其余留给标题/摘要/警示/合计/录入/动作。 */
-.subtable-detail-scroll{--subtable-detail-max:calc(340px*var(--fscale));display:block;overflow:hidden;border:1px solid var(--bd);border-radius:var(--radius-inner);background:var(--sf)}
-.contract-subtable-dialog .subtable-detail-scroll{--subtable-detail-max:clamp(96px,calc(84dvh - 380px*var(--fscale)),calc(340px*var(--fscale)))}
+.subtable-detail-scroll{--subtable-detail-max:calc(340px*var(--fscale));display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--bd);border-radius:var(--radius-inner);background:var(--sf)}
+.contract-subtable-dialog .contract-subtables{display:flex;flex-direction:column;flex:0 1 auto;min-height:0}
+.contract-subtable-dialog .contract-subtables>.subtable-invoices,
+.contract-subtable-dialog .contract-subtables>section,
+.contract-subtable-dialog .subtable-invoices>section{display:flex;flex-direction:column;flex:0 1 auto;min-height:0}
+.contract-subtable-dialog .subtable-detail-scroll{flex:0 1 auto;min-height:0}
 .subtable-scroll{border:1px solid var(--bd);border-radius:var(--radius-inner)}
 .subtable-payment-table col:nth-child(1){width:21%}
 .subtable-payment-table col:nth-child(2){width:24%}
@@ -72,8 +76,8 @@
 .contract-material-editor{width:min(calc(440px*var(--fscale)),calc(100vw - 48px))}
 .contract-material-editor .contract-form-grid{grid-template-columns:minmax(0,1fr)}
 /* The generic .project-dialog width is narrower than this four-column task. */
-.business-modal .ant-modal-body>.contract-subtable-dialog.project-dialog{width:min(calc(1080px*var(--fscale)),calc(100vw - 48px));padding:calc(12px*var(--fscale))}
-.business-modal .ant-modal-body>.contract-subtable-dialog.contract-invoice-dialog{width:min(calc(620px*var(--fscale)),calc(100vw - 48px))}
+.business-modal .contract-subtable-dialog.project-dialog{width:min(calc(1080px*var(--fscale)),calc(100vw - 48px));padding-inline:calc(12px*var(--fscale));padding-top:calc(8px*var(--fscale))}
+.business-modal .contract-subtable-dialog.contract-invoice-dialog{width:min(calc(620px*var(--fscale)),calc(100vw - 48px))}
 /* Reserve the native overlay bar's space so narrow dialogs can scroll the last action fully into view. */
 .contract-invoice-dialog .subtable-invoice-table .ag-body-horizontal-scroll.ag-scrollbar-invisible{position:static}
 .contract-subtable-dialog .dialog-close-heading{margin-bottom:calc(8px*var(--fscale))}
@@ -94,7 +98,6 @@
 .contract-subtable-dialog .subtable-links{margin-bottom:0}
 .contract-subtable-dialog .subtable-links .ant-btn{min-height:calc(28px*var(--fscale))}
 /* 矮视口只压缩容器内边距，不再牺牲明细条数。 */
-.business-modal .ant-modal-body>.contract-subtable-dialog.project-dialog{padding-block:calc(8px*var(--fscale))}
 .contract-subtable-dialog .subtable-heading{margin-bottom:calc(4px*var(--fscale))}
 .contract-subtable-dialog .subtable-overage[data-state=normal],.contract-subtable-dialog .subtable-overage[data-state=unknown]{padding-top:calc(4px*var(--fscale))}
 .subtable-entry{display:flex;align-items:flex-end;gap:calc(8px*var(--fscale));flex-wrap:wrap;padding:calc(8px*var(--fscale)) 0}

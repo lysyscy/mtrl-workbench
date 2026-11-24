@@ -71,9 +71,10 @@ export function OilInvoiceDialog(props: DialogAction & {
     else if (props.mode === 'delete') await props.submit({});
     else await props.submit({ invoice_no: number.trim(), invoice_date: date, amount: invoiceAmountText(amount), card_no: card.trim() || null, note, allocations, review_original_id: source?.id ?? null, ...(props.row.kind === 'credit' ? { related_invoice_id: props.row.related_invoice_id } : {}) });
   }
-  return <BusinessModal open className={`oilcard-invoice-dialog${hasParts ? ' oilcard-invoice-dialog-wide' : ''}`} titleId="oilcard-invoice-dialog-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="oilcard-invoice-dialog-title" closing={closing}>
-    {manual ? <p>保存后计入所选账户的已开金额。票号和日期按已有资料填写。</p> : <p>{row?.manual_request_id && !row.invoice_no ? '手工登记' : '发票'} {row?.invoice_no || `#${row?.id}`}{row?.amount != null ? `，${money(row.amount)} 元` : ''}</p>}
-    <form onSubmit={e => { e.preventDefault(); void save(); }}>
+  return <BusinessModal open layout={hasParts ? 'scroll-body' : 'compact'} className={`oilcard-invoice-dialog${hasParts ? ' oilcard-invoice-dialog-wide' : ''}`} titleId="oilcard-invoice-dialog-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="oilcard-invoice-dialog-title" closing={closing}>
+    <form className="dialog-form" onSubmit={e => { e.preventDefault(); void save(); }}>
+      <div className="dialog-body">
+      {manual ? <p>保存后计入所选账户的已开金额。票号和日期按已有资料填写。</p> : <p>{row?.manual_request_id && !row.invoice_no ? '手工登记' : '发票'} {row?.invoice_no || `#${row?.id}`}{row?.amount != null ? `，${money(row.amount)} 元` : ''}</p>}
       {manual && <div className="oilcard-invoice-facts">
         <label>价税合计<Input aria-label="手工登记价税合计" inputMode="decimal" value={amount} disabled={disabled || busy} onChange={e => edit(() => setAmount(e.target.value))} /></label>
         <OilDateText caption="开票日期或原标记" label="手工登记日期或原标记" value={date} disabled={disabled || busy} change={value => edit(() => setDate(value))} save={() => {}} />
@@ -98,6 +99,7 @@ export function OilInvoiceDialog(props: DialogAction & {
       {!manual && mode !== 'delete' && <label>{mode === 'resolve' ? '核对结论' : '修改说明'}（必填）<Input.TextArea aria-label="发票处理说明" aria-required="true" placeholder={mode === 'edit' ? '请填写本次修改原因' : undefined} value={note} disabled={disabled || busy} onChange={e => edit(() => setNote(e.target.value))} autoSize={{ minRows: 2, maxRows: 4 }} /></label>}
       {mode === 'delete' && <p>从台账删除此行并扣除对应开票金额。可在最近 20 步内撤销。普通发票出了撤销窗口后清除发票和原件。红票或历史接续仍引用的记录随关联保管。</p>}
       {(localError || error) && <p className="notice" role="alert">{localError || error}</p>}
+      </div>
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button>{mode === 'edit' && row?.status === 'pending' && <Button disabled={disabled || busy || !note.trim()} onClick={() => void save(true)}>暂不分配</Button>}<Button type="primary" danger={mode === 'delete'} htmlType="submit" disabled={disabled || busy || !manual && mode !== 'delete' && !note.trim()}>{mode === 'delete' ? '删除' : mode === 'resolve' ? '确认保留原票' : manual && !row ? '登记已开金额' : '保存修改'}</Button></div>
     </form>
   </DialogContents></BusinessModal>;

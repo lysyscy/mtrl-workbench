@@ -3,10 +3,12 @@ import type { Project } from './api';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
+import type { BoundedGridMetrics } from './bounded-grid';
+import { allocateBoundedHeights, boundedGridMinHeight, estimateBoundedGridHeight } from './bounded-grid-layout';
 import { PaymentGrid } from './notice-payment-grid';
 import { numberColumnWidth,fullTextWidth } from './grid';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
@@ -170,26 +172,89 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
   const warningIds = useMemo(() => shownContext?.rows.filter(item => item.term_warning).map(item => item.notice_id) ?? [], [shownContext]);
-  return <BusinessModal open={!blocked} className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
-    {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
-      {message && <p role="status" className="notice-feedback">{message}</p>}
-      {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
-      {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
-      {phase === 'saved' ? flows.length > 0 && <ReadGrid table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" domLayout="autoHeight" rows={flows} rowId={flow=>flow.flow_no} columns={[
-        {colId:'bill',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no)),wrapText:false,valueGetter:p=>rows.find(row=>row.notice_id===p.data!.notice_id)?.bill_no??''},
-        {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
-        {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
-        {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
-      ]}/> : <PaymentGrid scale={scale} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} />}
-      {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
-      {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
-      {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
-      {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} notices={rows} amount={draftAmount} scale={scale} />}
-      {phase === 'confirm' && <p className="payment-confirmation" role="alert">{checked?.available ? '该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？' : '本次未完成账期判断，请按合同人工核对后决定是否继续付款。'}</p>}
-
-    </>}
-    {error && <p className="notice" role="alert">{error}</p>}
-    {refreshFailed && <p className="notice" role="alert">{phase === 'saved' ? '付款已登记，列表尚待重读核对。' : '列表重读失败，提交结果尚未核实，请到付款流水核对，勿重复付款。'}<Button htmlType="submit" onClick={() => void reread()}>重读核对</Button></p>}
+  const termsInvoiceCount = useMemo(() => (shownContext?.available ? shownContext.rows.reduce((sum, item) => sum + (item.term_warning?.invoices.length ?? 0), 0) : 0), [shownContext]);
+  const hasTerms = phase !== 'saved' && termsInvoiceCount > 0;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [availableHeight, setAvailableHeight] = useState<number>(() => Math.max(240, Math.floor(window.innerHeight * 0.88 - 260 * scale)));
+  const [payMetrics, setPayMetrics] = useState<BoundedGridMetrics>(() => ({
+    naturalHeight: estimateBoundedGridHeight({ rowCount: targets.length, pinnedBottomCount: 1, scale }),
+    minHeight: boundedGridMinHeight({ minRows: 4, rowCount: targets.length, pinnedBottomCount: 1, scale }),
+    hasHorizontalScroll: false,
+  }));
+  const [termsMetrics, setTermsMetrics] = useState<BoundedGridMetrics>(() => ({
+    naturalHeight: estimateBoundedGridHeight({ rowCount: termsInvoiceCount, pinnedBottomCount: 0, scale }),
+    minHeight: boundedGridMinHeight({ minRows: 3, rowCount: termsInvoiceCount, pinnedBottomCount: 0, scale }),
+    hasHorizontalScroll: false,
+  }));
+  const measureBudget = useCallback(() => {
+    const stage = stageRef.current;
+    const dialog = stage?.closest<HTMLElement>('.notice-pay-dialog');
+    const frame = dialog?.querySelector<HTMLElement>('.dialog-frame:not([hidden])');
+    if (!dialog || !frame) return;
+    const dialogStyle = getComputedStyle(dialog);
+    const padY = (parseFloat(dialogStyle.paddingTop) || 0) + (parseFloat(dialogStyle.paddingBottom) || 0);
+    let totalChildren = 0;
+    for (const child of Array.from(frame.children) as HTMLElement[]) {
+      const cs = getComputedStyle(child);
+      totalChildren += child.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+    }
+    let gridsHeight = 0;
+    for (const grid of Array.from(frame.querySelectorAll<HTMLElement>('.bounded-grid'))) {
+      gridsHeight += grid.offsetHeight;
+    }
+    const chromeHeight = Math.max(0, totalChildren - gridsHeight);
+    const viewportBudget = Math.floor(window.innerHeight * 0.88);
+    const next = Math.max(0, Math.floor(viewportBudget - padY - chromeHeight - 4));
+    setAvailableHeight(previous => (Math.abs(previous - next) < 1 ? previous : next));
+  }, []);
+  useLayoutEffect(() => {
+    if (blocked || closing.confirming || phase === 'saved') return;
+    measureBudget();
+    const frame = stageRef.current?.closest<HTMLElement>('.dialog-frame:not([hidden])');
+    const observer = new ResizeObserver(() => measureBudget());
+    if (frame) {
+      for (const child of Array.from(frame.children) as HTMLElement[]) {
+        if (!child.classList.contains('bounded-grid')) observer.observe(child);
+      }
+      const terms = frame.querySelector<HTMLElement>('.payment-terms');
+      if (terms) observer.observe(terms);
+    }
+    window.addEventListener('resize', measureBudget);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measureBudget);
+    };
+  }, [blocked, closing.confirming, phase, hasTerms, excluded.length, missing.length, Boolean(error), Boolean(message), refreshFailed, context.isError, shownContext?.available, query.isPending, query.isError, measureBudget]);
+  const allocated = useMemo(() => allocateBoundedHeights(
+    availableHeight,
+    hasTerms
+      ? [
+          { id: 'payment', naturalHeight: payMetrics.naturalHeight, minHeight: payMetrics.minHeight, weight: 65 },
+          { id: 'terms', naturalHeight: termsMetrics.naturalHeight, minHeight: termsMetrics.minHeight, weight: 35 },
+        ]
+      : [{ id: 'payment', naturalHeight: payMetrics.naturalHeight, minHeight: payMetrics.minHeight, weight: 100 }],
+  ), [availableHeight, hasTerms, payMetrics, termsMetrics]);
+  return <BusinessModal open={!blocked} layout="pane" className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
+    <div ref={stageRef} className="notice-pay-stage">
+      {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
+        {message && <p role="status" className="notice-feedback">{message}</p>}
+        {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
+        {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
+        {phase === 'saved' ? flows.length > 0 && <BoundedGrid fill minRows={4} table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" rows={flows} rowId={flow=>flow.flow_no} columns={[
+          {colId:'bill',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no)),wrapText:false,valueGetter:p=>rows.find(row=>row.notice_id===p.data!.notice_id)?.bill_no??''},
+          {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
+          {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
+          {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
+        ]}/> : <PaymentGrid scale={scale} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} height={allocated.payment} onMetrics={setPayMetrics} />}
+        {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
+        {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
+        {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
+        {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} notices={rows} amount={draftAmount} scale={scale} height={allocated.terms} onMetrics={setTermsMetrics} />}
+        {phase === 'confirm' && <p className="payment-confirmation" role="alert">{checked?.available ? '该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？' : '本次未完成账期判断，请按合同人工核对后决定是否继续付款。'}</p>}
+      </>}
+      {error && <p className="notice" role="alert">{error}</p>}
+      {refreshFailed && <p className="notice" role="alert">{phase === 'saved' ? '付款已登记，列表尚待重读核对。' : '列表重读失败，提交结果尚未核实，请到付款流水核对，勿重复付款。'}<Button htmlType="submit" onClick={() => void reread()}>重读核对</Button></p>}
+    </div>
     <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>{phase === 'saved' ? '关闭' : '取消'}</Button>{phase === 'uncertain' && <Button htmlType="submit" onClick={() => void reread()}>重读列表核对</Button>}{editable && <Button htmlType="submit" className="primary" disabled={blocked||busy||query.isPending||query.isFetching||query.isError||context.isPending||context.isFetching||context.isError||!date||invalid||Boolean(missing.length)||!targets.length} onClick={() => void submit()}>确认付款</Button>}{phase === 'confirm' && <><Button onClick={() => { confirmed.current=null;setPhase('edit'); }}>返回修改</Button><Button className="primary" onClick={() => void continuePayment()}>继续付款</Button></>}{busy && <span role="status">{phase === 'checking' ? '正在核对合同账期…' : '正在提交…'}</span>}</div>
   </DialogContents></BusinessModal>;
 }

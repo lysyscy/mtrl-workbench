@@ -1,5 +1,4 @@
-.process-page{width:100%;max-width:100%;margin-inline:auto;min-width:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.process-page:has(.process-grid){width:100%}
+.process-page{--page-grid-min:calc(220px * var(--fscale));width:100%;max-width:100%;margin-inline:auto;min-width:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .process-toolbar,.process-filters,.process-tabs,.process-export-tools{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap}
 .process-toolbar{justify-content:space-between;gap:calc(12px * var(--fscale));padding:calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .process-toolbar h2{margin:0;font-size:calc(15px * var(--fscale));line-height:1.4;font-weight:600}
@@ -18,8 +17,7 @@
 .process-grid .row-button{display:inline-flex;align-items:center;justify-content:center;min-height:calc(28px * var(--fscale));padding:calc(3px * var(--fscale)) calc(10px * var(--fscale));border:1px solid var(--pri-bd);border-radius:var(--radius-pill);background:var(--sf);color:var(--pri-d);text-decoration:none;line-height:1.5;white-space:nowrap}
 .process-grid .row-button:hover{background:var(--pri-l)}
 .process-grid .row-button:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-.workspace .page-view .process-page{height:auto;min-height:0}
-.workspace .page-view .process-page .process-grid{height:auto;min-height:0;flex:none;width:100%;min-width:0;scrollbar-color:var(--bd3) var(--sf2)}
+.process-grid{width:100%;min-width:0;scrollbar-color:var(--bd3) var(--sf2)}
 .process-grid .process-segment{border-inline-start:1px solid var(--bd3)}
 .process-cell{display:flex;flex-direction:column;gap:calc(2px * var(--fscale));width:100%;padding-block:0;line-height:1.5}
 .process-cell .ant-input{width:100%;min-width:0;height:calc(32px * var(--fscale));text-align:right;font:inherit;font-variant-numeric:tabular-nums;border-radius:var(--radius-input);background:var(--sf2);padding-inline:calc(6px * var(--fscale))}
@@ -27,9 +25,7 @@
 .process-cell small{font-size:calc(12px * var(--fscale));line-height:1.3;color:var(--tx2)}
 .process-cell .ant-btn{align-self:flex-end}
 .process-matrix .process-adjusted{background:var(--pri-l)}
-.process-page:has(.process-matrix-scroll){display:flex;flex-direction:column;max-height:calc(100dvh - 104px * var(--fscale))}
-.process-page:has(.process-matrix-scroll)>:not(.process-matrix-scroll){flex:none}
-.process-matrix-scroll{flex:1 1 auto;min-height:calc(160px * var(--fscale));max-width:100%;overflow:auto;scrollbar-color:var(--bd3) var(--sf2);border-radius:0 0 var(--radius-card) var(--radius-card)}
+.process-matrix-scroll{display:flex;flex-direction:column;max-width:100%;overflow:hidden;scrollbar-color:var(--bd3) var(--sf2);border-radius:0 0 var(--radius-card) var(--radius-card)}
 .process-matrix-scroll:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
 .process-matrix{width:100%;min-width:0;font-size:inherit;border-collapse:separate;border-spacing:0}
 .process-matrix .process-segment{border-inline-start:.5px solid var(--bd)}
@@ -39,7 +35,7 @@
 .process-source-dialog h2,.process-export-dialog h2{font-size:calc(18px * var(--fscale));line-height:1.4;font-weight:600;margin:0}
 .process-source-dialog .dialog-close-button,.process-export-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
 .process-source-dialog p,.process-export-dialog p{line-height:1.55;overflow-wrap:anywhere}
-.process-export-projects{display:flex;flex-direction:column;gap:calc(10px * var(--fscale));max-height:44dvh;overflow:auto;margin-block:calc(16px * var(--fscale));padding:calc(8px * var(--fscale));background:var(--sf2);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
+.process-export-projects{display:flex;flex-direction:column;flex:0 1 auto;min-height:min(100%,calc(140px * var(--fscale)));gap:calc(10px * var(--fscale));overflow:auto;overscroll-behavior:contain;margin-block:calc(12px * var(--fscale));padding:calc(8px * var(--fscale));background:var(--sf2);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
 @media(max-width:800px){.process-tabs .ant-segmented{max-width:100%;overflow-x:auto}.business-modal .process-source-dialog,.business-modal .process-export-dialog{padding:calc(16px * var(--fscale))}}
 
 .process-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
@@ -50,9 +46,6 @@
 .process-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 
 .process-grid .ag-layout-auto-height :is(.ag-center-cols-container,.ag-center-cols-viewport){min-height:0}
-.process-matrix-scroll{overflow:hidden;min-height:calc(220px * var(--fscale))}
-.workspace .page-view .process-page:has(.process-matrix-scroll){height:calc(100dvh - 104px * var(--fscale));min-height:calc(400px * var(--fscale))}
-.process-matrix-scroll{display:flex;flex-direction:column}
 .process-matrix-scroll>.business-grid-view{flex:1;min-height:0;display:flex;flex-direction:column}
 .process-matrix-scroll .business-grid{flex:1;min-height:0}
 .process-matrix .process-cell .ant-input{width:100%;field-sizing:fixed}
@@ -63,16 +56,8 @@
 /* Lane geometry is shared (read-region.css): one fixed control line, failures side by side with
    their own retry, text truncating before a button. This page only sets its outer inset. */
 .process-read-status{--read-status-inset:calc(16px * var(--fscale))}
-.process-read-body{flex:1 1 auto;min-height:0;overflow:hidden;padding:calc(10px * var(--fscale)) calc(16px * var(--fscale))}
+.process-read-body{overflow:hidden;padding:calc(10px * var(--fscale)) calc(16px * var(--fscale))}
 .process-read-note{margin:0;color:var(--mut);font-size:calc(12px * var(--fscale))}
 .process-uncertain p{margin-block:calc(4px * var(--fscale));white-space:normal}
 .process-matrix .process-segment-total{display:flex;flex-wrap:wrap;justify-content:flex-end;column-gap:.35em;line-height:1.5}
 .process-matrix .process-segment-total>span{white-space:nowrap}
-
-/* The first-read shell occupies the same fixed workspace as the matrix it contains. */
-.process-page:has(.process-first-read-matrix){display:flex;flex-direction:column;max-height:calc(100dvh - 104px * var(--fscale))}
-.workspace .page-view .process-page:has(.process-first-read-matrix){height:calc(100dvh - 104px * var(--fscale));min-height:calc(400px * var(--fscale))}
-.process-first-read-matrix{flex:1 1 auto;min-height:calc(220px * var(--fscale));display:flex;flex-direction:column}
-.process-first-read-matrix>.first-read-content{flex:1;min-height:0;display:flex;flex-direction:column}
-.process-first-read-matrix>.first-read-measuring{height:100%}
-.process-page:has(.process-matrix-scroll)>.process-first-read-matrix{flex:1 1 auto}

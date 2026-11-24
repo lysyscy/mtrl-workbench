@@ -1,0 +1,65 @@
+/* Page shells opt into document flow, a filling stage, or a filling split workspace. */
+.page-shell--flow {
+  min-width: 0;
+}
+
+.workspace .page-view > :is(.page-shell--fill, .page-shell--split) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: min-content;
+  min-width: 0;
+}
+
+.workspace .page-view > .page-shell--fill > :not(.page-fill-stage, .page-fill-card),
+.workspace .page-view .page-fill-card > :not(.page-fill-stage),
+.workspace .page-view > .page-shell--split > :not(.page-split-panels) {
+  flex-shrink: 0;
+}
+
+.workspace .page-view .page-fill-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: min-content;
+  min-width: 0;
+}
+
+.workspace .page-view .page-fill-stage {
+  /* Reserve rows and virtualized grid content share the same intrinsic floor. */
+  contain: size;
+  flex: 1 0 var(--page-grid-min, calc(240px * var(--fscale)));
+  min-height: var(--page-grid-min, calc(240px * var(--fscale)));
+  height: auto;
+  min-width: 0;
+}
+
+/* Match the measured and published table to the reserve before first display.
+   Direct AG Grid stages, including PreparedGrid, use the same allocated height. */
+.workspace .page-view .page-fill-stage > :is(.first-read-content, .read-reserve, div:has(> .ag-root-wrapper)),
+.workspace .page-view .page-fill-stage > .first-read-content > .page-fill-stage {
+  height: 100%;
+  min-width: 0;
+}
+
+.workspace .page-view .page-shell--split > .page-split-panels {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: var(--page-split-min, 0px);
+  min-width: 0;
+}
+
+.workspace .page-view .page-shell--split .page-split-panels > [role="tabpanel"][aria-hidden="false"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* BoundedGrid sizing is shared by modal and page tables. */
+.bounded-grid{display:flex;flex-direction:column;width:100%;min-width:0;overflow:hidden}
+.bounded-grid>.business-grid-view{flex:1 1 auto;min-height:0;height:100%;display:flex;flex-direction:column}
+.bounded-grid .business-grid{flex:1 1 auto;min-height:0;height:100%;display:flex;flex-direction:column}
+.bounded-grid .business-grid>div{flex:1 1 auto;min-height:0;height:100%}
+.business-grid .ag-grid-viewport,.business-grid .ag-body-viewport{overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2)}
+.bounded-grid .ag-body-horizontal-scroll.ag-scrollbar-invisible:not(.ag-invisible){position:static}

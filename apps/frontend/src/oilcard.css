@@ -1,8 +1,6 @@
 .oilcard-page { display: flex; flex-direction: column; gap: 20px; }
 .page-view:has(> .oilcard-page-bounded) { padding-block-end: 0; }
-.oilcard-page-bounded { height: 100%; min-height: 0; gap: 12px; }
-.oilcard-page-bounded > .workspace-panels { flex: 1; min-height: 180px; }
-.oilcard-page-bounded > .workspace-panels > [role="tabpanel"] { height: 100%; }
+.oilcard-page-bounded { --page-split-min: 180px; gap: 12px; }
 .oilcard-tabs, .oilcard-toolbar, .oilcard-toolbar > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .oilcard-workspace-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; border-bottom: .5px solid var(--bd); }
 .oilcard-tabs { gap: 24px; }
@@ -21,17 +19,16 @@
 .oilcard-archive-section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
 .oilcard-archive-section > .oilcard-toolbar { margin-bottom: 12px; }
 .oilcard-row-actions, .oilcard-opening-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.oilcard-original-preview { width: min(990px, calc(100dvw - 48px)); }
-.oilcard-preview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block-end: 12px; }
+.oilcard-original-preview { width: min(990px, calc(100dvw - 48px)); padding: calc(20px * var(--fscale)) calc(24px * var(--fscale)); }
+.oilcard-preview-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block-end: 12px; }
 .oilcard-preview-toolbar > span:first-child { margin-inline-end: auto; }
-.oilcard-preview-stage { height: min(72dvh, 850px); overflow: auto; padding: 12px; background: var(--surface-soft, #eef2f1); }
+.oilcard-preview-stage { flex: 1 1 auto; min-height: calc(240px * var(--fscale)); height: min(72dvh, 850px); overflow: auto; overscroll-behavior: contain; padding: 12px; background: var(--surface-soft, #eef2f1); }
 .oilcard-preview-page { width: min(100%, 840px); margin: 0 auto 12px; }
 .oilcard-preview-stage[data-zoom="true"] .oilcard-preview-page { width: max(1120px, 100%); }
 .oilcard-preview-page canvas { display: block; width: 100%; height: auto; background: white; }
 .oilcard-preview-page canvas[data-ready="false"] { aspect-ratio: 1.414; }
 .oilcard-preview-page canvas[hidden] { display: none; }
 .oilcard-openings { margin-block: 6px 8px; }
-.oilcard-openings #oilcard-opening-details { max-height: 26dvh; overflow: auto; }
 .oilcard-opening-summary strong { font-variant-numeric: tabular-nums; }
 .oilcard-toolbar label { display: flex; align-items: center; gap: 8px; }
 .oilcard-toolbar label > .ant-select { min-width: calc(100px * var(--fscale, 1)); }
@@ -41,7 +38,7 @@
 .oilcard-draft-error { color: var(--dg-d); display: flex; align-items: center; gap: 8px; margin: 0; }
 .oilcard-pending-hint { margin: 0; }
 .oilcard-selected { background: var(--pri-l); }
-.oilcard-assignment-history { flex: none; max-height: 24dvh; overflow: auto; border-top: .5px solid var(--bd); padding-top: 16px; }
+.oilcard-assignment-history { flex: none; border-top: .5px solid var(--bd); padding-top: 16px; }
 .oilcard-assignment-history h2 { margin: 0; font-size: inherit; font-weight: 600; }
 .oilcard-assignment-history > .oilcard-toolbar { margin-bottom: 8px; }
 .oilcard-primary { display: flex; align-items: center; gap: 8px; }
@@ -78,15 +75,18 @@
 .oilcard-receive-dialog .ant-select { width: 100%; }
 .oilcard-receive-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .oilcard-receive-actions > label { display: grid; gap: 4px; min-width: min(100%, 260px); margin: 0; }
-.oilcard-relations-scroll { overflow: auto; max-block-size: 28dvh; }
-.oilcard-relations-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.oilcard-relations-scroll { overflow: auto; max-block-size: 28dvh; overscroll-behavior: contain; }
+.oilcard-relations-table { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
 .oilcard-relations-table :is(th, td) { text-align: start; padding: 6px 10px; border-block-end: 1px solid var(--bd); white-space: nowrap; }
-.oilcard-relations-table thead th { position: sticky; inset-block-start: 0; background-color: var(--sf2); font-weight: 600; }
+.oilcard-relations-table thead th { position: sticky; inset-block-start: 0; z-index: 1; background-color: var(--sf2); font-weight: 600; }
 .oilcard-relations-table tbody th { font-weight: 400; }
 .oilcard-relations-table small { display: block; color: var(--tx2); font-size: inherit; white-space: normal; }
 .oilcard-relations-table .oilcard-receipt-message { white-space: normal; min-inline-size: 12rem; }
-.oilcard-receive-dialog > .oilcard-relations-scroll { margin-block-start: 8px; }
-.oilcard-receive-detail { margin-block-start: 12px; }
+.oilcard-receive-dialog .oilcard-relations-scroll { flex: 0 1 auto; min-height: min(100%, calc(140px * var(--fscale))); max-block-size: none; margin-block-start: 8px; border: 1px solid var(--bd); border-radius: var(--radius-input); }
+.oilcard-receive-dialog .oilcard-delivery-grid { flex: 1 1 auto; min-height: calc(200px * var(--fscale)); height: 36dvh; display: flex; flex-direction: column; margin-block-start: 8px; }
+.oilcard-receive-dialog .oilcard-delivery-grid .business-grid { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; }
+.oilcard-receive-dialog .oilcard-delivery-grid .business-grid > div { flex: 1 1 auto; min-height: 0; height: 100%; }
+.oilcard-receive-detail { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; margin-block-start: 12px; }
 .oilcard-receive-detail h3 { margin-block: 12px 6px; }
 .oilcard-receive-detail h3 span { font-weight: 400; }
 .oilcard-receive-detail .oilcard-receive-actions { margin-block-start: 12px; }
@@ -111,7 +111,7 @@
 @media (max-width: 700px) { .oilcard-transfer-sides, .oilcard-transfer-common { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .oilcard-workspace-bar { flex-wrap: wrap; gap: 8px 16px; } .oilcard-tabs { gap: 16px; } .oilcard-total-export { margin-inline-start: auto; } }
 @media (max-width: 900px) {
-  #oilcard-panel-archives { min-height: 300px; }
+  .oilcard-page-bounded:has(#oilcard-panel-archives[aria-hidden="false"]) { --page-split-min: 300px; }
   .oilcard-archive-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
 }
 /* 读数未完成时用占位占住表区：不出现"尚无…"结论，也不让页签工具栏随表格落位跳动。

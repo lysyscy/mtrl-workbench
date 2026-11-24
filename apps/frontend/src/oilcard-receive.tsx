@@ -114,7 +114,7 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
     { field: 'message', headerName: '核对事项', ...contentWidth(280, 650, scale, 1) },
     { field: 'invoice_id', headerName: '发票', ...contentWidth(120, 170, scale), cellRenderer: InvoiceAction },
   ], [scale]);
-  return <BusinessModal open className="oilcard-receive-dialog" titleId="oilcard-receive-title" requestClose={closing.requestClose}><DialogContents title="交付链接收票" titleId="oilcard-receive-title" closing={closing}>
+  return <BusinessModal open layout="pane" className="oilcard-receive-dialog" titleId="oilcard-receive-title" requestClose={closing.requestClose}><DialogContents title="交付链接收票" titleId="oilcard-receive-title" closing={closing}>
     {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}</p>}
     {unknown && <p className="notice" role="alert">结果待核实，请先重新读取本批结果。</p>}
     {detail && detailItem ? <OilReceiveDetails key={detail.id} invoice={detail} archives={archives} projects={projects} disabled={blocked}
@@ -126,7 +126,7 @@ export function OilReceiveDialog({ active, disabled, scale, archives, projects, 
     {selected > 0 && query.isPending ? <p role="status">正在读取本次收票结果…</p> : query.data ? <BatchActions.Provider value={{ disabled: blocked, open: item => {
       if (invoices.some(invoice => invoice.id === item.invoice_id)) setDetailItem(item);
       else { opening.current = item; closing.requestClose(); }
-    } }}><BusinessGrid table="oilcard-delivery-items" label="逐项收票结果" rows={query.data.items} columns={columns} rowId={i => String(i.id)} scale={scale} domLayout="normal" style={{ height: '36dvh', minHeight: '200px' }} /></BatchActions.Provider> : null}
+    } }}><BusinessGrid table="oilcard-delivery-items" className="oilcard-delivery-grid" label="逐项收票结果" rows={query.data.items} columns={columns} rowId={i => String(i.id)} scale={scale} domLayout="normal" /></BatchActions.Provider> : null}
     </>}
     <div className="dialog-actions">
       <Button disabled={busy || Boolean(unknown)} onClick={closing.requestClose}>关闭</Button>

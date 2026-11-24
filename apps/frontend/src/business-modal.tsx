@@ -6,9 +6,11 @@ import { MotionAccess, useWorkspaceReducedMotion } from './workspace-motion';
 
 export const BusinessModalTitle = createContext<string | null>(null);
 
-// Only the close protocol belongs here; drafts and request state stay with the caller.
-export function BusinessModal({ open, requestClose, className, titleId, children, centered = true }: {
-  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode; centered?: boolean;
+export type BusinessModalLayout = 'compact' | 'scroll-body' | 'pane';
+
+// Only the close protocol and shared shell layout belong here; drafts and request state stay with the caller.
+export function BusinessModal({ open, requestClose, className, titleId, children, centered = true, layout = 'compact' }: {
+  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode; centered?: boolean; layout?: BusinessModalLayout;
 }) {
   const [present, safeToRemove] = usePresence();
   const allowed = useContext(MotionAccess), reduced = useWorkspaceReducedMotion();
@@ -34,7 +36,7 @@ export function BusinessModal({ open, requestClose, className, titleId, children
     mask={{ closable: true }} width="max-content" focusable={{ focusTriggerAfterClose: false }}
     rootClassName={visible ? 'business-modal-root' : 'business-modal-root business-modal-leaving'} transitionName="business-dialog-motion"
     rootStyle={{ opacity: allowed ? undefined : 0, pointerEvents: allowed ? undefined : 'none' }}
-    panelRef={panel => { if (panel) { panel.setAttribute('aria-labelledby', accessibleTitleId); panel.inert = !visible; panel.setAttribute('aria-hidden', String(!visible)); } }} className="business-modal" destroyOnHidden={false}>
-    <BusinessModalTitle.Provider value={accessibleTitleId}><div ref={body} inert={!visible} className={className}>{children}</div></BusinessModalTitle.Provider>
+    panelRef={panel => { if (panel) { panel.setAttribute('aria-labelledby', accessibleTitleId); panel.inert = !visible; panel.setAttribute('aria-hidden', String(!visible)); } }} className={`business-modal business-modal--${layout}`} destroyOnHidden={false}>
+    <BusinessModalTitle.Provider value={accessibleTitleId}><div ref={body} inert={!visible} className={className} data-modal-layout={layout}>{children}</div></BusinessModalTitle.Provider>
   </Modal>;
 }

@@ -7,7 +7,7 @@ import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './a
 import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
@@ -102,7 +102,7 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
     revealRule(next);
   }
 
-  return <section className="rules-page" aria-label="规则配置" data-page-chrome>
+  return <section className="rules-page page-shell page-shell--flow" data-page-layout="flow" aria-label="规则配置" data-page-chrome>
     <div className="rules-navigation">
       <nav className="rules-tabs" aria-label="规则所属业务">
         {(Object.keys(ruleTabs) as RulePage[]).map(tab =>
@@ -127,7 +127,7 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
           onPublished={() => { if (location?.page === 'procurement') revealRule(location); }} />
       </PageActivity.Provider>
     </div>
-    <DialogPresence>{searchOpen && <BusinessModal open={enabled} className="rules-dialog rules-search-dialog" titleId="rules-search-title" requestClose={searchClose.requestClose}>
+    <DialogPresence>{searchOpen && <BusinessModal open={enabled} layout="pane" className="rules-dialog rules-search-dialog" titleId="rules-search-title" requestClose={searchClose.requestClose}>
       <DialogContents title="搜索全部规则" titleId="rules-search-title" closing={searchClose}>
         <input type="search" aria-label="搜索规则关键词" value={search} onChange={event => setSearch(event.target.value)} />
         {notice.isError && <ReadFailure read={notice} retained="付款通知书规则更新失败，保留上次结果。" />}
@@ -282,7 +282,7 @@ function ExclusionRules({ query, writable, blocked, selected, onPublished }: {
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
     {data && <>
       <Feedback receipt={confirmedReadFailed ? '' : receipt} error={error} />
-      <ReadGrid table="exclusion-rules" className="rules-table" label="剔除规则列表" domLayout="autoHeight" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
+      <BoundedGrid maxHeight="52dvh" minRows={4} table="exclusion-rules" className="rules-table" label="剔除规则列表" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
         {field:'kindLabel',headerName:'规则类别',cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
           {rule.kindLabel}<span className="rules-match-kind">{rule.kind === 'bill_name' ? '包含' : '精确'}</span>
         </div>},

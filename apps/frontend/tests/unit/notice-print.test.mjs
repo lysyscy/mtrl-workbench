@@ -28,6 +28,7 @@ registerHooks({
     );
     if (specifier === './business-modal') return data('export const BusinessModal = props => props.children;');
     if (specifier === './business-grid') return data('export const ReadGrid = "grid";');
+    if (specifier === './bounded-grid') return data('export const BoundedGrid = "grid";');
     if (specifier === './grid') return data('export const numberColumnWidth = () => ({}); export const fullTextWidth = numberColumnWidth;');
     if (specifier === './dialog-close') return data('export const DialogContents = props => props.children; export const useDialogClose = ({close}) => ({requestClose: close});');
     if (specifier === 'react-router') return data('export const Link = "link";');

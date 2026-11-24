@@ -30,7 +30,7 @@ export function HomePage({ blocked, active }: { blocked: boolean; active: boolea
     { key: 'void', label: '撤单但有牵涉', detail: 'i8 已撤单，仍有付款或合同关联', action: '去处理', tone: 'dg', count: query.data?.void ?? 0 },
   ];
   const total = todos.reduce((sum, todo) => sum + todo.count, 0);
-  return <section data-page-chrome className="home-page" aria-labelledby="page-title">
+  return <section data-page-chrome className="home-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title">
     <div className="home-block">
       <h2>待办{query.data && <span className="home-summary">{total ? `共 ${total} 项需处理` : '当前没有需要处理的事'}</span>}</h2>
       <div className="home-todos">

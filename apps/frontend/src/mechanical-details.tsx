@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { BusinessModal } from './business-modal';
+import type { BusinessModalLayout } from './business-modal';
 import { numberColumnWidth, fixedWidth, textWidth } from './grid';
 import { EllipsisText, TextPreview, completeColumnWidth } from './grid-text';
 import { BusinessGrid } from './business-grid';
@@ -91,8 +92,27 @@ export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,wr
     onRowDataUpdated:e=>{if(!focus.current)return;const id=focus.current;focus.current='';e.api.ensureNodeVisible(node=>node.data?.row?.id===id,'middle');requestAnimationFrame(()=>document.getElementById('mechanical-device-'+id)?.focus());},getRowClass:p=>p.data?.kind==='group'?'mechanical-detail-group-row':'',overlayNoRowsTemplate:'尚未选择显示项目。用“显示项目”选入已有项目后增行。'}}/><p className="mechanical-feedback">当前显示 {count} 条，项目合计见合价、不含税价列</p></div>;
 }
 
-export function MechanicalDialog({ title, close, busy, dirty = false, paused = false, className = '', children }: { className?: string; title: string; close: () => void; busy: boolean; dirty?: boolean; paused?: boolean; children: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode) }) {
+export function MechanicalDialog({ title, close, busy, dirty = false, paused = false, className = '', layout = 'scroll-body', footer, children }: {
+  className?: string; title: string; close: () => void; busy: boolean; dirty?: boolean; paused?: boolean;
+  layout?: BusinessModalLayout;
+  footer?: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode);
+  children: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode);
+}) {
   const titleId = useId();
   const closing = useDialogClose({ busy, dirty, close, active: !paused });
-  return <BusinessModal open={!paused} requestClose={closing.requestClose} className={`mechanical-dialog ${className}`} titleId={titleId}><DialogContents title={title} titleId={titleId} closing={closing}><div className="mechanical-dialog-body">{typeof children === 'function' ? children(closing.requestClose) : children}</div></DialogContents></BusinessModal>;
+  const body = typeof children === 'function' ? children(closing.requestClose) : children;
+  const actions = typeof footer === 'function' ? footer(closing.requestClose) : footer;
+  if (layout === 'pane') {
+    return <BusinessModal open={!paused} layout="pane" requestClose={closing.requestClose} className={`mechanical-dialog ${className}`} titleId={titleId}>
+      <DialogContents title={title} titleId={titleId} closing={closing}>
+        {body}
+        {actions !== undefined && <div className="dialog-actions">{actions}</div>}
+      </DialogContents>
+    </BusinessModal>;
+  }
+  return <BusinessModal open={!paused} layout={layout} requestClose={closing.requestClose} className={`mechanical-dialog ${className}`} titleId={titleId}>
+    <DialogContents title={title} titleId={titleId} closing={closing} footer={actions !== undefined ? <div className="dialog-actions">{actions}</div> : undefined}>
+      {body}
+    </DialogContents>
+  </BusinessModal>;
 }

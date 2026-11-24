@@ -1,29 +1,13 @@
-.business-modal .ant-modal-container .ant-modal-body:has(> .history-details-dialog) {
-  max-height: none;
-  overflow: hidden;
-}
-
-.business-modal .ant-modal-container .ant-modal-body > .history-details-dialog {
+.business-modal .history-details-dialog {
   width: min(calc(640px * var(--fscale)), calc(100vw - 24px));
-  padding-block-end: calc(16px * var(--fscale));
 }
 
-.business-modal .ant-modal-container .ant-modal-body > .history-details-batch {
+.business-modal .history-details-batch {
   width: min(calc(760px * var(--fscale)), calc(100vw - 24px));
 }
 
-.history-details-dialog > div {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(86dvh - 38px * var(--fscale));
-}
-
 .history-details-body {
-  min-height: 0;
   padding-block-end: .9rem;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--bd3) var(--sf2);
 }
 
 .history-details-scope,

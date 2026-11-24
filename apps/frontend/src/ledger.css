@@ -25,11 +25,9 @@
 .export-project-row>div{display:flex;gap:4px;flex:none}
 .export-project-row .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
 
-/* Only the project list scrolls; keep close and download visible at maximum type. */
-.business-modal .ant-modal-body:has(>.ledger-project-export){overflow:hidden;max-height:none}
-.ledger-project-export>div:not([hidden]){display:flex;flex-direction:column;max-height:calc(100dvh - 48px - 40px * var(--fscale))}
-.ledger-project-export>div:not([hidden])>:not(.export-project-list){flex-shrink:0}
-.ledger-project-export .export-project-list{flex:0 1 auto;min-height:0}
+/* Only the project list scrolls inside pane dialogs; keep close and download visible. */
+.business-modal--pane .export-project-list{flex:0 1 auto;min-height:min(100%,calc(140px * var(--fscale)));max-height:none}
+.ledger-project-export .dialog-frame:not([hidden])>:not(.export-project-list){flex-shrink:0}
 
 /* Short tables end at their total; long tables cap the viewport and retain pinned totals. */
 .debt-workspace>.ledger-card{display:flex;flex-direction:column;flex:none;min-height:min-content}

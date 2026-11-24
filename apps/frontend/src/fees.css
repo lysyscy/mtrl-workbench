@@ -7,7 +7,7 @@
 .fee-toolbar{justify-content:space-between;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .fee-toolbar>.muted{font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .fee-feedback{color:var(--tx2);margin:calc(12px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55;overflow-wrap:anywhere}
-.fees-grid{height:60dvh;min-height:calc(280px * var(--fscale));width:100%;min-width:0;scrollbar-color:var(--bd3) var(--sf2)}
+.fees-grid{width:100%;min-width:0;scrollbar-color:var(--bd3) var(--sf2)}
 .fees-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
 .fees-grid .ag-cell{display:flex;align-items:center;padding-inline:calc(8px * var(--fscale));line-height:1.55}
 .fees-grid .ag-cell-wrapper,.fees-grid .ag-cell-value{width:100%;min-width:0}
@@ -23,7 +23,6 @@
 .fees-page .notice .ant-btn{margin-left:calc(8px * var(--fscale))}
 @media(max-width:800px){.fee-toolbar{align-items:flex-start}.fee-toolbar>.muted{width:100%}.fee-filters label{flex-wrap:wrap}}
 
-.fees-annual-grid{height:auto;min-height:0}
 .fees-annual-grid .ag-grid-scrolling-rows{min-height:0}
 /* Natural-height fee rows need the native overlay bar to occupy its own space. */
 .fees-annual-grid .ag-body-horizontal-scroll.ag-scrollbar-invisible{position:static}

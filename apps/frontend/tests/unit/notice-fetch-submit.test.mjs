@@ -83,6 +83,7 @@ registerHooks({
     }
     if (specifier === './workspace-motion') return stub("export const DialogPresence = 'presence';");
     if (specifier === './business-grid') return stub("export const ReadGrid = 'grid';");
+    if (specifier === './bounded-grid') return stub("export const BoundedGrid = 'grid';");
     if (specifier === './ownership') return stub(
       "export const OwnershipDialog = 'ownership'; export const OwnershipProjectLink = 'project-link';" +
       "export function useContractOwnershipPending() {return {read: {}, omit() {}};}",

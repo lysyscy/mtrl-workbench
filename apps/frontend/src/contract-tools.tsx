@@ -9,7 +9,7 @@ import type { Identity } from './api';
 import { OwnershipDialog, OwnershipProjectLink, useContractOwnershipPending } from './ownership';
 import type { OwnershipDocument } from './ownership';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { body, receipt } from './notices-api';
@@ -119,22 +119,24 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
     </div>;
   }
 
-  return <><BusinessModal open={!blocked && !ownership} className={`project-dialog contract-fetch${result ? ' jc-receipt-dialog' : ''}${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
+  return <><BusinessModal open={!blocked && !ownership} layout="scroll-body" className={`project-dialog contract-fetch${result ? ' jc-receipt-dialog' : ''}${closing.confirming ? ' contract-tool-discard' : ''}`} titleId="contract-fetch-title" requestClose={closing.requestClose}>
     <DialogContents title="抓取采购合同" titleId="contract-fetch-title" closing={closing}>
-      <I8FetchStatus action={action} me={me} />
-      {!action.sent && <>
-        <label className="contract-field">抓取范围
-          <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
-        </label>
-        {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
-        <p>已审批和未审批合同均写入台账。命中剔除规则或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
-      </>}
-      {result && <>
-        {feedback && <p role="status">{feedback}</p>}
-        {pendingRead.isError && <ReadFailure read={pendingRead} label="归属待办" retained="保留上次读取的归属待办。" />}
-        <JcReceiptContents data={result} pending={pending} actions={pendingActions} />
-      </>}
-      <I8FetchRecovery action={action} source="contracts" />
+      <div className="dialog-body">
+        <I8FetchStatus action={action} me={me} />
+        {!action.sent && <>
+          <label className="contract-field">抓取范围
+            <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
+          </label>
+          {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
+          <p>已审批和未审批合同均写入台账。命中剔除规则或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
+        </>}
+        {result && <>
+          {feedback && <p role="status">{feedback}</p>}
+          {pendingRead.isError && <ReadFailure read={pendingRead} label="归属待办" retained="保留上次读取的归属待办。" />}
+          <JcReceiptContents data={result} pending={pending} actions={pendingActions} />
+        </>}
+        <I8FetchRecovery action={action} source="contracts" />
+      </div>
       <I8FetchActions action={saving ? { ...action, busy: true } : action} close={closing.requestClose} onRun={() => void run()} />
     </DialogContents>
   </BusinessModal><DialogPresence>{ownership && <OwnershipDialog document={ownership}
@@ -170,9 +172,9 @@ export function ContractSettings({me,blocked,close,refresh}:ToolProps) {
   }
   async function reread(){if(busy||blocked)return;setBusy(true);try{await query.refetch({throwOnError:true});await refresh();setUnknown(false);setError('');setFeedback('已重读，请核对清单。');}catch(failure){setError(failure instanceof Error?failure.message:'重读失败。');}finally{setBusy(false);}}
   const unavailable=busy||blocked||!me||unknown||query.isPending||query.isError;
-  return <BusinessModal open={!blocked} className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title="甲方单位分类" titleId="contract-settings-title" closing={closing}>
+  return <BusinessModal open={!blocked} layout="pane" className={`project-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title="甲方单位分类" titleId="contract-settings-title" closing={closing}>
     <p>分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。</p>
-    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><ReadGrid<Party> table="contract-settings-party" className="contract-settings-table" label="甲方单位分类" domLayout="autoHeight" rows={query.data.parties} rowId={row=>row.name} columns={[
+    {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><BoundedGrid<Party> fill minRows={4} table="contract-settings-party" className="contract-settings-table" label="甲方单位分类" rows={query.data.parties} rowId={row=>row.name} columns={[
       {colId:'name',headerName:'甲方单位',valueGetter:p=>p.data!.name},
       {colId:'count',headerName:'合同数',valueGetter:p=>p.data!.count},
       {colId:'kind',headerName:'分类',cellRenderer:PartyKindCell},

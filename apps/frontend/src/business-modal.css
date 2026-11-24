@@ -1,9 +1,54 @@
-/* Shared frame/geometry owner. Page CSS owns only the contents of each task. */
+/* Shared modal frame and geometry owner.
+   Page CSS owns only task widths and interior layout, never .ant-modal-body scrolling. */
+.business-modal-root .ant-modal-mask{overflow:hidden;overscroll-behavior:contain}
+.business-modal-root .ant-modal-wrap{overscroll-behavior:contain}
 .business-modal{max-width:calc(100vw - 24px);padding-bottom:0}
 .business-modal .ant-modal-container{padding:0;border-radius:var(--radius-card);box-shadow:var(--shadow-md);overflow:visible}
-.business-modal .ant-modal-body{max-height:84dvh;overflow:auto;scrollbar-color:var(--bd3) var(--sf2)}
+.business-modal .ant-modal-body{max-height:84dvh;overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2)}
 .business-modal .ant-modal-body>div{margin:0;border:0;border-radius:0;background:transparent;color:var(--tx);box-shadow:none}
 :where(.business-modal .ant-modal-body)>div{max-width:calc(100vw - 24px);max-height:none;overflow:visible}
+
+/* Mode 1: compact (default) — short forms, light confirmations, discard confirmations. */
+.business-modal.business-modal--compact .ant-modal-body{max-height:84dvh;overflow:auto;overscroll-behavior:contain}
+
+/* Mode 2: scroll-body — pinned header & footer, single vertical scroll region in the middle. */
+.business-modal.business-modal--scroll-body .ant-modal-body{max-height:88dvh;overflow:hidden;display:flex;flex-direction:column}
+.business-modal.business-modal--scroll-body .ant-modal-body>div{display:flex;flex-direction:column;flex:0 1 auto;min-height:0;max-height:88dvh;overflow:hidden}
+.business-modal.business-modal--scroll-body .dialog-frame:not([hidden]),
+.business-modal.business-modal--scroll-body .dialog-form{display:flex;flex-direction:column;flex:0 1 auto;min-height:0;overflow:hidden}
+.business-modal.business-modal--scroll-body .dialog-close-heading,
+.business-modal.business-modal--scroll-body .dialog-footer,
+.business-modal.business-modal--scroll-body .dialog-frame>.dialog-actions,
+.business-modal.business-modal--scroll-body .dialog-form>.dialog-actions,
+.business-modal.business-modal--scroll-body .dialog-frame>.history-details-footer{flex:none}
+.business-modal.business-modal--scroll-body .dialog-close-heading{margin-bottom:calc(12px * var(--fscale))}
+.business-modal.business-modal--scroll-body .dialog-body{flex:0 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2);padding-right:2px}
+.business-modal.business-modal--scroll-body :is(.dialog-footer,.dialog-frame>.dialog-actions,.dialog-form>.dialog-actions){margin-top:calc(12px * var(--fscale));padding-top:calc(12px * var(--fscale));border-top:.5px solid var(--bd)}
+.business-modal.business-modal--scroll-body .dialog-footer>.dialog-actions,
+.business-modal.business-modal--scroll-body .dialog-footer>footer{margin-top:0;padding-top:0;border-top:0}
+@media(max-height:460px){
+  .business-modal.business-modal--scroll-body .ant-modal-body{overflow:auto}
+  .business-modal.business-modal--scroll-body .ant-modal-body>div,
+  .business-modal.business-modal--scroll-body .dialog-frame:not([hidden]),
+  .business-modal.business-modal--scroll-body .dialog-form{overflow:visible}
+}
+
+/* Mode 3: pane — pinned header & footer, bounded inner-scroll table/stage allocates remaining height;
+   short content hugs naturally; outer .ant-modal-body only scrolls as a fallback on very short / 1.4x viewports. */
+.business-modal.business-modal--pane .ant-modal-body{max-height:88dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2)}
+.business-modal.business-modal--pane .ant-modal-body>div{display:flex;flex-direction:column;max-height:88dvh;min-height:min-content;overflow:visible;padding-bottom:0}
+.business-modal.business-modal--pane .dialog-frame:not([hidden]){display:flex;flex-direction:column;flex:0 1 auto;min-height:min-content;overflow:visible}
+.business-modal.business-modal--pane .dialog-close-heading,
+.business-modal.business-modal--pane .dialog-footer,
+.business-modal.business-modal--pane .dialog-frame>.dialog-actions{flex:none}
+.business-modal.business-modal--pane .dialog-close-heading{margin-bottom:calc(10px * var(--fscale))}
+.business-modal.business-modal--pane :is(.dialog-footer,.dialog-frame>.dialog-actions){margin-top:calc(12px * var(--fscale));padding-top:calc(10px * var(--fscale));padding-bottom:calc(20px * var(--fscale));border-top:.5px solid var(--bd)}
+.business-modal.business-modal--pane .dialog-frame:not([hidden]):not(:has(>.dialog-footer,>.dialog-actions))>:last-child{margin-bottom:calc(20px * var(--fscale))}
+.business-modal.business-modal--pane .dialog-footer>.dialog-actions,
+.business-modal.business-modal--pane .dialog-footer>footer{margin-top:0;padding-top:0;padding-bottom:0;border-top:0}
+.business-modal.business-modal--pane .dialog-pane-fill{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;overflow:visible}
+
+/* Task widths and standard dialog paddings. */
 .business-modal .project-dialog{width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .notice-pay-dialog{width:min(calc(1240px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .notice-contract-dialog,.business-modal .contract-dialog,.business-modal .notice-flows-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
@@ -14,17 +59,18 @@
 .business-modal .jc-receipt-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .big-order-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
-.business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
+.business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600;margin:0}
 .business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(12px * var(--fscale))}
-.business-modal:has(.contract-dialog) .ant-modal-body{overflow:hidden;max-height:none}
-.business-modal .contract-dialog{display:flex;flex-direction:column;height:min(800px,88dvh);max-height:88dvh;overflow:hidden;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));border-radius:var(--radius-card)}
-/* Decision-only prompts use the compact contract-editor frame, including within large workflows. */
-.business-modal .ant-modal-container .ant-modal-body:has(.dialog-discard,.contract-decision){height:auto;max-height:84dvh;overflow:auto}
+.business-modal .contract-dialog{display:flex;flex-direction:column;height:min(800px,88dvh);min-height:0;max-height:88dvh;overflow:hidden;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));border-radius:var(--radius-card)}
+
+/* Decision-only prompts always shrink back to the compact 420px frame, including within large workflows. */
+.business-modal .ant-modal-container .ant-modal-body:has(.dialog-discard,.contract-decision){height:auto;max-height:84dvh;overflow:auto;display:block}
 .business-modal .ant-modal-container .ant-modal-body>div:has(>.dialog-discard,>.contract-decision),
-.business-modal .ant-modal-container .ant-modal-body>.history-confirm-dialog{width:min(calc(420px * var(--fscale)),calc(100vw - 24px));height:auto;min-width:0;max-width:calc(100vw - 24px);min-height:0;max-height:none;padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));display:block;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.business-modal .ant-modal-container .ant-modal-body>.history-confirm-dialog:not(.history-details-dialog){width:min(calc(420px * var(--fscale)),calc(100vw - 24px));height:auto;min-width:0;max-width:calc(100vw - 24px);min-height:0;max-height:none;padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));display:block;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .business-modal .ant-modal-container .dialog-discard,.business-modal .ant-modal-container .contract-decision{max-width:none;padding:0}
-.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) h2{margin:0 0 .75rem;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4;outline:0}
-.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) p{margin:0 0 1rem;line-height:1.5;overflow-wrap:anywhere}
-.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) .dialog-actions{margin:0;gap:.5rem;justify-content:flex-end}
+.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog:not(.history-details-dialog)) h2{margin:0 0 .75rem;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4;outline:0}
+.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog:not(.history-details-dialog)) p{margin:0 0 1rem;line-height:1.5;overflow-wrap:anywhere}
+.business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog:not(.history-details-dialog)) .dialog-actions{margin:0;padding-top:0;padding-bottom:0;border-top:0;gap:.5rem;justify-content:flex-end}
 
 .business-modal .history-confirm-dialog{line-height:1.55}
+.business-modal.business-modal--scroll-body .ant-modal-container .ant-modal-body>.history-details-dialog{display:flex;flex-direction:column;max-height:88dvh;overflow:hidden;padding:calc(20px * var(--fscale)) calc(24px * var(--fscale)) calc(16px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}

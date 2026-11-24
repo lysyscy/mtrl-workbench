@@ -157,15 +157,15 @@ export function JcFetchReceipt({ active, close, runId, history = true }: {
   });
   const closing = useDialogClose({ busy: false, dirty: false, close, active });
   const data = query.data;
-  return <BusinessModal open={active} className="rules-dialog jc-receipt-dialog" titleId="jc-receipt-title" requestClose={closing.requestClose}>
-    <DialogContents title={runId === undefined ? '最近一次集采抓取结果' : '集采抓取明细'} titleId="jc-receipt-title" closing={closing}>
+  return <BusinessModal open={active} layout="scroll-body" className="rules-dialog jc-receipt-dialog" titleId="jc-receipt-title" requestClose={closing.requestClose}>
+    <DialogContents title={runId === undefined ? '最近一次集采抓取结果' : '集采抓取明细'} titleId="jc-receipt-title" closing={closing}
+      footer={<div className="dialog-actions jc-receipt-actions">
+        {history && <Link to="/i8#execution-records" onClick={close}>i8 接入层 · 执行记录</Link>}
+        <Button onClick={closing.requestClose}>关闭</Button>
+      </div>}>
       {query.isFetching && <p role="status">正在读取抓取结果…</p>}
       {query.isError && <ReadFailure read={query} />}
       {!query.isFetching && (data ? <JcReceiptContents data={data} /> : !query.isError && <p className="state">暂无集采抓取记录</p>)}
-      <div className="dialog-actions jc-receipt-actions">
-        {history && <Link to="/i8#execution-records" onClick={close}>i8 接入层 · 执行记录</Link>}
-        <Button onClick={closing.requestClose}>关闭</Button>
-      </div>
     </DialogContents>
   </BusinessModal>;
 }

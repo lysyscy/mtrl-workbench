@@ -1,5 +1,5 @@
 .flow-bars{display:grid;grid-template-columns:minmax(90px,1.2fr) minmax(25px,1fr) max-content;column-gap:8px}.flow-bar>.money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.flow-card-head.payment-stat-head{justify-content:flex-start}.payment-stat-head>div{flex-wrap:wrap}
-.flow-workspace{display:grid;gap:calc(12px * var(--fscale))}.flow-card{border:1px solid var(--bd);border-radius:8px;background:var(--sf);min-width:0;overflow:clip}.flow-card h2{font-size:calc(15px * var(--fscale));margin:0;font-weight:600}.flow-card>h2,.flow-card-head{padding:calc(10px * var(--fscale)) calc(14px * var(--fscale));border-bottom:1px solid var(--bd)}.flow-card-head{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.flow-card-head>div{display:flex;gap:6px}.flow-card-body{padding:calc(12px * var(--fscale))}.debt-overviews-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.debt-overviews .flow-bars{max-height:calc(230px * var(--fscale));overflow:auto}.payment-stat-columns{display:grid;grid-template-columns:1fr 1fr;gap:24px}.payment-stat-columns .flow-bars{max-height:calc(290px * var(--fscale));overflow:auto}.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;align-items:center;gap:8px;width:100%;padding:8px 0;border:0;background:transparent;text-align:left;color:var(--tx)}button.flow-bar:hover,button.flow-bar[aria-pressed=true]{background:var(--sf2)}.bar-name{overflow-wrap:anywhere}.bar-track{height:7px;background:var(--sf2);border-radius:4px;overflow:hidden}.bar-track i{display:block;height:100%;background:var(--wn)}.bar-track i.negative{background:var(--ok)}.flow-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px}.flow-toolbar label{display:flex;align-items:center;gap:6px}.flow-toolbar form{display:flex;gap:6px}.flow-toolbar input[type=number]{width:100px}.flow-toolbar input[type=month]{max-width:150px}.flow-toolbar input{min-width:0}.flow-toolbar .project-picker{position:relative}.flow-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}.flow-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}.flow-grid .ag-cell.money{text-align:right}.flow-revoke{overflow:auto}.flow-revoke dl{display:grid;grid-template-columns:110px 1fr;gap:8px}.flow-revoke dd{margin:0;overflow-wrap:anywhere}.flow-revoke>label{display:grid;gap:6px}.flow-revoke fieldset label{display:block}.flow-revoke footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}@media(max-width:1000px){.debt-overviews-grid{grid-template-columns:1fr}.payment-stat-columns{grid-template-columns:1fr}}
+.flow-card{border:1px solid var(--bd);border-radius:8px;background:var(--sf);min-width:0;overflow:clip}.flow-card h2{font-size:calc(15px * var(--fscale));margin:0;font-weight:600}.flow-card>h2,.flow-card-head{padding:calc(10px * var(--fscale)) calc(14px * var(--fscale));border-bottom:1px solid var(--bd)}.flow-card-head{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.flow-card-head>div{display:flex;gap:6px}.flow-card-body{padding:calc(12px * var(--fscale))}.debt-overviews-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.debt-overviews .flow-bars{max-height:calc(230px * var(--fscale));overflow:auto}.payment-stat-columns{display:grid;grid-template-columns:1fr 1fr;gap:24px}.payment-stat-columns .flow-bars{max-height:calc(290px * var(--fscale));overflow:auto}.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;align-items:center;gap:8px;width:100%;padding:8px 0;border:0;background:transparent;text-align:left;color:var(--tx)}button.flow-bar:hover,button.flow-bar[aria-pressed=true]{background:var(--sf2)}.bar-name{overflow-wrap:anywhere}.bar-track{height:7px;background:var(--sf2);border-radius:4px;overflow:hidden}.bar-track i{display:block;height:100%;background:var(--wn)}.bar-track i.negative{background:var(--ok)}.flow-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px}.flow-toolbar label{display:flex;align-items:center;gap:6px}.flow-toolbar form{display:flex;gap:6px}.flow-toolbar input[type=number]{width:100px}.flow-toolbar input[type=month]{max-width:150px}.flow-toolbar input{min-width:0}.flow-toolbar .project-picker{position:relative}.flow-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}.flow-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}.flow-grid .ag-cell.money{text-align:right}.flow-revoke{overflow:auto}.flow-revoke dl{display:grid;grid-template-columns:110px 1fr;gap:8px}.flow-revoke dd{margin:0;overflow-wrap:anywhere}.flow-revoke>label{display:grid;gap:6px}.flow-revoke fieldset label{display:block}.flow-revoke footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}@media(max-width:1000px){.debt-overviews-grid{grid-template-columns:1fr}.payment-stat-columns{grid-template-columns:1fr}}
 
 .flow-revoke{border:1px solid var(--bd3);border-radius:var(--r2);background:var(--sf);color:var(--tx);padding:calc(18px * var(--fscale));box-shadow:var(--shadow-md)}.flow-revoke::backdrop{background:var(--mask)}
 
@@ -8,7 +8,7 @@
 .flow-bars>.ant-btn.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;height:auto;white-space:normal;text-align:left;justify-content:normal;box-shadow:none}
 
 /* Page-local geometry consumes the shared account theme. */
-.flow-workspace{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));gap:calc(16px * var(--fscale))}
+.flow-workspace{--page-grid-min:calc(280px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));gap:calc(16px * var(--fscale))}
 .flow-card{border:0;border-radius:var(--radius-card);box-shadow:var(--shadow)}
 .flow-card>h2,.flow-card-head{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf)}
 .flow-card h2{font-size:calc(15px * var(--fscale))}
@@ -46,14 +46,12 @@
 .flow-toolbar .flow-project-field .ant-select{width:100%}
 .flow-grid .ag-cell-wrap-text{line-height:1.5}.flow-grid .ag-cell-wrap-text,.flow-grid .ag-cell-wrap-text a{overflow-wrap:anywhere;white-space:normal;text-overflow:clip}
 
-.flow-revoke>div>label{display:grid;gap:8px}
-.flow-revoke>div>label input{width:100%}
+.flow-revoke .dialog-body>label{display:grid;gap:8px}
+.flow-revoke .dialog-body>label input{width:100%}
 .flow-revoke fieldset label{display:flex;align-items:center;gap:8px;margin:8px 0}
 .flow-revoke input[type=radio]{width:auto;height:auto;min-height:0;margin:0;accent-color:var(--pri);flex:none}
 
-/* Each payment page gives its main table the remaining workspace. */
-.flow-workspace,.debt-workspace{display:flex;flex-direction:column;gap:calc(16px * var(--fscale));height:100%;min-height:min-content}
-.flow-workspace>.payment-stats,.debt-workspace>.debt-overviews{flex:none}
+.debt-workspace{display:flex;flex-direction:column;gap:calc(16px * var(--fscale))}
 .debt-overviews{display:flex;flex-direction:column;gap:calc(12px * var(--fscale))}
 .debt-overviews .flow-card-body{height:auto;min-height:0;overflow:visible}
 .debt-overviews .flow-bars{max-height:none;overflow:visible}
@@ -62,9 +60,6 @@
 .payment-stat-columns>div{display:flex;flex-direction:column;min-height:0}
 .payment-stat-columns .flow-toolbar{flex:none}
 .payment-stat-columns .flow-bars{min-height:0;max-height:none;overflow:auto;align-content:start}
-.flow-workspace>.flow-list{display:flex;flex-direction:column;flex:1 0 auto;min-height:min-content}
-.flow-list>:not(.flow-grid){flex:none}
-.flow-list>.flow-grid{flex:1 0 calc(280px * var(--fscale));min-height:calc(280px * var(--fscale))}
 @media(max-width:1000px){.payment-stat-columns{height:auto}.payment-stat-columns .flow-bars{max-height:calc(180px * var(--fscale))}}
 
 /* Statistics and flows read independently. Each uses a visible line only for its own failure. */

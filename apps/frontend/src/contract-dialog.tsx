@@ -73,7 +73,7 @@ export function ContractEditor({ nextArchiveNo='1', inline=false, materialOnly=f
     finally {setBusy(false);}
   }
   if (blocked) return null;
-  const contents=<DialogContents title={materialOnly?'材料名':row?'合同详情与维护':'手工新增合同'} titleId={titleId} closing={closing}><form onSubmit={e=>{e.preventDefault();void save();}}><div className="contract-editor-body">
+  const contents=<DialogContents title={materialOnly?'材料名':row?'合同详情与维护':'手工新增合同'} titleId={titleId} closing={closing}><form className="dialog-form" onSubmit={e=>{e.preventDefault();void save();}}><div className="dialog-body contract-editor-body">
     {row&&materialOnly&&<p>{row.contract_no||'手工合同'}</p>}
     {row && !materialOnly && <div className="contract-source"><strong>{source?.contract_no||'手工合同'}</strong><span>{projects.find(p=>p.warehouse_name===row.project_key)?.disp||'项目未匹配'}，{source?.date||'合同日期未填'}</span><span>供应商：{source?.supplier||'未填'}，合同金额：{money(source!.contract_amt)} 元</span>{source?.trade_co && <span>贸易公司：{source?.trade_co}，合同金额：{source?.trade_contract_amt===null?'未确定':`${money(source!.trade_contract_amt!)} 元`}</span>}</div>}
     {row && detail.isPending ? <p role="status">正在读取合同详情…</p> : row && detail.isError ? <p className="notice" role="alert">{detail.error.message}<Button onClick={()=>void reread()}>重读详情</Button></p> : <>
@@ -87,5 +87,5 @@ export function ContractEditor({ nextArchiveNo='1', inline=false, materialOnly=f
 
     </div><div className="dialog-actions"><Button disabled={busy||subBusy} onClick={closing.requestClose}>{saved||uncertain?'关闭':'取消'}</Button>{(error||saved||uncertain)&&<Button disabled={busy||blocked} onClick={()=>void reread()}>重读核对</Button>}{!saved&&!uncertain&&<Button htmlType="submit" className="primary" disabled={unavailable||Boolean(row&&!dirty)||!row&&!project.length}>{busy?'正在保存…':materialOnly?'保存材料名':'保存合同'}</Button>}</div>
   </form></DialogContents>;
-  return inline&&!row?<div className={`contract-editor contract-inline-editor${closing.confirming?' contract-editor-discard':''}`}>{contents}</div>:<BusinessModal open className={`project-dialog contract-editor${materialOnly?' contract-material-editor':''}${closing.confirming?' contract-editor-discard':''}`} titleId={titleId} requestClose={closing.requestClose}>{contents}</BusinessModal>;
+  return inline&&!row?<div className={`contract-editor contract-inline-editor${closing.confirming?' contract-editor-discard':''}`}>{contents}</div>:<BusinessModal open layout={materialOnly?'compact':'scroll-body'} className={`project-dialog contract-editor${materialOnly?' contract-material-editor':''}${closing.confirming?' contract-editor-discard':''}`} titleId={titleId} requestClose={closing.requestClose}>{contents}</BusinessModal>;
 }

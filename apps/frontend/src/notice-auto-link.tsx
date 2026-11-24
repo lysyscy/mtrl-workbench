@@ -1,6 +1,6 @@
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { useRef, useState } from 'react';
 import { ApiError, record, requestJson } from './api';
 import { body, money } from './notices-api';
@@ -40,7 +40,7 @@ export function AutoLinkDialog({ids,blocked,close,refresh,announce}:{ids:number[
     }
     finally{setBusy(false);lock.current=false;}
   }
-  return <BusinessModal open={!blocked} className="project-dialog notice-dialog notice-contract-dialog notice-result-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。{session.mode===SESSION_MODE_BROWSER?'本次读取由你浏览器里已登录的 i8 标签发出：不登录、不顶号；连接失效时会明确停止。':'工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>{waiting && <I8ConnectionWaitStatus />}{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><ReadGrid table="notice-auto-link" className="notice-result-grid" label="关联预览与结果" domLayout="autoHeight" rows={rows} rowId={row=>String(row.notice_id)} columns={[
+  return <BusinessModal open={!blocked} layout="pane" className="project-dialog notice-dialog notice-contract-dialog notice-result-dialog" titleId="auto-link-title" requestClose={closing.requestClose}><DialogContents title="一键关联集采合同" titleId="auto-link-title" closing={closing}><p>读取采购合同应付；只补当前列表中未关联的通知书，已有合同保持。{session.mode===SESSION_MODE_BROWSER?'本次读取由你浏览器里已登录的 i8 标签发出：不登录、不顶号；连接失效时会明确停止。':'工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>{waiting && <I8ConnectionWaitStatus />}{rows&&<><p>可关联 {ready} 条，其余保留人工处理。</p><BoundedGrid fill minRows={4} table="notice-auto-link" className="notice-result-grid" label="关联预览与结果" rows={rows} rowId={row=>String(row.notice_id)} columns={[
       {field:'code',headerName:'通知书'},
       {colId:'result',headerName:'合同／处理结果',cellRenderer:({data:r}:{data:AutoRow})=><>{r.contract_no||r.reason}{r.amount&&<div>{money(r.amount)} 元</div>}{r.contract_no&&<p>{r.reason}</p>}</>},
       {colId:'basis',headerName:'采购应付／关联依据',valueGetter:p=>p.data?.payable_codes?.join('、')??''},

@@ -20,8 +20,8 @@ import type { InvoiceRow, PaymentDisplayRow } from './contract-subtables-api';
 import { subtableOverage } from './contract-subtable-overage';
 import { subtableDraftDirty as draftDirty } from './contract-subtable-workspace';
 import type { ContractSubtableWorkspace, SubtableView } from './contract-subtable-workspace';
-import { ReadGrid } from './business-grid';
-import { numberColumnWidth, pageGridGeometry, textWidth } from './grid';
+import { BoundedGrid } from './bounded-grid';
+import { numberColumnWidth, textWidth } from './grid';
 import { completeColumnWidth } from './grid-text';
 import { BusinessDate } from './time-picker';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
@@ -30,16 +30,6 @@ function completeMoneyWidth(values: string[], scale: number) {
   const amount = numberColumnWidth(values, scale), complete = completeColumnWidth(values, '金额（元）', scale);
   const minWidth = Math.max(amount.minWidth, complete.minWidth);
   return { ...complete, initialWidth: minWidth, minWidth };
-}
-
-/**
- * 明细表格的高度：按行数算自然高度，只有超过可用高度上限（CSS 变量 --subtable-detail-max）才封顶。
- * 表格走 AG 原生普通布局，滚动发生在表格内部，表头与合计行由表格自己固定，不靠外层容器滚。
- */
-function detailHeight(scale: number, rows: number): string {
-  const { rowHeight, headerHeight } = pageGridGeometry(scale);
-  const natural = Math.ceil(headerHeight + (rows + 1) * rowHeight + 2);
-  return `min(${natural}px, var(--subtable-detail-max))`;
 }
 
 function NoticeButton({ id, children }: { id: number; children: ReactNode }) {
@@ -146,7 +136,7 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
         <div className="subtable-section-head">{(!onlyKind || onlyKind !== 'payment') && <h4>{labels[kind]}{kind === 'trade' && data.trade_co ? `，${data.trade_co}` : kind === 'supplier' && data.supplier ? `，${data.supplier}` : ''}</h4>}<span className="subtable-count">共 {invoiceRows(kind).length} 条</span></div>
         {onlyKind === undefined && overageLine(kind)}
         <div className="subtable-detail-scroll">
-          <ReadGrid singleLine table={'contract-invoices-' + kind} className="subtable-invoice-table" label={labels[kind] + '明细'} domLayout="normal" style={{ height: detailHeight(scale, invoiceRows(kind).length) }} rows={invoiceRows(kind)} rowId={row => String(row.id)} totals={[{ id: -1, kind, date: kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计', amount: kind === 'supplier' ? data.inv_sum : data.trade_inv_sum }]} columns={[
+          <BoundedGrid singleLine fill={Boolean(onlyKind)} maxHeight={onlyKind ? undefined : 'var(--subtable-detail-max)'} minRows={3} table={'contract-invoices-' + kind} className="subtable-invoice-table" label={labels[kind] + '明细'} rows={invoiceRows(kind)} rowId={row => String(row.id)} totals={[{ id: -1, kind, date: kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计', amount: kind === 'supplier' ? data.inv_sum : data.trade_inv_sum }]} columns={[
             { field: 'date', headerName: kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', ...invoiceWidth(completeColumnWidth([...invoiceRows(kind).map(row => row.date || '日期未填'), kind === 'supplier' && historyDate ? '历史未结合计' : '发票合计'], kind === 'supplier' && historyDate ? '核对截至日' : '发票日期', scale), 170, 1), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? row.date : <div tabIndex={-1} data-subtable={kind} data-row={row.id}>{row.date || '日期未填'}</div> },
             { field: 'amount', headerName: '金额（元）', ...invoiceWidth(completeMoneyWidth([...invoiceRows(kind).map(row => money(row.amount)), money(kind === 'supplier' ? data.inv_sum : data.trade_inv_sum)], scale), 240, 1.5), cellClass: 'money', valueFormatter: p => money(p.value) },
             { colId: 'actions', headerName: '操作', ...invoiceWidth(completeColumnWidth(['删除发票'], '操作', scale, 24), 160, 1), cellRenderer: ({ data: row, node }: { data: InvoiceRow; node: { rowPinned: unknown } }) => node.rowPinned ? null : <Button htmlType="button" danger size="small" disabled={unavailable} onClick={() => remove(kind, row)}>删除发票</Button> },
@@ -154,7 +144,7 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
         </div>
         {draftRow(kind)}
       </section>)}</div>
-      {(!onlyKind || onlyKind === 'payment') && <section aria-label="合同付款明细">{!onlyKind && <div className="subtable-heading"><h4>付款明细</h4><Button htmlType="button" disabled={unavailable} onClick={() => setReferencing(true)}>从付款域引用</Button></div>}<div className="subtable-section-head"><span className="subtable-count">共 {data.payment_display_rows.length} 条</span></div><div className="subtable-detail-scroll"><ReadGrid singleLine table="contract-payments" className="subtable-payment-table" label="合同付款记录" domLayout="normal" style={{ height: detailHeight(scale, data.payment_display_rows.length) }} rows={data.payment_display_rows} rowId={row => row.id + ':' + (row.flow_id ?? row.display_kind)} totals={[{ id: -1, date: '合同付款合计', amount: data.pay_sum, source: 'manual', notice_id: null, display_kind: 'manual' }]} columns={[
+      {(!onlyKind || onlyKind === 'payment') && <section aria-label="合同付款明细">{!onlyKind && <div className="subtable-heading"><h4>付款明细</h4><Button htmlType="button" disabled={unavailable} onClick={() => setReferencing(true)}>从付款域引用</Button></div>}<div className="subtable-section-head"><span className="subtable-count">共 {data.payment_display_rows.length} 条</span></div><div className="subtable-detail-scroll"><BoundedGrid singleLine fill={Boolean(onlyKind)} maxHeight={onlyKind ? undefined : 'var(--subtable-detail-max)'} minRows={3} table="contract-payments" className="subtable-payment-table" label="合同付款记录" rows={data.payment_display_rows} rowId={row => row.id + ':' + (row.flow_id ?? row.display_kind)} totals={[{ id: -1, date: '合同付款合计', amount: data.pay_sum, source: 'manual', notice_id: null, display_kind: 'manual' }]} columns={[
         { field: 'date', headerName: '付款日期', ...completeColumnWidth([...data.payment_display_rows.map(row => row.date || '日期未填'), '合同付款合计', '最近实际付款日'], '付款日期', scale), autoHeight: true, cellRenderer: ({ data: row, node }: { data: PaymentDisplayRow; node: { rowPinned: unknown } }) => node.rowPinned ? row.date : <div tabIndex={-1} data-subtable="payment" data-row={row.id}>{row.date || '日期未填'}{row.display_kind === 'stat' && row.date && <small>最近实际付款日</small>}</div> },
         { field: 'amount', headerName: '金额（元）', ...completeMoneyWidth([...data.payment_display_rows.map(row => money(row.amount)), money(data.pay_sum)], scale), cellClass: 'money', valueFormatter: p => money(p.value) },
         { colId: 'source', headerName: '来源与口径', ...textWidth(240, 420, scale, 1), wrapText: true, autoHeight: true, cellRenderer: ({ data: row, node }: { data: PaymentDisplayRow; node: { rowPinned: unknown } }) => node.rowPinned ? null : row.display_kind === 'manual' ? '手工录入' : <span className="subtable-payment-source"><NoticeButton id={row.notice_id!}>查看通知书</NoticeButton><small>{row.display_kind === 'flow' ? '实际付款（统计一致）' : '统计累计，与实际付款有差异'}</small></span> },
@@ -177,7 +167,7 @@ export function ContractSubtableDialog({ row, kind, contracts, workspace, paused
     close();
   } });
   const title = kind === 'payment' ? '付款子表' : kind === 'trade' ? '贸易公司发票子表' : historyDate ? '历史未结金额' : '供应商发票子表';
-  return <BusinessModal open={!paused} centered={false} className={`project-dialog contract-subtable-dialog${kind === 'payment' ? '' : ' contract-invoice-dialog'}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
+  return <BusinessModal open={!paused} centered={false} layout="pane" className={`project-dialog contract-subtable-dialog${kind === 'payment' ? '' : ' contract-invoice-dialog'}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
     <ContractSubtables contractId={row.id} historyDate={historyDate} contracts={contracts} workspace={workspace} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
     <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
   </DialogContents></BusinessModal>;

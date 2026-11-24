@@ -118,11 +118,13 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     onClick={() => void replay(direction)}>{direction === 'undo' ? '撤销' : '重做'}</Button>)}
     {(feedback || history.isError) && <span role="status">{feedback || '操作历史未能读取。'}</span>}
     {(uncertain || history.isError) && <Button disabled={busy || blocked} onClick={() => void reload()}>重读核对</Button>}
-    <DialogPresence>{confirmation && <BusinessModal open={!blocked} requestClose={closing.requestClose}
+    <DialogPresence>{confirmation && <BusinessModal open={!blocked} layout="scroll-body" requestClose={closing.requestClose}
       className={`history-confirm-dialog history-details-dialog${confirmation.item.count > 1 ? ' history-details-batch' : ''}`} titleId="history-confirm-title">
       <DialogContents title={`${confirmation.direction === 'undo' ? '撤销' : '重做'} · ${confirmation.item.label}`} titleId="history-confirm-title" closing={closing}>
-        <HistoryDetailsBody records={confirmation.details.records} />
-        {feedback && <p className="notice" role="alert">{feedback}</p>}
+        <div className="dialog-body history-details-scroll">
+          <HistoryDetailsBody records={confirmation.details.records} />
+          {feedback && <p className="notice" role="alert">{feedback}</p>}
+        </div>
         <div className="history-details-footer">
           {confirmation.item.count > 1 && <span>本次整批执行</span>}
           <div className="dialog-actions">

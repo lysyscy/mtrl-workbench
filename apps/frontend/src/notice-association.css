@@ -1,5 +1,4 @@
-.business-modal:has(.notice-association-dialog) .ant-modal-body{height:min(800px,84dvh);max-height:none;overflow:hidden}
-.business-modal .ant-modal-body>.project-dialog.notice-association-dialog{width:min(1080px,calc(100vw - 32px));height:100%;max-height:none;display:flex;flex-direction:column;overflow:hidden}
+.business-modal .project-dialog.notice-association-dialog{width:min(1080px,calc(100vw - 32px));height:min(800px,88dvh);max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;padding:0}
 .association-steps{display:flex;gap:20px;align-items:center;padding:0 22px 14px;border-bottom:1px solid var(--bd);color:var(--tx2);flex-wrap:wrap}
 .association-steps [aria-current=step]{font-weight:600;color:var(--pri-d)}
 .association-steps small{margin-left:auto;font-size:calc(12px * var(--fscale))}

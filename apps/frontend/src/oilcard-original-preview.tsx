@@ -54,7 +54,7 @@ export function OilOriginalPreview({ invoice, originalId, onOriginalChange, clos
     }).catch(() => { if (!disposed) setFailed(true); });
     return () => { disposed = true; void loading?.destroy().catch(() => {}); };
   }, [originalId]);
-  return <BusinessModal open className="oilcard-original-preview" titleId="oilcard-original-preview" requestClose={closing.requestClose}>
+  return <BusinessModal open layout="pane" className="oilcard-original-preview" titleId="oilcard-original-preview" requestClose={closing.requestClose}>
     <DialogContents title="发票原件预览" titleId="oilcard-original-preview" closing={closing}>
       <div className="oilcard-preview-toolbar">
         <span>{invoice.invoice_no || '票号待核'}</span>

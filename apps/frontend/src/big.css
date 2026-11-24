@@ -110,10 +110,8 @@
   color: var(--tx);
   font-size: calc(var(--font-ui-size) * 1px * var(--fscale));
 }
-.big-order-dialog > div:not([hidden]) { display: flex; flex-direction: column; min-height: 0; max-height: calc(84dvh - 40px * var(--fscale)); }
-.big-order-dialog .dialog-close-heading, .big-order-dialog .dialog-actions { flex: none; }
 .big-order-summary { margin-block: calc(12px * var(--fscale)); color: var(--tx2); line-height: 1.5; }
-.big-order-dialog .dialog-actions { flex-wrap: wrap; padding-top: calc(12px * var(--fscale)); margin-top: calc(12px * var(--fscale)); border-top: 1px solid var(--bd); }
+.big-order-dialog .dialog-actions { flex-wrap: wrap; }
 .big-order-dialog .dialog-actions .ant-btn { min-height: calc(32px * var(--fscale)); height: auto; white-space: normal; }
 .big-export-list { max-height: 44dvh; overflow: auto; padding-inline-start: 24px; overflow-wrap: anywhere; }
 @media (max-width: 740px) {
@@ -128,7 +126,7 @@
 .big-page .big-grid .big-group-start { border-inline-start: 1px solid var(--bd3); }
 .big-grid .ag-header-group-cell { background: var(--sf2); color: var(--tx2); border-bottom: 1px solid var(--bd); }
 .big-grid .ag-header-group-text { font-weight: 600; }
-.big-order-dialog .export-project-list { flex: 1 1 auto; min-height: 0; max-height: 48dvh; }
+.big-order-dialog .export-project-list { flex: 0 1 auto; min-height: min(100%, calc(140px * var(--fscale))); max-height: none; }
 
 .page-view:has(>.big-page){padding-inline:calc(6px * var(--fscale))}
 .big-grid .big-rate-header .ag-header-cell-text{line-height:1.15}

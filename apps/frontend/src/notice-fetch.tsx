@@ -48,15 +48,17 @@ export function NoticeFetch({ me, blocked, close, refresh }: { me: Identity | nu
     });
   }
 
-  return <BusinessModal open={!blocked} className="project-dialog notice-result-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-result-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
     <DialogContents titleId="notice-fetch-title" title="抓取 i8 付款通知书（按月）" closing={closing}>
-      <I8FetchStatus action={action} me={me} />
-      {(!action.sent || action.busy) && <>
-        <div className="time-picker-field"><span>抓取月份</span><TimePicker label="抓取月份" value={month} modes={['月']} disabled={action.busy || blocked} onChange={value => { setMonth(value); action.reset(); }} /></div>
-        <p>按所选月份全量抓取，不受本页项目筛选限制。保留人工分类、已修改统计金额与集采实际供应商。</p>
-      </>}
-      {result && <I8FetchReceiptContents data={result} />}
-      <I8FetchRecovery action={action} source="notices" />
+      <div className="dialog-body">
+        <I8FetchStatus action={action} me={me} />
+        {(!action.sent || action.busy) && <>
+          <div className="time-picker-field"><span>抓取月份</span><TimePicker label="抓取月份" value={month} modes={['月']} disabled={action.busy || blocked} onChange={value => { setMonth(value); action.reset(); }} /></div>
+          <p>按所选月份全量抓取，不受本页项目筛选限制。保留人工分类、已修改统计金额与集采实际供应商。</p>
+        </>}
+        {result && <I8FetchReceiptContents data={result} />}
+        <I8FetchRecovery action={action} source="notices" />
+      </div>
       <I8FetchActions action={action} close={closing.requestClose} canRun={validMonth} onRun={run} />
     </DialogContents>
   </BusinessModal>;

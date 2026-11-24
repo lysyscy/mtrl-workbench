@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { money, projectLabel } from './api';
 import type { Project } from './api';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import type { OilArchives } from './oilcard-api';
 import { getOilOpenings } from './oilcard-ledger-api';
 import type { OilOpening } from './oilcard-ledger-api';
@@ -35,7 +35,7 @@ export function OilOpeningHistory({ archives, projects, enabled, scale }: {
     </div>
     {expanded && query.data && <div id="oilcard-opening-details">
       <p className="muted">已计入账户核对的充值累计，以下日期台账合计只统计台账内明细。</p>
-      <ReadGrid table="oilcard-openings" label="充值期初明细" rows={query.data.rows} columns={columns} rowId={row => String(row.id)} scale={scale} domLayout="autoHeight" />
+      <BoundedGrid maxHeight="26dvh" minRows={2} table="oilcard-openings" label="充值期初明细" rows={query.data.rows} columns={columns} rowId={row => String(row.id)} scale={scale} />
     </div>}
   </div>;
 }

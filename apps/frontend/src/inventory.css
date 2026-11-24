@@ -14,7 +14,7 @@
 .inventory-filter .ant-select,.inventory-filter .ant-input{min-height:calc(32px * var(--fscale))}
 .inventory-summary{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .inventory-summary .ant-tag{margin:0}
-.inventory-grid{height:62dvh;min-height:calc(300px * var(--fscale));width:100%;min-width:0;scrollbar-color:var(--bd3) var(--sf2)}
+.inventory-grid{width:100%;scrollbar-color:var(--bd3) var(--sf2)}
 .business-modal .inventory-dialog{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .inventory-dialog h2{font-size:calc(18px * var(--fscale));line-height:1.4;margin:0;font-weight:600}
 .inventory-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
@@ -45,7 +45,7 @@
 .inventory-fields small{color:var(--tx2);font-variant-numeric:tabular-nums}.inventory-fields .ant-select{width:100%}
 .inventory-cell-text{width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 
-.inventory-dialog .inventory-actions{position:sticky;bottom:0;z-index:1;padding-block:calc(12px * var(--fscale));border-top:.5px solid var(--bd2);background:var(--sf)}
+.inventory-dialog .inventory-actions{padding-block:calc(12px * var(--fscale)) 0;background:var(--sf)}
 .inventory-actions .inventory-problem{margin:0;margin-inline-end:auto;flex:1 1 10em;text-align:left}
 
 .inventory-actions>:is([role=status],[role=alert],.inventory-warning,.inventory-trail){flex-basis:100%;margin:0;text-align:left}

@@ -4,7 +4,8 @@ import type { NoticeRow } from './notices-api';
 import { useQuery } from '@tanstack/react-query';
 import Button from 'antd/es/button';
 import { ApiError, record, requestJson } from './api';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
+import type { BoundedGridMetrics } from './bounded-grid';
 import { numberColumnWidth } from './grid';
 import type { PaymentContextRow } from './payment-context';
 import { money } from './notices-api';
@@ -26,8 +27,9 @@ function MaterialCell({data}: ICellRendererParams<InvoiceView>) {
   return data?.contractId === undefined ? null : <ContractMaterial id={data.contractId}/>;
 }
 
-export const PaymentTerms = memo(function PaymentTerms({rows,notices,amount,scale}: {
+export const PaymentTerms = memo(function PaymentTerms({rows,notices,amount,scale,height,onMetrics}: {
   rows: PaymentContextRow[]; notices: NoticeRow[]; amount: (row: NoticeRow) => string | null; scale: number;
+  height?: number | undefined; onMetrics?: (metrics: BoundedGridMetrics) => void;
 }) {
   const byId = useMemo(() => new Map(notices.map(row => [row.notice_id, row])), [notices]);
   const invoices = useMemo(() => rows.flatMap(row => {
@@ -59,7 +61,7 @@ export const PaymentTerms = memo(function PaymentTerms({rows,notices,amount,scal
   if (!display.length) return null;
   return <section className="payment-terms" aria-label="账期提醒"><div className="payment-terms-heading"><strong>未满账期</strong><span>可继续付款</span></div>
     <p>依据录入发票日期计算提醒截止，日期真实性需人工核对；不代表准确应付款日或到期可付金额。</p>
-    <ReadGrid table="payment-terms" className="payment-terms-table" label="账期发票依据" domLayout="autoHeight" rows={display} rowId={invoiceId} scale={scale}
+    <BoundedGrid minRows={3} height={height} onMetrics={onMetrics} table="payment-terms" className="payment-terms-table" label="账期发票依据" rows={display} rowId={invoiceId} scale={scale}
       grid={{getRowClass:p=>p.data?.first?'payment-terms-start':''}} columns={columns}/>
   </section>;
 });

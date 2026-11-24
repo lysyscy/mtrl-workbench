@@ -1,6 +1,6 @@
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
-import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { numberColumnWidth, fullTextWidth } from './grid';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
@@ -402,10 +402,11 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     finally { lock.current = false; setBusy(false); }
   }
 
-  return <BusinessModal open={!blocked} className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="notice-print-title" closing={closing}>
+      <div className="dialog-body">
       <p>本批 {batch?.total ?? scope.length} 条通知书{rows.length > 0 && '（含搜索隐藏行）'}。</p>
-      {scope.length > 0 && <ReadGrid table="notice-print-list" className="notice-print-list" label="本批通知书" domLayout="autoHeight" rows={listedScope} rowId={row => String(row.notice_id)} columns={[
+      {scope.length > 0 && <BoundedGrid maxHeight="calc(220px * var(--fscale))" minRows={3} table="notice-print-list" className="notice-print-list" label="本批通知书" rows={listedScope} rowId={row => String(row.notice_id)} columns={[
         { field: 'bill_no', headerName: '单据编码', ...fullTextWidth(listedScope.map(row => row.bill_no || '—')), wrapText: false, valueFormatter: p => p.value || '—' },
         { field: 'project_display', headerName: '付款项目' },
         { field: 'amount_approved', headerName: '审批金额（元）', ...numberColumnWidth(scope.map(row => row.amount_approved ? money(row.amount_approved) : '—')), cellClass: 'money', valueFormatter: p => p.value ? money(p.value) : '—' },
@@ -452,6 +453,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
       <div role="status" className={revocationNotice ? 'notice' : undefined}>{revocationNotice}</div>
       {file?.pdf && <><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p>
         <iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
+      </div>
       <div className="dialog-actions">
         <Link to="/i8" onClick={event => { if (closeLocked) event.preventDefault(); else closing.requestClose(); }}>查看运行记录</Link>
         <Button htmlType="button" disabled={closeLocked} onClick={closing.requestClose}>关闭</Button>
@@ -508,13 +510,15 @@ export function PrinterSettings({ blocked, close }: { blocked:boolean;close:()=>
     catch(e){setError((printerSaved?'打印机设置已保存，版式未保存。':'未保存。')+(e instanceof ApiError && e.status>=500 && !printerSaved?'打印设置保存失败，请联系维护人员核对配置文件的写入权限。':e instanceof Error?e.message:'请核对后重试。'));}
     finally{lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} className="project-dialog printer-settings-dialog" titleId="printer-settings-title" requestClose={closing.requestClose}><DialogContents title="打印机设置" titleId="printer-settings-title" closing={closing}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog printer-settings-dialog" titleId="printer-settings-title" requestClose={closing.requestClose}><DialogContents title="打印机设置" titleId="printer-settings-title" closing={closing}>
+    <div className="dialog-body">
     {!printer?(!error&&<p role="status">正在读取打印设置…</p>):<><label>打印机 IPP 地址<input value={printer.printer_ipp_url} onChange={e=>setPrinter({...printer,printer_ipp_url:e.target.value})} placeholder="ipp://192.168.5.248" /></label>
     <label>出纸通道<select value={printer.print_mode} onChange={e=>setPrinter({...printer,print_mode:e.target.value})}>{[['auto','自动（推荐）'],['ipp','IPP'],['driver','系统驱动'],['raw','RAW 9100']].map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>
     <p>批量打印会先用 IPP 确认设备接受 A4。系统驱动和 RAW 目前无法为打印作业指定 A4。</p>
     <label>打印机名<input list="notice-printer-names" value={printer.printer_name} onChange={e=>setPrinter({...printer,printer_name:e.target.value})} /></label><datalist id="notice-printer-names">{names.map(n=><option key={n} value={n}/>)}</datalist>{!names.length&&<p>未取到本机打印机名，可手动填写。</p>}
     {layouts.map(item=><div key={item.key}><label>{item.label}<input value={item.stored} placeholder={item.env} onChange={e=>setLayouts(old=>old.map(x=>x.key===item.key?{...x,stored:e.target.value}:x))}/></label><p>{plain(item.hint)}</p><p className="mut">当前生效：{item.effective||'未设置'}，{item.stored?'本处所设；清空并保存后使用默认值':'默认值'}</p></div>)}</>}
     {error&&<p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={()=>void load()}>重读设置</Button></p>}{feedback&&<p role="status">{feedback}</p>}
+    </div>
     <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={busy||blocked||!printer} onClick={()=>void save()}>{busy?'正在保存…':'保存'}</Button></div>
   </DialogContents></BusinessModal>;
 }

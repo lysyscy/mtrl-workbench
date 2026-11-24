@@ -50,24 +50,21 @@
 .business-modal .mechanical-project-dialog{width:min(calc(600px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-plate-dialog{width:min(calc(520px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-discard-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px))}
-.mechanical-dialog>div:not([hidden]):not(.dialog-discard){display:flex;flex-direction:column;max-height:calc(84dvh - 40px * var(--fscale));min-height:0}
-.mechanical-dialog .dialog-close-heading{flex:none;margin-bottom:calc(12px * var(--fscale))}
 .mechanical-dialog .ant-btn.dialog-close-button{width:calc(28px * var(--fscale));height:calc(28px * var(--fscale));min-height:0;padding:calc(5px * var(--fscale))}
-.mechanical-dialog-body{min-height:0;overflow:auto;scrollbar-color:var(--bd3) var(--sf2);overscroll-behavior:contain}
 .mechanical-dialog .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mechanical-dialog textarea{width:100%;min-height:12em;margin:calc(12px * var(--fscale)) 0;border-radius:var(--radius-input);font:inherit}
-.mechanical-dialog footer{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:calc(8px * var(--fscale));margin-top:calc(16px * var(--fscale));padding-block:calc(12px * var(--fscale)) 0;border-top:1px solid var(--bd2);background:var(--sf)}
+.mechanical-dialog .dialog-actions{justify-content:flex-end;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
+.mechanical-modal-table{border:1px solid var(--bd);border-radius:var(--radius-input)}
 .mechanical-dialog p{line-height:1.6}
 .mechanical-dialog label:not(.ant-checkbox-wrapper){display:block}
 .mechanical-dialog label>select{display:block;margin-block:.5em}
 .mechanical-dialog details{margin:calc(12px * var(--fscale)) 0;border:1px solid var(--bd2);border-radius:var(--radius-inner);padding:calc(12px * var(--fscale))}
 .mechanical-dialog summary{cursor:pointer;font-weight:500;line-height:1.6}
-.mechanical-work-table{overflow:auto;padding:1rem}
 @media(max-width:740px){.mechanical-toolbar .mechanical-project-entry{margin-left:0}.mechanical-toolbar .filters{max-width:100%}.mechanical-locate label{max-width:100%;flex-wrap:wrap}.business-modal .mechanical-dialog{padding:calc(16px * var(--fscale))}.mechanical-detail-totals{align-items:flex-start;flex-direction:column}}
 
 .mechanical-work-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:calc(8px * var(--fscale)); margin-block:calc(8px * var(--fscale)); }
 .mechanical-work-tools > div { display:flex; flex-wrap:wrap; gap:calc(6px * var(--fscale)); }
-.mechanical-work-table { overflow:auto; max-width:100%; }
+.mechanical-work-table { padding:1rem; }
 .mechanical-check-table { min-width:calc(1340px * var(--fscale)); }
 .mechanical-work small,.mechanical-dialog small { display:block; color:var(--tx2); font-weight:400; white-space:normal; }
 .mechanical-work-table button { white-space:nowrap; }

@@ -3,6 +3,7 @@ import Tag from 'antd/es/tag';
 import Button from 'antd/es/button';
 import Segmented from 'antd/es/segmented';
 import { ReadGrid } from './business-grid';
+import { BoundedGrid } from './bounded-grid';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -129,7 +130,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
     });
     return () => cancelAnimationFrame(frame);
   }, [blocked, hash, key, placeheld]);
-  return <section data-page-chrome className="i8-page" aria-labelledby="page-title">
+  return <section data-page-chrome className="i8-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title">
     <div className="i8-block">
       <I8Server blocked={blocked} me={me}/>
       <I8BrowserRelay/>
@@ -151,7 +152,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
           <div className="i8-record-tools"><label>读取范围<Select aria-label="读取范围" value={limit} onChange={setLimit} options={[50,100,200].map(value=>({value,label:`最近 ${value} 条`}))}/></label><label>动作<Select aria-label="动作" value={type} onChange={setType} options={[['all','全部'],['fetch','抓取'],['sync','同步'],['print','打印'],['export_pdf','导出 PDF']].map(([value,label])=>({value,label}))}/></label>{records.isFetching && <span role="status">正在更新记录…</span>}</div>
           {visible.length === 0
             ? <p className="state">{(records.data ?? []).length === 0 ? '还没有执行记录。完成抓取、同步或打印后可在这里核对。' : '当前读取范围内没有这类执行记录。'}</p>
-            : <ReadGrid table="i8-records" className="i8-records" label="执行记录列表" domLayout="normal" style={{height:'min(60dvh,600px)'}} rows={visible} rowId={row=>String(row.id)} columns={[
+            : <BoundedGrid maxHeight="min(55dvh, 600px)" minRows={4} table="i8-records" className="i8-records" label="执行记录列表" rows={visible} rowId={row=>String(row.id)} columns={[
             {field:'started_at',headerName:'开始时间',valueFormatter:p=>when(p.value)},
             {colId:'action',headerName:'动作',valueGetter:p=>recordLabel(p.data!)},
             {colId:'target',headerName:'范围 / 对象',valueGetter:p=>p.data && recordSource(p.data) === 'contracts' ? recordScope(p.data) : p.data?.target},
