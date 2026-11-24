@@ -9,8 +9,8 @@
 }
 .equipment-page-bounded,
 .equipment-top-tabs,
-.equipment-top-tabs > .ant-tabs-content-holder > .ant-tabs-content,
-.equipment-top-tabs .ant-tabs-tabpane,
+.equipment-tabs-body,
+.equipment-tab-panel,
 .equipment-sheet {
   height: 100%;
   min-height: 0;
@@ -20,7 +20,7 @@
   display: flex;
   flex-direction: column;
 }
-.equipment-top-tabs > .ant-tabs-content-holder {
+.equipment-top-tabs > :has(> .equipment-tabs-body) {
   flex: 1;
   min-height: 0;
 }

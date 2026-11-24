@@ -21,6 +21,7 @@ export function EquipmentPage({ me, blocked }: { me: Identity | null; blocked: b
     <section className="equipment-page equipment-page-bounded" aria-label="设备台账">
       <Tabs
         className="equipment-top-tabs"
+        classNames={{ body: 'equipment-tabs-body', content: 'equipment-tab-panel' }}
         activeKey={tab}
         onChange={setTab}
         items={sections.map(({ key, label, page }) => ({
