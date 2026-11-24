@@ -1,4 +1,4 @@
-"""Single full-app real-copy preview CLI; DB-only isolated schemas also support contract tests.
+"""Manage full-app real-copy previews and prepare DB-only test schemas.
 
 Source configuration is read only for explicit database targets. Browser tests attach
 through the registered runtime and never create synthetic HTTP previews.
@@ -9,8 +9,8 @@ import argparse
 from contextlib import contextmanager
 import os
 from pathlib import Path
+import re
 import secrets
-import socket
 import subprocess
 import sys
 import uuid
@@ -54,9 +54,10 @@ def verified_database_source(source_env: Path):
 
 @contextmanager
 def isolated_database(source_env: Path | None = None, *, copy_source: bool = False, test_url: str = "",
-                      preview: bool = True, log=None):
+                      preview: bool = True, log=None, preview_schema: str | None = None):
     from tests.db_guard import TestDatabaseGuard, database_identity
     from sqlalchemy import create_engine, text
+    from tools.dev.frontend_preview_runtime import DISPOSABLE_SCHEMA_PREFIX
 
     if test_url:
         if copy_source or database_identity(test_url)[2] != 'mtrl_workbench_test':
@@ -73,8 +74,11 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
     if copy_source:
         from tools.dev.frontend_preview_copy import source_revision
         revision = source_revision(source_url)
+    if preview_schema is not None and (not preview or not re.fullmatch(DISPOSABLE_SCHEMA_PREFIX + '[0-9a-f]{32}', preview_schema)):
+        raise RuntimeError('可丢弃预览 schema 名称不符')
+    prefix = 'frontend_preview_test_' if preview else 'backend_verify_'
+    schema = preview_schema or prefix + uuid.uuid4().hex
     engine = create_engine(guard.test_url)
-    schema = ('frontend_rewrite_397_' if preview else 'backend_verify_') + uuid.uuid4().hex
     owned = False
     try:
         with engine.begin() as connection:
@@ -179,20 +183,88 @@ def migrate(env, revision, *, log=None):
                    cwd=ROOT / 'backend', env=env, check=True, stdout=log, stderr=log)
 
 
+def prune(source_env):
+    from sqlalchemy import create_engine, text
+    from tools.dev.frontend_preview_runtime import DISPOSABLE_SCHEMA_PREFIX, prune_registrations
+
+    if source_env is None:
+        source_env = ROOT / '.env'
+        if not source_env.is_file():
+            removed, _ = prune_registrations()
+            return dict(removed_registrations=removed, dropped_schemas=[], schema_cleanup='no-source-env')
+    _, guard = verified_database_source(source_env)
+    engine = create_engine(guard.test_url, hide_parameters=True)
+    try:
+        guard.assert_runtime(engine.url)
+        if engine.url.database != 'mtrl_workbench_test':
+            raise RuntimeError('仅能清理专用库 mtrl_workbench_test 中的可丢弃预览 schema')
+        with engine.begin() as connection:
+            identity = connection.exec_driver_sql('SELECT current_database(), current_user, session_user').one()
+            if tuple(identity) != ('mtrl_workbench_test', engine.url.username, engine.url.username):
+                raise RuntimeError('实际测试库或账号身份不符')
+            candidates = connection.execute(text('''
+                SELECT nspname FROM pg_namespace
+                WHERE pg_get_userbyid(nspowner) = current_user
+                  AND left(nspname, length(:prefix)) = :prefix
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pg_stat_activity
+                      WHERE datname = current_database()
+                        AND application_name = left('frontend_preview_' || nspname, 63)
+                  )
+                ORDER BY nspname
+            '''), {'prefix': DISPOSABLE_SCHEMA_PREFIX}).scalars().all()
+            # New servers reserve their schema before creating it. Snapshot the
+            # registry after discovering candidates, without holding it during DDL.
+            removed, live = prune_registrations()
+            if any(not entry.owner.get('schema') for entry in live):
+                raise RuntimeError('活动预览的 schema 无法确认，未执行数据库清理')
+            protected = {entry.owner.get('schema') for entry in live}
+            dropped = []
+            for schema in candidates:
+                if schema in protected or not re.fullmatch(DISPOSABLE_SCHEMA_PREFIX + r'[a-zA-Z0-9_]+', schema):
+                    continue
+                connection.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
+                dropped.append(schema)
+        return dict(removed_registrations=removed, dropped_schemas=dropped)
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
-    from tools.dev.frontend_preview_runtime import exclusive_preview
+    from tools.dev.frontend_preview_runtime import describe_preview, preview_inventory, request_stop
     from tools.dev.frontend_preview_server import run, arguments
     args = arguments()
+    if args.list:
+        live, stale = preview_inventory()
+        print('活动预览：')
+        print('\n'.join(map(describe_preview, live)) or '无')
+        if stale:
+            print('已退出的残留登记：')
+            print('\n'.join(map(describe_preview, stale)))
+        return
+    if args.prune:
+        import json
+        print(json.dumps(prune(args.source_env), ensure_ascii=False))
+        return
     if args.stop:
-        from tools.dev.frontend_preview_runtime import request_stop
-        request_stop()
+        if not args.all:
+            request_stop(port=args.port)
+            return
+        live, _ = preview_inventory()
+        failed = []
+        for entry in live:
+            try:
+                request_stop(target=entry)
+            except Exception as error:
+                failed.append(f"端口 {entry.owner.get('port')}：{type(error).__name__}")
+        if failed:
+            raise RuntimeError('部分预览停止失败：' + '、'.join(failed))
         return
     if args.prepare_build:
         from tools.dev.frontend_preview_server import prepare_build
         prepare_build(args)
         return
-    with exclusive_preview():
-        run(args)
+    run(args)
 
 
 if __name__ == '__main__':
@@ -200,3 +272,5 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         pass
+    except (RuntimeError, ValueError) as error:
+        sys.exit(str(error))

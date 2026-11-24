@@ -12,15 +12,15 @@
 
 ## 先确定当前实例和数据用途
 
-除用户明确要求单独查看另一预览外，同一时间仅一个最新产品代码与真实数据库副本的预览，自动 HTTP 测试和换端口也适用。当前入口、进程、schema、修订、构建、读写及数据保留归唯一运行 owner，以主检出登记指针及实际进程为准。
+每个 Git 工作树同一时间可运行一个真实副本预览。同仓各工作树合计最多 3 个，使用回环地址的 `8065`、`8066`、`8067`，启动未指定端口时使用 `8065`。先用 `--list` 找可用端口。预览没有空闲超时，会一直运行到显式停止，或同工作树的正式发布核验成功后清理符合条件的可丢弃副本。自动 HTTP 测试默认连接当前工作树登记的实例。
 
-统一入口为 `tools/dev/frontend_preview.py`，排他与进程身份实现为同目录 runtime 模块，完整应用装配为 server 模块。主检出 `var/state/react-writable-preview/current.json` 指向当前 run 的 `reports/real_owner.json`；锁覆盖同仓各工作树和端口，持锁服务PID直接运行uvicorn。异常退出由OS释放锁，残留记录仍核实际PID、创建时间和命令，不能只凭文件存在或旧stopped_at判断。
+统一入口为 `tools/dev/frontend_preview.py`。同仓共享 `var/state/react-writable-preview`，每个工作树使用 `slots/<slot>.lock` 和 `instances/<slot>.json`，登记指向 run 的 `reports/real_owner.json`。共享 `registry.lock` 短时串行更新登记。启动在创建或升级副本前占用工作树和端口，服务进程持有工作树锁直至退出。旧 `current.json` 中仍存活的实例也占一个名额和端口。异常退出由系统释放工作树锁，下次启动按实际 PID、创建时间和命令核实并移除已死的新式登记，保留原 owner 回执。
 
 | 用途 | 操作边界 |
 |---|---|
 | 新建验证副本 | 显式 `--copy-source --disposable`；来源只读一致快照，目标先匹配来源版本，核复制计数/内容/序列，再只升级目标。退出只清其自建schema。 |
 | 现有用户试用副本 | `--existing`只接受已登记可写副本；需要时显式目标升级，先保恢复点并核已有表数据不丢。停止保留schema、私有状态和用户修改，禁止重拷正式库覆盖。 |
-| 冻结历史性能样本 | 保既定版本、数据指纹和离线原件；无额外常驻服务，不为最新产品迁移原样本。获准测量时再按唯一实例安排符合条件的只读副本。 |
+| 冻结历史性能样本 | 保既定版本、数据指纹和离线原件；无额外常驻服务，不为最新产品迁移原样本。获准测量时再安排符合条件的只读副本。 |
 
 新副本账号经去凭据/停用投影，再建专用本地验看账号，配置、操作历史与运行记录按复制工具的明确边界处理；不打印或复制来源凭据到工作树.env。验证副本保持所有既有i8/物理打印外呼入口阻断，本地读写和Excel导出完整开放。已有业务试用实例保其明确授权的绑定及私有会话，读取配置不代表认证成功或新外部动作授权。
 
@@ -50,7 +50,7 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --run 
 
 先离线准备。构建统一经Corepack调用package.json声明的pnpm，先核实际版本，再typecheck/build，版本身份随version.json记录；缺Corepack或版本不符即停止，不回落PATH中的其他pnpm。核旧owner后正常退出，再开放新实例；统一入口在任何副本持久写入前取得排他锁及目标端口。未知来源修订、迁移分叉、数据库身份或search_path不符均拒绝，不stamp、不回退public、不改来源结构。参数中的配置只用于明确来源和专用测试目标。
 
-共享检出上开始累计回归或加载前，先与相关输入主人核目标修订和产品指纹，约定需要稳定的源码及窗口；实施期间可并行，验证窗口内保持这些输入稳定。无法冻结时使用隔离检出，仍遵守唯一预览和已登记真实副本约束。沿现有任务/owner沟通，不增加登记表；独立清理与归档不占共享索引窗口。
+共享检出上开始累计回归或加载前，先与相关输入主人核目标修订和产品指纹，约定需要稳定的源码及窗口；实施期间可并行，验证窗口内保持这些输入稳定。无法冻结时使用隔离检出，为该工作树登记真实副本和空闲端口。沿现有任务/owner沟通，不增加登记表；独立清理与归档不占共享索引窗口。
 
 来源和目标沿[父入口身份核验](development-and-verification.md#后端隔离验证参数)在连接前校验。新副本与existing均拒绝明确文件和有效环境的身份冲突；普通应用Settings的环境优先规则不变。
 
@@ -71,9 +71,19 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --sour
 
 从当前工作树现有解释器调用 `tools.dev.frontend_preview_runtime.registered_preview()`，核固定进程身份、HTTP `/visual-version`的实际schema/revision、产品输入、完整构建及实际HTML。再由入口导航检查登录、权限、受影响读取/正常保存读回或实际下载；不从健康200推完整业务正确。独立Cookie、精确search_path、导出目录及配置/i8缓存/导入状态都由原run隔离。
 
-停止仍用统一CLI `--stop`。它按当前owner的真实进程和HTTP身份请求正常退出，不依赖可能已替换的待用version清单；停止后核端口及拥有者状态。用户试用schema和私有状态保留，可丢弃验证schema由创建者清理。需要临时写验证时先停并保留试用实例，验证后恢复原试用入口；试用修改不作为测试重置材料。
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --list
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop --port 8066
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop --all
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --prune --source-env <正式检出的.env>
+```
 
-服务退出时在唯一预览锁内清除与自身owner路径及进程身份一致的current登记和停止请求，保留停止回执、用户试用数据及私有状态。替换owner（包括复用同一路径的新进程）保持；异常退出遗留或无法核实的历史登记须先核进程与用途。
+`--list` 列出所有登记中的活动预览和已退出的残留登记，包括旧实例。`--stop` 默认只作用当前工作树，可显式按端口或全仓停止。已就绪实例按登记进程和实际 HTTP 身份请求正常退出，待用构建清单不影响停止。用户试用 schema 和私有状态保留，可丢弃验证 schema 由创建者清理。需要在同一工作树临时做写入验证时，先停止并保留试用副本，验证后恢复原试用入口。
+
+`--prune` 清除已确认进程退出的登记，包括残留的旧 `current.json`。数据库清理使用指定 `--source-env`，默认使用当前工作树的 `.env`。没有配置文件时只清理残留登记。数据库清理范围是 `mtrl_workbench_test` 中由测试库账号拥有、且所有活动预览均未引用的 `frontend_rewrite_397_*` schema。命令列出移除的登记和清理的 schema。
+
+正式 `publish` 在核实 `/app` 已加载目标版本后，请求同工作树的可丢弃预览正常退出。其他工作树与用户试用实例记录在发布回执的 `other_active_previews`。`preview_cleanup` 记录停止结果、清理警告及已经释放的 `work/build-*` 目录，目录清理限于同工作树内已登记、无活动消费者且未受保护的预览 run。清理警告不影响已核验的发布结果。
 
 ## 布局采集
 

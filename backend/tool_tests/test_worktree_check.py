@@ -67,11 +67,17 @@ def test_unmerged_commit_and_active_consumer_remain_visible(repo, monkeypatch, c
     pointer = root / 'var/state/react-writable-preview/current.json'
     pointer.parent.mkdir(parents=True)
     pointer.write_text(json.dumps({'owner_path': str(tree / 'owner.json')}), encoding='utf-8')
+    instance = pointer.parent / 'instances/fixture-slot.json'
+    instance.parent.mkdir()
+    entry = {'owner_path': str(root / 'new-owner.json'), 'source_root': str(root), 'port': 8066, 'slot': 'fixture-slot'}
+    instance.write_text(json.dumps(entry), encoding='utf-8')
     assert checker.main(['--root', str(root)]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result['worktrees'][0]['head_in_base'] is False
     assert result['process_commands']['matches'][0]['pid'] == 123
     assert result['preview_registration']['present'] is True
+    assert result['preview_registration']['owner_path'] == str(tree / 'owner.json')
+    assert result['preview_registration']['instances'] == [{'path': str(instance), **entry}]
     assert tree.is_dir()
 
 

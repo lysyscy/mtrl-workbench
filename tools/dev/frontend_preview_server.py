@@ -14,9 +14,10 @@ import socket
 import subprocess
 import sys
 import threading
+import uuid
 
-from tools.dev.frontend_preview_runtime import (ROOT, product_sources, process_identity,
-    read_json, write_json, state_dir, verify_build, finish_preview)
+from tools.dev.frontend_preview_runtime import (ALLOWED_PREVIEW_PORTS, DISPOSABLE_SCHEMA_PREFIX, ROOT,
+    product_sources, read_json, reserve_preview, validate_port, verify_build, write_json)
 from tools.audit.workspace_paths import owned_run as validate_run, owned_work, consume_run, attach_run
 
 
@@ -24,17 +25,26 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-env', type=Path)
     parser.add_argument('--run', type=Path)
-    parser.add_argument('--port', type=int, default=8065)
+    parser.add_argument('--port', type=int, choices=ALLOWED_PREVIEW_PORTS)
     parser.add_argument('--copy-source', action='store_true')
     parser.add_argument('--existing', action='store_true')
     parser.add_argument('--upgrade-existing', action='store_true')
     parser.add_argument('--disposable', action='store_true')
-    parser.add_argument('--prepare-build', type=Path)
-    parser.add_argument('--stop', action='store_true')
+    command = parser.add_mutually_exclusive_group()
+    command.add_argument('--prepare-build', type=Path)
+    command.add_argument('--stop', action='store_true')
+    command.add_argument('--list', action='store_true')
+    command.add_argument('--prune', action='store_true')
+    parser.add_argument('--all', action='store_true', help='停止所有工作树的预览，需与 --stop 一起使用')
     parser.add_argument('--pg-bin', type=Path, help='既有匹配PostgreSQL工具目录，仅已有副本升级需要')
     parser.add_argument('--browser-notice-check', type=Path,
                         help='单独获批后使用：本run/work内的月份/站点/账号范围文件，仅新建disposable副本')
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.all and (not args.stop or args.port is not None):
+        parser.error('--all 仅用于 --stop，且不能与 --port 一起使用')
+    if args.port is not None and (args.list or args.prune):
+        parser.error('--list 和 --prune 作用于全部端口，不能指定 --port')
+    return args
 
 
 def prepare_build(args):
@@ -212,32 +222,62 @@ def application(args, run, env, owner, version, browser_notice_check=None):
 
 
 def run(args):
-    from tools.dev.frontend_preview import isolated_database, verified_database_source
+    from tools.dev.frontend_preview import verified_database_source
     run = owned_run(args.run)
     from tools.dev.frontend_preview_browser_check import load_check
     browser_notice_check = load_check(args, run)
     if args.source_env is None:
         raise RuntimeError('须明确只读来源配置 --source-env')
-    version = read_json(run / 'reports/version.json')
-    verify_build(version)
     _, guard = verified_database_source(args.source_env)
     if not args.existing and (not args.copy_source or not args.disposable):
         raise RuntimeError('新验证实例须显式 --copy-source --disposable，不能复用用户副本生命周期')
-    attach_run(run, root=ROOT)
-    os.environ.setdefault('MTRL_EFFORT', 'frontend-preview')
+    port = validate_port(args.port if args.port is not None else ALLOWED_PREVIEW_PORTS[0])
+    path = run / 'reports/real_owner.json'
+    schema = read_json(path)['schema'] if args.existing else DISPOSABLE_SCHEMA_PREFIX + uuid.uuid4().hex
+    stop = path.parent / 'stop-request.json'
+    with reserve_preview(port, path, schema=schema, disposable=not args.existing) as reservation:
+        attach_run(run, root=ROOT)
+        version = read_json(run / 'reports/version.json')
+        verify_build(version)
+        os.environ.setdefault('MTRL_EFFORT', 'frontend-preview')
+        owner = _serve(args, run, guard, version, browser_notice_check, reservation, path, stop)
+        if owner is not None and read_json(path).get('process') == reservation['process']:
+            owner.update(status='stopped-schema-preserved' if owner['preserve_schema_on_stop'] else 'stopped-disposable',
+                         stopped_at=datetime.now(timezone.utc).isoformat())
+            write_json(path, owner)
+
+
+def _stop_requested(stop, process):
+    try:
+        return read_json(stop).get('process') == process
+    except FileNotFoundError:
+        return False
+
+
+def _serve(args, run, guard, version, browser_notice_check, reservation, path, stop):
+    from tools.dev.frontend_preview import isolated_database
+
+    process = reservation['process']
+    port = reservation['port']
+    if _stop_requested(stop, process):
+        return None
     with socket.socket() as listener:
-        listener.bind(('127.0.0.1', args.port))
+        listener.bind(('127.0.0.1', port))
         if args.existing:
             env, owner = existing_environment(args, run, guard)
             database = nullcontext(env)
         else:
-            database = isolated_database(args.source_env, copy_source=True)
+            database = isolated_database(args.source_env, copy_source=True, preview_schema=reservation['schema'])
             owner = dict(owner='', database='mtrl_workbench_test', revision='', read_only=False,
                 cookie_name='mw_real_preview_' + secrets.token_hex(8), preview_account='preview-admin',
                 i8_enabled=False, preserve_schema_on_stop=False, disposable=True)
         with database as env:
             from sqlalchemy import create_engine
             schema = env['PGOPTIONS'].split('search_path=', 1)[1]
+            if schema != reservation['schema']:
+                raise RuntimeError('预览实际 schema 与登记不符')
+            if _stop_requested(stop, process):
+                return None
             engine = create_engine(env['DATABASE_URL'], connect_args={'options':env['PGOPTIONS']}, hide_parameters=True)
             try:
                 with engine.connect() as connection:
@@ -247,27 +287,22 @@ def run(args):
                 engine.dispose()
             sources = product_sources()
             backend_commit = subprocess.run(['git','rev-parse','HEAD'],cwd=ROOT,capture_output=True,encoding='utf-8',check=True).stdout.strip()
-            owner.update(status='ready', synthetic=False, host='127.0.0.1', port=args.port,
-                schema=schema, revision=revision, owner=role, pid=os.getpid(), process=process_identity(os.getpid()),
+            owner.update(status='ready', synthetic=False, host='127.0.0.1', port=port,
+                schema=schema, revision=revision, owner=role, pid=process['pid'], process=process,
                 source_root=str(ROOT), source_commit=version['source_commit'], backend_commit=backend_commit, product_sources=sources,
                 product_digest=hashlib.sha256(__import__('json').dumps(sources, sort_keys=True).encode()).hexdigest(),
-                index_sha256=version['index_sha256'], build_path=version['build_path'], started_at=datetime.now(timezone.utc).isoformat())
+                index_sha256=version['index_sha256'], build_path=version['build_path'], started_at=reservation['started_at'])
             owner.pop('stopped_at', None)
             if browser_notice_check is not None:
                 owner['browser_notice_check'] = browser_notice_check.receipt()
             app = application(args, run, env, owner, version, browser_notice_check)
-            path = run / 'reports/real_owner.json'
-            stop = run / 'reports/stop-request.json'
-            if stop.exists():
-                stop.unlink()
             write_json(path, owner)
-            write_json(state_dir() / 'current.json', {'owner_path':str(path), 'process':owner['process']})
             import uvicorn
             server = uvicorn.Server(uvicorn.Config(app, log_level='warning', access_log=False))
             finished = threading.Event()
             def watch():
                 while not finished.wait(.2):
-                    if stop.exists() and read_json(stop).get('process') == owner['process']:
+                    if _stop_requested(stop, process):
                         server.should_exit = True
                         return
             thread = threading.Thread(target=watch, daemon=True)
@@ -277,5 +312,4 @@ def run(args):
             finally:
                 finished.set()
                 thread.join(timeout=2)
-                owner.update(status='stopped-schema-preserved' if owner['preserve_schema_on_stop'] else 'stopped-disposable', stopped_at=datetime.now(timezone.utc).isoformat())
-                finish_preview(path, owner)
+            return owner

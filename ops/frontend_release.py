@@ -25,7 +25,9 @@ from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from tools.audit.workspace_paths import close_runs, output_dir, owned_run, owned_work, attach_run, development_run
+from tools.audit.workspace_paths import (close_runs, output_dir, owned_run, owned_work, attach_run,
+                                         development_run, retire_preview_builds)
+from tools.dev import frontend_preview_runtime as previews
 from tools.dev.frontend_preview_runtime import product_sources, read_json, write_json
 
 POINTER = re.compile(rb'(?m)^(?:\xef\xbb\xbf)?FRONTEND_APP_DIR[ \t]*=[^\r\n]*')
@@ -399,6 +401,33 @@ def release_lock(root):
             stream.seek(0); msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
 
 
+def cleanup_previews_after_publish(root, report):
+    receipt = report['preview_cleanup'] = {'stopped': [], 'warnings': []}
+    other = report['other_active_previews'] = []
+    live, _ = previews.preview_inventory(root=root)
+    for entry in live:
+        owner = entry.owner
+        summary = entry.summary()
+        if (not entry.matches_root(root) or owner.get('disposable') is not True
+                or owner.get('preserve_schema_on_stop') is not False):
+            other.append(summary)
+            continue
+        try:
+            previews.request_stop(target=entry)
+        except Exception as error:
+            receipt['warnings'].append({**summary, 'action': 'stop', 'reason': type(error).__name__})
+            continue
+        receipt['stopped'].append(summary)
+        try:
+            stopped = read_json(entry.path) if entry.path.is_file() else {}
+            if stopped.get('process') != owner['process'] or stopped.get('status') != 'stopped-disposable':
+                summary['build_cleanup'] = {'retained': 'stop-receipt-unconfirmed'}
+            else:
+                summary['build_cleanup'] = retire_preview_builds(entry.path.parent.parent, root=root)
+        except Exception as error:
+            receipt['warnings'].append({**summary, 'action': 'build-cleanup', 'reason': type(error).__name__})
+
+
 def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
     """File and service boundary, also exercised against an isolated service double."""
     root, report_path = Path(root).resolve(), Path(report_path)
@@ -450,14 +479,6 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
         report['listener'] = service.verify_listener()
         report.update(status='loaded', service=after, finished_at=datetime.now(timezone.utc).isoformat())
         checkpoint('actual-version-verified')
-        if candidate:
-            try:
-                report['release_cleanup'] = retire_releases(root, new_release, previous, created=created)
-            except Exception as cleanup:
-                # A cleanup problem must not roll back an already verified release.
-                report['release_cleanup'] = {'status': 'retained', 'reason': type(cleanup).__name__}
-            write_json(report_path, report)
-        return report
     except BaseException as exc:
         report['error'] = str(exc) if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__
         if stopped:
@@ -478,6 +499,24 @@ def apply_release(root, service, get, report_path, *, candidate=None, wait=20):
             shutil.rmtree(new_release)
         write_json(report_path, report)
         raise
+
+    if candidate:
+        # The verified release is complete. Cleanup and its receipt cannot roll it back.
+        try:
+            report['release_cleanup'] = retire_releases(root, new_release, previous, created=created)
+        except Exception as cleanup:
+            report['release_cleanup'] = {'status': 'retained', 'reason': type(cleanup).__name__}
+        try:
+            cleanup_previews_after_publish(root, report)
+        except Exception as cleanup:
+            receipt = report.setdefault('preview_cleanup', {'stopped': [], 'warnings': []})
+            receipt['warnings'].append({'action': 'inventory', 'reason': type(cleanup).__name__})
+            report.setdefault('other_active_previews', [])
+        try:
+            write_json(report_path, report)
+        except Exception as cleanup:
+            print(f'正式发布已核验，清理回执更新失败：{type(cleanup).__name__}', file=sys.stderr)
+    return report
 
 
 def require_committed_product():

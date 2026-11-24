@@ -24,7 +24,7 @@ _abandonment_safe = False
 _protection = None
 
 
-def _lifecycle():
+def _lifecycle(*, root=ROOT, managed_root=None):
     source = RUNTIME_SOURCE
     if not source.is_file():
         raise RuntimeError('项目产物工具尚未部署，请通过setup部署固定版本')
@@ -36,10 +36,12 @@ def _lifecycle():
         spec.loader.exec_module(module)
     finally:
         sys.dont_write_bytecode = previous
-    target = Path(os.environ.get('MTRL_LIFECYCLE_ROOT', str(ROOT / '.artifacts/runs')))
+    target = managed_root or root / '.artifacts/runs'
+    if managed_root is None and root == ROOT and os.environ.get('MTRL_LIFECYCLE_ROOT'):
+        target = Path(os.environ['MTRL_LIFECYCLE_ROOT'])
     module.enrolled(target)
     config = module.configuration(target)
-    if config.get('layout') == 'runs' and not Path(config['project']).samefile(ROOT):
+    if config.get('layout') == 'runs' and not Path(config['project']).samefile(root):
         raise RuntimeError('产物区属于另一项目或工作树')
     return module, target
 
@@ -147,7 +149,7 @@ def owned_run(path: Path, *, root: Path = ROOT, writing: bool = False) -> Path:
     if run.is_relative_to(Path(root).resolve() / '.artifacts/active'):
         return run
     try:
-        module, managed_root = _lifecycle()
+        module, managed_root = _lifecycle(root=root)
         managed_root = module.enrolled(managed_root)
         _, files, record = _binding(module, managed_root, run, workspace=root)
         if writing and (record['state'] != 'active' or record['hold']):
@@ -169,6 +171,42 @@ def owned_work(path: Path, *, root: Path = ROOT, writing: bool = False) -> Path:
             continue
         return run / 'work' / work.relative_to(parent)
     raise RuntimeError('构建不属于本项目已登记运行的work目录')
+
+
+def retire_preview_builds(path, *, root):
+    """Release only rebuildable build directories from one stopped preview run."""
+    root = Path(root).resolve()
+    area = _checked_path(root / '.artifacts/runs', root)
+    run = _checked_path(path, root)
+    if run.parent != area:
+        return {'retained': 'outside-local-runs'}
+    module, managed_root = _lifecycle(root=root, managed_root=area)
+
+    def raise_walk_error(error):
+        raise error
+
+    with module.lock(managed_root):
+        _, files, record = _binding(module, managed_root, run, workspace=root)
+        if record['hold'] or record['state'] != 'active' or record['kind'] == 'permanent':
+            return {'retained': 'protected-run'}
+        if (module.consumption_state(record) != 'ended'
+                or (record.get('producer') and module.producer_state(record['producer']) != 'ended')):
+            return {'retained': 'active-or-unverified-consumer'}
+        work = _checked_path(files / 'work', root)
+        builds = []
+        for path in sorted(work.glob('build-*')):
+            build = _checked_path(path, root)
+            if build.parent != work:
+                raise ValueError('预览构建路径越界')
+            if build.is_dir():
+                builds.append(build)
+                # Check descendants before any recursive deletion, including Windows junctions.
+                for directory, folders, names in os.walk(build, onerror=raise_walk_error):
+                    for name in folders + names:
+                        module.safe(Path(directory) / name)
+        for build in builds:
+            shutil.rmtree(build)
+        return {'removed': [str(build) for build in builds]}
 
 
 def output_dir(kind: str = 'reports', *, root: Path = ROOT) -> Path:

@@ -108,15 +108,28 @@ def process_references(paths: list[Path]) -> dict:
 
 
 def preview_registration(common: Path) -> dict:
-    pointer = common.parent / 'var/state/react-writable-preview/current.json'
+    directory = common.parent / 'var/state/react-writable-preview'
+    pointer = directory / 'current.json'
+    result = {'path': str(pointer), 'present': False, 'instances': []}
     try:
-        if not pointer.exists():
-            return {'path': str(pointer), 'present': False}
-        value = json.loads(pointer.read_text(encoding='utf-8-sig'))
         # Presence always needs the preview owner's identity/use check, even if stale.
-        return {'path': str(pointer), 'present': True, 'owner_path': value['owner_path']}
+        if pointer.exists():
+            value = json.loads(pointer.read_text(encoding='utf-8-sig'))
+            result.update(present=True, owner_path=value['owner_path'])
     except (OSError, ValueError, KeyError, TypeError) as error:
-        return {'path': str(pointer), 'error': type(error).__name__}
+        result['error'] = type(error).__name__
+    for instance in sorted((directory / 'instances').glob('*.json')):
+        try:
+            value = json.loads(instance.read_text(encoding='utf-8-sig'))
+            entry = {'path': str(instance), 'owner_path': value['owner_path'],
+                     'source_root': value.get('source_root'), 'port': value.get('port'), 'slot': value.get('slot')}
+            result.setdefault('owner_path', entry['owner_path'])
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            entry = {'path': str(instance), 'error': type(error).__name__}
+            result.setdefault('error', entry['error'])
+        result['instances'].append(entry)
+        result['present'] = True
+    return result
 
 
 def inspect_tree(root: Path, record: dict, base: str) -> dict:

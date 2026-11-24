@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ops import frontend_release as release
+from tools._vendor.setup_solo_workflow import artifact_lifecycle
 from tools.dev import frontend_preview_runtime as runtime
 
 
@@ -125,13 +126,17 @@ class ReleaseTests(unittest.TestCase):
         parent = os.environ.get('MTRL_TEST_WORK')
         self.temporary = tempfile.TemporaryDirectory(prefix='release-', dir=parent)
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.old = make_release(self.root / 'var/frontend/releases/previous', 'a' * 40, 'previous saved release')
         self.candidate = make_release(self.root / '.artifacts/active/operation/run/work/build', 'b' * 40, 'new saved release')
         self.original = (f'TOKEN=private-before\r\nFRONTEND_APP_DIR="{self.old.as_posix()}"\r\nKEEP=保留\r\n').encode('utf-8')
         (self.root / '.env').write_bytes(self.original)
         self.service = IsolatedService(self.root)
         self.report = self.root / '.artifacts/active/operation/run/reports/deployment.json'
+        self.registry = self.root / 'var/state/react-writable-preview'
+        state_dir = patch.object(runtime, 'state_dir', return_value=self.registry)
+        state_dir.start()
+        self.addCleanup(state_dir.stop)
 
     def apply(self, candidate=True):
         return release.apply_release(self.root, self.service, self.service.get, self.report,
@@ -358,11 +363,83 @@ class ReleaseTests(unittest.TestCase):
         self.assertTrue((self.root / 'var/frontend/releases' / ('b' * 12)).is_dir())
 
     def test_cleanup_failure_does_not_rollback_verified_publication(self):
-        with patch.object(release, 'retire_releases', side_effect=OSError('unavailable state')):
+        with patch.object(release, 'retire_releases', side_effect=OSError('unavailable state')), \
+             patch.object(runtime, 'preview_inventory', side_effect=OSError('unavailable registry')):
             result = self.apply()
         self.assertEqual(result['status'], 'loaded')
         self.assertEqual(result['release_cleanup']['status'], 'retained')
+        self.assertEqual(result['preview_cleanup']['warnings'], [{'action': 'inventory', 'reason': 'OSError'}])
         self.assertEqual(self.service.calls, ['stop', 'start'])
+
+    def test_preview_cleanup_targets_only_same_worktree_disposable_after_publish_verification(self):
+        area = self.root / '.artifacts/runs'
+        artifact_lifecycle.enroll(area, project=self.root)
+        other = self.root / 'other-worktree'
+
+        def preview(root, port, run_id, *, disposable, legacy=False):
+            if root == self.root:
+                run = Path(artifact_lifecycle.register(area, run_id, 'test', 'preview test', workspace=root))
+            else:
+                run = root / '.artifacts/runs' / run_id
+            build = run / 'work/build-preview'
+            build.mkdir(parents=True)
+            (build / 'index.html').write_bytes(b'preview')
+            (run / 'work/keep').write_bytes(b'non-build file')
+            path = run / 'reports/real_owner.json'
+            process = {'pid': port + 100, 'created': str(port), 'command': 'isolated-preview'}
+            owner = dict(process=process, source_root=str(root), port=port, status='ready',
+                         disposable=disposable, preserve_schema_on_stop=not disposable)
+            runtime.write_json(path, owner)
+            slot = runtime.slot_key(root)
+            if legacy:
+                runtime.write_json(self.registry / 'current.json', dict(owner_path=str(path), process=process))
+            else:
+                runtime.write_json(self.registry / f'instances/{slot}.json',
+                                   dict(owner_path=str(path), process=process, source_root=str(root), port=port, slot=slot))
+            return path, build
+
+        disposable, build = preview(self.root, 8066, 'disposable', disposable=True)
+        trial, trial_build = preview(self.root, 8065, 'trial', disposable=False, legacy=True)
+        foreign, foreign_build = preview(other, 8067, 'other', disposable=True)
+        calls = []
+
+        def stop(*, target):
+            self.assertEqual(runtime.read_json(self.report)['checkpoints'][-1], 'actual-version-verified')
+            calls.append(target.path)
+            runtime.write_json(target.path, {**target.owner, 'status': 'stopped-disposable'})
+            target.pointer.unlink()
+
+        with patch.object(runtime, 'live_process', return_value=True), patch.object(runtime, 'request_stop', side_effect=stop):
+            self.apply(candidate=False)
+            self.assertEqual(calls, [])
+            self.service.wrong_index = True
+            with self.assertRaisesRegex(RuntimeError, '探活超时'):
+                self.apply()
+            self.assertEqual(calls, [])
+            self.service.wrong_index = False
+            result = self.apply()
+
+        self.assertEqual(calls, [disposable])
+        self.assertEqual({item['owner_path'] for item in result['other_active_previews']}, {str(trial), str(foreign)})
+        self.assertEqual(result['preview_cleanup']['stopped'][0]['build_cleanup'], {'removed': [str(build)]})
+        self.assertFalse(build.exists())
+        self.assertTrue((build.parent / 'keep').is_file())
+        self.assertTrue(trial_build.is_dir() and foreign_build.is_dir() and self.old.is_dir())
+        self.assertEqual(runtime.read_json(self.report)['preview_cleanup'], result['preview_cleanup'])
+
+    def test_preview_build_cleanup_preserves_leased_and_protected_runs(self):
+        area = self.root / '.artifacts/runs'
+        artifact_lifecycle.enroll(area, project=self.root)
+        run = Path(artifact_lifecycle.register(area, 'leased', 'test', 'preview', workspace=self.root))
+        build = run / 'work/build-preview'
+        build.mkdir(parents=True)
+        with artifact_lifecycle.consume(area, run.name):
+            self.assertEqual(release.retire_preview_builds(run, root=self.root),
+                             {'retained': 'active-or-unverified-consumer'})
+        record, _, value = artifact_lifecycle.load(area, run.name)
+        artifact_lifecycle.atomic(record, {**value, 'hold': {'reason': 'pending review'}})
+        self.assertEqual(release.retire_preview_builds(run, root=self.root), {'retained': 'protected-run'})
+        self.assertTrue(build.is_dir())
 
     def test_changed_frontend_pointer_is_rejected_even_when_http_content_matches(self):
         other = make_release(self.root / 'var/frontend/releases/manual', 'b' * 40, 'new saved release')
