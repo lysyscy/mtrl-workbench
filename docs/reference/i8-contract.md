@@ -36,19 +36,21 @@
 
 ## 设备台账与流动资产调拨（协同办公自定义表单）
 
-2026-11-23 在第四工程公司（组织主键 `3700000000000014`）的 i8 登录会话内完成列表、设备详情只读探测。此处的业务码分别为 `sbzx`（流动资产设备台账）和 `ldzcdb`（流动资产调拨）。原生 EAM 菜单另有资产台账和调拨。
+2026-11-23 至 24 日在第四工程公司（组织主键 `3700000000000014`）核验了 `sbzx`（流动资产设备台账）和 `ldzcdb`（流动资产调拨）的列表、设备详情、一次设备改号与恢复、一次调拨保存。Edge 扩展新标签直接打开同源 `/ngweb/portal/index.html#/` 可沿用当前 Edge 会话，访问裸根路径 `/` 会跳到登录页。本次使用已有会话，未发起登录或下线操作。
 
 | 方法及路径 | 请求与结果 | 验证范围 |
 |---|---|---|
-| `POST /sup/customServer/getList` | 表单字段为 `customBusCode`、`containerId=p_form_<业务码>_m_list`、从 0 起的 `page`、行偏移 `start`、页长 `limit`，以及该组织列表的 `clientfilter`、`queryfilter`。返回 `total` 与行数组 `data`。 | 两表已只读实测。设备每页 100 条，3 页共 285 个唯一 `phid`。调拨列表同范围复查为 0 条，调拨列表行结构待验证。 |
-| `GET /sup/customServer/getInfo` | 查询参数为设备主键 `id`、`oType=edit`、`customBusCode=sbzx` 和页面由主键生成的 `encryptPrimaryKey`。详情主表在 `data.p_form_sbzx_m`。 | 设备详情已只读实测。打开修改页未提交保存。 |
-| `POST /sup/customServer/save` | 前端定义使用 `customBusCode`、`data`、`billNoStatus=1` 和 `isContinue`。后者的初始警告选项为 `warn`、`validateWarn`、`checkProjOrgWarn`，值均为字符串 `0`。 | **待首次真实写入实测验证。** 已核前端组装，服务端必填校验、成功回执、调拨生效时点和历史引用变化均未验证。 |
+| `POST /sup/customServer/getList` | 表单字段为 `customBusCode`、`containerId=p_form_<业务码>_m_list`、从 0 起的 `page`、行偏移 `start`、页长 `limit`，以及该组织列表的 `clientfilter`、`queryfilter`。返回 `total` 与行数组 `data`。 | 两表在同一组织筛选下实测。设备每页 100 条，3 页共 285 个唯一 `phid`。调拨主表行包含 `phid`、`bill_no`、`bill_dt`、`phid_org`、`phid_pc`、`app_status` 和 `wf_flag`。 |
+| `GET /sup/customServer/getInfo` | 查询参数为设备主键 `id`、`oType=edit`、`customBusCode=sbzx` 和页面由主键生成的 `encryptPrimaryKey`。详情主表在 `data.p_form_sbzx_m`。 | 设备详情及各次编辑前的 `ng_record_ver` 已实测。 |
+| `POST /sup/customServer/save` | 使用表单编码的 `customBusCode`、JSON 字符串 `data`、`billNoStatus=1`、JSON 字符串 `isContinue`。其中 `warn`、`validateWarn`、`checkProjOrgWarn` 初始值均为字符串 `0`。实测保存字段中无 `encryptPrimaryKey`。 | 两种表单成功均返回 HTTP 200，JSON 中 `status="success"`、`data` 为所存记录的主键字符串、`msg` 和 `total` 为 `null`。`bill_no` 由列表按主键回读。 |
 
-设备主表 `p_form_sbzx_m.form` 的 `key` 为 `phid`，新增数据放入 `newRow` 对象，修改数据放入含原主键的 `modifiedRow` 对象。`u_device_code` 为设备编码，修改页允许编辑，最长 50 字符。`bill_no` 为独立的单据编号。`bill_name` 为设备名称，`phid_org` 为管理组织，`u_use_org` 为使用组织，`phid_pc` / `phid_pc_EXName` 分别为使用项目主键和名称。购置日期 `u_indata` 在界面显示为 `YYYY-MM-DD`，接口值带零点时间 `YYYY-MM-DD 00:00:00`。
+设备主表 `p_form_sbzx_m.form` 的 `key` 为 `phid`。修改提交整个 `modifiedRow` 对象，保留原 `phid` 和写前服务端的整数 `ng_record_ver`。`u_device_code` 为设备编码，最长 50 字符。`bill_name` 为设备名称，`phid_org` 为管理组织，`u_use_org` 为使用组织。编辑提交的 `u_indata` 和 `bill_dt` 为 `YYYY-MM-DD`，列表中 `u_indata` 带零点时间。实测改号后再用新版本改回，三个连续列表版本为 1、2、3，设备主键和项目一致。原为空的 `bill_no` 在首次保存时由 i8 生成，恢复设备编码后仍保留。新增形态沿用前端定义的 `newRow`，设备新增及历史调拨引用变化未实测。
 
-调拨主表 `p_form_ldzcdb_m.form` 带组织 `phid_org` 和调出项目 `phid_pc`。调拨明细变更放入 `p_form_ldzcdb_d.table`。其中 `u_sbmc` 是设备名称选择控件，`u_sbbm` 是设备编码，`phid_pc` 是调出项目，`u_inproj` 是必填的调入项目。当前适配器按设备主键填写选择控件，按项目主键填写调出和调入。明细新增行序列化、选择控件实际接受的值以及保存响应 `status=success` 均只做过模拟传输测试。
+调拨主表 `p_form_ldzcdb_m.form.newRow` 带当前录入人 `phid_fill_psn`、组织 `phid_org`、调出项目 `phid_pc`、方案 `phid_schemeid=3700000000000363` 和 `YYYY-MM-DD` 的 `bill_dt`。本次页面使用默认单据日期，`bill_no`、`bill_name`、`wf_flag`、`app_status` 在提交时为 `null`。明细写入 `p_form_ldzcdb_d`，其 `isChanged` 为 `true`，`table.key` 为 `phid`，`table.newRow` 形如 `[{"row":{...}}]`。首行 `detail_row_no=0`，`key` 和 `rel_key1` 为 `null`。单据引用选择器带出设备主键 `u_sbmc`、设备编码 `u_sbbm`、规格 `u_spe`、单位 `u_msuint` 和调出项目 `phid_pc`，再选择必填的调入项目 `u_inproj`。显示名称以各字段的 `_EXName` 传递。明细的 `imp_info` 为独立 JSON 字符串，包含 `SchemePhId`、`SSign=p_form_sbzx_m`、`TSign=p_form_ldzcdb_d`、`SOrgPhId=3700000000000869`、`STable=p_form_sbzx_m`、`SPk=phid`、`SPkValue`（设备主键）和 `SName=流动资产台账`。
 
-工作台封装见 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。API 默认保留本地待同步，启用须显式注入传输和已核实的项目、单位映射。适配器按完整组织列表精确匹配设备编码，调拨前核项目名称和主键，有冲突时记录双方快照。保存后重查同一设备的项目；调拨回执未知或回读未确认时，已记录的重试只回查。真实写入与会话选择须另行授权，现有浏览器只读通道的范围见下文。
+单次调拨保存后按回执主键回读到了单号，`app_status=0`、`wf_flag=0`。同期回读同一设备，`sbzx.phid_pc` 仍为调出项目。送审后的联动时点及是否需要在 i8 另行维护设备项目未验证。
+
+工作台封装见 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。API 默认保留本地待同步，启用须显式注入传输及已核项目、单位映射，新增调拨还需同一 i8 会话的录入人主键和名称。适配器按完整组织列表精确匹配设备编码及调出项目。调拨保存后按单据主键核对单号，并回查同一设备的项目。单据已保存而设备仍在调出项目时保留单号及主键，显示项目待更新。回执未知和读回待确认的重试沿原执行记录回查，禁止重复建单。此流程只执行保存和回查两个业务动作。真实写入与会话选择按当次授权，现有浏览器只读通道的范围见下文。
 
 ## 抓取回执
 

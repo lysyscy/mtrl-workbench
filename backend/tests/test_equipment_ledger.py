@@ -406,6 +406,7 @@ TEST_CODE = "样机-20261103"
 def equipment_row(project="项目甲", project_id="P1"):
     return {"phid": "E1", "u_device_code": TEST_CODE, "bill_name": "样机", "phid_pc": project_id,
             "phid_pc_EXName": project, "u_indata": "2026-11-03 00:00:00", "u_yz": "0.0000",
+            "ng_record_ver": 2, "u_msunit": "U1", "u_msunit_EXName": "台",
             "phid_org": "3700000000000014", "u_use_org": "3700000000000014"}
 
 
@@ -413,11 +414,23 @@ def page(*rows):
     return {"data": list(rows), "total": len(rows)}
 
 
-def custom_adapter(*responses):
+def custom_adapter(*responses, project_names=None):
     transport = Mock(spec=["post_json"])
     transport.post_json.side_effect = responses
-    adapter = I8CustomFormEquipmentAdapter(transport, project_ids={"项目甲": "P1", "项目乙": "P2"})
+    adapter = I8CustomFormEquipmentAdapter(
+        transport, project_ids={"项目甲": "P1", "项目乙": "P2"},
+        project_names=project_names, transfer_operator=("I8-P1", "测试录入人"),
+    )
     return adapter, transport.post_json
+
+
+def save_receipt(phid):
+    return {"status": "success", "msg": None, "data": phid, "total": None}
+
+
+def transfer_bill():
+    return {"phid": "B1", "bill_no": "20261124-0001", "phid_pc": "P1",
+            "phid_org": "3700000000000014", "app_status": 0, "wf_flag": 0}
 
 
 def saved_form(calls, business):
@@ -447,7 +460,10 @@ def test_equipment_exact_lookup_reads_all_pages():
 @pytest.mark.parametrize("existing", [False, True])
 def test_equipment_custom_form_create_or_modify(existing):
     row = equipment_row()
-    adapter, calls = custom_adapter(page(row | {"bill_name": "旧名称"}) if existing else page(), {"status": "success"}, page(row))
+    original = row | {"bill_name": "旧名称", "bill_no": "原单号",
+                      "bill_dt": "2026-11-03 13:21:30", "app_dt": None}
+    after = page(row | {"ng_record_ver": 3}) if existing else page(row)
+    adapter, calls = custom_adapter(page(original) if existing else page(), save_receipt("E1"), after)
     result = adapter.create_equipment({"code": TEST_CODE, "name": "样机", "current_project": "项目甲",
                                        "purchase_date": date(2026, 11, 3), "purchase_price": Decimal("0")})
     assert result.status == "synced"
@@ -455,11 +471,19 @@ def test_equipment_custom_form_create_or_modify(existing):
                 "u_spec": None, "u_indata": "2026-11-03 00:00:00", "u_yz": "0",
                 "phid_org": "3700000000000014", "u_use_org": "3700000000000014", "u_bz": None}
     if existing:
-        expected["phid"] = "E1"
-        del expected["phid_org"], expected["u_use_org"]
+        expected = original | {"bill_name": "样机", "u_indata": "2026-11-03",
+                               "bill_dt": "2026-11-03", "app_dt": ""}
     assert saved_form(calls, "sbzx") == {"p_form_sbzx_m": {
         "form": {"key": "phid", "modifiedRow" if existing else "newRow": expected}}}
     assert calls.call_args_list[-1].args == (LIST_PATH,)
+
+
+def test_equipment_edit_requires_current_record_version():
+    original = equipment_row() | {"bill_name": "旧名称", "ng_record_ver": None}
+    adapter, calls = custom_adapter(page(original))
+    with pytest.raises(ValueError, match="记录版本"):
+        adapter.create_equipment({"code": TEST_CODE, "name": "样机", "current_project": "项目甲"})
+    assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH]
 
 
 @pytest.mark.parametrize("unexpected", [
@@ -484,21 +508,46 @@ def test_custom_transfer_conflict_blocks_save(project, project_id):
     assert calls.call_count == 1 and calls.call_args.args == (LIST_PATH,)
 
 
-@pytest.mark.parametrize("after,status", [(page(equipment_row("项目乙", "P2")), "synced"),
-                                        (page(equipment_row()), "failed"), (page(), "failed"),
-                                        (page(equipment_row("项目乙", "P9")), "failed")])
-def test_custom_transfer_save_and_readback(after, status):
-    adapter, calls = custom_adapter(page(equipment_row()), {"status": "success"}, after)
+@pytest.mark.parametrize("bill_rows,after,status", [
+    (page(transfer_bill()), page(equipment_row("项目乙全称", "P2")), "synced"),
+    (page(transfer_bill()), page(equipment_row("项目甲全称")), "pending"),
+    (page(transfer_bill()), page(), "failed"),
+    (page(transfer_bill()), page(equipment_row("项目乙全称", "P9")), "failed"),
+    (page(), page(equipment_row("项目乙全称", "P2")), "failed"),
+])
+def test_custom_transfer_save_and_readback(bill_rows, after, status):
+    adapter, calls = custom_adapter(
+        page(equipment_row("项目甲全称")), save_receipt("B1"), bill_rows, after,
+        project_names={"项目甲": "项目甲全称", "项目乙": "项目乙全称"},
+    )
     result = adapter.create_transfer(TEST_CODE, "项目甲", "项目乙", transfer_date=date(2026, 11, 23))
     assert result.status == status
-    assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, SAVE_PATH, LIST_PATH]
-    assert saved_form(calls, "ldzcdb") == {
-        "p_form_ldzcdb_m": {"form": {"key": "phid", "newRow": {
-            "phid_org": "3700000000000014", "phid_pc": "P1", "bill_dt": "2026-11-23 00:00:00"}}},
-        "p_form_ldzcdb_d": {"isChanged": True, "table": {"key": "phid", "newRow": [{
-            "u_sbmc": "E1", "u_sbbm": TEST_CODE, "phid_pc": "P1", "u_inproj": "P2",
-            "detail_row_no": 1, "u_bz": None}]}},
+    assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH]
+    assert calls.call_args_list[2].kwargs["data"]["containerId"] == "p_form_ldzcdb_m_list"
+    payload = saved_form(calls, "ldzcdb")
+    assert payload["p_form_ldzcdb_m"] == {"form": {"key": "phid", "newRow": {
+        "phid_fill_psn": "I8-P1", "phid_fill_psn_EXName": "测试录入人",
+        "phid_schemeid": "3700000000000363", "phid_org": "3700000000000014",
+        "phid_org_EXName": "第四工程公司", "phid_pc": "P1", "bill_dt": "2026-11-23",
+        "bill_no": None, "bill_name": None, "app_status": None, "wf_flag": None,
+    }}}
+    detail = payload["p_form_ldzcdb_d"]
+    assert detail["isChanged"] is True and detail["table"]["key"] == "phid"
+    row = detail["table"]["newRow"][0]["row"]
+    assert json.loads(row.pop("imp_info")) == {
+        "SchemePhId": "3700000000000363", "SSign": "p_form_sbzx_m", "TSign": "p_form_ldzcdb_d",
+        "SOrgPhId": "3700000000000869", "STable": "p_form_sbzx_m", "SPk": "phid",
+        "SPkValue": "E1", "SName": "流动资产台账",
     }
+    assert detail["table"]["newRow"] == [{"row": {
+        "rel_key1": None, "u_sbmc": "E1", "u_sbmc_EXName": "样机", "u_sbbm": TEST_CODE,
+        "u_spe": None, "phid_pc": "P1", "phid_pc_EXName": "项目甲全称", "u_inproj": "P2",
+        "u_inproj_EXName": "项目乙全称", "u_msuint": "U1", "u_msuint_EXName": "台",
+        "key": None, "detail_row_no": 0,
+    }}]
+    if status == "pending":
+        assert result.conflict["bill_phid"] == "B1"
+        assert result.conflict["bill_no"] == "20261124-0001"
 
 
 def test_custom_adapter_injected_at_normal_sync_entry(client):
@@ -523,6 +572,28 @@ def test_transfer_retry_reconciles_unknown_save_without_reposting(client):
         result = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [transfer["id"]]})
         assert result["transfers"][0]["status"] == expected
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH]
+
+
+def test_saved_transfer_waits_for_equipment_project_without_reposting(client):
+    key = add(client, in_rental="no")["equipment"][0]["id"]
+    code = request(client, "GET", f"/equipment/{key}")["equipment"]["code"]
+    row = equipment_row() | {
+        "u_device_code": code, "bill_name": BASE["name"], "u_yz": BASE["purchase_price"],
+        "u_indata": f"{BASE['purchase_date']} 00:00:00", "u_spec": BASE.get("spec"),
+    }
+    bill = page(transfer_bill())
+    moved = page(row | {"phid_pc": "P2", "phid_pc_EXName": "项目乙"})
+    adapter, calls = custom_adapter(page(row), page(row), save_receipt("B1"), bill, page(row), bill, moved)
+    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    saved = request(client, "POST", "/transfers", dict(equipment_ids=[key], to_project="项目乙",
+                                                       transfer_date="2026-11-24"))["transfers"][0]
+    assert saved["i8_sync_status"] == "pending"
+    assert json.loads(saved["i8_conflict_json"])["bill_no"] == "20261124-0001"
+    retried = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [saved["id"]]})
+    assert retried["transfers"][0]["status"] == "synced"
+    assert [c.args[0] for c in calls.call_args_list] == [
+        LIST_PATH, LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH, LIST_PATH, LIST_PATH,
+    ]
 
 
 def save_source(path, sheets):

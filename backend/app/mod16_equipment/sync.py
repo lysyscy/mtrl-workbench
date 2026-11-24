@@ -32,10 +32,10 @@ class SyncResult:
     conflict: dict | None = None
 
 
-def transfer_precondition(snapshot, code, from_project, to_project):
+def transfer_precondition(snapshot, code, from_project, to_project, *, project_name=None):
     if snapshot is None:
         return SyncResult("pending", "未查到 i8 设备，调拨待同步")
-    if snapshot["current_project"] != from_project:
+    if snapshot["current_project"] != (project_name or from_project):
         local = {"code": code, "from_project": from_project, "to_project": to_project}
         return SyncResult("conflict", "i8 当前项目与本地调出项目不一致，请核对", snapshot,
                           {"snapshot": snapshot, "local": local, "from_project": from_project})
@@ -66,24 +66,31 @@ class I8CustomFormEquipmentAdapter:
     LIST = "/sup/customServer/getList"
     SAVE = "/sup/customServer/save"
     ORG = "3700000000000014"
+    ORG_NAME = "第四工程公司"
+    TRANSFER_SCHEME = "3700000000000363"
+    TRANSFER_REFERENCE_ORG = "3700000000000869"
     # Fixed organizational query filters observed on the sbzx list, not session data.
     CLIENT_FILTER = ("e48f570da0f71818a59e798cfa48fa57bc388a6b8519dc9d0f237f397f1fdf63"
                      "f4b6f41b8fbed0c7a9520cd37c2e728810b59c1f0f0f253c")
     QUERY_FILTER = "5e3410ab22038162"
 
     def __init__(self, transport: FormTransport, *, project_ids: Mapping[str, str],
-                 unit_ids: Mapping[str, str] | None = None):
+                 unit_ids: Mapping[str, str] | None = None,
+                 project_names: Mapping[str, str] | None = None,
+                 transfer_operator: tuple[str, str] | None = None):
         self.transport = transport
         self.project_ids = project_ids
+        self.project_names = project_names or {}
         self.unit_ids = unit_ids or {}
+        self.transfer_operator = transfer_operator
 
-    def list_equipment(self):
+    def _list_rows(self, business):
         rows, ids = [], set()
         total = None
         page = 0
         while True:
             body = self.transport.post_json(self.LIST, data={
-                "customBusCode": "sbzx", "containerId": "p_form_sbzx_m_list",
+                "customBusCode": business, "containerId": f"p_form_{business}_m_list",
                 "clientfilter": self.CLIENT_FILTER, "queryfilter": self.QUERY_FILTER,
                 "page": str(page), "start": str(len(rows)), "limit": "100",
             })
@@ -91,37 +98,53 @@ class I8CustomFormEquipmentAdapter:
             if (not isinstance(batch, list) or count < 0 or
                     (total is not None and total != count) or body.get("success") is False
                     or body.get("Success") is False or body.get("status") not in (None, "success")):
-                raise ValueError("i8 设备列表不完整")
+                raise ValueError("i8 自定义表单列表不完整")
             total = count
             for row in batch:
-                if not row.get("phid") or str(row["phid"]) in ids or not row.get("u_device_code"):
-                    raise ValueError("i8 设备主键重复或缺少标识")
+                if not row.get("phid") or str(row["phid"]) in ids:
+                    raise ValueError("i8 列表主键重复或缺少标识")
+                if business == "sbzx" and not row.get("u_device_code"):
+                    raise ValueError("i8 设备缺少编码")
                 ids.add(str(row["phid"]))
-                rows.append({key: row.get(key) for key in (
-                    "phid", "bill_name", "phid_pc", "phid_pc_EXName", "u_device_code",
-                    "u_indata", "u_yz", "u_spec", "u_msunit", "u_bz", "phid_org", "u_use_org",
-                )} | {"current_project": row.get("phid_pc_EXName")})
+                rows.append(row)
             if len(rows) == total:
                 return rows
             if not batch or len(rows) > total:
-                raise ValueError("i8 设备列表条数不符")
+                raise ValueError("i8 自定义表单列表条数不符")
             page += 1
 
-    def lookup_by_code(self, code):
-        matches = [row for row in self.list_equipment() if row["u_device_code"] == code]
+    @staticmethod
+    def _snapshot(row):
+        return {key: row.get(key) for key in (
+            "phid", "bill_name", "phid_pc", "phid_pc_EXName", "u_device_code",
+            "u_indata", "u_yz", "u_spec", "u_msunit", "u_bz", "phid_org", "u_use_org",
+            "ng_record_ver",
+        )} | {"current_project": row.get("phid_pc_EXName")}
+
+    def list_equipment(self):
+        return [self._snapshot(row) for row in self._list_rows("sbzx")]
+
+    def _equipment_row(self, code):
+        matches = [row for row in self._list_rows("sbzx") if row["u_device_code"] == code]
         if len(matches) > 1:
             raise ValueError("i8 设备编码重复")
         return matches[0] if matches else None
+
+    def lookup_by_code(self, code):
+        row = self._equipment_row(code)
+        return self._snapshot(row) if row is not None else None
 
     def _save(self, code, data):
         response = self.transport.post_json(self.SAVE, retry_expired=False, data={
             "customBusCode": code, "data": encoded(data), "billNoStatus": "1",
             "isContinue": encoded({"warn": "0", "validateWarn": "0", "checkProjOrgWarn": "0"}),
         })
-        if response.get("status") in ("validateWarn", "warn", "error"):
+        if response.get("status") in ("validateWarn", "validateForbid", "warn", "checkProjOrgWarn", "error"):
             raise SaveRejected("i8 未接受保存")
-        if response.get("status") != "success":
+        phid = response.get("data")
+        if response.get("status") != "success" or not isinstance(phid, str) or not phid.strip():
             raise ValueError("i8 保存回执未确认成功")
+        return phid
 
     @staticmethod
     def _form(row):
@@ -131,11 +154,13 @@ class I8CustomFormEquipmentAdapter:
         code, project = data["code"], data["current_project"]
         if not code or len(code) > 50:
             raise ValueError("i8 设备编码须为 1 至 50 个字符")
-        before = self.lookup_by_code(code)
+        original = self._equipment_row(code)
+        before = self._snapshot(original) if original is not None else None
         project_id = self.project_ids[project]
+        project_name = self.project_names.get(project, project)
         if not project_id:
             raise ValueError("缺少 i8 项目标识")
-        if before and (before["current_project"] != project or str(before["phid_pc"]) != project_id):
+        if before and (before["current_project"] != project_name or str(before["phid_pc"]) != project_id):
             return equipment_conflict(before)
         purchase_date = data.get("purchase_date")
         row = {"u_device_code": code, "bill_name": data["name"], "phid_pc": project_id,
@@ -146,43 +171,89 @@ class I8CustomFormEquipmentAdapter:
             row["u_msunit"] = self.unit_ids[data["unit"]]
             if not row["u_msunit"]:
                 raise ValueError("缺少 i8 单位标识")
-        if before:
-            row["phid"] = before["phid"]
-            if all(_field_matches(key, before.get(key), value) for key, value in row.items()):
-                return checked_project(before, project)
+        version = None
+        if original is not None:
+            changes = {key: value for key, value in row.items()
+                       if not _field_matches(key, before.get(key), value)}
+            if not changes:
+                return checked_project(before, project_name)
+            version = original.get("ng_record_ver")
+            if type(version) is not int or version < 0:
+                raise ValueError("i8 设备缺少有效记录版本")
+            # The edit form sends the full current row, including the server version.
+            form_row = original | changes
+            for key in ("u_indata", "bill_dt", "app_dt"):
+                if form_row.get(key):
+                    form_row[key] = form_row[key].split(" ")[0]
+            if "app_dt" in form_row and form_row["app_dt"] is None:
+                form_row["app_dt"] = ""
         else:
             row.update(phid_org=self.ORG, u_use_org=self.ORG)
-        self._save("sbzx", {"p_form_sbzx_m": self._form(row)})
+            form_row = row
+        saved_id = self._save("sbzx", {"p_form_sbzx_m": self._form(form_row)})
         after = self.lookup_by_code(code)
-        matches = after is not None and all(
-            _field_matches(key, after.get(key), value) for key, value in row.items())
-        return checked_project(after, project, matches)
+        matches = (
+            after is not None and str(after["phid"]) == saved_id
+            and (before is None or str(before["phid"]) == saved_id)
+            and (version is None or (
+                type(after["ng_record_ver"]) is int and after["ng_record_ver"] > version))
+            and all(_field_matches(key, after.get(key), value) for key, value in row.items())
+        )
+        return checked_project(after, project_name, matches)
 
     def create_transfer(self, code, from_project, to_project, *, transfer_date=None, remark=None):
-        before = self.lookup_by_code(code)
-        stop = transfer_precondition(before, code, from_project, to_project)
+        original = self._equipment_row(code)
+        before = self._snapshot(original) if original is not None else None
+        source_name = self.project_names.get(from_project, from_project)
+        stop = transfer_precondition(before, code, from_project, to_project, project_name=source_name)
         if stop:
             return stop
         origin, destination = self.project_ids[from_project], self.project_ids[to_project]
         if not origin or not destination:
             raise ValueError("缺少 i8 调拨项目标识")
-        if str(before["phid_pc"]) != origin:
+        if str(before["phid_pc"]) != origin or str(before["phid_org"]) != self.ORG:
             local = {"code": code, "from_project": from_project, "phid_pc": origin, "to_project": to_project}
-            return SyncResult("conflict", "i8 调出项目主键不一致，请核对", before,
+            return SyncResult("conflict", "i8 调出项目主键或管理组织不一致，请核对", before,
                               {"snapshot": before, "local": local, "from_project": from_project})
-        header = {"phid_org": self.ORG, "phid_pc": origin}
-        if transfer_date:
-            header["bill_dt"] = f"{date.fromisoformat(str(transfer_date))} 00:00:00"
-        detail = {"u_sbmc": before["phid"], "u_sbbm": code, "phid_pc": origin,
-                  "u_inproj": destination, "detail_row_no": 1, "u_bz": remark}
+        if not self.transfer_operator or not all(self.transfer_operator):
+            raise ValueError("缺少当前 i8 会话的录入人标识")
+        if transfer_date is None:
+            raise ValueError("缺少 i8 调拨日期")
+        operator_id, operator_name = self.transfer_operator
+        destination_name = self.project_names.get(to_project, to_project)
+        header = {
+            "phid_fill_psn": operator_id, "phid_fill_psn_EXName": operator_name,
+            "bill_dt": date.fromisoformat(str(transfer_date)).isoformat(),
+            "phid_schemeid": self.TRANSFER_SCHEME,
+            "phid_org": self.ORG, "phid_org_EXName": self.ORG_NAME, "phid_pc": origin,
+            "bill_no": None, "bill_name": None, "wf_flag": None, "app_status": None,
+        }
+        detail = {
+            "rel_key1": None, "u_sbmc": before["phid"], "u_sbmc_EXName": before["bill_name"],
+            "u_sbbm": code, "u_spe": before["u_spec"], "phid_pc": origin, "phid_pc_EXName": source_name,
+            "u_inproj": destination, "u_inproj_EXName": destination_name, "key": None, "detail_row_no": 0,
+            "imp_info": encoded({
+                "SchemePhId": self.TRANSFER_SCHEME, "SSign": "p_form_sbzx_m",
+                "TSign": "p_form_ldzcdb_d", "SOrgPhId": self.TRANSFER_REFERENCE_ORG,
+                "STable": "p_form_sbzx_m", "SPk": "phid", "SPkValue": str(before["phid"]),
+                "SName": "流动资产台账",
+            }),
+        }
+        if before["u_msunit"]:
+            detail.update(u_msuint=before["u_msunit"], u_msuint_EXName=original.get("u_msunit_EXName"))
+        if original.get("u_prc") is not None:
+            detail["u_prc"] = original["u_prc"]
+        if remark is not None:
+            detail["u_bz"] = remark
         payload = {
             "p_form_ldzcdb_m": self._form(header),
-            "p_form_ldzcdb_d": {"isChanged": True, "table": {"key": "phid", "newRow": [detail]}},
+            "p_form_ldzcdb_d": {"isChanged": True, "table": {"key": "phid", "newRow": [{"row": detail}]}},
         }
         evidence = {"awaiting_readback": True, "code": code, "phid": before["phid"],
-                    "to_project": to_project, "destination_id": destination}
+                    "to_project": to_project, "destination_id": destination, "origin_id": origin,
+                    "destination_name": destination_name}
         try:
-            self._save("ldzcdb", payload)
+            evidence["bill_phid"] = self._save("ldzcdb", payload)
         except SaveRejected:
             raise
         except Exception:
@@ -190,14 +261,30 @@ class I8CustomFormEquipmentAdapter:
         return self.verify_transfer(evidence)
 
     def verify_transfer(self, evidence):
+        bill_phid = evidence.get("bill_phid")
+        bill = None
+        if bill_phid:
+            try:
+                bill = next((row for row in self._list_rows("ldzcdb") if str(row["phid"]) == bill_phid), None)
+            except Exception:
+                pass
         try:
             after = self.lookup_by_code(evidence["code"])
         except Exception:
             after = None
-        if (after and after["phid"] == evidence["phid"]
-                and str(after["phid_pc"]) == evidence["destination_id"]
-                and after["current_project"] == evidence["to_project"]):
-            return checked_project(after, evidence["to_project"])
+        if bill_phid and (
+            not bill or not bill.get("bill_no") or str(bill.get("phid_pc")) != evidence["origin_id"]
+            or str(bill.get("phid_org")) != self.ORG
+        ):
+            return SyncResult("failed", "i8 调拨单未核对成功，重试时只回查", after, evidence)
+        same_device = after is not None and str(after["phid"]) == str(evidence["phid"])
+        destination_name = evidence.get("destination_name", evidence["to_project"])
+        if (same_device and str(after["phid_pc"]) == evidence["destination_id"]
+                and after["current_project"] == destination_name):
+            return checked_project(after, destination_name)
+        if bill and same_device and str(after["phid_pc"]) == evidence["origin_id"]:
+            receipt = evidence | {"bill_no": bill["bill_no"]}
+            return SyncResult("pending", f"i8 调拨单 {bill['bill_no']} 已保存，设备项目待更新", after, receipt)
         return SyncResult("failed", "i8 调拨尚未核对成功，重试时只核对所在项目", after, evidence)
 
 
