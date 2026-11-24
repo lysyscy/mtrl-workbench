@@ -72,6 +72,7 @@ def test_discard_confirmation_reuses_contract_content_and_size(server,browser_pa
     confirmation=page.get_by_role('dialog')
     expect(confirmation).to_have_accessible_name('放弃未保存的修改？')
     assert confirmation.locator('.dialog-discard').locator('h2,p,button').all_text_contents()==reference_text
+    expect(page.locator('.ant-modal')).to_have_css('transform','none')
     size=confirmation.locator('.project-dialog').bounding_box()
     assert abs(size['width']-reference_size['width'])<1,(size,reference_size)
     assert abs(size['height']-reference_size['height'])<1,(size,reference_size)

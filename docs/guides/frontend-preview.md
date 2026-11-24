@@ -69,6 +69,12 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --sour
 
 ## 实际核验与退出
 
+Agent 自动核验可在本次运行内启动可丢弃预览，检查结束后正常停止。交给用户长时间验看时，若当前宿主会在会话空闲后回收后台进程（如 Antigravity 约 30 分钟的空闲清理），交接时提供下列单行启动命令，填入已登记的 run、来源文件与空闲端口，由用户在自己的终端或项目脚本中运行。预览随该终端或脚本运行，独立于聊天会话。
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --source-env <正式检出的.env> --run <run> --copy-source --disposable --port <空闲端口>
+```
+
 从当前工作树现有解释器调用 `tools.dev.frontend_preview_runtime.registered_preview()`，核固定进程身份、HTTP `/visual-version`的实际schema/revision、产品输入、完整构建及实际HTML。再由入口导航检查登录、权限、受影响读取/正常保存读回或实际下载；不从健康200推完整业务正确。独立Cookie、精确search_path、导出目录及配置/i8缓存/导入状态都由原run隔离。
 
 ```text
