@@ -48,7 +48,7 @@
 
 调拨主表 `p_form_ldzcdb_m.form.newRow` 带当前录入人 `phid_fill_psn`、组织 `phid_org`、调出项目 `phid_pc`、方案 `phid_schemeid=3700000000000363` 和 `YYYY-MM-DD` 的 `bill_dt`。本次页面使用默认单据日期，`bill_no`、`bill_name`、`wf_flag`、`app_status` 在提交时为 `null`。明细写入 `p_form_ldzcdb_d`，其 `isChanged` 为 `true`，`table.key` 为 `phid`，`table.newRow` 形如 `[{"row":{...}}]`。首行 `detail_row_no=0`，`key` 和 `rel_key1` 为 `null`。单据引用选择器带出设备主键 `u_sbmc`、设备编码 `u_sbbm`、规格 `u_spe`、单位 `u_msuint` 和调出项目 `phid_pc`，再选择必填的调入项目 `u_inproj`。显示名称以各字段的 `_EXName` 传递。明细的 `imp_info` 为独立 JSON 字符串，包含 `SchemePhId`、`SSign=p_form_sbzx_m`、`TSign=p_form_ldzcdb_d`、`SOrgPhId=3700000000000869`、`STable=p_form_sbzx_m`、`SPk=phid`、`SPkValue`（设备主键）和 `SName=流动资产台账`。
 
-单次调拨保存后按回执主键回读到了单号，`app_status=0`、`wf_flag=0`。同期回读同一设备，`sbzx.phid_pc` 仍为调出项目。送审后的联动时点及是否需要在 i8 另行维护设备项目未验证。
+调拨单 `20261124-0001` 保存后按回执主键回读到了单号，`app_status=0`、`wf_flag=0`。同期回读同一设备，`sbzx.phid_pc` 仍为调出项目。2026-11-24 用户在 i8 对该 `ldzcdb` 调拨单执行送审并确认，i8 自动将设备当前项目（`sbzx.phid_pc`）更新为调入项目。
 
 工作台封装见 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。API 默认保留本地待同步，启用须显式注入传输及已核项目、单位映射，新增调拨还需同一 i8 会话的录入人主键和名称。适配器按完整组织列表精确匹配设备编码及调出项目。调拨保存后按单据主键核对单号，并回查同一设备的项目。单据已保存而设备仍在调出项目时保留单号及主键，显示项目待更新。回执未知和读回待确认的重试沿原执行记录回查，禁止重复建单。此流程只执行保存和回查两个业务动作。真实写入与会话选择按当次授权，现有浏览器只读通道的范围见下文。
 
