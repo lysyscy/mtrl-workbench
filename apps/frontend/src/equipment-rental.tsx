@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
@@ -9,6 +9,9 @@ import { BusinessGrid } from './business-grid';
 import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { equipmentApi as api, exportEquipment } from './equipment-api';
 import type { Billing, Choice, Pending, RentGroup, RentalLine } from './equipment-api';
+import { equipmentFlashDuration, scrollToEquipmentTarget, whenEquipmentTargetReady } from './equipment-navigation';
+import type { RentalTarget } from './equipment-navigation';
+import { contentWidth } from './grid';
 import {
   DateField,
   decimalInput,
@@ -39,7 +42,11 @@ const choices: Record<Exclude<Pending, 'none'>, [Choice, string][]> = {
   ],
 };
 type Editable = 'quantity' | 'custom_unit_price' | 'distribution_note';
-type RentalContext = { locked: boolean; act: (fn: () => Promise<unknown>) => Promise<void> };
+type RentalContext = {
+  locked: boolean;
+  act: (fn: () => Promise<unknown>) => Promise<void>;
+  goToDistribution: (ids: readonly number[]) => void;
+};
 type Cell = ICellRendererParams<RentalLine, unknown, RentalContext>;
 function EditCell({ data, context, field }: { field: Editable } & Cell) {
   const [draft, setDraft] = useState<string | null>(null),
@@ -165,40 +172,51 @@ function Decision({ data: r, context }: Cell) {
     </div>
   );
 }
-const columns: ColDef<RentalLine>[] = [
-  {
-    colId: 'sequence',
-    headerName: '序号',
-    minWidth: 78,
-    rowDrag: true,
-    valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1,
-  },
-  {
-    field: 'name',
-    headerName: '名称',
-    tooltipValueGetter: (p) => (p.data?.source_row ? '租赁底稿行 ' + p.data.source_row : p.value),
-  },
-  { field: 'spec', headerName: '规格型号' },
-  { field: 'unit', headerName: '单位' },
-  { field: 'quantity', headerName: '数量', cellRenderer: Quantity },
-  { field: 'unit_price', headerName: '租赁单价(元)', cellRenderer: Price },
-  { field: 'amount', headerName: '金额(元)', valueFormatter: ({ value }) => formatNum(value) },
-  { field: 'category_label', headerName: '类别' },
-  { field: 'distribution_note', headerName: '分布', cellRenderer: Note },
-  { colId: 'billing', headerName: '本月计租', minWidth: 220, autoHeight: true, cellRenderer: Decision },
-];
+function EquipmentName({ data, context }: Cell) {
+  const id = data?.equipment_id;
+  if (!data || id == null) return data?.name;
+  return <button type="button" className="equipment-row-link" title="定位到设备分布"
+    onClick={() => context.goToDistribution([id])}>{data.name}</button>;
+}
+
+function rentalColumns(scale: number): ColDef<RentalLine>[] {
+  return [
+    {
+      colId: 'sequence', headerName: '序号', ...contentWidth(61, 68, scale), rowDrag: true,
+      valueGetter: p => (p.node?.rowIndex ?? 0) + 1,
+    },
+    {
+      field: 'name', headerName: '名称', ...contentWidth(84, 140, scale, 1), cellRenderer: EquipmentName,
+      tooltipValueGetter: p => p.data?.source_row ? '租赁底稿行 ' + p.data.source_row : p.value,
+    },
+    { field: 'spec', headerName: '规格型号', ...contentWidth(70, 115, scale, 0.6) },
+    { field: 'unit', headerName: '单位', ...contentWidth(42, 56, scale) },
+    { field: 'quantity', headerName: '数量', ...contentWidth(55, 72, scale), cellRenderer: Quantity },
+    { field: 'unit_price', headerName: '租赁单价(元)', ...contentWidth(81, 94, scale), cellRenderer: Price },
+    { field: 'amount', headerName: '金额(元)', ...contentWidth(78, 106, scale),
+      cellClass: 'ag-right-aligned-cell', valueFormatter: ({ value }) => formatNum(value) },
+    { field: 'category_label', headerName: '类别', ...contentWidth(48, 66, scale) },
+    { field: 'distribution_note', headerName: '分布', ...contentWidth(62, 102, scale, 0.7), cellRenderer: Note },
+    { colId: 'billing', headerName: '本月计租', ...contentWidth(130, 154, scale), autoHeight: true, cellRenderer: Decision },
+  ];
+}
 const groupKey = (group: RentGroup) => group.project_id === null ? 'name:' + group.project_name : 'id:' + group.project_id;
+const projectAnchor = (group: RentGroup) => 'equipment-rental-' + encodeURIComponent(groupKey(group));
 
 function ProjectGrid({
   group,
   month,
   only,
   context,
+  columns,
+  scale,
 }: {
   group: RentGroup;
   month: string;
   only: boolean;
   context: RentalContext;
+  columns: ColDef<RentalLine>[];
+  scale: number;
 }) {
   const drag = useGridRowDrag<RentalLine>({
     disabled: context.locked || only,
@@ -212,14 +230,13 @@ function ProjectGrid({
     const ordered = rowsInOrder(group.lines, order, r => r.id);
     return only ? ordered.filter(r => r.pending_action_type !== 'none') : ordered;
   }, [group.lines, order, only]);
-  if (!rows.length) return null;
   return (
-    <section className="equipment-project">
+    <section className="equipment-project" id={projectAnchor(group)}>
       <h3>
         {group.project_name}
         <span>项目小计　{formatNum(group.subtotal)} 元</span>
       </h3>
-      <BusinessGrid
+      {rows.length ? <BusinessGrid
         table="equipment-rental"
         scope={month + groupKey(group)}
         rows={rows}
@@ -227,30 +244,88 @@ function ProjectGrid({
         rowId={rowId}
         label={group.project_name + '租赁明细'}
         domLayout="autoHeight"
+        scale={scale}
         grid={drag.grid}
         context={context}
-      />
+      /> : <p className="equipment-project-empty">{only ? '没有待定项' : '暂无租赁明细'}</p>}
     </section>
   );
 }
-export function Rental() {
+export function Rental({ target, scale, goToDistribution }: {
+  target: RentalTarget | null;
+  scale: number;
+  goToDistribution: (ids: readonly number[]) => void;
+}) {
   const [month, setMonth] = useState(dayjs().format('YYYY-MM')),
-    [project, setProject] = useState(''),
     [only, setOnly] = useState(false),
-    [confirm, setConfirm] = useState(false);
+    [confirm, setConfirm] = useState(false),
+    [jumpNotice, setJumpNotice] = useState('');
+  const scroll = useRef<HTMLDivElement>(null);
+  const resolved = useRef<RentalTarget | null>(null);
+  const columns = useMemo(() => rentalColumns(scale), [scale]);
   const query = useLedgerQuery(['rental', month], () => api.rental(month)),
     action = useLedgerAction(),
-    { writable } = useAccess(),
+    { enabled, writable } = useAccess(),
     data = query.data;
   const savingCells = useIsMutating({ mutationKey: ['equipment-rental-edit', month] }) > 0;
   const locked = !writable || query.isError || data?.status !== 'draft' || action.busy;
   const context: RentalContext = {
     locked,
+    goToDistribution,
     act: (fn) =>
       action.run(async () => {
         await fn();
       }),
   };
+
+  useEffect(() => {
+    const root = scroll.current;
+    if (!enabled || !target || !data || !root || resolved.current === target) return;
+    if (only) {
+      setOnly(false);
+      return;
+    }
+    const linked = data.projects.find(group => group.lines.some(line => line.equipment_id === target.equipmentId));
+    const group = linked ?? data.projects.find(project => target.projectId !== null
+      ? project.project_id === target.projectId
+      : project.project_name === target.projectName);
+    if (!group) {
+      resolved.current = target;
+      setJumpNotice('本月租赁表未找到对应设备或项目。');
+      return;
+    }
+    setJumpNotice('');
+    const line = group.lines.find(row => row.equipment_id === target.equipmentId);
+    let flash: HTMLElement | null = null;
+    let inView: IntersectionObserver | undefined;
+    let flashTimer = 0;
+    const stop = whenEquipmentTargetReady(root, () => {
+      if (root.querySelector('.business-grid[data-layout-state="preparing"]')) return false;
+      const card = document.getElementById(projectAnchor(group));
+      const row = card?.querySelector<HTMLElement>(line
+        ? `.ag-center-cols-container .ag-row[row-id="${line.id}"]`
+        : 'h3');
+      if (!row || (line && row.closest('[inert]'))) return false;
+      resolved.current = target;
+      inView = new IntersectionObserver(entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        inView?.disconnect();
+        flash = row;
+        row.classList.add('equipment-flash-row');
+        flashTimer = window.setTimeout(() => row.classList.remove('equipment-flash-row'), equipmentFlashDuration);
+      }, { root, threshold: 0.5 });
+      inView.observe(row);
+      scrollToEquipmentTarget(row, line ? 'center' : 'start');
+      return true;
+    });
+    return () => {
+      stop();
+      inView?.disconnect();
+      window.clearTimeout(flashTimer);
+      flash?.classList.remove('equipment-flash-row');
+    };
+  }, [data, enabled, only, target]);
+
   return (
     <div className="equipment-sheet">
       <div data-page-chrome className="equipment-toolbar">
@@ -258,21 +333,9 @@ export function Rental() {
           month
           label="租赁月份"
           value={month}
-          onChange={(v) => {
-            if (v) {
-              setMonth(v);
-              setProject('');
-            }
+          onChange={v => {
+            if (v) { setMonth(v); setJumpNotice(''); }
           }}
-        />
-        <Select
-          aria-label="租赁项目"
-          value={project}
-          options={[
-            { value: '', label: '全部项目' },
-            ...(data?.projects ?? []).map(g => ({ value: groupKey(g), label: g.project_name })),
-          ]}
-          onChange={setProject}
         />
         <Checkbox checked={only} onChange={(e) => setOnly(e.target.checked)}>
           仅看待定项 ({data?.pending_count ?? '…'})
@@ -294,19 +357,42 @@ export function Rental() {
       </div>
       <LoadState query={query} />
       {action.error && <p role="alert">{action.error}</p>}
+      {jumpNotice && <div className="equipment-receipt" role="status">{jumpNotice}</div>}
+      {!!data?.projects.length && (
+        <nav className="equipment-rental-nav" aria-label="项目快速导航">
+          {data.projects.map(group => {
+            const pending = group.lines.filter(line => line.pending_action_type !== 'none').length;
+            const zeroTotal = group.subtotal !== null && Number(group.subtotal) === 0;
+            return (
+              <Button key={groupKey(group)} size="small" shape="round"
+                className={zeroTotal ? 'equipment-project-zero' : ''}
+                aria-controls={projectAnchor(group)}
+                onClick={() => {
+                  const card = document.getElementById(projectAnchor(group));
+                  if (card) scrollToEquipmentTarget(card);
+                }}>
+                {group.project_name}
+                {!!pending && <span className="equipment-nav-pending" aria-label={pending + ' 项待定'}>{pending}</span>}
+              </Button>
+            );
+          })}
+        </nav>
+      )}
       {data && (
-        <div className="equipment-rental-scroll" tabIndex={0} role="region" aria-label="月租赁明细">
-          {data.projects
-            .filter(g => !project || groupKey(g) === project)
-            .map((g) => (
+        <div className="equipment-rental-scroll" ref={scroll} tabIndex={0} role="region" aria-label="月租赁明细">
+          <div className="equipment-rental-grid">
+            {data.projects.map((g) => (
               <ProjectGrid
                 key={month + groupKey(g)}
                 group={g}
                 month={month}
                 only={only}
                 context={context}
+                columns={columns}
+                scale={scale}
               />
             ))}
+          </div>
           <div className="equipment-total">
             本月总计　{formatNum(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
           </div>

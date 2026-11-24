@@ -41,7 +41,12 @@ const inventoryItem = schema.object({
   created_by: text,
   updated_by: text,
 });
-export type InventoryItem = schema.InferOutput<typeof inventoryItem>;
+const linkedInventoryItem = schema.object({
+  ...inventoryItem.entries,
+  linked_equipment_ids: schema.array(id),
+  linked_equipment_codes: schema.array(text),
+});
+export type InventoryItem = schema.InferOutput<typeof linkedInventoryItem>;
 
 const equipmentItem = schema.object({
   id,
@@ -169,7 +174,18 @@ const rentalLine = schema.object({
 export type RentalLine = schema.InferOutput<typeof rentalLine>;
 
 const identityFields = { code: text, name: text, spec: nullableText, unit: nullableText };
-const transferRow = schema.object({ ...equipmentTransfer.entries, ...identityFields });
+const transferRow = schema.object({
+  ...equipmentTransfer.entries,
+  ...identityFields,
+  is_latest_for_equipment: schema.boolean(),
+});
+const transferDeleteResult = schema.object({
+  deleted_transfer_id: id,
+  equipment_id: id,
+  reverted_project: text,
+  reverted_project_id: schema.nullable(id),
+  reverted_project_custom: nullableText,
+});
 const scrapRow = schema.object({ ...equipmentScrap.entries, ...identityFields });
 export type TransferRow = schema.InferOutput<typeof transferRow>;
 export type ScrapRow = schema.InferOutput<typeof scrapRow>;
@@ -193,9 +209,6 @@ export type EquipmentPatch = Partial<
 export type Create = EquipmentPatch &
   Preview & {
     expected_codes: string[];
-    current_project?: string;
-    current_project_id?: number | null;
-    current_project_custom?: string | null;
     target_month?: string;
     custom_unit_price?: string | null;
   };
@@ -324,6 +337,8 @@ export const equipmentApi = {
   update: (id: number, v: EquipmentPatch) => write(equipmentItem, '/equipment/' + id, 'PATCH', v),
   transfers: (f: Filters & { sync_status?: SyncStatus }) =>
     get(schema.object({ items: schema.array(transferRow) }), '/transfers', f),
+  deleteTransfer: (id: number) =>
+    checked(transferDeleteResult, url('/transfers/' + id), { method: 'DELETE' }),
   transfer: (v: {
     equipment_ids: number[];
     expected_from_projects?: Record<number, string>;
@@ -378,7 +393,7 @@ export const equipmentApi = {
   inventory: (category?: InventoryCategory) =>
     get(
       schema.object({
-        items: schema.array(inventoryItem),
+        items: schema.array(linkedInventoryItem),
         book_amount: nullableText,
         count_amount: nullableText,
       }),

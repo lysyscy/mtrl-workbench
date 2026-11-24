@@ -380,8 +380,16 @@ def receipt(row):
     return {"id": row.id, "status": row.i8_sync_status, "message": row.i8_sync_message}
 
 
+def transfer_awaiting_readback(row):
+    return json.loads(row.i8_conflict_json or "{}").get("awaiting_readback", False)
+
+
+def sync_lock(key):
+    return _sync_locks[key % len(_sync_locks)]
+
+
 def sync_queue(key, adapter):
-    with _sync_locks[key % len(_sync_locks)]:
+    with sync_lock(key):
         return _drain(key, adapter)
 
 
@@ -393,7 +401,6 @@ def _drain(key, adapter):
         ).order_by(EquipmentTransfer.transfer_date, EquipmentTransfer.id)).all()
         projects = project_index(db) if adapter is not None else {}
         # The first outstanding transfer retains the project before the local move.
-        # This also respects an explicitly supplied initial current project.
         revision = item.updated_at
         db.expunge_all()
     equipment, transfers = [], []

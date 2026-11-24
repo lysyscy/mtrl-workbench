@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 import Decimal from 'decimal.js';
 import { ApiError, uncertainWrite } from './api';
 import { equipmentApi as api } from './equipment-api';
-import type { Create, EquipmentItem, EquipmentPatch, EquipmentProjectOption, ItemCategory } from './equipment-api';
+import type { Create, EquipmentItem, EquipmentPatch, EquipmentProjectOption, ItemCategory, TransferRow } from './equipment-api';
 import {
   DateField,
   decimalField,
@@ -32,6 +32,7 @@ export type DialogState =
   | { kind: 'create'; category: ItemCategory }
   | { kind: 'transfer'; items: EquipmentItem[] }
   | { kind: 'edit' | 'scrap'; item: EquipmentItem }
+  | { kind: 'delete-transfer'; transfer: TransferRow }
   | { kind: 'sync'; id: number };
 type Props = {
   state: DialogState;
@@ -89,7 +90,6 @@ function ProjectDualField({
 const noProjects: EquipmentProjectOption[] = [];
 type EquipmentFormValues = Omit<Create, 'expected_codes' | 'item_category'> & {
   purchase: ProjectValue;
-  current?: ProjectValue;
 };
 
 function EquipmentForm({ state, close, done }: Props) {
@@ -124,7 +124,7 @@ function EquipmentForm({ state, close, done }: Props) {
   const validPreview = !item && !!preview.name && !!date && Number(qty) > 0;
   const codes = useLedgerQuery(['codes', preview], () => api.preview(preview), validPreview);
   const [unknownCodes, setUnknownCodes] = useState<string[] | null>(null);
-  async function save({ purchase, current = emptyProject, ...values }: EquipmentFormValues) {
+  async function save({ purchase, ...values }: EquipmentFormValues) {
     if (!writable) return;
     if (item) {
       const changes: EquipmentPatch = {};
@@ -142,8 +142,6 @@ function EquipmentForm({ state, close, done }: Props) {
           ...values,
           purchase_project_id: purchase.id,
           purchase_project_custom: purchase.custom?.trim() || null,
-          current_project_id: current.id,
-          current_project_custom: current.custom?.trim() || null,
           item_category: category,
           expected_codes: codes.data.codes,
         });
@@ -214,11 +212,6 @@ function EquipmentForm({ state, close, done }: Props) {
           <Form.Item className="equipment-project-form-item" name="purchase" label="购买项目" rules={[projectRequired]}>
             <ProjectDualField label="购买项目" projects={projectOptions} loading={projects.isPending} />
           </Form.Item>
-          {!item && (
-            <Form.Item className="equipment-project-form-item" name="current" label="当前所在项目（默认同购买项目）">
-              <ProjectDualField label="当前所在项目" projects={projectOptions} loading={projects.isPending} />
-            </Form.Item>
-          )}
           <Form.Item name="purchase_price" label="购买价格">
             <InputNumber stringMode {...decimalField} min="0" precision={4} />
           </Form.Item>
@@ -413,9 +406,29 @@ function SyncDetails({ id, close }: { id: number; close: () => void }) {
   );
 }
 
+function DeleteTransferDialog({ transfer, close, done }: { transfer: TransferRow } & Pick<Props, 'close' | 'done'>) {
+  const { writable } = useAccess();
+  const action = useLedgerAction();
+  return (
+    <LedgerModal compact title="删除调拨记录" busy={action.busy} close={close}>
+      <p>{transfer.code} · {transfer.transfer_date ?? '日期未登记'} · {transfer.from_project} → {transfer.to_project}</p>
+      <p>删除后，设备将回到上一次调入的项目；没有更早的调拨记录时，回到购买项目。系统会同时清理这笔调拨的草稿租赁归属。</p>
+      {action.error && <p role="alert">{action.error}</p>}
+      <div className="dialog-actions">
+        <Button disabled={action.busy} onClick={close}>取消</Button>
+        <Button type="primary" danger loading={action.busy} disabled={!writable} onClick={() => void action.run(async () => {
+          const result = await api.deleteTransfer(transfer.id);
+          done(`已删除调拨记录 #${result.deleted_transfer_id}，设备 ${transfer.code} 已回到 ${result.reverted_project}。`);
+        })}>删除调拨记录</Button>
+      </div>
+    </LedgerModal>
+  );
+}
+
 export function EquipmentDialog(props: Props) {
   const state = props.state;
   if (state.kind === 'sync') return <SyncDetails id={state.id} close={props.close} />;
+  if (state.kind === 'delete-transfer') return <DeleteTransferDialog {...props} transfer={state.transfer} />;
   if (state.kind === 'edit' || state.kind === 'create') return <EquipmentForm {...props} />;
   return <MovementForm {...props} />;
 }

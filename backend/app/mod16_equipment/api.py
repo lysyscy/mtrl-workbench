@@ -12,7 +12,7 @@ from app.core.db import session_scope
 from app.core.session import current_name
 from . import rental, schemas as S, service
 from .common import ledger_lock, record
-from .sync import sync_queue
+from .sync import sync_lock, sync_queue
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer
 
 router = APIRouter(prefix="/api/m16", tags=["设备台账"])
@@ -36,7 +36,8 @@ def save_and_sync(fn, request, adapter, model, field):
     if adapter is not None:
         for row in rows:
             sync_queue(row["equipment_id"] if model is EquipmentTransfer else row["id"], adapter)
-        rows = result[field] = call(service.saved_records, model, [row["id"] for row in rows])
+        refreshed = {row["id"]: row for row in call(service.saved_records, model, [row["id"] for row in rows])}
+        rows = result[field] = [refreshed.get(row["id"], row) for row in rows]
     result["i8_sync"] = [{"id": r["id"], "status": r["i8_sync_status"], "message": r["i8_sync_message"]}
                          for r in rows]
     return jsonable_encoder(result, custom_encoder={Decimal: str})
@@ -89,6 +90,13 @@ def transfer(request: S.Transfer, adapter=Depends(i8_adapter)):
 def transfers(item_category: S.ItemCategory | None = None, project: str | None = None,
               keyword: str | None = None, sync_status: str | None = None):
     return {"items": call(service.history, EquipmentTransfer, item_category, project, keyword, sync_status)}
+
+
+@router.delete("/transfers/{transfer_id}", response_model=S.TransferDeleteResult)
+def delete_transfer(transfer_id: int):
+    equipment_id = call(service.transfer_equipment_id, transfer_id)
+    with sync_lock(equipment_id):
+        return call(service.delete_transfer, transfer_id, write=True)
 
 
 @router.post("/scraps")

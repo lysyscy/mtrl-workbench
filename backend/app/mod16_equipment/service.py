@@ -1,4 +1,5 @@
 """设备、盘点以及调拨报废联动。一个业务动作使用同一事务。"""
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -10,7 +11,7 @@ from . import rental
 from .common import batch, product, record, require, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine
 from .projects import ProjectRef, project_index, requested_project
-from .sync import ISSUES, UNAVAILABLE
+from .sync import ISSUES, UNAVAILABLE, transfer_awaiting_readback
 
 
 def project_options(db):
@@ -42,7 +43,7 @@ def equipment_record(item, projects, inventory):
 
 
 def saved_records(db, model, ids):
-    rows = [require(db, model, key) for key in ids]
+    rows = [row for key in ids if (row := db.get(model, key)) is not None]
     projects = project_index(db)
     if model is EquipmentItem:
         return equipment_records(db, rows, projects, include_transfer_status=False)
@@ -84,7 +85,14 @@ def inventory(db, category=None):
     if category:
         query = query.where(InventoryItem.category == category)
     rows = db.scalars(query.order_by(InventoryItem.sort_order, InventoryItem.id)).all()
-    return {"items": [record(r) for r in rows], "book_amount": total(r.book_amount for r in rows),
+    ids, codes = defaultdict(list), defaultdict(list)
+    if rows:
+        for inv_id, key, code in db.execute(select(EquipmentItem.inventory_item_id, EquipmentItem.id, EquipmentItem.code)
+                .where(EquipmentItem.inventory_item_id.in_([row.id for row in rows])).order_by(EquipmentItem.id)):
+            ids[inv_id].append(key)
+            codes[inv_id].append(code)
+    return {"items": [record(r) | {"linked_equipment_ids": ids[r.id], "linked_equipment_codes": codes[r.id]} for r in rows],
+            "book_amount": total(r.book_amount for r in rows),
             "count_amount": total(r.count_amount for r in rows)}
 
 
@@ -104,16 +112,13 @@ def start_rental(db, item, month, custom=None):
 def create(db, req):
     projects = project_index(db)
     purchase = requested_project(projects, req.purchase_project, req.purchase_project_id, req.purchase_project_custom)
-    current = purchase
-    if req.current_project or req.current_project_id is not None or req.current_project_custom:
-        current = requested_project(projects, req.current_project, req.current_project_id, req.current_project_custom)
     allocated = codes(db, req)
     if req.expected_codes is not None and req.expected_codes != allocated:
         raise DataConflictError("编号已被占用或录入内容已变化，请刷新编号预览", detail="expected_codes")
     inv = asset_row(db, req, req.quantity) if req.asset_scope == "current_asset" else None
     data = req.model_dump(exclude={"quantity", "custom_unit_price", "target_month", "expected_codes"})
     data.update(purchase.fields("purchase_project"))
-    data.update(current.fields("current_project"))
+    data.update(purchase.fields("current_project"))
     items, lines = [], []
     for code in allocated:
         item = EquipmentItem(**data, code=code, i8_sync_message=UNAVAILABLE,
@@ -238,8 +243,16 @@ def matches_equipment(item, projects, project, keyword):
         keyword.casefold() in value.casefold() for value in (item.code, item.name, item.spec, label) if value))
 
 
+LATEST_TRANSFER_ORDER = (EquipmentTransfer.transfer_date.desc().nulls_last(), EquipmentTransfer.id.desc())
+
+
 def history(db, model, item_category=None, project=None, keyword=None, sync_status=None, equipment_id=None, *, projects=None):
     query = select(model, EquipmentItem).join(EquipmentItem, model.equipment_id == EquipmentItem.id)
+    if model is EquipmentTransfer:
+        latest = (select(EquipmentTransfer.id)
+                  .where(EquipmentTransfer.equipment_id == EquipmentItem.id)
+                  .order_by(*LATEST_TRANSFER_ORDER).limit(1).correlate(EquipmentItem).scalar_subquery())
+        query = query.add_columns(model.id == latest)
     if equipment_id:
         query = query.where(model.equipment_id == equipment_id)
     if item_category:
@@ -251,9 +264,11 @@ def history(db, model, item_category=None, project=None, keyword=None, sync_stat
             EquipmentItem.code, EquipmentItem.name, EquipmentItem.spec))))
     projects = project_index(db) if projects is None else projects
     rows = []
-    for row, item in db.execute(query.order_by(model.id)):
+    for row, item, *flags in db.execute(query.order_by(model.id)):
         values = distribution_record(row, projects)
         if not project or any(values[field] == project for field in PROJECT_FIELDS[model]):
+            if flags:
+                values["is_latest_for_equipment"] = flags[0]
             rows.append(values | {"code": item.code, "name": item.name, "spec": item.spec, "unit": item.unit})
     return rows
 
@@ -318,6 +333,38 @@ def transfer(db, req):
         records.append(row)
     return {"equipment_ids": req.equipment_ids, "transfers": [distribution_record(r, projects) for r in records],
             "rental_line_ids": lines}
+
+
+def transfer_equipment_id(db, key):
+    return require(db, EquipmentTransfer, key).equipment_id
+
+
+def delete_transfer(db, key):
+    transfer = require(db, EquipmentTransfer, key)
+    item = require(db, EquipmentItem, transfer.equipment_id)
+    recent = db.scalars(select(EquipmentTransfer).where(EquipmentTransfer.equipment_id == item.id)
+                        .order_by(*LATEST_TRANSFER_ORDER).limit(2)).all()
+    if recent[0].id != key:
+        raise DataConflictError("仅可删除该设备的最新一条调拨记录")
+    if item.status == "scrapped":
+        raise DataConflictError("设备已报废，不能删除历史调拨记录")
+    if transfer.rental_month is not None:
+        rental.check_transfer_month(db, transfer.rental_month)
+    if transfer.i8_sync_status == "synced":
+        raise DataConflictError("该调拨已同步 i8，暂不支持直接删除，请先核对 i8 单据")
+    if transfer_awaiting_readback(transfer):
+        raise DataConflictError("该调拨的 i8 保存结果待核对，暂不支持直接删除")
+    previous = recent[1] if len(recent) == 2 else None
+    reverted = ProjectRef.from_row(previous, "to_project") if previous else ProjectRef.from_row(item, "purchase_project")
+    rental.remove_transfer(db, transfer, reverted)
+    for field, value in reverted.fields("current_project").items():
+        setattr(item, field, value)
+    item.updated_by = current_operator()
+    db.delete(transfer)
+    db.flush()
+    return {"deleted_transfer_id": key, "equipment_id": item.id,
+            "reverted_project": reverted.display(project_index(db)),
+            "reverted_project_id": reverted.id, "reverted_project_custom": reverted.custom}
 
 
 def scrap(db, req):

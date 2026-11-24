@@ -2,9 +2,10 @@
 from datetime import date
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import to_excel
+from openpyxl.worksheet.pagebreak import Break
 
 from app.report_export.save import Formula, TextFormula, set_formula, workbook_bytes
 
@@ -18,6 +19,7 @@ TRANSFER_WIDTH = [23.675, 18.3416666666667, 43.0083333333333, 8.675, 14.48333333
 INVENTORY_WIDTH = [4.64166666666667, 19.6416666666667, 14.6416666666667, 6.70833333333333,
                    11.6416666666667, 7.85833333333333, 14.1416666666667, 7.64166666666667,
                    14.5, 6.64166666666667, 5.64166666666667, 22.7083333333333]
+RENT_WIDTH = [4.375, 13.875, 10.25, 5.5, 5.375, 10.125, 11.25, 11, 13]
 MAIN_HEADER = ["工机具编号", "名称", "规格型号", "单位", "信息化用购买日期", "购买日期", "购买项目",
                "购买价格", "当前状态", "当前所在项目", "备注", "在账", None, "列租赁表", "列资产账",
                "租赁底稿行", "盘点来源行", "来源", "接续所在项目", "数量", "核对说明"]
@@ -25,7 +27,11 @@ HISTORY_HEADER = "工机具编号 名称 规格型号 单位 购买日期 购买
 RENT_HEADER = "序号 名称 规格型号 单位 数量 租赁单价（元） 金额（元） 类别 分布".split()
 STATE = {"in_use": "在用", "damaged": "损坏", "pending_scrap": "待报废", "scrapped": "报废"}
 SCOPE = {"current_asset": "是", "fixed_asset": "固定资产", "off_book": "否"}
-BORDER = Side(style="thin", color="666666")
+BORDER = Side(style="thin", color="000000")
+GRID_BORDER = Border(left=BORDER, right=BORDER, top=BORDER, bottom=BORDER)
+HEADER_FILL = PatternFill("solid", fgColor="E9EFF5")
+NUMBER_FORMAT = "General"
+INVENTORY_MONEY = "#,##0.00##"
 
 
 def sheet_setup(ws, widths, orientation=None):
@@ -46,21 +52,40 @@ def put(ws, r, values):
             cell.data_type = "s"  # Workbook text never becomes an Excel expression.
 
 
-def grid(ws, first, end, width):
+def style_cell(cell, size=12, *, bold=False, horizontal="center", shrink=False):
+    cell.font = Font(name="宋体", size=size, bold=bold)
+    cell.alignment = Alignment(horizontal=horizontal, vertical="center", wrap_text=not shrink, shrink_to_fit=shrink)
+
+
+def grid(ws, first, end, width, *, size=12, bold=False, fill=None, money=(), right=()):
     for row in ws.iter_rows(min_row=first, max_row=end, max_col=width):
         for c in row:
-            c.border = Border(left=BORDER, right=BORDER, top=BORDER, bottom=BORDER)
-            c.alignment = Alignment(vertical="center", wrap_text=True)
-            c.font = Font(name="宋体", size=10, bold=c.row == first)
+            c.border = GRID_BORDER
+            style_cell(c, size, bold=bold, horizontal="right" if c.column in right else "center")
+            if fill:
+                c.fill = fill
+            if c.column in money:
+                c.number_format = INVENTORY_MONEY
+
+
+def distribution_layout(ws, widths, header, count):
+    sheet_setup(ws, widths, "portrait")
+    ws.sheet_format.defaultRowHeight = 22.5
+    ws.freeze_panes = f"A{header + 1}"
+    ws.print_title_rows = f"1:{header}"
+    ws.print_area = f"A1:{get_column_letter(count)}{ws.max_row}"
+    grid(ws, header, header, count, size=11, bold=True, fill=HEADER_FILL)
+    grid(ws, header + 1, ws.max_row, count, size=10)
 
 
 def main_sheet(ws, items, turnover, transfer_sheet, scrap_sheet):
     widths = MAIN_WIDTH.copy()
     if turnover:
         widths[2], widths[12] = 16.85, 3
-    sheet_setup(ws, widths, None if turnover else "portrait")
     ws.merge_cells("A1:K1")
     ws["A1"] = "四分公司周转材料分布台账" if turnover else "四分公司大型工机具分布台账"
+    style_cell(ws["A1"], 22, bold=True)
+    ws.row_dimensions[1].height = 31
     put(ws, 2, MAIN_HEADER)
     for n, r in enumerate(items, 3):
         dt = r["purchase_date"]
@@ -81,7 +106,7 @@ def main_sheet(ws, items, turnover, transfer_sheet, scrap_sheet):
         set_formula(ws[f"I{n}"], TextFormula(f'=IF(COUNTIF(\'{scrap_sheet}\'!A:A,A{n})>=1,"报废","{status}")', status))
         lookup = f"=_xlfn.XLOOKUP(A{n},'{transfer_sheet}'!A:A,'{transfer_sheet}'!I:I,S{n},0,-1)"
         set_formula(ws[f"J{n}"], TextFormula(lookup, r["current_project"]))
-    grid(ws, 2, ws.max_row, 21)
+    distribution_layout(ws, widths, 2, 21)
 
 
 def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
@@ -97,7 +122,6 @@ def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
         if turnover:
             widths = widths[:12]
             widths[-1] = 24
-    sheet_setup(ws, widths, None if scrap else "portrait")
     put(ws, 1, headers)
     for n, r in enumerate(rows, 2):
         tail = [r["original_project"], r["scrap_date"], r["reason"], r["quantity"]] if scrap else [
@@ -119,7 +143,7 @@ def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
         if not scrap and not turnover:
             expr = f'=IFERROR(VLOOKUP(A{n},\'{main}\'!A:L,12,FALSE),"")'
             set_formula(ws[f"L{n}"], TextFormula(expr, SCOPE[item["asset_scope"]]))
-    grid(ws, 1, ws.max_row, len(headers))
+    distribution_layout(ws, widths, 1, len(headers))
 
 
 def equipment_distribution_xlsx(snapshot):
@@ -131,86 +155,156 @@ def equipment_distribution_xlsx(snapshot):
         main_sheet(wb.create_sheet(main), items, bool(prefix), transfer, scrap)
         for key, title in (("transfers", transfer), ("scraps", scrap)):
             rows = [r for r in snapshot[key] if r["item_category"] == category]
+            if key == "transfers":
+                # XLOOKUP searches from the bottom, with undated history below dated rows in priority.
+                rows.sort(key=lambda row: (row["transfer_date"] is not None, row["transfer_date"] or date.min, row["id"]))
             history_sheet(wb.create_sheet(title), rows, main, {i["id"]: i for i in items},
                           scrap=key == "scraps", turnover=bool(prefix))
     return workbook_bytes(wb)
+
+
+def rental_page_setup(ws, *, fit_height=0):
+    sheet_setup(ws, RENT_WIDTH, "portrait")
+    ws.page_setup.blackAndWhite = True
+    ws.page_setup.horizontalDpi = 600
+    ws.page_margins.left = ws.page_margins.right = .5
+    ws.page_margins.top = ws.page_margins.bottom = .6
+    ws.print_options.horizontalCentered = ws.print_options.verticalCentered = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = fit_height
+
+
+def rental_row_height(count):
+    if count <= 3:
+        return 36
+    if count <= 12:
+        return 30
+    if count <= 28:
+        return max(18, min(29, 510 // count))
+    return max(15.5, 510 / count)
+
+
+def rental_table(ws, first, period, project):
+    count = len(project["lines"])
+    data_row = first + 3
+    subtotal = data_row + (4 if count < 3 else count)
+    footer = subtotal + 1
+    ws.merge_cells(f"A{first}:I{first}")
+    style_cell(ws.cell(first, 1, "租赁费明细（费用划转）"), 16, bold=True)
+    info = first + 1
+    ws.merge_cells(f"A{info}:D{info}")
+    ws.merge_cells(f"E{info}:F{info}")
+    ws.merge_cells(f"G{info}:I{info}")
+    put(ws, info, ["单位：" + project["project_name"]])
+    style_cell(ws.cell(info, 1), horizontal="left", shrink=True)
+    style_cell(ws.cell(info, 5, "1012其他安装工程"), shrink=True)
+    style_cell(ws.cell(info, 7, period))
+    ws.cell(info, 7).number_format = 'yyyy"年"m"月"'
+    for col in (*range(1, 5), *range(7, 10)):
+        ws.cell(info, col).border = Border(bottom=BORDER)
+    put(ws, first + 2, RENT_HEADER)
+    grid(ws, first + 2, first + 2, 9, bold=True)
+    grid(ws, data_row, subtotal - 1, 9, size=10.5 if count > 28 else 12, right=(6, 7))
+    grid(ws, subtotal, subtotal, 9, bold=True, right=(7,))
+    for row, height in ((first, 21), (info, 21), (first + 2, 34.5), (subtotal, 30), (footer, 43)):
+        ws.row_dimensions[row].height = height
+    for n in range(data_row, subtotal):
+        ws.row_dimensions[n].height = rental_row_height(count)
+    for index, line in enumerate(project["lines"], 1):
+        n = data_row + index - 1
+        put(ws, n, [index, line["name"], line["spec"], line["unit"], line["quantity"], line["unit_price"],
+                    line["amount"], line["category_label"], line["distribution_note"]])
+        if line["amount"] is not None and line["quantity"] is not None and line["unit_price"] is not None:
+            set_formula(ws[f"G{n}"], Formula(
+                f'=IF(COUNT(E{n}:F{n})=2,ROUND(E{n}*F{n},4),"")', line["amount"]))
+    put(ws, subtotal, [None, "合计："])
+    span = f"G{data_row}:G{subtotal-1}"
+    set_formula(ws[f"G{subtotal}"], Formula(f'=IF(COUNT({span}),SUM({span}),"")', project["subtotal"]))
+    ws.merge_cells(f"C{footer}:D{footer}")
+    ws.merge_cells(f"G{footer}:I{footer}")
+    style_cell(ws.cell(footer, 2, "审核人："), horizontal="right")
+    style_cell(ws.cell(footer, 7, "制表人："))
+    for cell in ws[footer][:9]:
+        cell.border = Border(top=BORDER)
+    return subtotal, footer
 
 
 def equipment_rental_xlsx(snapshot):
     wb = Workbook()
     ws = wb.active
     ws.title = "分公司租赁费"
-    sheet_setup(ws, [4.375, 13.875, 10.25, 5.5, 5.375, 10.125, 11.25, 11, 9], "portrait")
-    ws.page_setup.blackAndWhite = True
-    ws.page_setup.horizontalDpi = 600
-    ws.print_options.horizontalCentered = ws.print_options.verticalCentered = True
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth = ws.page_setup.fitToHeight = 1
-    first, totals, areas = 1, [], []
+    period = date.fromisoformat(snapshot["month"] + "-01")
+    printable, oversized, excluded = [], [], []
     for project in snapshot["projects"]:
-        for offset, start, end in ((0, 1, 9), (1, 1, 4), (1, 5, 6), (1, 7, 9)):
-            ws.merge_cells(start_row=first + offset, end_row=first + offset, start_column=start, end_column=end)
-        ws.cell(first, 1, "租赁费明细（费用划转）")
-        put(ws, first + 1, ["单位：" + project["project_name"]])
-        ws.cell(first + 1, 5, "1012其他安装工程")
-        ws.cell(first + 1, 7, date.fromisoformat(snapshot["month"] + "-01")).number_format = 'yyyy"年"m"月"'
-        put(ws, first + 2, RENT_HEADER)
-        for index, line in enumerate(project["lines"], 1):
-            n = first + 2 + index
-            put(ws, n, [index, line["name"], line["spec"], line["unit"], line["quantity"], line["unit_price"],
-                        line["amount"], line["category_label"], line["distribution_note"]])
-            if line["amount"] is not None:
-                set_formula(ws[f"G{n}"], Formula(
-                    f'=IF(COUNT(E{n}:F{n})=2,ROUND(E{n}*F{n},4),"")', line["amount"]))
-        subtotal = first + 3 + len(project["lines"])
-        put(ws, subtotal, [None, "合计"])
-        span = f"G{first+3}:G{subtotal-1}"
-        set_formula(ws[f"G{subtotal}"], Formula(f'=IF(COUNT({span}),SUM({span}),"")', project["subtotal"]))
+        count = len(project["lines"])
+        if not (project["subtotal"] or 0):
+            excluded.append(project)
+        # A4 less the margins and fixed rows leaves about 606 pt for the body at 100%.
+        elif count * rental_row_height(count) > 590:
+            oversized.append(project)
+        else:
+            printable.append(project)
+    fit_height = 0
+    if not printable and oversized:
+        printable.append(oversized.pop(0))
+        fit_height = 1
+    rental_page_setup(ws, fit_height=fit_height)
+    first, totals, areas = (1 if printable else 3), [], []
+    for project in printable + excluded:
+        subtotal, footer = rental_table(ws, first, period, project)
         totals.append(f"G{subtotal}")
-        ws.merge_cells(f"C{subtotal+1}:D{subtotal+1}")
-        ws.merge_cells(f"G{subtotal+1}:I{subtotal+1}")
-        ws.cell(subtotal + 1, 1, "制表")
-        ws.cell(subtotal + 1, 5, "审核")
-        grid(ws, first + 2, subtotal, 9)
-        if (project["subtotal"] or 0) > 0:
-            areas.append(f"A{first}:I{subtotal+1}")
-        first = subtotal + 3
+        if project["subtotal"]:
+            areas.append(f"A{first}:I{footer}")
+            ws.row_breaks.append(Break(id=footer))
+        # Keep the areas non-adjacent so Excel prints each independently in fit-to-width mode.
+        first = footer + 2
+    for index, project in enumerate(oversized, 1):
+        page = wb.create_sheet(f"租赁长表 {index}")
+        rental_page_setup(page, fit_height=1)
+        subtotal, footer = rental_table(page, 1, period, project)
+        page.print_area = f"A1:I{footer}"
+        totals.append(f"'{page.title}'!G{subtotal}")
     put(ws, first, [None, "总计"])
+    style_cell(ws.cell(first, 2), bold=True)
+    style_cell(ws.cell(first, 7), bold=True, horizontal="right")
     if totals and snapshot["grand_total"] is not None:
         set_formula(ws[f"G{first}"], Formula("=" + "+".join(f"N({ref})" for ref in totals), snapshot["grand_total"]))
-    ws.print_area = areas or [f"A{first}:I{first}"]
+    ws.print_area = areas or ["A1:I1"]
     return workbook_bytes(wb)
 
 
-def equipment_inventory_xlsx(items):
-    wb = Workbook()
-    cover = wb.active
+def inventory_cover(cover):
     cover.title = "封皮"
     sheet_setup(cover, [9, 9, 9, 12.6416666666667, 9, 9, 9.35833333333333, 18.75, 9, 7.425, 9], "landscape")
     for address in ("C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6", "C7:G7", "C8:G8",
                     "C9:K9", "C10:K10", "A13:K14"):
         cover.merge_cells(address)
-    cover["C3"] = "流动资产盘点表"
-    cover["C4"] = "第四工程公司"
-    cover["B6"] = "合计"
+    for row, height in ((3, 62.15), (4, 36), (5, 36), (6, 36), (7, 36), (8, 27), (9, 27), (10, 27)):
+        cover.row_dimensions[row].height = height
+    for address, value, size in (("C3", "河南省安装集团有限责任公司", 24), ("C4", "第四工程公司", 20),
+                                 ("C5", "流动资产盘点表", 20), ("B6", "合计", 14)):
+        cover[address] = value
+        style_cell(cover[address], size, bold=address == "C3")
+    cover["A13"] = "单位主管：            财务主管：            资产主管：            制表人："
+    style_cell(cover["A13"], 16, horizontal="left")
+    for address in ("K6", "I7", "I8"):
+        cover[address] = "元"
+        style_cell(cover[address], 14, horizontal="left")
+    for address in ("E6", "I6", "H7", "H8"):
+        style_cell(cover[address], 14)
+        cover[address].number_format = INVENTORY_MONEY
+    cover.print_area = "A1:K14"
+
+
+def equipment_inventory_xlsx(items):
+    wb = Workbook()
+    cover = wb.active
+    inventory_cover(cover)
     counted_totals = []
     for category, title, cover_row in (("tool", "流动资产盘点表", 7), ("turnover", "周转材料", 8)):
         ws = wb.create_sheet(title)
-        sheet_setup(ws, INVENTORY_WIDTH, "landscape")
-        ws.page_setup.scale = 92
-        ws.page_setup.horizontalDpi, ws.page_setup.verticalDpi = 600, 180
-        ws.page_margins.left, ws.page_margins.right = .551181102362205, .590551181102362
-        ws.page_margins.top, ws.page_margins.bottom = .31496062992126, .748031496062992
-        ws.page_margins.header = ws.page_margins.footer = .31496062992126
-        for address in ("A1:L1", "A2:B2", "C2:E2", "F2:H2", "J2:L2", "F3:G3", "H3:I3",
-                        "A3:A4", "B3:B4", "C3:C4", "D3:D4", "E3:E4", "K3:K4", "L3:L4"):
-            ws.merge_cells(address)
-        ws["A1"] = "流   动   资   产   盘   点   表"
-        ws["A2"] = "类别：" + ("在用工具" if category == "tool" else title)
-        for address, label in {"A3":"序          号", "B3":"名   称", "C3":"规   格", "D3":"单  位", "E3":"单价",
-                               "F3":"帐面数", "H3":"盘点数", "J3":"盈亏      数量", "K3":"盈亏      金额", "L3":"盈亏原因",
-                               "F4":"数量", "G4":"金额", "H4":"数量", "I4":"金额", "J4":"盈+        亏－      毁×"}.items():
-            ws[address] = label
+        inventory_page_setup(ws, category)
         n = 5
         amounts = {"G": [], "I": [], "K": []}
         for r in items:
@@ -227,15 +321,19 @@ def equipment_inventory_xlsx(items):
                         expr = f'=IF(COUNT({qty}{n},E{n})=2,ROUND({qty}{n}*E{n},4),"")'
                         set_formula(ws[f"{col}{n}"], Formula(expr, r[key]))
             n += 1
-        ws.cell(n, 2, "合计")
+        ws.cell(n, 2, "合计：")
         if n > 5:
             for col, values in amounts.items():
                 span = f"{col}5:{col}{n-1}"
                 set_formula(ws[f"{col}{n}"], Formula(f'=IF(COUNT({span}),SUM({span}),"")',
                                                     sum(values) if values else None))
-        ws.print_area, ws.print_title_rows = f"A1:L{n}", "1:4"
-        grid(ws, 3, n, 12)
-        cover[f"C{cover_row}"] = title
+        ws.print_area = f"A1:L{n}"
+        money = (5, 7, 9, 11)
+        grid(ws, 5, n - 1, 12, money=money)
+        grid(ws, n, n, 12, bold=True, money=money)
+        ws.row_dimensions[n].height = 20.05 if category == "tool" else 23.05
+        cover[f"C{cover_row}"] = "其     中：大型工机具：" if category == "tool" else "周转材料："
+        style_cell(cover[f"C{cover_row}"], 14, horizontal="right")
         counted = sum(amounts["I"]) if amounts["I"] else None
         if counted is not None:
             counted_totals.append(counted)
@@ -245,3 +343,35 @@ def equipment_inventory_xlsx(items):
     set_formula(cover["I6"], Formula('=IF(COUNT(H7:H8),SUM(H7:H8),"")', overall))
     set_formula(cover["E6"], Formula('=IF(ISNUMBER(I6),I6,"")', overall))
     return workbook_bytes(wb)
+
+
+def inventory_page_setup(ws, category):
+    sheet_setup(ws, INVENTORY_WIDTH, "landscape")
+    ws.page_setup.scale = 92
+    ws.page_setup.horizontalDpi, ws.page_setup.verticalDpi = 600, 180
+    ws.page_margins.left, ws.page_margins.right = .551181102362205, .590551181102362
+    ws.page_margins.top, ws.page_margins.bottom = .31496062992126, .748031496062992
+    ws.page_margins.header = ws.page_margins.footer = .31496062992126
+    ws.print_title_rows = "1:4"
+    tool = category == "tool"
+    ws.sheet_format.defaultRowHeight = 17.5 if tool else 23.05
+    for row, height in enumerate((33, 18, 17.5, 17.5) if tool else (22.5, 18.75, 30, 45.75), 1):
+        ws.row_dimensions[row].height = height
+    grid(ws, 3, 4, 12)
+    for address in ("A1:L1", "A2:B2", "C2:E2", "F2:H2", "J2:L2", "F3:G3", "H3:I3",
+                    "A3:A4", "B3:B4", "C3:C4", "D3:D4", "E3:E4", "K3:K4", "L3:L4"):
+        ws.merge_cells(address)
+    ws["A1"] = "流   动   资   产   盘   点   表"
+    style_cell(ws["A1"], 18, bold=True)
+    ws["A2"] = "类别：" + ("在用工具" if tool else "周转材料")
+    style_cell(ws["A2"], 12 if tool else 14, horizontal="left")
+    if tool:
+        for cell in ws[2][:2]:
+            cell.border = Border(bottom=BORDER)
+        ws.freeze_panes = "A5"
+    for address, label in {
+        "A3": "序          号", "B3": "名   称", "C3": "规   格", "D3": "单  位", "E3": "单价",
+        "F3": "帐面数", "H3": "盘点数", "J3": "盈亏      数量", "K3": "盈亏      金额", "L3": "盈亏原因",
+        "F4": "数量", "G4": "金额", "H4": "数量", "I4": "金额", "J4": "盈+        亏－      毁×",
+    }.items():
+        ws[address] = label

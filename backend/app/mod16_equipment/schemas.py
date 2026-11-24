@@ -47,9 +47,9 @@ class EquipmentCreate(Preview):
     purchase_project: Name | None = None
     purchase_project_id: ProjectId | None = None
     purchase_project_custom: str | None = None
-    current_project: Name | None = None
-    current_project_id: ProjectId | None = None
-    current_project_custom: str | None = None
+    current_project: Name | None = Field(None, deprecated=True, description="兼容旧客户端，初始位置以购买项目为准")
+    current_project_id: ProjectId | None = Field(None, deprecated=True, description="兼容旧客户端，初始位置以购买项目为准")
+    current_project_custom: str | None = Field(None, deprecated=True, description="兼容旧客户端，初始位置以购买项目为准")
     purchase_price: Price | None = None
     custom_unit_price: Price | None = None
     asset_scope: Scope = "current_asset"
@@ -82,6 +82,14 @@ class Transfer(Input):
     to_project_custom: str | None = None
     transfer_date: date
     remark: str | None = None
+
+
+class TransferDeleteResult(BaseModel):
+    deleted_transfer_id: int
+    equipment_id: int
+    reverted_project: str
+    reverted_project_id: int | None
+    reverted_project_custom: str | None
 
 
 class Scrap(Input):

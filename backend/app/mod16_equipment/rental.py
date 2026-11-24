@@ -100,6 +100,81 @@ def move(db, line, project):
     line.project_name, line.project_id, line.project_custom = project.legacy, project.id, project.custom
 
 
+def check_transfer_month(db, month):
+    status = db.scalar(select(RentalMonth.status).where(RentalMonth.month == month))
+    if status == "confirmed":
+        raise DataConflictError("该调拨所属月份租赁已确认，不能删除")
+
+
+TRANSFER_DETAILS = ("transfer_id", "from_project", "to_project", "transfer_date", "suggested_side")
+
+
+def drop_transfer_action(line, data, key):
+    queue = [entry for entry in data.pop("queue", []) if not (
+        entry["kind"] == "transfer_attribution" and entry["details"].get("transfer_id") == key)]
+    if line.pending_action_type == "transfer_attribution" and data.get("transfer_id") == key:
+        for field in TRANSFER_DETAILS:
+            data.pop(field, None)
+        line.pending_action_type = "none"
+        if queue:
+            upcoming = queue.pop(0)
+            line.pending_action_type = upcoming["kind"]
+            data.update(upcoming["details"])
+    if queue:
+        data["queue"] = queue
+
+
+def same_position(line, project):
+    current = ProjectRef.from_row(line, "project")
+    return current.key() == project.key() and current.custom == project.custom
+
+
+def restore_transfer_attribution(db, line, data, transfer, reverted):
+    data.pop("next_transfer_id")
+    data.pop("next_project", None)
+    previous = db.scalar(select(EquipmentTransfer).where(
+        EquipmentTransfer.equipment_id == transfer.equipment_id,
+        EquipmentTransfer.rental_month == transfer.rental_month,
+        EquipmentTransfer.id != transfer.id,
+        EquipmentTransfer.rental_attribution.in_(("from_project", "to_project")),
+    ).order_by(EquipmentTransfer.transfer_date.desc().nulls_last(), EquipmentTransfer.id.desc()).limit(1))
+    project = continuation = reverted
+    if previous:
+        data.update(next_transfer_id=previous.id, next_project=previous.to_project)
+        project = ProjectRef.from_row(previous, previous.rental_attribution)
+        continuation = ProjectRef.from_row(previous, "to_project")
+    charged = ProjectRef.from_row(transfer, transfer.rental_attribution)
+    if same_position(line, charged):
+        move(db, line, project)
+
+    destination = ProjectRef.from_row(transfer, "to_project")
+    later = db.execute(select(RentalLine, RentalMonth.status).join(
+        RentalMonth, RentalMonth.month == RentalLine.month
+    ).where(RentalLine.equipment_id == line.equipment_id, RentalLine.month > line.month).order_by(RentalLine.month))
+    for other, status in later:
+        if other.pending_action_type != "none" or "next_project" in meta(other) or not same_position(other, destination):
+            break
+        if same_position(other, continuation):
+            continue
+        if status == "confirmed":
+            raise DataConflictError(f"该变动影响后续已确认租赁月份 {other.month}，请核对日期")
+        move(db, other, continuation)
+
+
+def remove_transfer(db, transfer, reverted):
+    if transfer.rental_month is None:
+        return
+    line = db.scalar(select(RentalLine).where(
+        RentalLine.month == transfer.rental_month, RentalLine.equipment_id == transfer.equipment_id))
+    if line is None:
+        return
+    data = meta(line)
+    drop_transfer_action(line, data, transfer.id)
+    if data.get("next_transfer_id") == transfer.id:
+        restore_transfer_attribution(db, line, data, transfer, reverted)
+    line.pending_meta_json = encoded(data) if data else None
+
+
 def action(db, item, month, kind, details, custom_price=None, *, project=None):
     draft(db, month)
     closed = db.scalar(select(RentalMonth.month).where(
@@ -166,7 +241,7 @@ def view(db, month, project=None):
         group["lines"].sort(key=lambda line: (line["row_sort_order"], line["id"]))
         group["subtotal"] = total(line["amount"] for line in group["lines"])
     return {"month": month, "status": row.status, "pending_count": pending, "projects": projects,
-            "grand_total": total(amounts), "printable_project_count": sum((g["subtotal"] or 0) > 0 for g in projects)}
+            "grand_total": total(amounts), "printable_project_count": sum((g["subtotal"] or 0) != 0 for g in projects)}
 
 
 def stop_lines(db, equipment_id, month, *, include_current=False):
