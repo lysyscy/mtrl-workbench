@@ -5,7 +5,7 @@ import Form from 'antd/es/form';
 import Input from 'antd/es/input';
 import InputNumber from 'antd/es/input-number';
 import Select from 'antd/es/select';
-import Checkbox from 'antd/es/checkbox';
+import Segmented from 'antd/es/segmented';
 import dayjs from 'dayjs';
 import Decimal from 'decimal.js';
 import { ApiError, uncertainWrite } from './api';
@@ -51,20 +51,21 @@ const emptyProject: ProjectValue = { id: null, custom: null };
 const hasProject = (value?: ProjectValue) => value?.id != null || !!value?.custom?.trim();
 const projectRequired = {
   validator: (_rule: unknown, value?: ProjectValue) =>
-    hasProject(value) ? Promise.resolve() : Promise.reject(new Error('请选择系统项目或地点')),
+    hasProject(value) ? Promise.resolve() : Promise.reject(new Error('请选择系统项目或非系统项目')),
 };
 
 function SystemProjectField({
-  label, value, onChange, projects, disabled,
+  label, value, onChange, projects, disabled, emptyLabel = '选择系统项目',
 }: {
   label: string;
   value?: number | null;
   onChange?: (value: number | null) => void;
   projects: Project[];
   disabled: boolean;
+  emptyLabel?: string;
 }) {
   return <ProjectPicker projects={projects} selected={value == null ? [] : [value]}
-    label={label} emptyLabel="选择系统项目" allowClear disabled={disabled}
+    label={label} emptyLabel={emptyLabel} allowClear disabled={disabled}
     pick={ids => onChange?.(ids[0] ?? null)} />;
 }
 
@@ -92,14 +93,14 @@ function ProjectDualField({
           onChange={projectId => onChange?.({ ...value, id: projectId })} />
         <Select
           {...(id ? { id } : {})}
-          aria-label={label + '地点'}
+          aria-label={label + '非系统项目'}
           value={value.custom || undefined}
           options={choices}
           allowClear
           showSearch={{ optionFilterProp: 'label' }}
           loading={locations.isPending}
           disabled={busy || locations.isPending}
-          placeholder="选择地点"
+          placeholder="选择非系统项目"
           popupMatchSelectWidth={false}
           onChange={custom => {
             const location = available.find(option => option.name === custom);
@@ -113,73 +114,113 @@ function ProjectDualField({
   );
 }
 
+const newLocation: LocationValues = { name: '', default_project_id: null, is_active: true };
+const defaultProjectLabel = '默认归属系统项目';
+
 function LocationDialog({ close }: { close: () => void }) {
   const locations = useLedgerQuery(['locations', true], () => api.locations(true));
   const projects = useLedgerQuery(['project-options'], api.projectOptions);
   const action = useLedgerAction();
   const { writable } = useAccess();
-  const [edit, setEdit] = useState<{ location: EquipmentLocation | null } | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [add, setAdd] = useState(newLocation);
+  const [filter, setFilter] = useState<'在用' | '全部'>('在用');
+  const [edit, setEdit] = useState<{
+    original: EquipmentLocation;
+    name: string;
+    defaultProjectId: number | null;
+  } | null>(null);
   const disabled = !writable || action.busy;
-  const stopEditing = () => { setEdit(null); setDirty(false); };
+  const editDirty = edit !== null && (edit.name !== edit.original.name ||
+    edit.defaultProjectId !== edit.original.default_project_id);
+  const visible = locations.data?.items.filter(location => filter === '全部' || location.is_active);
   return (
-    <LedgerModal title="地点维护" compact busy={action.busy} dirty={dirty} close={close}>
-      {edit ? (
-        <Form<LocationValues> layout="vertical" disabled={disabled}
-          initialValues={edit.location ?? { name: '', default_project_id: null, is_active: true }}
-          onValuesChange={() => setDirty(true)}
-          onFinish={values => void action.run(async () => {
-            if (edit.location) await api.updateLocation(edit.location.id, values);
-            else await api.createLocation(values);
-            stopEditing();
-          })}>
-          <Form.Item name="name" label="地点名称" rules={[{ required: true, whitespace: true, message: '请输入地点名称' }]}>
-            <Input autoFocus />
-          </Form.Item>
-          {edit.location && <p className="equipment-location-note">改名会同步更新已有设备、调拨和租赁记录。</p>}
-          <Form.Item name="default_project_id" label="默认系统项目">
-            <SystemProjectField label="默认系统项目" projects={projects.data?.items ?? []}
-              disabled={disabled || projects.isPending} />
-          </Form.Item>
-          {projects.error && <LoadState query={projects} />}
-          <Form.Item name="is_active" valuePropName="checked">
-            <Checkbox>启用地点</Checkbox>
-          </Form.Item>
-          <div className="dialog-actions">
-            <Button disabled={action.busy} onClick={stopEditing}>取消</Button>
-            <Button type="primary" htmlType="submit" loading={action.busy}
-              disabled={disabled || !dirty}>保存地点</Button>
-          </div>
-        </Form>
-      ) : (
-        <>
-          <LoadState query={locations} />
-          {locations.data && (
-            <>
-              <div className="equipment-location-toolbar">
-                <Button size="small" type="primary" disabled={disabled} onClick={() => setEdit({ location: null })}>
-                  新增地点
-                </Button>
-              </div>
-              {locations.data.items.length ? (
-                <ul className="equipment-location-list">
-                  {locations.data.items.map(location => (
-                    <li key={location.id}>
-                      <div>
-                        <strong>{location.name}</strong>
-                        <span>{[location.default_project_disp, !location.is_active && '已停用'].filter(Boolean).join(' · ')}</span>
-                      </div>
-                      <Button size="small" disabled={disabled} aria-label={'编辑地点 ' + location.name}
-                        onClick={() => setEdit({ location })}>编辑</Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : <p>暂无地点。</p>}
-            </>
-          )}
-        </>
-      )}
+    <LedgerModal title="非系统项目维护" className="equipment-location-dialog" busy={action.busy}
+      dirty={editDirty || !!add.name.trim() || add.default_project_id !== null} close={close}>
+      <div className="equipment-location-toolbar">
+        <form className="equipment-location-add" onSubmit={event => {
+          event.preventDefault();
+          const name = add.name.trim();
+          if (disabled || !name) return;
+          void action.run(async () => {
+            await api.createLocation({ ...add, name });
+            setAdd(newLocation);
+          });
+        }}>
+          <Input aria-label="新增非系统项目名称" placeholder="非系统项目名称" disabled={disabled}
+            value={add.name} onChange={event => setAdd({ ...add, name: event.target.value })} />
+          <SystemProjectField label={defaultProjectLabel} emptyLabel={defaultProjectLabel + '（可选）'}
+            value={add.default_project_id} projects={projects.data?.items ?? []}
+            disabled={disabled || projects.isPending}
+            onChange={id => setAdd({ ...add, default_project_id: id })} />
+          <Button type="primary" htmlType="submit" aria-label="新增非系统项目"
+            disabled={disabled || !add.name.trim()}>新增</Button>
+        </form>
+        <Segmented size="small" aria-label="筛选非系统项目" options={['在用', '全部']}
+          value={filter} onChange={setFilter} disabled={edit !== null || action.busy} />
+      </div>
+      <LoadState query={locations} />
+      {projects.error && <LoadState query={projects} />}
       {action.error && <p role="alert">{action.error}</p>}
+      {visible && (
+        <div className="equipment-location-scroll" tabIndex={0} role="region" aria-label="非系统项目列表">
+          <table className="equipment-location-table">
+            <thead><tr>
+              <th scope="col">非系统项目名称</th>
+              <th scope="col">{defaultProjectLabel}</th>
+              <th scope="col">状态</th>
+              <th scope="col">操作</th>
+            </tr></thead>
+            <tbody>
+              {visible.length === 0 && <tr><td colSpan={4}>暂无{filter === '在用' ? '在用' : ''}非系统项目。</td></tr>}
+              {visible.map(location => {
+                const draft = edit?.original.id === location.id ? edit : null;
+                return (
+                  <tr key={location.id}>
+                    <th scope="row">{draft
+                      ? <Input size="small" autoFocus aria-label={'非系统项目名称 ' + location.name}
+                          value={draft.name} disabled={disabled}
+                          onChange={event => setEdit({ ...draft, name: event.target.value })} />
+                      : location.name}</th>
+                    <td>{draft
+                      ? <SystemProjectField label={defaultProjectLabel + ' ' + location.name}
+                          value={draft.defaultProjectId} projects={projects.data?.items ?? []}
+                          disabled={disabled || projects.isPending}
+                          onChange={id => setEdit({ ...draft, defaultProjectId: id })} />
+                      : location.default_project_disp ?? '—'}</td>
+                    <td><span className={'status-tag ' + (location.is_active ? 'status-positive' : 'status-neutral')}>
+                      {location.is_active ? '在用' : '已停用'}
+                    </span></td>
+                    <td>
+                      <div className="equipment-actions">
+                        {draft ? <>
+                          <Button size="small" type="primary" disabled={disabled || !editDirty || !draft.name.trim()}
+                            onClick={() => void action.run(async () => {
+                              await api.updateLocation(location.id, {
+                                name: draft.name.trim(), default_project_id: draft.defaultProjectId,
+                              });
+                              setEdit(null);
+                            })}>保存</Button>
+                          <Button size="small" disabled={action.busy} onClick={() => setEdit(null)}>取消</Button>
+                        </> : <>
+                          <Button size="small" disabled={disabled || edit !== null}
+                            onClick={() => setEdit({
+                              original: location, name: location.name, defaultProjectId: location.default_project_id,
+                            })}>编辑</Button>
+                          <Button size="small" disabled={disabled || edit !== null}
+                            onClick={() => void action.run(async () => {
+                              await api.updateLocation(location.id, { is_active: !location.is_active });
+                            })}>{location.is_active ? '停用' : '启用'}</Button>
+                        </>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="equipment-location-note">改名会同步更新已有设备、调拨和租赁记录中的非系统项目名称。</p>
     </LedgerModal>
   );
 }

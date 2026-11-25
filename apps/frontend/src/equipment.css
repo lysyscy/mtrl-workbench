@@ -168,6 +168,9 @@
 .equipment-dialog-compact {
   width: min(calc(480px * var(--fscale)), calc(100vw - 24px));
 }
+.equipment-location-dialog {
+  width: min(calc(820px * var(--fscale)), calc(100vw - 24px));
+}
 .equipment-project-form-item {
   grid-column: 1 / -1;
 }
@@ -181,30 +184,72 @@
 }
 .equipment-location-toolbar {
   display: flex;
-  justify-content: flex-end;
-  margin-block-end: 0.5em;
-}
-.equipment-location-list {
-  max-block-size: min(24em, 50dvh);
-  overflow: auto;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.equipment-location-list li {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.8em;
-  padding: 0.55em 0;
-  border-block-end: 1px solid var(--bd);
+  gap: 12px;
+  margin-block-end: 16px;
 }
-.equipment-location-list li div {
+.equipment-location-add {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(12em, 100%), 1fr));
+  flex: 1 1 30em;
+  gap: 8px;
+}
+.equipment-location-add > button {
+  justify-self: start;
+}
+@media (min-width: 620px) {
+  .equipment-location-add {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  }
+}
+.equipment-location-dialog .business-project-picker {
+  min-inline-size: 100%;
+  max-inline-size: 100%;
+}
+.equipment-location-scroll {
+  max-block-size: 48dvh;
+  overflow: auto;
+  border: 0.5px solid var(--bd);
+  border-radius: 6px;
+}
+.equipment-location-table {
+  width: 100%;
+  min-inline-size: 36em;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.equipment-location-table :is(th, td) {
+  padding: 7px 10px;
+  border-block-end: 0.5px solid var(--bd);
+  text-align: start;
   overflow-wrap: anywhere;
 }
-.equipment-location-list li span,
+.equipment-location-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background: var(--sf2);
+}
+.equipment-location-table thead th:nth-child(3) {
+  width: 6em;
+}
+.equipment-location-table thead th:nth-child(4) {
+  width: 10em;
+}
+.equipment-location-table tbody th {
+  font-weight: 400;
+}
+.equipment-location-table tbody tr:hover {
+  background: var(--sf2);
+}
+.equipment-location-table tbody tr:last-child > * {
+  border-block-end: 0;
+}
 .equipment-location-note {
+  margin-block: 12px 0;
   color: var(--tx2);
 }
 .equipment-history-source {
@@ -234,8 +279,7 @@
   display: block;
 }
 .equipment-receipt,
-.equipment-total,
-.equipment-project h3 {
+.equipment-total {
   padding: 0.8em 1em;
   background: var(--sf2);
   overflow-wrap: anywhere;
@@ -249,8 +293,7 @@
   gap: 1em;
   font-weight: 600;
 }
-.equipment-total small,
-.equipment-project h3 span {
+.equipment-total small {
   font-size: 0.95em;
   color: var(--tx2);
   font-weight: 500;
@@ -261,6 +304,11 @@
 .equipment-project h3 {
   margin: 0;
   font-size: 1em;
+  font-weight: 600;
+}
+.equipment-project .ag-row-pinned {
+  font-weight: 600;
+  background: var(--sf2);
 }
 .equipment-project-empty {
   margin: 0;

@@ -283,7 +283,7 @@ export const equipmentApi = {
   locations: (include_inactive = false) =>
     get(schema.object({ items: schema.array(location) }), '/locations', { include_inactive }),
   createLocation: (values: LocationValues) => write(location, '/locations', 'POST', values),
-  updateLocation: (id: number, values: LocationValues) => write(location, '/locations/' + id, 'PATCH', values),
+  updateLocation: (id: number, values: Partial<LocationValues>) => write(location, '/locations/' + id, 'PATCH', values),
   preview: (v: Preview) => write(preview, '/equipment/preview', 'POST', v),
   previewGet: (v: Preview) => get(preview, '/equipment/preview', v),
   create: (v: Create) =>

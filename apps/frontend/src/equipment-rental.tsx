@@ -129,16 +129,16 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
   );
 }
 function Quantity(p: Cell) {
-  return <EditCell {...p} field="quantity" />;
+  return p.node.rowPinned ? null : <EditCell {...p} field="quantity" />;
 }
 function Price(p: Cell) {
-  return <EditCell {...p} field="custom_unit_price" />;
+  return p.node.rowPinned ? null : <EditCell {...p} field="custom_unit_price" />;
 }
 function Note(p: Cell) {
-  return <EditCell {...p} field="distribution_note" />;
+  return p.node.rowPinned ? null : <EditCell {...p} field="distribution_note" />;
 }
-function Decision({ data: r, context }: Cell) {
-  if (!r) return null;
+function Decision({ data: r, context, node }: Cell) {
+  if (node.rowPinned || !r) return null;
   const meta = JSON.parse(r.pending_meta_json || '{}');
   return (
     <div className="equipment-billing">
@@ -173,9 +173,9 @@ function Decision({ data: r, context }: Cell) {
     </div>
   );
 }
-function EquipmentName({ data, context }: Cell) {
+function EquipmentName({ data, context, node }: Cell) {
   const id = data?.equipment_id;
-  if (!data || id == null) return data?.name;
+  if (node.rowPinned || !data || id == null) return data?.name;
   return <button type="button" className="equipment-row-link" title="定位到设备分布"
     onClick={() => context.goToDistribution([id])}>{data.name}</button>;
 }
@@ -183,8 +183,8 @@ function EquipmentName({ data, context }: Cell) {
 function rentalColumns(scale: number): ColDef<RentalLine>[] {
   return [
     {
-      colId: 'sequence', headerName: '序号', ...contentWidth(61, 68, scale), rowDrag: true,
-      valueGetter: p => (p.node?.rowIndex ?? 0) + 1,
+      colId: 'sequence', headerName: '序号', ...contentWidth(61, 68, scale), rowDrag: p => !p.node?.rowPinned,
+      valueGetter: p => p.node?.rowPinned ? null : (p.node?.rowIndex ?? 0) + 1,
     },
     {
       field: 'name', headerName: '名称', ...contentWidth(84, 140, scale, 1), cellRenderer: EquipmentName,
@@ -203,6 +203,7 @@ function rentalColumns(scale: number): ColDef<RentalLine>[] {
 }
 const groupKey = (group: RentGroup) => group.project_id === null ? 'name:' + group.project_name : 'id:' + group.project_id;
 const projectAnchor = (group: RentGroup) => 'equipment-rental-' + encodeURIComponent(groupKey(group));
+const subtotalId = -1;
 
 function ProjectGrid({
   group,
@@ -222,7 +223,7 @@ function ProjectGrid({
   const drag = useGridRowDrag<RentalLine>({
     disabled: context.locked || only,
     sourceId: (r) => r.id,
-    targetId: (_source, target) => target.id,
+    targetId: (_source, target) => target.id === subtotalId ? null : target.id,
     orderFor: () => group.lines.map((r) => r.id),
     save: (_, __, ids) => context.act(() => api.reorder(month, group.project_id, group.project_name, ids)),
   });
@@ -231,16 +232,21 @@ function ProjectGrid({
     const ordered = rowsInOrder(group.lines, order, r => r.id);
     return only ? ordered.filter(r => r.pending_action_type !== 'none') : ordered;
   }, [group.lines, order, only]);
+  const totals = useMemo(() => {
+    const [line] = group.lines;
+    return line ? [{
+      ...line, id: subtotalId, name: '合计', amount: group.subtotal,
+      equipment_id: null, spec: null, unit: null, category_label: '', source_row: null,
+    }] : [];
+  }, [group.lines, group.subtotal]);
   return (
     <section className="equipment-project" id={projectAnchor(group)}>
-      <h3>
-        {group.project_name}
-        <span>项目小计　{formatNum(group.subtotal)} 元</span>
-      </h3>
+      <h3>{group.project_name}</h3>
       {rows.length ? <BusinessGrid
         table="equipment-rental"
         scope={month + groupKey(group)}
         rows={rows}
+        totals={totals}
         columns={columns}
         rowId={rowId}
         label={group.project_name + '租赁明细'}

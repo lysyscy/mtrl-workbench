@@ -294,37 +294,61 @@ def test_transfer_scrap_pending_queue_and_exports(client):
     request(c, "POST", "/scraps", dict(equipment_id=keys[0], scrap_date="2026-11-28", reason="损坏"))
     assert request(c, "GET", "/inventory")["items"][0]["book_qty"] == "1.0000"
     inventory = workbook(c, "inventory")
-    assert Decimal(str(workbook(c, "inventory", data_only=True)["封皮"]["I6"].value)) == Decimal("100.1234")
+    assert Decimal(str(workbook(c, "inventory", data_only=True)["封皮"]["H6"].value)) == Decimal("100.1234")
     assert inventory.sheetnames == ["封皮", "流动资产盘点表", "周转材料"]
     ws = inventory.worksheets[1]
     assert ws["F5"].value == 1 and "F5*E5" in ws["G5"].value
     cover = inventory["封皮"]
     assert {str(area) for area in cover.merged_cells.ranges} == {
-        "C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6", "C7:G7", "C8:G8", "C9:K9", "C10:K10", "A13:K14",
+        "A2:J2", "A3:J3", "A4:J4", "B6:D6", "E6:G6", "H6:I6", "B7:G7", "B8:G8", "H7:I7", "H8:I8",
+        "A12:C12", "D12:E12", "F12:H12", "I12:J12",
     }
-    assert "$A$1:$K$14" in cover.print_area
-    assert (cover.page_setup.paperSize, cover.page_setup.orientation, cover.print_options.horizontalCentered) == (
-        9, "landscape", True)
-    assert (cover["C3"].font.name, cover["C3"].font.sz, cover["C3"].font.bold) == ("宋体", 24, True)
-    assert [cover.column_dimensions[col].width for col in "ABCDEFGHIJKL"] == pytest.approx(
-        [9, 13, 13, 12.642, 9, 13, 9.358, 18.75, 9, 7.425, 9, 13], abs=.001)
-    assert cover["B6"].value == "流动资产金额总计（原值）："
-    assert cover["C7"].alignment.horizontal == "right" and cover["I7"].alignment.horizontal is None
-    assert (cover["A13"].font.sz, cover["A13"].font.u, cover["E6"].border.bottom.style) == (16, None, None)
-    assert [cover[cell].value for cell in ("E6", "I6", "H7", "H8")] == [
-        "=I6", "=H7+H8", "='流动资产盘点表'!I6", "='周转材料'!I5",
+    assert cover.print_area == "'封皮'!$A$1:$J$13"
+    assert (cover.page_setup.paperSize, cover.page_setup.orientation) == (9, "landscape")
+    assert cover.print_options.horizontalCentered and cover.print_options.verticalCentered
+    assert cover.sheet_properties.pageSetUpPr.fitToPage
+    assert (cover.page_setup.fitToWidth, cover.page_setup.fitToHeight) == (1, 1)
+    margins = cover.page_margins
+    assert (margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer) == (
+        .6, .6, .6, .6, .3, .3)
+    widths = [cover.column_dimensions[col].width for col in "ABCDEFGHIJ"]
+    assert widths == widths[::-1] and sum(widths) == 124
+    assert [cover.row_dimensions[n].height for n in range(1, 14)] == [
+        24, 48, 36, 44, 38, 40, 36, 36, 42, 42, 42, 36, 20,
     ]
-    assert cover["E6"].number_format == "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"
-    assert cover["I6"].number_format == r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'
-    assert cover["H7"].number_format == cover["H8"].number_format == r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
-    for sheet, last in ((ws, 6), (inventory["周转材料"], 5)):
+    for row, title, size, bold in (
+        (2, "河南省安装集团有限责任公司", 26, True),
+        (3, "第四工程公司", 20, False),
+        (4, "流动资产盘点表", 22, True),
+    ):
+        cell = cover[f"A{row}"]
+        assert (cell.value, cell.font.name, cell.font.sz, cell.font.bold) == (title, "宋体", size, bold)
+        assert cell.alignment.horizontal == cell.alignment.vertical == "center"
+    assert cover["B6"].value == "流动资产金额总计（原值）："
+    assert cover["B7"].value == "其中：大型工机具：" and cover["B8"].value == "周转材料："
+    assert [cover[cell].value for cell in ("A12", "D12", "F12", "I12")] == [
+        "单位主管：", "财务主管：", "资产主管：", "制表人：",
+    ]
+    assert [cover[cell].value for cell in ("E6", "H6", "H7", "H8")] == [
+        "=H6", "=H7+H8", "='流动资产盘点表'!I6", "='周转材料'!I5",
+    ]
+    for span in ("E6:G6", "H6:I6", "H7:I7", "H8:I8"):
+        assert all(cell.border.bottom.style == "thin" for cell in cover[span][0])
+    assert cover["E6"].number_format == "[DBNum2][]General;[Red][DBNum2][]General"
+    assert cover["H6"].number_format == '"￥"#,##0.00;[Red]"￥"-#,##0.00'
+    assert cover["H7"].number_format == cover["H8"].number_format == '"￥"#,##0.00'
+    for sheet, last, category in ((ws, 6, "在用工具"), (inventory["周转材料"], 5, "周转材料")):
         assert (sheet.page_setup.paperSize, sheet.page_setup.orientation, sheet.page_setup.scale) == (9, "landscape", None)
         assert not sheet.sheet_properties.pageSetUpPr.fitToPage
         margins = sheet.page_margins
         assert (margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer) == (
             .551, .591, .315, .748, .315, .315)
-        assert sheet.max_column == 12 and f"$A$1:$L${last}" in sheet.print_area
+        assert sheet.max_column == 12 and sheet.print_area == f"'{sheet.title}'!$A$1:$L${last}"
         assert sheet.print_title_rows == "$1:$4"
+        assert [sheet.row_dimensions[n].height for n in range(1, 5)] == [33, 20, 28.5, 42.75]
+        cell = sheet["A2"]
+        assert (cell.value, cell.font.name, cell.font.sz) == (f"类别：{category}", "宋体", 12)
+        assert (cell.alignment.horizontal, cell.alignment.vertical) == ("left", "center")
         assert {"A1:L1", "A3:A4", "F3:G3", "H3:I3"} <= {str(cell) for cell in sheet.merged_cells.ranges}
         assert (sheet["A1"].font.name, sheet["A1"].font.sz, sheet["A3"].border.bottom.style) == ("宋体", 18, "thin")
         assert sheet[f"B{last}"].font.bold and sheet[f"L{last}"].border.right.style == "thin"

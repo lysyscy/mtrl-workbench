@@ -143,6 +143,7 @@ export function LedgerModal({
   busy = false,
   dirty = false,
   compact = false,
+  className = '',
   close,
   children,
 }: {
@@ -150,6 +151,7 @@ export function LedgerModal({
   busy?: boolean;
   dirty?: boolean;
   compact?: boolean;
+  className?: string;
   close: () => void;
   children: ReactNode;
 }) {
@@ -158,7 +160,7 @@ export function LedgerModal({
     <BusinessModal
       open
       titleId="equipment-dialog"
-      className={compact ? 'equipment-dialog equipment-dialog-compact' : 'equipment-dialog'}
+      className={['equipment-dialog', compact ? 'equipment-dialog-compact' : '', className].filter(Boolean).join(' ')}
       requestClose={closing.requestClose}
     >
       <DialogContents titleId="equipment-dialog" title={title} closing={closing}>

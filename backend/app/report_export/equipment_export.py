@@ -281,42 +281,48 @@ def equipment_rental_xlsx(snapshot):
 
 def inventory_cover(cover):
     cover.title = "封皮"
-    sheet_setup(cover, [9, 13, 13, 12.6416666666667, 9, 13, 9.35833333333333, 18.75, 9, 7.425, 9, 13], "landscape")
-    cover.print_options.horizontalCentered = True
-    for address in ("C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6", "C7:G7", "C8:G8",
-                    "C9:K9", "C10:K10", "A13:K14"):
-        cover.merge_cells(address)
-    for column in cover.column_dimensions.values():
-        column.font = Font(name="宋体", charset=134, size=12)
-        column.alignment = Alignment(vertical="center")
-    for row, height in ((3, 62.15), (4, 36), (5, 36), (6, 36), (7, 36), (8, 27), (9, 27), (10, 27)):
+    sheet_setup(cover, [10, 12, 12, 14, 14, 14, 14, 12, 12, 10], "landscape")
+    cover.page_margins.left = cover.page_margins.right = .6
+    cover.page_margins.top = cover.page_margins.bottom = .6
+    cover.page_margins.header = cover.page_margins.footer = .3
+    cover.print_options.horizontalCentered = cover.print_options.verticalCentered = True
+    cover.sheet_properties.pageSetUpPr.fitToPage = True
+    cover.page_setup.fitToWidth = cover.page_setup.fitToHeight = 1
+    cover.print_area = "A1:J13"
+    for row, height in enumerate((24, 48, 36, 44, 38, 40, 36, 36, 42, 42, 42, 36, 20), 1):
         cover.row_dimensions[row].height = height
-        cover.row_dimensions[row].font = Font(name="宋体", charset=134, size=12)
-    cells = {
-        "C3": ("河南省安装集团有限责任公司", 24, "center"),
-        "C4": ("第四工程公司", 20, "center"),
-        "C5": ("流动资产盘点表", 20, "center"),
-        "B6": ("流动资产金额总计（原值）：", 14, "center"),
-        "C7": ("其     中：大型工机具：", 14, "right"),
-        "C8": ("周转材料：", 14, "right"),
-        "A13": ("单位主管：             财务主管：               资产主管：              制表人：   ", 16, None),
-    }
-    for address in ("K6", "I7", "I8"):
-        cells[address] = ("元", 14, None)
-    for address in ("J7", "K7", "J8", "K8", "C9", "C10"):
-        cells[address] = (None, 14, None)
-    for address in ("E6", "I6", "H7", "H8"):
-        cells[address] = (None, 14, "center")
-    for address, (value, size, align) in cells.items():
-        cell = cover[address]
-        cell.value = value
-        cell.font = Font(name="宋体", charset=134, size=size, bold=address == "C3")
-        cell.alignment = Alignment(horizontal=align, vertical="center")
-    cover["E6"].number_format = '[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General'
-    cover["I6"].number_format = r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'
-    for address in ("H7", "H8"):
-        cover[address].number_format = r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
-    cover.print_area = "A1:K14"
+
+    for address, text, size, bold, align in (
+        ("A2:J2", "河南省安装集团有限责任公司", 26, True, "center"),
+        ("A3:J3", "第四工程公司", 20, False, "center"),
+        ("A4:J4", "流动资产盘点表", 22, True, "center"),
+        ("B6:D6", "流动资产金额总计（原值）：", 14, False, "right"),
+        ("B7:G7", "其中：大型工机具：", 14, False, "right"),
+        ("B8:G8", "周转材料：", 14, False, "right"),
+        ("A12:C12", "单位主管：", 15, False, "center"),
+        ("D12:E12", "财务主管：", 15, False, "center"),
+        ("F12:H12", "资产主管：", 15, False, "center"),
+        ("I12:J12", "制表人：", 15, False, "center"),
+    ):
+        cover.merge_cells(address)
+        cell = cover[address.split(":")[0]]
+        cell.value = text
+        style_cell(cell, size, bold=bold, horizontal=align)
+
+    yuan = '"￥"#,##0.00'
+    for address, align, number_format in (
+        ("E6:G6", "center", "[DBNum2][]General;[Red][DBNum2][]General"),
+        ("H6:I6", "right", f'{yuan};[Red]"￥"-#,##0.00'),
+        ("H7:I7", "right", yuan),
+        ("H8:I8", "right", yuan),
+    ):
+        anchor = cover[address.split(":")[0]]
+        anchor.border = Border(bottom=BORDER)
+        cover.merge_cells(address)
+        style_cell(anchor, 14, horizontal=align, shrink=True)
+        anchor.number_format = number_format
+    for row in range(6, 9):
+        style_cell(cover.cell(row, 10, "元"), 14, horizontal="left")
 
 
 def equipment_inventory_xlsx(items):
@@ -362,8 +368,8 @@ def equipment_inventory_xlsx(items):
     overall = sum(counted_totals) if counted_totals else None
     # A populated detail sheet can have no known amounts, so its total formula returns empty text.
     total_formula = '=H7+H8' if len(counted_totals) == 2 else '=IF(COUNT(H7:H8),SUM(H7:H8),"")'
-    set_formula(cover["I6"], Formula(total_formula, overall))
-    set_formula(cover["E6"], Formula('=I6', overall))
+    set_formula(cover["H6"], Formula(total_formula, overall))
+    set_formula(cover["E6"], Formula('=H6', overall))
     return workbook_bytes(wb)
 
 
@@ -376,16 +382,17 @@ def inventory_page_setup(ws, category):
     ws.print_title_rows = "1:4"
     tool = category == "tool"
     ws.sheet_format.defaultRowHeight = 17.5 if tool else 23.05
-    for row, height in enumerate((33, 18, 17.5, 17.5) if tool else (22.5, 18.75, 30, 45.75), 1):
+    for row, height in enumerate((33, 20, 28.5, 42.75), 1):
         ws.row_dimensions[row].height = height
     grid(ws, 3, 4, 12)
+    ws["J3"].border = Border(left=BORDER, right=BORDER, top=BORDER)
     for address in ("A1:L1", "A2:B2", "C2:E2", "F2:H2", "J2:L2", "F3:G3", "H3:I3",
                     "A3:A4", "B3:B4", "C3:C4", "D3:D4", "E3:E4", "K3:K4", "L3:L4"):
         ws.merge_cells(address)
     ws["A1"] = "流   动   资   产   盘   点   表"
     style_cell(ws["A1"], 18, bold=True)
     ws["A2"] = "类别：" + ("在用工具" if tool else "周转材料")
-    style_cell(ws["A2"], 12 if tool else 14, horizontal="left")
+    style_cell(ws["A2"], horizontal="left")
     if tool:
         for cell in ws[2][:2]:
             cell.border = Border(bottom=BORDER)
