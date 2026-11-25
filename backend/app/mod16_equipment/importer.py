@@ -11,8 +11,9 @@ from sqlalchemy import select
 
 from app.core.money import ledger_product
 from .common import ledger_lock, total
-from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine, RentalMonth
+from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, Location, RentalLine, RentalMonth
 from .projects import ProjectRef, project_index
+from .rental import category_label, imported_category_label
 
 
 PROJECT_ALIASES = {
@@ -170,7 +171,8 @@ def parse_rental(path):
                     raise ValueError(f"本月租赁第 {n} 行缺少已计费金额，请核对公式缓存")
                 lines.append(dict(project_name=text(r[0]), name=text(r[1]), spec=text(r[2]), unit=text(r[3]),
                     quantity=number(r[4]), unit_price=number(r[5]), billing_status=billing, amount=number(r[7]),
-                    category_label=text(r[9]) or "", original_value=number(r[10]), custom_unit_price=number(r[11]),
+                    category_label=imported_category_label(text(r[9])),
+                    original_value=number(r[10]), custom_unit_price=number(r[11]),
                     source_row=text(r[12]), code=text(r[15])))
         else:
             sheet = book["分公司9月份 (2)"]
@@ -186,9 +188,121 @@ def parse_rental(path):
                 lines.append(dict(project_name=project, name=text(r[1]), spec=text(r[2]), unit=text(r[3]),
                     quantity=number(r[4]), unit_price=price, amount=number(r[6]), original_value=original,
                     custom_unit_price=price if price != ledger_product(original, Decimal(".05")) else None,
-                    billing_status="blank" if r[6] is None else "normal", category_label=text(r[7]) or "",
+                    billing_status="blank" if r[6] is None else "normal", category_label=imported_category_label(text(r[7])),
                     distribution_note=text(r[8]), source_row=str(n)))
     return lines
+
+
+def link_jiaozuo_tricycles(items, inventory, links):
+    # The accepted baseline pairs these indistinguishable May 2023 vehicles in source order.
+    codes = ("电动三轮车-202305-1", "电动三轮车-202305-2")
+    for code in codes:
+        item = items.get(code)
+        if item is None or code in links or item["status"] == "scrapped":
+            return
+        identity = item["name"], item["purchase_price"], item["quantity"], item["asset_scope"], item["item_category"]
+        if not item["source_lists_inventory"] or identity != ("电动三轮车", 5300, 1, "current_asset", "equipment"):
+            return
+    linked = set(links.values())
+    matches = [key for key, row in inventory.items() if key not in linked and
+               (row["category"], row["name"], row["unit_price"], row["book_qty"]) == ("tool", "电动三轮车", 5300, 1)]
+    if len(matches) == len(codes):
+        matches.sort(key=lambda key: inventory[key]["sort_order"])
+        links.update(zip(codes, matches))
+
+
+def inventory_fields(row):
+    return dict(name=row["name"], spec=row["spec"], unit=row["unit"], quantity=row["book_qty"],
+                purchase_price=row["unit_price"], inventory_source_row=row["source_row"],
+                source_lists_inventory=True)
+
+
+def align_baseline(items, inventory, transfers, scraps, lines):
+    history = transfers + scraps
+    history_codes = {row["code"] for row in history}
+    replacements, renamed, rental_names = {}, {}, {}
+    for code, item in items.items():
+        row = inventory.get(("tool", item["inventory_source_row"]))
+        qty = item["quantity"]
+        if (item["item_category"] == "equipment" and re.fullmatch(r"盘点\d+", code)
+                and row and item["source_lists_inventory"] and qty > 1 and qty == int(qty) == row["book_qty"]
+                and not item["rental_source_row"] and code not in history_codes):
+            replacements[code] = [dict(item, code=f"{code}-{unit:02d}", quantity=Decimal(1))
+                                  for unit in range(1, int(qty) + 1)]
+
+    old_welders = [f"二保焊机-20230711-{unit:02d}" for unit in range(1, 5)]
+    if any(code in items for code in old_welders):
+        welder = inventory.get(("tool", "75"))
+        if ((welder and (welder["name"], welder["book_qty"], welder["unit_price"])) !=
+                ("逆变焊机", 15, Decimal("1132.7430")) or not all(
+                    code in items and items[code]["inventory_source_row"] == "75" for code in old_welders)):
+            raise ValueError("南靖焊机基线与已确认的盘点对应关系不符")
+        for unit in range(1, 16):
+            old = old_welders[min(unit - 1, 3)]
+            code = f"逆变焊机-20230711-{unit:02d}"
+            row = dict(items[old], **inventory_fields(welder))
+            row.update(code=code, quantity=Decimal(1), purchase_date=date(2023, 7, 11),
+                       purchase_project="南靖项目", current_project="南平项目", asset_scope="current_asset",
+                       in_rental="yes", remark="实物为4台二保焊机")
+            replacements.setdefault(old, []).append(row)
+            if unit <= 4:
+                renamed[old] = code
+
+    for number_, source_row, price in ((1, "7", "34867.26"), (2, "9", "12570"), (3, "10", "14920.35")):
+        old = f"吹扫阀门-未知{number_}"
+        if old not in items:
+            continue
+        item, valve = items[old], inventory.get(("turnover", source_row))
+        silencer = inventory.get(("turnover", "8")) if number_ == 1 else None
+        if (not valve or valve["name"] != "电动闸阀" or (number_ == 1 and
+                (not silencer or silencer["name"] != "消音器")) or item["purchase_price"] != Decimal(price)
+                or total(row["unit_price"] for row in (valve, silencer) if row) != Decimal(price)):
+            raise ValueError(f"{old}基线与已确认的盘点对应关系不符")
+        code = f"电动闸阀-未知{number_}"
+        row = dict(item, **inventory_fields(valve))
+        row["code"] = renamed[old] = code
+        replacements[old] = [row]
+        if item["rental_source_row"]:
+            rental_names[item["rental_source_row"]] = row
+        if silencer:
+            row.update(spec="DN150 100公斤，碳钢", status="damaged", in_rental="no",
+                       remark="原吹扫阀门一套，阀门已坏")
+            other = dict(item, **inventory_fields(silencer))
+            other.update(code="消音器-未知1", status="in_use", in_rental="no", remark="原吹扫阀门一套")
+            replacements[old].append(other)
+
+    aligned = {}
+    for old, item in items.items():
+        for row in replacements.get(old, [item]):
+            code = row["code"]
+            if code in aligned:
+                raise ValueError(f"接续设备编号重复：{code}")
+            aligned[code] = row
+    linked_turnover = {row["inventory_source_row"] for row in aligned.values()
+                       if row["item_category"] == "turnover" and row["source_lists_inventory"]}
+    for key, row in inventory.items():
+        if key[0] == "turnover" and row["name"] == "电缆" and row["spec"] in ("YH35", "YH50") and key[1] not in linked_turnover:
+            code = f"盘点电缆-{row['spec']}"
+            if code in aligned:
+                raise ValueError(f"接续设备编号重复：{code}")
+            aligned[code] = dict(**inventory_fields(row), code=code, item_category="turnover", purchase_project="",
+                                 current_project="待核", asset_scope="current_asset", status="in_use", in_rental="no",
+                                 remark="盘点周转材料接续", i8_sync_status="not_applicable", rental_source_row=None)
+    for row in history:
+        row["code"] = renamed.get(row["code"], row["code"])
+    for line in lines:
+        valve = rental_names.get(line["source_row"])
+        if valve and line["original_value"] == valve["purchase_price"]:
+            line.update(code=valve["code"], name=valve["name"], category_label="周转材料")
+    return aligned
+
+
+def remember_location(locations, ref):
+    if ref.custom:
+        if ref.id is not None:
+            locations[ref.custom] = ref.id
+        else:
+            locations.setdefault(ref.custom, None)
 
 
 def import_equipment_baseline(session, *, distribution_path, inventory_path, rental_path,
@@ -201,6 +315,7 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
     lines = parse_rental(rental_path)
     if not items or not inventory or not lines:
         raise ValueError("三账基线缺少有效明细")
+    items = align_baseline(items, inventory, transfers, scraps, lines)
     inventory_links, by_rental_row = {}, defaultdict(list)
     for code, item in items.items():
         category = "tool" if item["item_category"] == "equipment" else "turnover"
@@ -208,6 +323,7 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         if item["source_lists_inventory"] and key in inventory:
             inventory_links[code] = key
         by_rental_row[item["rental_source_row"]].append(code)
+    link_jiaozuo_tricycles(items, inventory, inventory_links)
     for line in lines:
         if "code" not in line:  # Legacy print sheet has no explicit equipment code.
             matches = by_rental_row[line["source_row"]]
@@ -232,11 +348,14 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         by_name = defaultdict(list)
         for project in project_index(session).values():
             by_name[project.disp].append(project.id)
+        locations = {}
         for records, prefixes in ((items.values(), ("purchase_project", "current_project")),
                                   (transfers, ("from_project", "to_project")), (scraps, ("original_project",))):
             for record in records:
                 for prefix in prefixes:
-                    record.update(match_project(record[prefix], by_name).fields(prefix))
+                    ref = match_project(record[prefix], by_name)
+                    record.update(ref.fields(prefix))
+                    remember_location(locations, ref)
         assets = {k: InventoryItem(**r) for k, r in inventory.items()}
         session.add_all(list(assets.values()) + [RentalMonth(month=rental_month)])
         session.flush()
@@ -252,12 +371,19 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         for i, line in enumerate(lines):
             line.pop("code")
             item = equipment_rows.get(rental_links.get(i))
+            source_project = match_project(line["project_name"], by_name)
+            remember_location(locations, source_project)
             project = (ProjectRef.from_row(item, "current_project") if item and item.current_project_id is not None
-                       else match_project(line["project_name"], by_name))
+                       else source_project)
+            if item:
+                line["category_label"] = category_label(item.item_category)
             key = project.key()
             line.update(project.fields("project", label="project_name"))
             session.add(RentalLine(month=rental_month, equipment_id=item.id if item else None,
                                    project_sort_order=project_order.setdefault(key, len(project_order)),
                                    row_sort_order=row_counts[key], **line))
             row_counts[key] += 1
+        existing = set(session.scalars(select(Location.name)))
+        session.add_all(Location(name=name, default_project_id=project_id)
+                        for name, project_id in locations.items() if name not in existing)
     return summary

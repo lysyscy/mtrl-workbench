@@ -9,6 +9,19 @@ from app.core.db import Base
 from app.core.identity import current_operator
 
 
+class Location(Base):
+    __tablename__ = 'm16_locations'
+    __table_args__ = (sa.CheckConstraint("btrim(name) <> ''", name='ck_m16_locations_name'),)
+
+    id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True)
+    name: Mapped[str] = mapped_column(sa.Text(), unique=True)
+    default_project_id: Mapped[int | None] = mapped_column(sa.ForeignKey('project.id', ondelete='SET NULL'))
+    is_active: Mapped[bool] = mapped_column(sa.Boolean(), server_default=sa.true())
+    sort_order: Mapped[int] = mapped_column(sa.Integer(), server_default='0')
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(), server_default=sa.func.now())
+    updated_at: Mapped[datetime] = mapped_column(sa.DateTime(), server_default=sa.func.now(), onupdate=datetime.now)
+
+
 class InventoryItem(Base):
     __tablename__ = 'm16_inventory_items'
     __table_args__ = (

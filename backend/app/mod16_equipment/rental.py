@@ -1,12 +1,11 @@
 """月租的接续、当月决议与排序。"""
 import json
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, select
 
 from app.core.errors import DataConflictError
-from app.core.identity import current_operator
 from .common import encoded, product, record, require, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, RentalLine, RentalMonth
 from .projects import ProjectRef, project_index
@@ -23,8 +22,17 @@ def recalculate(line):
     line.amount = product(line.unit_price, line.quantity) if line.billing_status == "normal" else None
 
 
-def category_label(item):
-    return "周转材料" if item.item_category == "turnover" else "大型工机具"
+def category_label(item_category):
+    return "周转材料" if item_category == "turnover" else "大型工机具"
+
+
+def imported_category_label(label):
+    # Unlinked lines have no equipment category, so retain explicit turnover from the source.
+    return category_label("turnover" if label == "周转材料" else "equipment")
+
+
+def line_category(line, item):
+    return category_label(item.item_category) if item else imported_category_label(line.category_label)
 
 
 def carry_line(db, old, month, item=None):
@@ -36,8 +44,7 @@ def carry_line(db, old, month, item=None):
     values = record(old)
     for key in ("id", "created_at", "updated_at", "pending_meta_json"):
         values.pop(key)
-    if item is not None:
-        values["category_label"] = category_label(item)
+    values["category_label"] = line_category(old, item)
     if "next_transfer_id" in carry:
         transfer = require(db, EquipmentTransfer, carry["next_transfer_id"])
         values.update(ProjectRef.from_row(transfer, "to_project").fields("project", label="project_name"))
@@ -57,21 +64,31 @@ def month_row(db, month):
         row = RentalMonth(month=month)
         db.add(row)
         db.flush()
-    elif row.status == "confirmed" or db.scalar(select(RentalLine.id).where(RentalLine.month == month).limit(1)):
+    elif db.scalar(select(RentalLine.id).where(RentalLine.month == month).limit(1)):
         return row
     prior = db.scalar(select(func.max(RentalMonth.month)).where(RentalMonth.month < month))
     if prior:
-        for old, item in lines_with_equipment(db, prior):
+        previous = list(lines_with_equipment(db, prior))
+        positions = {}
+        for line, _ in previous:
+            key = ProjectRef.from_row(line, "project").key()
+            rank, next_row = positions.get(key, (line.project_sort_order, 0))
+            positions[key] = rank, max(next_row, line.row_sort_order + 1)
+        next_rank = max((rank for rank, _ in positions.values()), default=-1) + 1
+        for old, item in previous:
             new = carry_line(db, old, month, item)
-            if new is not None:
-                db.add(new)
+            if new is None:
+                continue
+            key = ProjectRef.from_row(new, "project").key()
+            if key != ProjectRef.from_row(old, "project").key():
+                if key not in positions:
+                    positions[key] = next_rank, 0
+                    next_rank += 1
+                new.project_sort_order, new.row_sort_order = positions[key]
+                positions[key] = new.project_sort_order, new.row_sort_order + 1
+            db.add(new)
         db.flush()
     return row
-
-
-def draft(db, month):
-    if month_row(db, month).status == "confirmed":
-        raise DataConflictError(f"{month} 月租已经确认")
 
 
 def lines_with_equipment(db, month):
@@ -100,13 +117,26 @@ def move(db, line, project):
     line.project_name, line.project_id, line.project_custom = project.legacy, project.id, project.custom
 
 
-def check_transfer_month(db, month):
-    status = db.scalar(select(RentalMonth.status).where(RentalMonth.month == month))
-    if status == "confirmed":
-        raise DataConflictError("该调拨所属月份租赁已确认，不能删除")
-
-
 TRANSFER_DETAILS = ("transfer_id", "from_project", "to_project", "transfer_date", "suggested_side")
+
+
+def rename_location_metadata(db, old, new):
+    for line in db.scalars(select(RentalLine).where(RentalLine.pending_meta_json.is_not(None))):
+        data = meta(line)
+        changed = False
+        for details in (data, *(entry["details"] for entry in data.get("queue", []))):
+            for field, prefix, id_field in (("from_project", "from_project", "transfer_id"),
+                                            ("to_project", "to_project", "transfer_id"),
+                                            ("next_project", "to_project", "next_transfer_id")):
+                if details.get(field) != old:
+                    continue
+                key = details.get(id_field)
+                transfer = db.get(EquipmentTransfer, key) if key is not None else None
+                if transfer is None or ProjectRef.from_row(transfer, prefix).custom == new:
+                    details[field] = new
+                    changed = True
+        if changed:
+            line.pending_meta_json = encoded(data)
 
 
 def drop_transfer_action(line, data, key):
@@ -148,16 +178,13 @@ def restore_transfer_attribution(db, line, data, transfer, reverted):
         move(db, line, project)
 
     destination = ProjectRef.from_row(transfer, "to_project")
-    later = db.execute(select(RentalLine, RentalMonth.status).join(
-        RentalMonth, RentalMonth.month == RentalLine.month
-    ).where(RentalLine.equipment_id == line.equipment_id, RentalLine.month > line.month).order_by(RentalLine.month))
-    for other, status in later:
+    later = db.scalars(select(RentalLine).where(
+        RentalLine.equipment_id == line.equipment_id, RentalLine.month > line.month).order_by(RentalLine.month))
+    for other in later:
         if other.pending_action_type != "none" or "next_project" in meta(other) or not same_position(other, destination):
             break
         if same_position(other, continuation):
             continue
-        if status == "confirmed":
-            raise DataConflictError(f"该变动影响后续已确认租赁月份 {other.month}，请核对日期")
         move(db, other, continuation)
 
 
@@ -176,18 +203,15 @@ def remove_transfer(db, transfer, reverted):
 
 
 def action(db, item, month, kind, details, custom_price=None, *, project=None):
-    draft(db, month)
-    closed = db.scalar(select(RentalMonth.month).where(
-        RentalMonth.month > month, RentalMonth.status == "confirmed").order_by(RentalMonth.month).limit(1))
-    if closed:
-        raise DataConflictError(f"该变动影响后续已确认租赁月份 {closed}，请核对日期")
+    month_row(db, month)
     line = db.scalar(select(RentalLine).where(RentalLine.month == month, RentalLine.equipment_id == item.id))
     if line is None:
         project = project or ProjectRef.from_row(item, "current_project")
         group, order = position(db, month, project)
         line = RentalLine(month=month, equipment_id=item.id, **project.fields("project", label="project_name"),
                           project_sort_order=group,
-                          category_label=category_label(item), row_sort_order=order, name=item.name, spec=item.spec, unit=item.unit,
+                          category_label=category_label(item.item_category), row_sort_order=order,
+                          name=item.name, spec=item.spec, unit=item.unit,
                           quantity=item.quantity, original_value=item.purchase_price, custom_unit_price=custom_price,
                           pending_action_type="none", billing_status="skip_month" if kind == "new_purchase_start" else "normal")
         db.add(line)
@@ -206,7 +230,7 @@ def action(db, item, month, kind, details, custom_price=None, *, project=None):
             existing = db.scalar(select(RentalLine.id).where(RentalLine.month == later, RentalLine.equipment_id == item.id))
             if existing:
                 break
-            new = carry_line(db, line, later)
+            new = carry_line(db, line, later, item)
             if new is None:
                 break
             new.project_sort_order, new.row_sort_order = position(db, later, ProjectRef.from_row(new, "project"))
@@ -215,12 +239,13 @@ def action(db, item, month, kind, details, custom_price=None, *, project=None):
     return line
 
 
-def line_record(line, projects):
-    return record(line) | ProjectRef.from_row(line, "project").response("project", projects, rental=True)
+def line_record(line, projects, item):
+    return (record(line) | ProjectRef.from_row(line, "project").response("project", projects, rental=True)
+            | {"category_label": line_category(line, item)})
 
 
 def view(db, month, project=None):
-    row = month_row(db, month)
+    month_row(db, month)
     archive = project_index(db)
     groups = {}
     pending = 0
@@ -229,9 +254,7 @@ def view(db, month, project=None):
         pending += line.pending_action_type != "none"
         ref = ProjectRef.from_row(line, "project")
         if project is None or ref.rental_name(archive) == project:
-            values = line_record(line, archive)
-            if item:
-                values["category_label"] = category_label(item)
+            values = line_record(line, archive, item)
             group = groups.setdefault(ref.key(), {"project_id": ref.id, "project_name": values["project_name"],
                                                  "lines": []})
             group["lines"].append(values)
@@ -240,7 +263,7 @@ def view(db, month, project=None):
     for group in projects:
         group["lines"].sort(key=lambda line: (line["row_sort_order"], line["id"]))
         group["subtotal"] = total(line["amount"] for line in group["lines"])
-    return {"month": month, "status": row.status, "pending_count": pending, "projects": projects,
+    return {"month": month, "status": "draft", "pending_count": pending, "projects": projects,
             "grand_total": total(amounts), "printable_project_count": sum((g["subtotal"] or 0) != 0 for g in projects)}
 
 
@@ -248,32 +271,24 @@ def stop_lines(db, equipment_id, month, *, include_current=False):
     if equipment_id is None:
         return
     cutoff = RentalLine.month >= month if include_current else RentalLine.month > month
-    rows = db.execute(select(RentalLine, RentalMonth.status).join(
-        RentalMonth, RentalMonth.month == RentalLine.month
-    ).where(RentalLine.equipment_id == equipment_id, cutoff).order_by(RentalLine.month))
-    for line, status in rows:
-        if status == "confirmed":
-            if not include_current and line.billing_status == "normal":
-                raise DataConflictError(f"{line.month} 已确认且仍对该设备计租，请先核对后续月份")
-        else:
-            line.billing_status, line.amount = "stopped", None
+    rows = db.scalars(select(RentalLine).where(RentalLine.equipment_id == equipment_id, cutoff))
+    for line in rows:
+        line.billing_status, line.amount = "stopped", None
 
 
 def patch(db, key, changes):
     line = require(db, RentalLine, key)
-    draft(db, line.month)
     if changes.get("billing_status") == "stopped":
         stop_lines(db, line.equipment_id, line.month)
     for name, value in changes.items():
         setattr(line, name, value)
     recalculate(line)
     db.flush()
-    return line_record(line, project_index(db))
+    return line_record(line, project_index(db), db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None)
 
 
 def resolve(db, key, choice):
     line = require(db, RentalLine, key)
-    draft(db, line.month)
     data = meta(line)
     kind = line.pending_action_type
     following = {k: data[k] for k in ("next_project", "next_transfer_id", "stop_next") if k in data}
@@ -299,25 +314,23 @@ def resolve(db, key, choice):
         line.pending_action_type = upcoming["kind"]
         following.update(upcoming["details"], queue=queue)
     line.pending_meta_json = encoded(following) if following else None
-    # A user may already have opened later drafts before settling this event.
+    # Later months may already have been opened before this event was settled.
     later = db.scalars(select(RentalLine).where(RentalLine.equipment_id == line.equipment_id,
                         RentalLine.month > line.month).order_by(RentalLine.month)).all()
     for other in later:
         if kind == "scrap_stop":
-            draft(db, other.month)
             db.delete(other)
         elif kind == "transfer_attribution":
             if other.pending_action_type != "none" or "next_project" in meta(other):
                 break
-            draft(db, other.month)
             move(db, other, ProjectRef.from_row(transfer, "to_project"))
     recalculate(line)
     db.flush()
-    return line_record(line, project_index(db))
+    return line_record(line, project_index(db), db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None)
 
 
 def reorder(db, request):
-    draft(db, request.month)
+    month_row(db, request.month)
     archive = project_index(db)
     lines, keys = {}, set()
     for line, _ in lines_with_equipment(db, request.month):
@@ -336,19 +349,15 @@ def reorder(db, request):
     return {"ordered_line_ids": ids}
 
 
-def confirm(db, month):
-    row = month_row(db, month)
-    if row.status != "confirmed":
-        pending = db.scalar(select(func.count()).select_from(RentalLine).where(
-            RentalLine.month == month, RentalLine.pending_action_type != "none"))
-        if pending:
-            raise DataConflictError(f"本月还有 {pending} 行租赁事项待确认")
-        unresolved = db.scalar(select(RentalLine.month).where(
-            RentalLine.month < month, RentalLine.pending_action_type != "none",
-            RentalLine.equipment_id.in_(select(RentalLine.equipment_id).where(RentalLine.month == month)),
-        ).order_by(RentalLine.month).limit(1))
-        if unresolved:
-            raise DataConflictError(f"本月接续的设备在 {unresolved} 仍有待确认事项")
-        row.status, row.confirmed_at, row.confirmed_by = "confirmed", datetime.now(), current_operator()
-        db.flush()
-    return record(row)
+def reorder_projects(db, request):
+    month_row(db, request.month)
+    ranks = {project.project_id if project.project_id is not None else project.project_name: order
+             for order, project in enumerate(request.projects)}
+    lines = db.scalars(select(RentalLine).where(RentalLine.month == request.month)).all()
+    keys = {ProjectRef.from_row(line, "project").key() for line in lines}
+    if len(ranks) != len(request.projects) or ranks.keys() != keys:
+        raise DataConflictError("排序须包含本月全部项目且无重复")
+    for line in lines:
+        line.project_sort_order = ranks[ProjectRef.from_row(line, "project").key()]
+    db.flush()
+    return request.model_dump()

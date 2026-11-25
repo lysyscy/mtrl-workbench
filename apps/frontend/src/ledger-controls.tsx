@@ -13,8 +13,8 @@ import { projectLabel, requestFile } from './api';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { projectPickerProjects } from './project-picker-order';
 
-export function ProjectPicker({ projects: allProjects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false, emptyLabel = '请选择项目' }: {
-  projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean; emptyLabel?: string;
+export function ProjectPicker({ projects: allProjects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false, emptyLabel = '请选择项目', allowClear = false }: {
+  projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean; emptyLabel?: string; allowClear?: boolean;
 }) {
   const { token } = theme.useToken();
   const projects = projectPickerProjects(allProjects, multiple);
@@ -30,13 +30,13 @@ export function ProjectPicker({ projects: allProjects, selected, pick, multiple 
   return <span className="business-project-picker" title={summary} style={{ width: `${Math.min(36, Math.max(10, summary.length + 5))}em` }}
     onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); } }}>
     <Select aria-label={label} value={multiple ? selected : selected[0] ?? null} {...(multiple ? { mode: 'multiple' as const } : {})}
-      placeholder={emptyLabel} disabled={disabled} open={open && !disabled} onOpenChange={setOpen}
+      placeholder={emptyLabel} disabled={disabled} allowClear={allowClear} open={open && !disabled} onOpenChange={setOpen}
       showSearch={{ optionFilterProp: 'label' }} options={options} maxTagCount={0} maxTagPlaceholder={() => summary}
       listHeight={listHeight}
       classNames={{ popup: { root: 'business-project-popup ag-custom-component-popup' } }}
       popupMatchSelectWidth={Math.min(560, Math.max(280, summary.length * 14 + 70))}
       getPopupContainer={trigger => (trigger as HTMLElement).closest<HTMLElement>('.ant-modal-container') ?? document.body}
-      onChange={(value: number | number[]) => pick(Array.isArray(value) ? value : [value])}
+      onChange={(value: number | number[] | undefined) => pick(Array.isArray(value) ? value : value === undefined ? [] : [value])}
       optionRender={option => <span className="business-project-option">{multiple ? <Checkbox checked={selected.includes(Number(option.value))} tabIndex={-1} aria-hidden /> : <Radio checked={selected.includes(Number(option.value))} tabIndex={-1} aria-hidden />}<span title={String(option.label)}>{option.label}</span></span>}
       popupRender={menu => <>{multiple && <div className="business-project-actions" onMouseDown={event => event.preventDefault()}><Button onClick={() => pick(projects.map(item => item.id))}>全选</Button><Button onClick={() => pick([])}>清空</Button></div>}{menu}</>}
       notFoundContent={projects.length ? '没有匹配的项目' : '暂无可选项目'} />

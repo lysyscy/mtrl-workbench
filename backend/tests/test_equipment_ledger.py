@@ -22,7 +22,9 @@ from app.core.db import session_scope
 from app.mod01_projects.models import Project
 from app.mod16_equipment import rental
 from app.mod16_equipment.importer import import_equipment_baseline, parse_rental, transfer_date_note
-from app.mod16_equipment.models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, RentalLine, RentalMonth
+from app.mod16_equipment.models import (
+    EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, Location, RentalLine, RentalMonth,
+)
 
 from app.core import session
 from app.main import create_app
@@ -128,6 +130,42 @@ def test_creation_uses_purchase_project_for_initial_location(client):
     assert not request(client, "GET", "/transfers")["items"]
 
 
+@pytest.mark.parametrize(("category", "scope"), [
+    ("equipment", "off_book"), ("equipment", "fixed_asset"),
+    ("turnover", "current_asset"), ("turnover", "off_book"), ("turnover", "fixed_asset"),
+])
+def test_non_i8_scope_never_calls_adapter_or_queues_retry(client, category, scope):
+    adapter = RecordingAdapter()
+    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    created = add(client, item_category=category, asset_scope=scope, in_rental="no")
+    item, = created["equipment"]
+    assert item["i8_sync_status"] == created["i8_sync"][0]["status"] == "not_applicable"
+    edited = request(client, "PATCH", f"/equipment/{item['id']}", {"remark": "已核对"})
+    assert edited["i8_sync_status"] == "not_applicable"
+    moved = request(client, "POST", "/transfers", dict(
+        equipment_ids=[item["id"]], to_project="项目乙", transfer_date="2026-11-20"))
+    transfer, = moved["transfers"]
+    assert transfer["i8_sync_status"] == moved["i8_sync"][0]["status"] == "not_applicable"
+    assert not adapter.events
+    assert request(client, "GET", "/i8-sync/issues") == {"equipment": [], "transfers": []}
+    request(client, "POST", "/i8-sync/retry", {"equipment_ids": [item["id"]]}, 409)
+    request(client, "POST", "/i8-sync/retry", {"transfer_ids": [transfer["id"]]}, 409)
+
+
+def test_leaving_i8_scope_retires_unresolved_transfers(client):
+    item, = add(client, in_rental="no")["equipment"]
+    key = item["id"]
+    moved = request(client, "POST", "/transfers", dict(
+        equipment_ids=[key], to_project="项目乙", transfer_date="2026-11-20"))
+    assert moved["i8_sync"][0]["status"] == "pending"
+    off_book = request(client, "PATCH", f"/equipment/{key}", {"asset_scope": "off_book"})
+    assert off_book["i8_sync_status"] == "not_applicable"
+    assert request(client, "GET", "/i8-sync/issues") == {"equipment": [], "transfers": []}
+    current = request(client, "PATCH", f"/equipment/{key}", {"asset_scope": "current_asset"})
+    assert current["i8_sync_status"] == "pending"
+    assert request(client, "GET", "/i8-sync/issues")["transfers"] == []
+
+
 def test_project_options_excludes_shells_and_orders_by_status_ord_and_id(client):
     with session_scope() as db:
         archived = archive_project(db, "归档", status="archived", ord=-1)
@@ -138,7 +176,8 @@ def test_project_options_excludes_shells_and_orders_by_status_ord_and_id(client)
     options = request(client, "GET", "/project-options")["items"]
     new = [row for row in options if row["id"] in {archived, later, first, tie, shell}]
     assert [row["id"] for row in new] == [first, tie, later, archived]
-    assert new[0] == dict(id=first, disp="在建甲", status="active", phid="i8-在建甲", warehouse_name="测试仓-在建甲")
+    assert new[0] == dict(id=first, disp="在建甲", status="active", phid="i8-在建甲", warehouse_name="测试仓-在建甲",
+                          name_full="", project_type="normal", ord=2)
     add_data = BASE | {"purchase_project_id": shell}
     request(client, "POST", "/equipment", add_data, 409)
 
@@ -194,6 +233,48 @@ def test_project_display_and_rental_identity_across_transfer_and_scrap(client):
     assert detail["scrap"]["original_project_id"] is None and detail["scrap"]["original_project_disp"] is None
 
 
+def test_location_dictionary_rename_and_default_archive_project(client):
+    with session_scope() as db:
+        project_id = archive_project(db, "乌兰察布项目")
+    location = request(client, "POST", "/locations", dict(name=" 鄂旗项目 ", default_project_id=project_id))
+    key = location["id"]
+    assert location == dict(id=key, name="鄂旗项目", default_project_id=project_id,
+                           default_project_disp="乌兰察布项目", is_active=True, sort_order=0)
+    other = request(client, "POST", "/locations", dict(name="临时仓", sort_order=-1))
+    assert request(client, "GET", "/locations")["items"] == [other, location]
+    request(client, "POST", "/locations", {"name": "鄂旗项目"}, 409)
+    request(client, "POST", "/locations", {"name": "   "}, 422)
+    request(client, "PATCH", f"/locations/{key}", {"default_project_id": project_id + 1}, 409)
+    request(client, "PATCH", f"/locations/{key}", {"name": "临时仓"}, 409)
+
+    created = add(client, purchase_project_id=project_id, purchase_project_custom="鄂旗项目")
+    item_id = created["equipment"][0]["id"]
+    line, = created["rental_line_ids"]
+    transfer_to(client, item_id, "外地仓", day=12)
+    transfer_to(client, item_id, None, day=15, to_project_id=project_id, to_project_custom="鄂旗项目")
+    request(client, "POST", "/scraps", dict(equipment_id=item_id, scrap_date="2026-11-20"))
+    renamed = request(client, "PATCH", f"/locations/{key}", dict(name="鄂旗工区", is_active=False))
+    assert renamed == location | dict(name="鄂旗工区", is_active=False)
+    assert request(client, "GET", "/locations")["items"] == [other]
+    assert request(client, "GET", "/locations?include_inactive=true")["items"] == [other, renamed]
+    detail = request(client, "GET", f"/equipment/{item_id}?month={MONTH}")
+    equipment, transfers = detail["equipment"], detail["transfers"]
+    for row, prefix in [(equipment, "purchase_project"), (equipment, "current_project"),
+                        (next(t for t in transfers if t["from_project_id"]), "from_project"),
+                        (next(t for t in transfers if t["to_project_id"]), "to_project"),
+                        (detail["scrap"], "original_project")]:
+        assert (row[prefix], row[f"{prefix}_custom"], row[f"{prefix}_id"]) == ("鄂旗工区", "鄂旗工区", project_id)
+    rent_line, = detail["rental_lines"]
+    assert (rent_line["id"], rent_line["project_name"], rent_line["project_custom"]) == (line, "乌兰察布项目", "鄂旗工区")
+    pending = json.loads(rent_line["pending_meta_json"])["queue"]
+    assert pending[0]["details"]["from_project"] == pending[1]["details"]["to_project"] == "鄂旗工区"
+    with session_scope() as db:
+        assert db.get(RentalLine, line).project_name == "鄂旗工区"
+        db.delete(db.get(Project, project_id))
+    cleared = request(client, "PATCH", f"/locations/{key}", {"is_active": True})
+    assert cleared["default_project_id"] is None and cleared["default_project_disp"] is None
+
+
 def test_transfer_scrap_pending_queue_and_exports(client):
     c = client
     added = add(c, quantity=2)
@@ -211,19 +292,37 @@ def test_transfer_scrap_pending_queue_and_exports(client):
         assert json.loads(next_action["pending_meta_json"])["suggested_side"] == "from_project"
         resolve(c, line, "from_project")
     request(c, "POST", "/scraps", dict(equipment_id=keys[0], scrap_date="2026-11-28", reason="损坏"))
-    request(c, "POST", "/rental/confirm", {"month": MONTH}, 409)
     assert request(c, "GET", "/inventory")["items"][0]["book_qty"] == "1.0000"
     inventory = workbook(c, "inventory")
     assert Decimal(str(workbook(c, "inventory", data_only=True)["封皮"]["I6"].value)) == Decimal("100.1234")
     assert inventory.sheetnames == ["封皮", "流动资产盘点表", "周转材料"]
     ws = inventory.worksheets[1]
     assert ws["F5"].value == 1 and "F5*E5" in ws["G5"].value
-    assert "I6" in inventory["封皮"]["H7"].value and ws.page_setup.scale == 92
     cover = inventory["封皮"]
-    assert "C3:K3" in cover.merged_cells and "$A$1:$K$14" in cover.print_area
+    assert {str(area) for area in cover.merged_cells.ranges} == {
+        "C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6", "C7:G7", "C8:G8", "C9:K9", "C10:K10", "A13:K14",
+    }
+    assert "$A$1:$K$14" in cover.print_area
+    assert (cover.page_setup.paperSize, cover.page_setup.orientation, cover.print_options.horizontalCentered) == (
+        9, "landscape", True)
     assert (cover["C3"].font.name, cover["C3"].font.sz, cover["C3"].font.bold) == ("宋体", 24, True)
+    assert [cover.column_dimensions[col].width for col in "ABCDEFGHIJKL"] == pytest.approx(
+        [9, 13, 13, 12.642, 9, 13, 9.358, 18.75, 9, 7.425, 9, 13], abs=.001)
+    assert cover["B6"].value == "流动资产金额总计（原值）："
+    assert cover["C7"].alignment.horizontal == "right" and cover["I7"].alignment.horizontal is None
+    assert (cover["A13"].font.sz, cover["A13"].font.u, cover["E6"].border.bottom.style) == (16, None, None)
+    assert [cover[cell].value for cell in ("E6", "I6", "H7", "H8")] == [
+        "=I6", "=H7+H8", "='流动资产盘点表'!I6", "='周转材料'!I5",
+    ]
+    assert cover["E6"].number_format == "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"
+    assert cover["I6"].number_format == r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'
+    assert cover["H7"].number_format == cover["H8"].number_format == r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
     for sheet, last in ((ws, 6), (inventory["周转材料"], 5)):
-        assert (sheet.page_setup.paperSize, sheet.page_setup.orientation, sheet.page_setup.scale) == (9, "landscape", 92)
+        assert (sheet.page_setup.paperSize, sheet.page_setup.orientation, sheet.page_setup.scale) == (9, "landscape", None)
+        assert not sheet.sheet_properties.pageSetUpPr.fitToPage
+        margins = sheet.page_margins
+        assert (margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer) == (
+            .551, .591, .315, .748, .315, .315)
         assert sheet.max_column == 12 and f"$A$1:$L${last}" in sheet.print_area
         assert sheet.print_title_rows == "$1:$4"
         assert {"A1:L1", "A3:A4", "F3:G3", "H3:I3"} <= {str(cell) for cell in sheet.merged_cells.ranges}
@@ -261,8 +360,6 @@ def test_transfer_scrap_pending_queue_and_exports(client):
     assert distribution["调拨记录"]["I2"].value == "项目乙" and distribution["报废记录"]["J2"].value == "损坏"
     cached = workbook(c, "distribution", data_only=True)
     assert cached["工机具基础信息"]["I3"].value == "报废" and cached["调拨记录"]["B2"].value == "试验焊机"
-    assert request(c, "POST", "/rental/confirm", {"month": MONTH})["status"] == "confirmed"
-    request(c, "PATCH", f"/rental/lines/{lines[0]}", {"quantity": 2}, 409)
     assert not request(c, "GET", "/rental?month=2026-12")["projects"]
 
 
@@ -296,8 +393,32 @@ def test_rental_carry_reorder_custom_price_blank_and_print(client):
     assert request(c, "GET", "/rental?month=2026-12&project=项目甲")["projects"][0]["lines"] == groups["项目甲"]
 
 
+def test_project_reorder_swaps_groups_and_carries_to_export(client):
+    with session_scope() as db:
+        project_id = archive_project(db, "项目甲")
+    official = add(client, name="档案项目设备", purchase_project_id=project_id, quantity=2)["rental_line_ids"]
+    added = add(client, name="自定义位置设备", purchase_project="项目甲", quantity=2)
+    custom = added["rental_line_ids"]
+    for line in official + custom:
+        resolve(client, line, "this_month")
+    order = dict(month=MONTH, projects=[dict(project_id=None, project_name="项目甲"),
+                                        dict(project_id=project_id, project_name="项目甲")])
+    request(client, "PUT", "/rental/reorder-projects", order | {"projects": order["projects"][:1]}, 409)
+    request(client, "PUT", "/rental/reorder-projects", order | {"projects": order["projects"][:1] * 2}, 409)
+    assert request(client, "PUT", "/rental/reorder-projects", order) == order
+    transfer_to(client, added["equipment"][0]["id"], None, to_project_id=project_id)
+    resolve(client, custom[0], "from_project")
+    for month, ranks in ((MONTH, [[0, 0], [1, 1]]), ("2026-12", [[0], [1, 1, 1]])):
+        groups = request(client, "GET", f"/rental?month={month}")["projects"]
+        assert [group["project_id"] for group in groups] == [None, project_id]
+        assert [[line["project_sort_order"] for line in group["lines"]] for group in groups] == ranks
+        sheet = workbook(client, f"rental?month={month}").active
+        assert sheet["A2"].value == sheet["A12"].value == "单位：项目甲"
+        assert sheet["B4"].value == "自定义位置设备" and sheet["B14"].value == "档案项目设备"
+
+
 def test_rental_print_blocks_and_dynamic_row_heights(client):
-    counts = (0, 2, 4, 15, 20, 25, 29, 40)
+    counts = (2, 4, 15, 20, 25, 29, 0, 40, 3)
     with session_scope() as db:
         db.add(RentalMonth(month=MONTH))
         db.flush()
@@ -314,7 +435,7 @@ def test_rental_print_blocks_and_dynamic_row_heights(client):
         4.375, 13.875, 10.25, 5.5, 5.375, 10.125, 11.25, 11, 13]
     assert (ws.page_setup.paperSize, ws.page_setup.orientation) == (9, "portrait")
     assert (ws.page_setup.fitToWidth, ws.page_setup.fitToHeight, ws.sheet_properties.pageSetUpPr.fitToPage) == (1, 0, True)
-    assert ws.print_options.horizontalCentered and ws.print_options.verticalCentered
+    assert ws.print_options.horizontalCentered is True and ws.print_options.verticalCentered is False
     assert (ws.page_margins.left, ws.page_margins.right, ws.page_margins.top, ws.page_margins.bottom) == (.5, .5, .6, .6)
     assert (ws["A1"].font.name, ws["A1"].font.sz, ws["A1"].font.bold) == ("宋体", 16, True)
     assert (ws["A2"].font.sz, ws["E2"].font.sz, ws["G2"].font.sz) == (12, 12, 12)
@@ -343,8 +464,10 @@ def test_rental_print_blocks_and_dynamic_row_heights(client):
     assert ws[f"A{first + 1}"].value == "单位：项目0" and f"$A${first}:" not in ws.print_area
     overflow = book["租赁长表 1"]
     assert overflow.page_setup.fitToHeight == 1 and "$A$1:$I$45" in overflow.print_area
+    assert overflow.print_options.horizontalCentered is True and overflow.print_options.verticalCentered is False
     assert (overflow["B4"].font.sz, overflow.row_dimensions[4].height) == (10.5, 15.5)
     assert cached[overflow.title]["G44"].value == 120
+    assert book["租赁续表 2"]["A2"].value == "单位：项目3"
     assert cached.active[f"G{ws.max_row}"].value == 3 * sum(counts)
 
 
@@ -431,11 +554,9 @@ def test_latest_transfer_orders_undated_history_last(client):
 
 
 @pytest.mark.parametrize(("guard", "message"), [
-    ("confirmed", "该调拨所属月份租赁已确认，不能删除"),
     ("synced", "该调拨已同步 i8，暂不支持直接删除，请先核对 i8 单据"),
     ("awaiting_readback", "该调拨的 i8 保存结果待核对，暂不支持直接删除"),
     ("scrapped", "设备已报废，不能删除历史调拨记录"),
-    ("later_confirmed", "该变动影响后续已确认租赁月份 2026-12，请核对日期"),
 ])
 def test_delete_transfer_conflicts_leave_ledger_intact(client, guard, message):
     added = add(client)
@@ -444,11 +565,7 @@ def test_delete_transfer_conflicts_leave_ledger_intact(client, guard, message):
     resolve(client, line, "this_month")
     transfer = transfer_to(client, key, "项目乙")
     resolve(client, line, "to_project")
-    if guard == "confirmed":
-        request(client, "POST", "/rental/confirm", {"month": MONTH})
-    elif guard == "later_confirmed":
-        request(client, "POST", "/rental/confirm", {"month": "2026-12"})
-    elif guard == "scrapped":
+    if guard == "scrapped":
         request(client, "POST", "/scraps", dict(equipment_id=key, scrap_date=f"{MONTH}-28"))
     else:
         with session_scope() as db:
@@ -509,7 +626,6 @@ def test_early_month_view_and_transfer_across_months(client):
     assert tr["rental_line_ids"] == [line]
     detail = request(c, "GET", f"/equipment/{key}?month=2026-11")
     assert json.loads(detail["rental_lines"][0]["pending_meta_json"])["suggested_side"] == "to_project"
-    request(c, "POST", "/rental/confirm", {"month": "2026-12"}, 409)
     resolve(c, line, "from_project")
     carried = request(c, "GET", "/rental?month=2026-12")["projects"]
     assert len(carried) == 1 and carried[0]["project_name"] == "项目乙"
@@ -521,6 +637,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     revision = runpy.run_path(str(filename))
     baseline = runpy.run_path(str(filename.with_name("equipbase261123_historical_transfers.py")))
     project_links = runpy.run_path(str(filename.with_name("equipproj261124_project_links.py")))
+    locations = runpy.run_path(str(filename.with_name("equiploc261125_locations.py")))
     schema = rollback_db.exec_driver_sql("select current_schema()").scalar_one()
     assert schema.startswith("backend_verify_")
 
@@ -529,6 +646,9 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
 
     initial = tables()
     with Operations.context(MigrationContext.configure(rollback_db)):
+        assert "m16_locations" in initial
+        locations["downgrade"]()
+        assert "m16_locations" not in tables()
         project_links["downgrade"]()
         columns = inspect(rollback_db).get_columns("m16_equipment_items", schema=schema)
         assert "current_project_id" not in {column["name"] for column in columns}
@@ -538,6 +658,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
         revision["upgrade"]()
         baseline["upgrade"]()
         project_links["upgrade"]()
+        locations["upgrade"]()
     assert tables() == initial
 
 class RecordingAdapter:
@@ -628,20 +749,44 @@ def test_scrap_handles_inventory_discrepancy(client, count, remaining):
     assert row["is_active"] == bool(remaining)
 
 
-def test_stop_propagation_and_confirmed_month_conflict(client):
-    line = add(client)["rental_line_ids"][0]
+def mark_legacy_confirmed(*months):
+    with session_scope() as db:
+        for row in db.scalars(select(RentalMonth).where(RentalMonth.month.in_(months))):
+            row.status = "confirmed"
+
+
+def test_rental_remains_editable_in_previously_confirmed_months(client):
+    added = add(client)
+    equipment_id = added["equipment"][0]["id"]
+    line, = added["rental_line_ids"]
+    later = "2026-12"
+    request(client, "GET", f"/rental?month={later}")
+    mark_legacy_confirmed(MONTH, later)
+    request(client, "POST", "/rental/confirm", {"month": MONTH}, 404)
     resolve(client, line, "this_month")
-    for month in ["2026-12", "2027-01"]:
-        request(client, "GET", f"/rental?month={month}")
-    request(client, "POST", "/rental/confirm", {"month": "2027-01"})
-    conflict = request(client, "PATCH", f"/rental/lines/{line}", {"billing_status": "stopped"}, 409)
-    assert "2027-01" in conflict["message"]
-    assert request(client, "GET", "/rental?month=2026-12")["projects"][0]["lines"][0]["billing_status"] == "normal"
+    assert Decimal(request(client, "PATCH", f"/rental/lines/{line}", {"quantity": 2})["quantity"]) == 2
+    request(client, "PUT", "/rental/reorder", dict(month=MONTH, project_name="项目甲", ordered_line_ids=[line]))
+    request(client, "PUT", "/rental/reorder-projects", dict(month=MONTH, projects=[
+        dict(project_id=None, project_name="项目甲")]))
+    transfer = transfer_to(client, equipment_id, "项目乙")
+    resolve(client, line, "to_project")
+    assert request(client, "GET", f"/rental?month={later}")["projects"][0]["project_name"] == "项目乙"
+    request(client, "DELETE", f"/transfers/{transfer}")
+    reopened = request(client, "GET", f"/rental?month={later}")
+    assert reopened["status"] == "draft" and reopened["projects"][0]["project_name"] == "项目甲"
+    request(client, "PATCH", f"/rental/lines/{line}", {"billing_status": "stopped"})
+    assert request(client, "GET", f"/rental?month={later}")["projects"][0]["lines"][0]["billing_status"] == "stopped"
 
 
 def test_turnover_category_export_and_stop_existing_draft(client):
     line = add(client, item_category="turnover")["rental_line_ids"][0]
+    equipment_line = add(client, purchase_project="项目乙")["rental_line_ids"][0]
+    with session_scope() as db:
+        db.get(RentalLine, line).category_label = "设备"
+        db.get(RentalLine, equipment_line).category_label = "周转材料"
+    request(client, "PATCH", f"/rental/lines/{line}", {"category_label": "大型工机具"}, 422)
     assert resolve(client, line, "this_month")["category_label"] == "周转材料"
+    assert resolve(client, equipment_line, "this_month")["category_label"] == "大型工机具"
     later = "/rental?month=2026-12"
     assert request(client, "GET", later)["projects"][0]["lines"][0]["category_label"] == "周转材料"
     assert workbook(client, later[1:]).active["H4"].value == "周转材料"
@@ -650,15 +795,15 @@ def test_turnover_category_export_and_stop_existing_draft(client):
     assert stopped["billing_status"] == "stopped" and stopped["amount"] is None
 
 
-def test_remove_rental_flag_stops_open_months_only(client):
+def test_remove_rental_flag_stops_from_current_month(client):
     today = date.today().replace(day=1)
     prior = (today - timedelta(days=1)).strftime("%Y-%m")
     months = [today.strftime("%Y-%m"), (today + timedelta(days=32)).strftime("%Y-%m")]
     created = add(client, target_month=prior)
     resolve(client, created["rental_line_ids"][0], "this_month")
-    request(client, "POST", "/rental/confirm", {"month": prior})
     for month in months:
         request(client, "GET", f"/rental?month={month}")
+    mark_legacy_confirmed(prior, *months)
     request(client, "PATCH", f"/equipment/{created['equipment'][0]['id']}", {"in_rental": "no"})
     for month in months:
         row = request(client, "GET", f"/rental?month={month}")["projects"][0]["lines"][0]
@@ -933,32 +1078,38 @@ def baseline_paths(tmp_path):
     scrap = transfer[:7] + ["所在项目", "报废日期", "报废原因", "备注"]
     item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "晋江污泥处理项目", 2, "在用", "鄂旗项目",
             None, "是", None, "是", "是", "4", "5", "分布原第 3 行", None, 3]
+    tricycle = ["电动三轮车", None, "辆", date(2023, 5, 1), 202305, "焦作佰利项目", 5300,
+                "在用", "焦作佰利项目", None, "是", None, "否", "是", None, "6、7", None, None, 1]
     distribution = save_source(tmp_path / "d.xlsx", {
         "工机具基础信息": [[], item_header, item, ["乙-01", "样机乙", *item[2:11], "固定资产", None, "是", "否",
-                                           None, None, None, None, 1]],
+                                           None, None, None, None, 1],
+                           ["电动三轮车-202305-1", *tricycle], ["电动三轮车-202305-2", *tricycle]],
         "调拨记录": [transfer, ["甲-01", *[None]*6, "酒钢项目", "乌兰察布储能项目", "20260811张永军", "原备注"]],
         "报废记录": [scrap, ["乙-01", *[None]*5, 2, "福建南平项目", 20261101, "损坏"]],
         "周转材料": [[], item_header, ["转-01", "样阀", *item[2:14], "否", None, None, None, None, 1]],
         "周转材料调拨记录": [transfer], "周转材料报废记录": [scrap]})
     header = [None]*4 + ["单价", "帐面数", None, "盘点数", None, None, None, "盈亏原因"]
     inventory = save_source(tmp_path / "i.xlsx", {"2025年年终盘点流动资产": [[], [], header, [],
-        [1, "样机", None, "台", 2, 3, 6, 3, 6]], "周转材料": [[], [], header]})
+        [1, "样机", None, "台", 2, 3, 6, 3, 6], [2, "电动三轮车", None, "辆", 5300, 1, 5300, 1, 5300],
+        [3, "电动三轮车", None, "辆", 5300, 1, 5300, 1, 5300]], "周转材料": [[], [], header]})
     rental_header = "项目 设备名称 规格型号 单位 数量 租赁单价（元） 本月收费 金额（元） 变化／待核 类别 原值（元） 自定义单价（元） 底稿行 上期金额 早期草稿金额 对应设备编号".split()
     rental = save_source(tmp_path / "r.xlsx", {"本月租赁": [[], [], [], [], rental_header,
         ["乌兰察布储能", "样机", None, "台", 3, 5, "计费", 15, None, "设备", None, 5, 4, None, None, "甲-01"],
-        ["宜阳仓库", "样机", None, "台", 1, 0, "金额留空", None, None, "设备", 0, None, 5, None, None, "甲-01、乙-01"]]})
+        ["宜阳仓库", "样机", None, "台", 1, 0, "金额留空", None, None, None, 0, None, 5, None, None, "甲-01、乙-01"]]})
     return dict(distribution_path=distribution, inventory_path=inventory, rental_path=rental)
 
 
 def test_baseline_apply_and_excel_readback(client, baseline_paths):
     preview = import_equipment_baseline(None, **baseline_paths, dry_run=True)
-    assert preview == dict(equipment_count=2, turnover_count=1, transfer_count=1, scrap_count=1,
-        inventory_tool_count=1, inventory_tool_book_total=6, inventory_turnover_count=0,
-        rental_line_count=2, rental_grand_total=15, linked_inventory_count=1, linked_rental_count=1)
+    assert preview == dict(equipment_count=4, turnover_count=1, transfer_count=1, scrap_count=1,
+        inventory_tool_count=3, inventory_tool_book_total=10606, inventory_turnover_count=0,
+        rental_line_count=2, rental_grand_total=15, linked_inventory_count=3, linked_rental_count=1)
+    original_location = request(client, "POST", "/locations", dict(name="酒钢项目", is_active=False, sort_order=5))
     with session_scope() as db:
         jinjiang = archive_project(db, "晋江污泥项目")
         wulanchabu = archive_project(db, "乌兰察布项目")
         nanping = archive_project(db, "南平项目")
+        archive_project(db, "焦作佰利项目")
         assert import_equipment_baseline(db, **baseline_paths) == preview
     with session_scope() as db:
         with pytest.raises(ValueError, match="台账非空"):
@@ -979,6 +1130,13 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
         assert (a.project_id, a.project_custom) == (wulanchabu, "鄂旗项目")
         assert b.equipment_id is None and b.billing_status == "blank" and b.amount is None
         assert (b.project_id, b.project_custom) == (None, "宜阳仓库")
+        assert a.category_label == b.category_label == "大型工机具"
+        assert [db.get(InventoryItem, db.scalar(select(EquipmentItem.inventory_item_id).where(
+            EquipmentItem.code == f"电动三轮车-202305-{i}"))).source_row for i in (1, 2)] == ["6", "7"]
+    locations = {r["name"]: r for r in request(client, "GET", "/locations?include_inactive=true")["items"]}
+    assert locations["鄂旗项目"]["default_project_id"] == wulanchabu
+    assert locations["宜阳仓库"]["default_project_id"] is None
+    assert locations["酒钢项目"] == original_location
     assert request(client, "GET", "/i8-sync/issues") == {"equipment": [], "transfers": []}
     with session_scope() as db:
         turnover_id = db.scalar(select(EquipmentItem.id).where(EquipmentItem.item_category == "turnover"))
@@ -1015,6 +1173,7 @@ def test_legacy_rental_sheet(tmp_path):
     line, = parse_rental(path)
     assert (line["project_name"], line["source_row"], line["custom_unit_price"]) == ("测试项目", "4", 17)
     assert line["billing_status"] == "blank" and line["amount"] is None
+    assert line["category_label"] == "大型工机具"
 
 
 def test_optional_tail501_baseline(rollback_db):
@@ -1045,9 +1204,47 @@ def test_optional_tail501_baseline(rollback_db):
                 rental_line_count=count(RentalLine), rental_grand_total=db.scalar(select(func.sum(RentalLine.amount))),
                 linked_inventory_count=count(EquipmentItem, EquipmentItem.inventory_item_id.is_not(None)),
                 linked_rental_count=count(RentalLine, RentalLine.equipment_id.is_not(None)))
-            assert observed == preview == dict(equipment_count=377, turnover_count=3, transfer_count=295, scrap_count=0,
+            assert observed == preview == dict(equipment_count=421, turnover_count=6, transfer_count=295, scrap_count=0,
                 inventory_tool_count=146, inventory_turnover_count=6, inventory_tool_book_total=Decimal("758371.4324"),
-                rental_line_count=128, rental_grand_total=Decimal("19781.0367"), linked_inventory_count=254, linked_rental_count=88)
+                rental_line_count=128, rental_grand_total=Decimal("19781.0367"), linked_inventory_count=306, linked_rental_count=88)
+            assert count(InventoryItem, ~select(EquipmentItem.id).where(
+                EquipmentItem.inventory_item_id == InventoryItem.id, EquipmentItem.status != "scrapped",
+                EquipmentItem.asset_scope == "current_asset").exists()) == 0
+            assert count(EquipmentItem, EquipmentItem.item_category == "equipment", EquipmentItem.quantity != 1) == 0
+            welders = db.scalars(select(EquipmentItem).where(
+                EquipmentItem.code.startswith("逆变焊机-20230711-")).order_by(EquipmentItem.code)).all()
+            assert [row.code for row in welders] == [f"逆变焊机-20230711-{unit:02d}" for unit in range(1, 16)]
+            nanping = db.scalar(select(Project.id).where(Project.disp == "南平项目"))
+            assert {(r.name, r.unit, r.purchase_price, r.purchase_date, r.purchase_project, r.current_project,
+                     r.current_project_id, r.asset_scope, r.in_rental, r.remark) for r in welders} == {
+                ("逆变焊机", "台", Decimal("1132.7430"), date(2023, 7, 11), "南靖项目", "南平项目",
+                 nanping, "current_asset", "yes", "实物为4台二保焊机")}
+            inventory_ids = {row.inventory_item_id for row in welders}
+            assert len(inventory_ids) == 1 and db.get(InventoryItem, welders[0].inventory_item_id).source_row == "75"
+            for index, row in enumerate(welders):
+                history = db.scalars(select(EquipmentTransfer).where(
+                    EquipmentTransfer.equipment_id == row.id).order_by(EquipmentTransfer.id)).all()
+                assert [(t.transfer_date, t.from_project, t.to_project, t.remark) for t in history] == (
+                    [(date(2025, 10, 29), "南靖项目", "大连项目", "统计"),
+                     (date(2025, 10, 29), "大连项目", "晋江污泥项目", "统计"),
+                     (date(2026, 4, 5), "晋江污泥项目", "福建南平项目", None)] if index < 4 else [])
+            cable = db.scalars(select(EquipmentItem).where(EquipmentItem.name == "电缆")).all()
+            assert {(r.spec, r.unit, r.quantity, r.current_project, r.in_rental, r.i8_sync_status) for r in cable} == {
+                ("YH35", "m", 5788, "待核", "no", "not_applicable"),
+                ("YH50", "m", 1145, "待核", "no", "not_applicable")}
+            turnover = db.execute(select(InventoryItem, EquipmentItem)
+                .join(EquipmentItem, EquipmentItem.inventory_item_id == InventoryItem.id)
+                .where(InventoryItem.category == "turnover")).all()
+            assert len(turnover) == 6
+            assert all((i.name, i.unit, i.book_qty, i.unit_price) == (e.name, e.unit, e.quantity, e.purchase_price)
+                       for i, e in turnover)
+            valves = db.scalars(select(RentalLine).where(RentalLine.source_row.in_(("180", "209")))).all()
+            assert len(valves) == 2 and all(r.name == "电动闸阀" and r.category_label == "周转材料"
+                and db.get(EquipmentItem, r.equipment_id).purchase_price == r.original_value for r in valves)
+            assert all(row.category_label in ("周转材料", "大型工机具") for row in db.scalars(select(RentalLine)))
+            locations = {row.name: row.default_project_id for row in db.scalars(select(Location))}
+            assert {"宜阳仓库", "酒钢项目", "宁夏项目", "开平项目", "廉江项目", "南靖项目", "合肥项目", "鄂旗项目"} <= locations.keys()
+            assert locations["鄂旗项目"] == db.scalar(select(Project.id).where(Project.disp == "乌兰察布项目"))
             assert count(EquipmentItem, EquipmentItem.asset_scope == "fixed_asset") == 7
             assert count(RentalMonth, RentalMonth.month == MONTH) == 1
             assert count(RentalLine, RentalLine.billing_status == "blank", RentalLine.amount.is_(None)) == 97

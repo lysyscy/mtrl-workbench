@@ -1,4 +1,5 @@
 import * as schema from 'valibot';
+import type { Project } from './api';
 import { ApiError, body, record, requestFile, requestJson } from './api';
 import { saveBlob } from './flow-api';
 
@@ -133,17 +134,6 @@ const equipmentScrap = schema.object({
 });
 export type EquipmentScrap = schema.InferOutput<typeof equipmentScrap>;
 
-const rentalMonth = schema.object({
-  id,
-  month: text,
-  status: schema.picklist(['draft', 'confirmed']),
-  confirmed_at: nullableText,
-  confirmed_by: nullableText,
-  created_at: text,
-  updated_at: text,
-});
-export type RentalMonth = schema.InferOutput<typeof rentalMonth>;
-
 const rentalLine = schema.object({
   id,
   month: text,
@@ -212,8 +202,6 @@ export type Create = EquipmentPatch &
     target_month?: string;
     custom_unit_price?: string | null;
   };
-export type InventoryValues = Pick<InventoryItem, 'name' | 'category' | 'book_qty' | 'count_qty'> &
-  Partial<Pick<InventoryItem, 'spec' | 'unit' | 'unit_price' | 'diff_qty' | 'diff_reason' | 'sort_order'>>;
 export type RentPatch = Partial<
   Pick<RentalLine, 'quantity' | 'custom_unit_price' | 'billing_status' | 'distribution_note'>
 >;
@@ -221,18 +209,26 @@ const ids = schema.array(id);
 const codes = schema.array(schema.pipe(text, schema.nonEmpty()));
 const preview = schema.object({ codes: schema.pipe(codes, schema.nonEmpty()) });
 const syncResults = schema.array(schema.object({ id, status: syncStatus, message: nullableText }));
+const rentalProject = schema.object({ project_id: schema.nullable(id), project_name: text });
+type RentalProject = schema.InferOutput<typeof rentalProject>;
 const rentGroup = schema.object({
-  project_id: schema.nullable(id),
-  project_name: text,
+  ...rentalProject.entries,
   lines: schema.array(rentalLine),
   subtotal: nullableText,
 });
 export type RentGroup = schema.InferOutput<typeof rentGroup>;
-const projectOption = schema.object({ id, disp: text, status: text, phid: text, warehouse_name: nullableText });
-export type EquipmentProjectOption = schema.InferOutput<typeof projectOption>;
+const projectOption = schema.object({
+  id, disp: text, status: schema.picklist(['active', 'archived']), phid: text, warehouse_name: nullableText,
+  name_full: text, project_type: schema.picklist(['normal', 'shell', 'small']), ord: schema.number(),
+}) satisfies schema.GenericSchema<unknown, Project>;
+const location = schema.object({
+  id, name: text, default_project_id: schema.nullable(id), default_project_disp: nullableText,
+  is_active: schema.boolean(), sort_order: schema.number(),
+});
+export type EquipmentLocation = schema.InferOutput<typeof location>;
+export type LocationValues = Pick<EquipmentLocation, 'name' | 'default_project_id' | 'is_active'>;
 const monthly = schema.object({
   month: text,
-  status: rentalMonth.entries.status,
   pending_count: count,
   projects: schema.array(rentGroup),
   grand_total: nullableText,
@@ -284,6 +280,10 @@ const write = <S extends ResponseSchema>(contract: S, path: string, method: stri
 
 export const equipmentApi = {
   projectOptions: () => get(schema.object({ items: schema.array(projectOption) }), '/project-options'),
+  locations: (include_inactive = false) =>
+    get(schema.object({ items: schema.array(location) }), '/locations', { include_inactive }),
+  createLocation: (values: LocationValues) => write(location, '/locations', 'POST', values),
+  updateLocation: (id: number, values: LocationValues) => write(location, '/locations/' + id, 'PATCH', values),
   preview: (v: Preview) => write(preview, '/equipment/preview', 'POST', v),
   previewGet: (v: Preview) => get(preview, '/equipment/preview', v),
   create: (v: Create) =>
@@ -389,7 +389,11 @@ export const equipmentApi = {
       project_name,
       ordered_line_ids,
     }),
-  confirm: (month: string) => write(rentalMonth, '/rental/confirm', 'POST', { month }),
+  reorderProjects: (month: string, projects: RentalProject[]) =>
+    write(schema.object({ month: text, projects: schema.array(rentalProject) }), '/rental/reorder-projects', 'PUT', {
+      month,
+      projects: projects.map(({ project_id, project_name }) => ({ project_id, project_name })),
+    }),
   inventory: (category?: InventoryCategory) =>
     get(
       schema.object({
@@ -402,9 +406,6 @@ export const equipmentApi = {
         category,
       }
     ),
-  addInventory: (v: InventoryValues) => write(inventoryItem, '/inventory', 'POST', v),
-  editInventory: (id: number, v: Partial<Omit<InventoryValues, 'category'>>) =>
-    write(inventoryItem, '/inventory/' + id, 'PATCH', v),
 };
 export function exportEquipment(kind: 'distribution' | 'inventory'): Promise<void>;
 export function exportEquipment(kind: 'rental', month: string): Promise<void>;

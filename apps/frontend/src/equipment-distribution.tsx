@@ -312,6 +312,7 @@ export function Distribution({ goToRental, targetIds, scale }: {
               {category === 'equipment' ? '新增设备' : '新增周转材料'}
             </Button>
           </>}
+          <Button size="small" onClick={() => setDialog({ kind: 'locations' })}>地点维护</Button>
           <Button disabled={action.busy} onClick={() => void action.run(() => exportEquipment('distribution'), false)}>
             导出分布 Excel
           </Button>

@@ -25,6 +25,30 @@ class Input(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class LocationPatch(Input):
+    name: Name = Field(default_factory=str)
+    default_project_id: ProjectId | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class LocationCreate(LocationPatch):
+    name: Name
+
+
+class LocationResult(BaseModel):
+    id: int
+    name: str
+    default_project_id: int | None
+    default_project_disp: str | None
+    is_active: bool
+    sort_order: int
+
+
+class LocationList(BaseModel):
+    items: list[LocationResult]
+
+
 class Preview(Input):
     name: Name
     purchase_date: date
@@ -155,3 +179,12 @@ class Reorder(MonthInput):
     project_name: Name
     project_id: ProjectId | None = None
     ordered_line_ids: Ids
+
+
+class RentalProject(Input):
+    project_id: ProjectId | None
+    project_name: Name
+
+
+class ReorderProjects(MonthInput):
+    projects: list[RentalProject]

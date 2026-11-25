@@ -169,7 +169,8 @@ def rental_page_setup(ws, *, fit_height=0):
     ws.page_setup.horizontalDpi = 600
     ws.page_margins.left = ws.page_margins.right = .5
     ws.page_margins.top = ws.page_margins.bottom = .6
-    ws.print_options.horizontalCentered = ws.print_options.verticalCentered = True
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = False
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = fit_height
@@ -230,70 +231,91 @@ def rental_table(ws, first, period, project):
     return subtotal, footer
 
 
+def rental_pages(projects):
+    batch, fit_height, has_printable = [], 0, False
+    for project in projects:
+        count = len(project["lines"])
+        printable = bool(project["subtotal"])
+        # A4 less the margins and fixed rows leaves about 606 pt for the body at 100%.
+        oversized = printable and count * rental_row_height(count) > 590
+        if printable and has_printable and (fit_height or oversized):
+            yield batch, fit_height, has_printable
+            batch, has_printable = [], False
+        if printable:
+            fit_height, has_printable = int(oversized), True
+        batch.append(project)
+    yield batch, fit_height, has_printable
+
+
 def equipment_rental_xlsx(snapshot):
     wb = Workbook()
     ws = wb.active
     ws.title = "分公司租赁费"
     period = date.fromisoformat(snapshot["month"] + "-01")
-    printable, oversized, excluded = [], [], []
-    for project in snapshot["projects"]:
-        count = len(project["lines"])
-        if not (project["subtotal"] or 0):
-            excluded.append(project)
-        # A4 less the margins and fixed rows leaves about 606 pt for the body at 100%.
-        elif count * rental_row_height(count) > 590:
-            oversized.append(project)
-        else:
-            printable.append(project)
-    fit_height = 0
-    if not printable and oversized:
-        printable.append(oversized.pop(0))
-        fit_height = 1
-    rental_page_setup(ws, fit_height=fit_height)
-    first, totals, areas = (1 if printable else 3), [], []
-    for project in printable + excluded:
-        subtotal, footer = rental_table(ws, first, period, project)
-        totals.append(f"G{subtotal}")
-        if project["subtotal"]:
-            areas.append(f"A{first}:I{footer}")
-            ws.row_breaks.append(Break(id=footer))
-        # Keep the areas non-adjacent so Excel prints each independently in fit-to-width mode.
-        first = footer + 2
-    for index, project in enumerate(oversized, 1):
-        page = wb.create_sheet(f"租赁长表 {index}")
-        rental_page_setup(page, fit_height=1)
-        subtotal, footer = rental_table(page, 1, period, project)
-        page.print_area = f"A1:I{footer}"
-        totals.append(f"'{page.title}'!G{subtotal}")
+    totals, total_row = [], 3
+    for index, (projects, fit_height, has_printable) in enumerate(rental_pages(snapshot["projects"])):
+        title = "租赁长表" if fit_height else "租赁续表"
+        page = wb.create_sheet(f"{title} {index}") if index else ws
+        rental_page_setup(page, fit_height=fit_height)
+        first, areas = (1 if has_printable else 3), []
+        for project in projects:
+            subtotal, footer = rental_table(page, first, period, project)
+            totals.append(f"'{page.title}'!G{subtotal}" if index else f"G{subtotal}")
+            if project["subtotal"]:
+                areas.append(f"A{first}:I{footer}")
+                if not fit_height:
+                    page.row_breaks.append(Break(id=footer))
+            # Non-adjacent print areas keep each project on its own page.
+            first = footer + 2
+        page.print_area = areas or ["A1:I1"]
+        if not index:
+            total_row = first
+    first = total_row
     put(ws, first, [None, "总计"])
     style_cell(ws.cell(first, 2), bold=True)
     style_cell(ws.cell(first, 7), bold=True, horizontal="right")
     if totals and snapshot["grand_total"] is not None:
         set_formula(ws[f"G{first}"], Formula("=" + "+".join(f"N({ref})" for ref in totals), snapshot["grand_total"]))
-    ws.print_area = areas or ["A1:I1"]
     return workbook_bytes(wb)
 
 
 def inventory_cover(cover):
     cover.title = "封皮"
-    sheet_setup(cover, [9, 9, 9, 12.6416666666667, 9, 9, 9.35833333333333, 18.75, 9, 7.425, 9], "landscape")
+    sheet_setup(cover, [9, 13, 13, 12.6416666666667, 9, 13, 9.35833333333333, 18.75, 9, 7.425, 9, 13], "landscape")
+    cover.print_options.horizontalCentered = True
     for address in ("C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6", "C7:G7", "C8:G8",
                     "C9:K9", "C10:K10", "A13:K14"):
         cover.merge_cells(address)
+    for column in cover.column_dimensions.values():
+        column.font = Font(name="宋体", charset=134, size=12)
+        column.alignment = Alignment(vertical="center")
     for row, height in ((3, 62.15), (4, 36), (5, 36), (6, 36), (7, 36), (8, 27), (9, 27), (10, 27)):
         cover.row_dimensions[row].height = height
-    for address, value, size in (("C3", "河南省安装集团有限责任公司", 24), ("C4", "第四工程公司", 20),
-                                 ("C5", "流动资产盘点表", 20), ("B6", "合计", 14)):
-        cover[address] = value
-        style_cell(cover[address], size, bold=address == "C3")
-    cover["A13"] = "单位主管：            财务主管：            资产主管：            制表人："
-    style_cell(cover["A13"], 16, horizontal="left")
+        cover.row_dimensions[row].font = Font(name="宋体", charset=134, size=12)
+    cells = {
+        "C3": ("河南省安装集团有限责任公司", 24, "center"),
+        "C4": ("第四工程公司", 20, "center"),
+        "C5": ("流动资产盘点表", 20, "center"),
+        "B6": ("流动资产金额总计（原值）：", 14, "center"),
+        "C7": ("其     中：大型工机具：", 14, "right"),
+        "C8": ("周转材料：", 14, "right"),
+        "A13": ("单位主管：             财务主管：               资产主管：              制表人：   ", 16, None),
+    }
     for address in ("K6", "I7", "I8"):
-        cover[address] = "元"
-        style_cell(cover[address], 14, horizontal="left")
+        cells[address] = ("元", 14, None)
+    for address in ("J7", "K7", "J8", "K8", "C9", "C10"):
+        cells[address] = (None, 14, None)
     for address in ("E6", "I6", "H7", "H8"):
-        style_cell(cover[address], 14)
-        cover[address].number_format = INVENTORY_MONEY
+        cells[address] = (None, 14, "center")
+    for address, (value, size, align) in cells.items():
+        cell = cover[address]
+        cell.value = value
+        cell.font = Font(name="宋体", charset=134, size=size, bold=address == "C3")
+        cell.alignment = Alignment(horizontal=align, vertical="center")
+    cover["E6"].number_format = '[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General'
+    cover["I6"].number_format = r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'
+    for address in ("H7", "H8"):
+        cover[address].number_format = r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
     cover.print_area = "A1:K14"
 
 
@@ -332,26 +354,25 @@ def equipment_inventory_xlsx(items):
         grid(ws, 5, n - 1, 12, money=money)
         grid(ws, n, n, 12, bold=True, money=money)
         ws.row_dimensions[n].height = 20.05 if category == "tool" else 23.05
-        cover[f"C{cover_row}"] = "其     中：大型工机具：" if category == "tool" else "周转材料："
-        style_cell(cover[f"C{cover_row}"], 14, horizontal="right")
-        counted = sum(amounts["I"]) if amounts["I"] else None
+        counted = sum(amounts["I"]) if amounts["I"] or n == 5 else None
         if counted is not None:
             counted_totals.append(counted)
         ref = f"'{title}'!I{n}"
-        set_formula(cover[f"H{cover_row}"], Formula(f'=IF(ISNUMBER({ref}),{ref},"")', counted))
+        set_formula(cover[f"H{cover_row}"], Formula(f'={ref}', counted))
     overall = sum(counted_totals) if counted_totals else None
-    set_formula(cover["I6"], Formula('=IF(COUNT(H7:H8),SUM(H7:H8),"")', overall))
-    set_formula(cover["E6"], Formula('=IF(ISNUMBER(I6),I6,"")', overall))
+    # A populated detail sheet can have no known amounts, so its total formula returns empty text.
+    total_formula = '=H7+H8' if len(counted_totals) == 2 else '=IF(COUNT(H7:H8),SUM(H7:H8),"")'
+    set_formula(cover["I6"], Formula(total_formula, overall))
+    set_formula(cover["E6"], Formula('=I6', overall))
     return workbook_bytes(wb)
 
 
 def inventory_page_setup(ws, category):
     sheet_setup(ws, INVENTORY_WIDTH, "landscape")
-    ws.page_setup.scale = 92
     ws.page_setup.horizontalDpi, ws.page_setup.verticalDpi = 600, 180
-    ws.page_margins.left, ws.page_margins.right = .551181102362205, .590551181102362
-    ws.page_margins.top, ws.page_margins.bottom = .31496062992126, .748031496062992
-    ws.page_margins.header = ws.page_margins.footer = .31496062992126
+    ws.page_margins.left, ws.page_margins.right = .551, .591
+    ws.page_margins.top, ws.page_margins.bottom = .315, .748
+    ws.page_margins.header = ws.page_margins.footer = .315
     ws.print_title_rows = "1:4"
     tool = category == "tool"
     ws.sheet_format.defaultRowHeight = 17.5 if tool else 23.05

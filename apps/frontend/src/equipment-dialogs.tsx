@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ReadGrid } from './business-grid';
 import Button from 'antd/es/button';
 import Form from 'antd/es/form';
 import Input from 'antd/es/input';
 import InputNumber from 'antd/es/input-number';
 import Select from 'antd/es/select';
+import Checkbox from 'antd/es/checkbox';
 import dayjs from 'dayjs';
 import Decimal from 'decimal.js';
 import { ApiError, uncertainWrite } from './api';
+import type { Project } from './api';
+import { ProjectPicker } from './ledger-controls';
 import { equipmentApi as api } from './equipment-api';
-import type { Create, EquipmentItem, EquipmentPatch, EquipmentProjectOption, ItemCategory, TransferRow } from './equipment-api';
+import type { Create, EquipmentItem, EquipmentLocation, EquipmentPatch, ItemCategory, LocationValues, TransferRow } from './equipment-api';
 import {
   DateField,
   decimalField,
@@ -33,6 +36,7 @@ export type DialogState =
   | { kind: 'transfer'; items: EquipmentItem[] }
   | { kind: 'edit' | 'scrap'; item: EquipmentItem }
   | { kind: 'delete-transfer'; transfer: TransferRow }
+  | { kind: 'locations' }
   | { kind: 'sync'; id: number };
 type Props = {
   state: DialogState;
@@ -47,47 +51,139 @@ const emptyProject: ProjectValue = { id: null, custom: null };
 const hasProject = (value?: ProjectValue) => value?.id != null || !!value?.custom?.trim();
 const projectRequired = {
   validator: (_rule: unknown, value?: ProjectValue) =>
-    hasProject(value) ? Promise.resolve() : Promise.reject(new Error('请选择系统项目或填写自定义名')),
+    hasProject(value) ? Promise.resolve() : Promise.reject(new Error('请选择系统项目或地点')),
 };
 
+function SystemProjectField({
+  label, value, onChange, projects, disabled,
+}: {
+  label: string;
+  value?: number | null;
+  onChange?: (value: number | null) => void;
+  projects: Project[];
+  disabled: boolean;
+}) {
+  return <ProjectPicker projects={projects} selected={value == null ? [] : [value]}
+    label={label} emptyLabel="选择系统项目" allowClear disabled={disabled}
+    pick={ids => onChange?.(ids[0] ?? null)} />;
+}
+
 function ProjectDualField({
-  id, label, value = emptyProject, onChange, projects, loading,
+  id, label, value = emptyProject, onChange, busy,
 }: {
   id?: string;
   label: string;
   value?: ProjectValue;
   onChange?: (value: ProjectValue) => void;
-  projects: EquipmentProjectOption[];
-  loading: boolean;
+  busy: boolean;
 }) {
-  const choices = useMemo(() => projects.map(project => ({
-    value: project.id,
-    label: project.disp + (project.status === 'archived' ? '（已归档）' : ''),
-  })), [projects]);
+  const projects = useLedgerQuery(['project-options'], api.projectOptions);
+  const locations = useLedgerQuery(['locations', false], () => api.locations());
+  const available = locations.data?.items ?? [];
+  const choices = available.map(location => ({ value: location.name, label: location.name, disabled: false }));
+  if (value.custom && !available.some(location => location.name === value.custom)) {
+    choices.push({ value: value.custom, label: value.custom, disabled: true });
+  }
   return (
-    <div className="equipment-project-field">
-      <Select
-        {...(id ? { id } : {})}
-        aria-label={label + '系统项目'}
-        value={value.id}
-        options={choices}
-        allowClear
-        showSearch={{ optionFilterProp: 'label' }}
-        loading={loading}
-        placeholder="选择系统项目"
-        onChange={projectId => onChange?.({ ...value, id: projectId ?? null })}
-      />
-      <Input
-        aria-label={label + '自定义名'}
-        value={value.custom ?? ''}
-        onChange={event => onChange?.({ ...value, custom: event.target.value })}
-        placeholder="选填：如 鄂旗项目、宜阳仓库，填写后优先显示"
-      />
-    </div>
+    <>
+      <div className="equipment-project-field">
+        <SystemProjectField label={label + '系统项目'} value={value.id}
+          projects={projects.data?.items ?? []} disabled={busy || projects.isPending}
+          onChange={projectId => onChange?.({ ...value, id: projectId })} />
+        <Select
+          {...(id ? { id } : {})}
+          aria-label={label + '地点'}
+          value={value.custom || undefined}
+          options={choices}
+          allowClear
+          showSearch={{ optionFilterProp: 'label' }}
+          loading={locations.isPending}
+          disabled={busy || locations.isPending}
+          placeholder="选择地点"
+          popupMatchSelectWidth={false}
+          onChange={custom => {
+            const location = available.find(option => option.name === custom);
+            onChange?.({ id: value.id ?? location?.default_project_id ?? null, custom: custom ?? null });
+          }}
+        />
+      </div>
+      {projects.error && <LoadState query={projects} />}
+      {locations.error && <LoadState query={locations} />}
+    </>
   );
 }
 
-const noProjects: EquipmentProjectOption[] = [];
+function LocationDialog({ close }: { close: () => void }) {
+  const locations = useLedgerQuery(['locations', true], () => api.locations(true));
+  const projects = useLedgerQuery(['project-options'], api.projectOptions);
+  const action = useLedgerAction();
+  const { writable } = useAccess();
+  const [edit, setEdit] = useState<{ location: EquipmentLocation | null } | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const disabled = !writable || action.busy;
+  const stopEditing = () => { setEdit(null); setDirty(false); };
+  return (
+    <LedgerModal title="地点维护" compact busy={action.busy} dirty={dirty} close={close}>
+      {edit ? (
+        <Form<LocationValues> layout="vertical" disabled={disabled}
+          initialValues={edit.location ?? { name: '', default_project_id: null, is_active: true }}
+          onValuesChange={() => setDirty(true)}
+          onFinish={values => void action.run(async () => {
+            if (edit.location) await api.updateLocation(edit.location.id, values);
+            else await api.createLocation(values);
+            stopEditing();
+          })}>
+          <Form.Item name="name" label="地点名称" rules={[{ required: true, whitespace: true, message: '请输入地点名称' }]}>
+            <Input autoFocus />
+          </Form.Item>
+          {edit.location && <p className="equipment-location-note">改名会同步更新已有设备、调拨和租赁记录。</p>}
+          <Form.Item name="default_project_id" label="默认系统项目">
+            <SystemProjectField label="默认系统项目" projects={projects.data?.items ?? []}
+              disabled={disabled || projects.isPending} />
+          </Form.Item>
+          {projects.error && <LoadState query={projects} />}
+          <Form.Item name="is_active" valuePropName="checked">
+            <Checkbox>启用地点</Checkbox>
+          </Form.Item>
+          <div className="dialog-actions">
+            <Button disabled={action.busy} onClick={stopEditing}>取消</Button>
+            <Button type="primary" htmlType="submit" loading={action.busy}
+              disabled={disabled || !dirty}>保存地点</Button>
+          </div>
+        </Form>
+      ) : (
+        <>
+          <LoadState query={locations} />
+          {locations.data && (
+            <>
+              <div className="equipment-location-toolbar">
+                <Button size="small" type="primary" disabled={disabled} onClick={() => setEdit({ location: null })}>
+                  新增地点
+                </Button>
+              </div>
+              {locations.data.items.length ? (
+                <ul className="equipment-location-list">
+                  {locations.data.items.map(location => (
+                    <li key={location.id}>
+                      <div>
+                        <strong>{location.name}</strong>
+                        <span>{[location.default_project_disp, !location.is_active && '已停用'].filter(Boolean).join(' · ')}</span>
+                      </div>
+                      <Button size="small" disabled={disabled} aria-label={'编辑地点 ' + location.name}
+                        onClick={() => setEdit({ location })}>编辑</Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p>暂无地点。</p>}
+            </>
+          )}
+        </>
+      )}
+      {action.error && <p role="alert">{action.error}</p>}
+    </LedgerModal>
+  );
+}
+
 type EquipmentFormValues = Omit<Create, 'expected_codes' | 'item_category'> & {
   purchase: ProjectValue;
 };
@@ -96,8 +192,6 @@ function EquipmentForm({ state, close, done }: Props) {
   const item = state.kind === 'edit' ? state.item : null,
     category = state.kind === 'create' ? state.category : item!.item_category;
   const [form] = Form.useForm<EquipmentFormValues>();
-  const projects = useLedgerQuery(['project-options'], api.projectOptions);
-  const projectOptions = projects.data?.items ?? noProjects;
   const initial = {
     name: item?.name,
     spec: item?.spec,
@@ -210,7 +304,7 @@ function EquipmentForm({ state, close, done }: Props) {
             <DateField label="购买日期" />
           </Form.Item>
           <Form.Item className="equipment-project-form-item" name="purchase" label="购买项目" rules={[projectRequired]}>
-            <ProjectDualField label="购买项目" projects={projectOptions} loading={projects.isPending} />
+            <ProjectDualField label="购买项目" busy={!writable || action.busy} />
           </Form.Item>
           <Form.Item name="purchase_price" label="购买价格">
             <InputNumber stringMode {...decimalField} min="0" precision={4} />
@@ -228,7 +322,6 @@ function EquipmentForm({ state, close, done }: Props) {
             <Input.TextArea />
           </Form.Item>
         </div>
-        {projects.error && <LoadState query={projects} />}
         {validPreview && (
           <div aria-live="polite" className="equipment-preview">
             <strong>编号预览</strong>
@@ -262,7 +355,6 @@ function MovementForm({ state, close, done }: Props) {
   const [dirty, setDirty] = useState(false),
     action = useLedgerAction(),
     { writable } = useAccess();
-  const projects = useLedgerQuery(['project-options'], api.projectOptions, transfer);
   async function save(values: { project: ProjectValue; date: string; note: string }) {
     if (!writable) return;
     const ids = items.map((x) => x.id);
@@ -324,10 +416,9 @@ function MovementForm({ state, close, done }: Props) {
       >
         {transfer && (
           <Form.Item name="project" label="调入项目" rules={[projectRequired]}>
-            <ProjectDualField label="调入项目" projects={projects.data?.items ?? noProjects} loading={projects.isPending} />
+            <ProjectDualField label="调入项目" busy={!writable || action.busy} />
           </Form.Item>
         )}
-        {transfer && projects.error && <LoadState query={projects} />}
         <Form.Item name="date" label={transfer ? '调拨日期' : '报废日期'} rules={required}>
           <DateField label={transfer ? '调拨日期' : '报废日期'} />
         </Form.Item>
@@ -427,6 +518,7 @@ function DeleteTransferDialog({ transfer, close, done }: { transfer: TransferRow
 
 export function EquipmentDialog(props: Props) {
   const state = props.state;
+  if (state.kind === 'locations') return <LocationDialog close={props.close} />;
   if (state.kind === 'sync') return <SyncDetails id={state.id} close={props.close} />;
   if (state.kind === 'delete-transfer') return <DeleteTransferDialog {...props} transfer={state.transfer} />;
   if (state.kind === 'edit' || state.kind === 'create') return <EquipmentForm {...props} />;

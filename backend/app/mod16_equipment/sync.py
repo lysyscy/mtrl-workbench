@@ -388,6 +388,10 @@ def sync_lock(key):
     return _sync_locks[key % len(_sync_locks)]
 
 
+def i8_scope(item):
+    return (item.item_category == "equipment") & (item.asset_scope == "current_asset")
+
+
 def sync_queue(key, adapter):
     with sync_lock(key):
         return _drain(key, adapter)
@@ -396,6 +400,8 @@ def sync_queue(key, adapter):
 def _drain(key, adapter):
     with session_scope() as db:
         item = require(db, EquipmentItem, key)
+        if not i8_scope(item):
+            return {"equipment": [], "transfers": []}
         pending = db.scalars(select(EquipmentTransfer).where(
             EquipmentTransfer.equipment_id == key, EquipmentTransfer.i8_sync_status.in_(ISSUES)
         ).order_by(EquipmentTransfer.transfer_date, EquipmentTransfer.id)).all()

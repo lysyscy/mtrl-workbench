@@ -12,7 +12,7 @@ from app.core.db import session_scope
 from app.core.session import current_name
 from . import rental, schemas as S, service
 from .common import ledger_lock, record
-from .sync import sync_lock, sync_queue
+from .sync import ISSUES, sync_lock, sync_queue
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer
 
 router = APIRouter(prefix="/api/m16", tags=["设备台账"])
@@ -34,10 +34,12 @@ def save_and_sync(fn, request, adapter, model, field):
     result = call(fn, request, write=True)
     rows = result[field]
     if adapter is not None:
-        for row in rows:
+        queued = [row for row in rows if row["i8_sync_status"] in ISSUES]
+        for row in queued:
             sync_queue(row["equipment_id"] if model is EquipmentTransfer else row["id"], adapter)
-        refreshed = {row["id"]: row for row in call(service.saved_records, model, [row["id"] for row in rows])}
-        rows = result[field] = [refreshed.get(row["id"], row) for row in rows]
+        if queued:
+            refreshed = {row["id"]: row for row in call(service.saved_records, model, [row["id"] for row in queued])}
+            rows = result[field] = [refreshed.get(row["id"], row) for row in rows]
     result["i8_sync"] = [{"id": r["id"], "status": r["i8_sync_status"], "message": r["i8_sync_message"]}
                          for r in rows]
     return jsonable_encoder(result, custom_encoder={Decimal: str})
@@ -51,6 +53,21 @@ def preview_get(request: S.Preview = Query()):
 @router.get("/project-options")
 def project_options():
     return call(service.project_options)
+
+
+@router.get("/locations", response_model=S.LocationList)
+def locations(include_inactive: bool = False):
+    return call(service.locations, include_inactive)
+
+
+@router.post("/locations", response_model=S.LocationResult)
+def create_location(request: S.LocationCreate):
+    return call(service.save_location, request.model_dump(), write=True)
+
+
+@router.patch("/locations/{id}", response_model=S.LocationResult)
+def update_location(id: int, request: S.LocationPatch):
+    return call(service.save_location, request.model_dump(exclude_unset=True), id, write=True)
 
 
 @router.post("/equipment/preview")
@@ -78,7 +95,8 @@ def detail(id: int, month: S.Month | None = None):
 
 @router.patch("/equipment/{id}")
 def update(id: int, request: S.EquipmentPatch):
-    return call(service.update, id, request.model_dump(exclude_unset=True), write=True)
+    with sync_lock(id):
+        return call(service.update, id, request.model_dump(exclude_unset=True), write=True)
 
 
 @router.post("/transfers")
@@ -154,9 +172,9 @@ def reorder(request: S.Reorder):
     return call(rental.reorder, request, write=True)
 
 
-@router.post("/rental/confirm")
-def confirm(request: S.MonthInput):
-    return call(rental.confirm, request.month, write=True)
+@router.put("/rental/reorder-projects", response_model=S.ReorderProjects)
+def reorder_projects(request: S.ReorderProjects):
+    return call(rental.reorder_projects, request, write=True)
 
 
 @router.get("/inventory")

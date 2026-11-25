@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import Button from 'antd/es/button';
 import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
@@ -16,7 +17,6 @@ import {
   DateField,
   decimalInput,
   formatNum,
-  LedgerModal,
   LoadState,
   options,
   rowId,
@@ -167,6 +167,7 @@ function Decision({ data: r, context }: Cell) {
         value={r.billing_status}
         disabled={context.locked}
         options={options(billing)}
+        popupMatchSelectWidth={false}
         onChange={(v: Billing) => void context.act(() => api.patchLine(r.id, { billing_status: v }))}
       />
     </div>
@@ -197,7 +198,7 @@ function rentalColumns(scale: number): ColDef<RentalLine>[] {
       cellClass: 'ag-right-aligned-cell', valueFormatter: ({ value }) => formatNum(value) },
     { field: 'category_label', headerName: '类别', ...contentWidth(48, 66, scale) },
     { field: 'distribution_note', headerName: '分布', ...contentWidth(62, 102, scale, 0.7), cellRenderer: Note },
-    { colId: 'billing', headerName: '本月计租', ...contentWidth(130, 154, scale), autoHeight: true, cellRenderer: Decision },
+    { colId: 'billing', headerName: '本月计租', ...contentWidth(155, 178, scale), autoHeight: true, cellRenderer: Decision },
   ];
 }
 const groupKey = (group: RentGroup) => group.project_id === null ? 'name:' + group.project_name : 'id:' + group.project_id;
@@ -258,8 +259,9 @@ export function Rental({ target, scale, goToDistribution }: {
 }) {
   const [month, setMonth] = useState(dayjs().format('YYYY-MM')),
     [only, setOnly] = useState(false),
-    [confirm, setConfirm] = useState(false),
     [jumpNotice, setJumpNotice] = useState('');
+  const [dropSpot, setDropSpot] = useState<{ key: string; after: boolean } | null>(null);
+  const dragSource = useRef<string | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const resolved = useRef<RentalTarget | null>(null);
   const columns = useMemo(() => rentalColumns(scale), [scale]);
@@ -268,7 +270,9 @@ export function Rental({ target, scale, goToDistribution }: {
     { enabled, writable } = useAccess(),
     data = query.data;
   const savingCells = useIsMutating({ mutationKey: ['equipment-rental-edit', month] }) > 0;
-  const locked = !writable || query.isError || data?.status !== 'draft' || action.busy;
+  const client = useQueryClient();
+  const locked = !writable || query.isError || action.busy;
+  const canReorder = !locked && !savingCells && (data?.projects.length ?? 0) > 1;
   const context: RentalContext = {
     locked,
     goToDistribution,
@@ -277,6 +281,38 @@ export function Rental({ target, scale, goToDistribution }: {
         await fn();
       }),
   };
+
+  function clearDrag() {
+    dragSource.current = null;
+    setDropSpot(null);
+  }
+
+  function dropAfter(event: DragEvent<HTMLElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientX > bounds.left + bounds.width / 2;
+  }
+
+  function moveProject(source: string, target: string, after: boolean) {
+    if (!canReorder || !data || source === target) return;
+    const groups = data.projects;
+    const moved = groups.find(group => groupKey(group) === source);
+    const next = groups.filter(group => groupKey(group) !== source);
+    const index = next.findIndex(group => groupKey(group) === target);
+    if (!moved || index === -1) return;
+    next.splice(index + Number(after), 0, moved);
+    if (next.every((group, position) => group === groups[position])) return;
+    const queryKey = ['equipment-ledger', 'rental', month];
+    void action.run(async () => {
+      await client.cancelQueries({ queryKey, exact: true });
+      client.setQueryData(queryKey, { ...data, projects: next });
+      try {
+        await api.reorderProjects(month, next);
+      } catch (error) {
+        client.setQueryData(queryKey, data);
+        throw error;
+      }
+    });
+  }
 
   useEffect(() => {
     const root = scroll.current;
@@ -341,14 +377,7 @@ export function Rental({ target, scale, goToDistribution }: {
           仅看待定项 ({data?.pending_count ?? '…'})
         </Checkbox>
         <Button
-          type="primary"
-          disabled={locked || savingCells || !!data?.pending_count}
-          title={data?.pending_count ? '请先处理全部待定项' : undefined}
-          onClick={() => setConfirm(true)}
-        >
-          {data?.status === 'confirmed' ? '本月租赁已确认' : '确认本月租赁'}
-        </Button>
-        <Button
+          className="equipment-toolbar-actions"
           disabled={!data || action.busy || savingCells}
           onClick={() => void action.run(() => exportEquipment('rental', month), false)}
         >
@@ -359,19 +388,52 @@ export function Rental({ target, scale, goToDistribution }: {
       {action.error && <p role="alert">{action.error}</p>}
       {jumpNotice && <div className="equipment-receipt" role="status">{jumpNotice}</div>}
       {!!data?.projects.length && (
-        <nav className="equipment-rental-nav" aria-label="项目快速导航">
+        <nav className="equipment-rental-nav" aria-label="项目快速导航" onDragEnd={clearDrag}>
           {data.projects.map(group => {
+            const key = groupKey(group);
             const pending = group.lines.filter(line => line.pending_action_type !== 'none').length;
             const zeroTotal = group.subtotal !== null && Number(group.subtotal) === 0;
             return (
-              <Button key={groupKey(group)} size="small" shape="round"
-                className={zeroTotal ? 'equipment-project-zero' : ''}
+              <Button key={key} size="small" shape="round"
+                className="equipment-project-pill"
+                draggable={canReorder}
+                data-drop={dropSpot?.key === key ? (dropSpot.after ? 'after' : 'before') : undefined}
                 aria-controls={projectAnchor(group)}
+                onDragStart={event => {
+                  if (!canReorder) { event.preventDefault(); return; }
+                  dragSource.current = key;
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', group.project_name);
+                }}
+                onDragOver={event => {
+                  if (!canReorder || !dragSource.current || dragSource.current === key) {
+                    setDropSpot(null);
+                    return;
+                  }
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  const after = dropAfter(event);
+                  setDropSpot(current => current?.key === key && current.after === after ? current : { key, after });
+                }}
+                onDragLeave={event => {
+                  if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+                  setDropSpot(current => current?.key === key ? null : current);
+                }}
+                onDrop={event => {
+                  const source = dragSource.current;
+                  if (!source) return;
+                  event.preventDefault();
+                  clearDrag();
+                  moveProject(source, key, dropAfter(event));
+                }}
                 onClick={() => {
                   const card = document.getElementById(projectAnchor(group));
                   if (card) scrollToEquipmentTarget(card);
                 }}>
                 {group.project_name}
+                <span className={zeroTotal ? 'equipment-project-zero' : undefined}>
+                  · {group.subtotal === null ? '—' : '¥' + formatNum(group.subtotal)}
+                </span>
                 {!!pending && <span className="equipment-nav-pending" aria-label={pending + ' 项待定'}>{pending}</span>}
               </Button>
             );
@@ -393,32 +455,12 @@ export function Rental({ target, scale, goToDistribution }: {
               />
             ))}
           </div>
-          <div className="equipment-total">
-            本月总计　{formatNum(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
-          </div>
         </div>
       )}
-      {confirm && (
-        <LedgerModal
-          title={'确认 ' + month + ' 全部项目租赁？'}
-          busy={action.busy}
-          close={() => setConfirm(false)}
-        >
-          <p>确认后本月明细及计租归属将锁定。</p>
-          <Button
-            type="primary"
-            disabled={locked || savingCells}
-            onClick={() =>
-              void action.run(async () => {
-                await api.confirm(month);
-                setConfirm(false);
-              })
-            }
-          >
-            确认本月租赁
-          </Button>
-          {action.error && <p role="alert">{action.error}</p>}
-        </LedgerModal>
+      {data && (
+        <div className="equipment-total">
+          本月总计　{formatNum(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
+        </div>
       )}
     </div>
   );
