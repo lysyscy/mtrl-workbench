@@ -49,7 +49,6 @@
 .business-modal .mechanical-dialog{width:min(calc(940px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .business-modal .mechanical-project-dialog{width:min(calc(600px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .mechanical-plate-dialog{width:min(calc(520px * var(--fscale)),calc(100vw - 24px))}
-.business-modal .mechanical-discard-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px))}
 .mechanical-dialog .ant-btn.dialog-close-button{width:calc(28px * var(--fscale));height:calc(28px * var(--fscale));min-height:0;padding:calc(5px * var(--fscale))}
 .mechanical-dialog .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mechanical-dialog textarea{width:100%;min-height:12em;margin:calc(12px * var(--fscale)) 0;border-radius:var(--radius-input);font:inherit}

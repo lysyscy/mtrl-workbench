@@ -20,7 +20,7 @@ const labels = { month: '月份', other_expense: '结算', payment: '付款', re
 const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: true, suppressMovable: true };
 
 interface Scope { key: string; owner: string; project: number; end: string }
-interface Draft { text: string; base: string; version: number; queued: boolean; month: string }
+interface Draft { text: string; base: string; version: number; queued: boolean; month: string; error?: string }
 interface Task extends Draft { field: Field }
 interface Edit { scope: Scope; base: LedgerRow; drafts: Partial<Record<Field, Draft>>; own: Map<string, Partial<Record<Field, string>>>; queue: Task[]; saving: boolean; locked: boolean }
 interface Actions {
@@ -32,14 +32,16 @@ interface Actions {
   busy(): boolean;
 }
 interface GridContext { scope: Scope; actions: React.RefObject<Actions> }
+type SideGrids = Partial<Record<LedgerSide['category'], GridApi<LedgerRow>>>;
 
 function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
   const { data: row, context } = props;
   const field = props.colDef?.field as Field;
-  const [text, setText] = useState(() => row ? context.actions.current.value(context.scope, row, field) : '');
+  const value = row ? context.actions.current.value(context.scope, row, field) : '';
+  const [text, setText] = useState(value);
   const composing = useRef(false);
   const base = useRef(row?.[field] ?? '');
-  useEffect(() => { if (row) setText(context.actions.current.value(context.scope, row, field)); }, [row, field, context]);
+  useEffect(() => { setText(value); }, [row, context, value]);
   if (!row) return null;
   if (!editable(row, field) || !context.actions.current.writable()) return <span>{field === 'month' ? row.month_label || row.month : field === 'remark' ? row.remark : amount(row[field])}</span>;
   function change(value: string) {
@@ -63,7 +65,7 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
 function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow, string, GridContext>) {
   return row?.row_kind === 'manual' && context.actions.current.writable() ? <Button htmlType="submit" className="ledger-delete" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</Button> : node.rowPinned ? null : <span className="muted">—</span>;
 }
-function Side({ active, scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
+function Side({ active, scale, side, scope, actions, grids, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; grids: SideGrids; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
   const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null), summaryRoot = useRef<HTMLDivElement>(null);
   const [tableHeight, setTableHeight] = useState(200 * scale);
   function sizeTable() {
@@ -117,14 +119,17 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
     <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" style={{height:tableHeight,maxHeight:'60dvh'}} grid={{theme:gridTheme,alwaysShowVerticalScroll:false,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
       getRowId:params=>params.data.key,defaultColDef:defaultColumn,suppressCellFocus:true,suppressScrollOnNewData:true,
       overlayNoRowsTemplate:'暂无台账数据。',animateRows:false,onGridReady:event=>{
-        api.current=event.api;
+        api.current=event.api; grids[side.category]=event.api;
         const observer=new ResizeObserver(sizeTable);
         for(const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
           const element=root.current?.querySelector(selector);if(element)observer.observe(element);
         }
         const visibility=new MutationObserver(sizeTable),scrollbar=root.current?.querySelector('.ag-body-horizontal-scroll');
         if(scrollbar)visibility.observe(scrollbar,{attributes:true,attributeFilter:['class','style']});
-        event.api.addEventListener('gridPreDestroyed',()=>{observer.disconnect();visibility.disconnect();});
+        event.api.addEventListener('gridPreDestroyed',()=>{
+          if (grids[side.category] === event.api) delete grids[side.category];
+          observer.disconnect(); visibility.disconnect();
+        });
       },
       onModelUpdated:()=>requestAnimationFrame(sizeTable),onGridSizeChanged:()=>requestAnimationFrame(sizeTable),
       onFirstDataRendered:event=>{sizeTable();if(visible.length)event.api.ensureIndexVisible(visible.length-1,'bottom');}}} />
@@ -140,6 +145,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const scope = useMemo<Scope>(() => ({ key: `${owner}:${project}:${end}`, owner, project, end }), [owner, project, end]);
   const current = useRef({ scope, blocked, me, active, historyBusy, historyUncertain }); current.current = { scope, blocked, me, active, historyBusy, historyUncertain };
   const lifetime = useRef<AbortController | null>(null);
+  const grids = useRef<SideGrids>({});
   const mounted = useRef(true); const edits = useRef(new Map<string, Edit>()); const messages = useRef(new Map<string, { text: string; reload: boolean }>());
   const jobs = useRef(new Set<Promise<void>>()); const serial = useRef(0); const acting = useRef(false);
   const pointerDown = useRef(false);
@@ -199,21 +205,34 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     }
     return full;
   }
-  function clearQueue(edit: Edit) { edit.queue = []; for (const draft of Object.values(edit.drafts)) if (draft) draft.queued = false; }
+  const interrupted = '保存已中断，输入已保留。';
+  function clearQueue(edit: Edit) {
+    edit.queue = [];
+    for (const draft of Object.values(edit.drafts)) {
+      if (draft?.queued) { draft.queued = false; draft.error ??= interrupted; }
+    }
+  }
+  function reject(edit: Edit, task: Task, reason: string, reload: boolean) {
+    clearQueue(edit);
+    const draft = edit.drafts[task.field];
+    if (draft) draft.error = draft.version === task.version ? reason : interrupted;
+    if (reload || !draft) message(edit.scope, reason, reload);
+  }
   async function drain(edit: Edit) {
     if (edit.saving) return;
     edit.saving = true; changed();
+    let task: Task | undefined;
     try {
       while (edit.queue.length) {
         if (!mounted.current || current.current.blocked || current.current.historyBusy || current.current.historyUncertain || !current.current.me) { clearQueue(edit); return; }
-        const task = edit.queue.shift(); if (!task) break;
-        if (edit.locked) { clearQueue(edit); message(edit.scope, '已保存，读取失败；后续输入已保留。', true); break; }
+        task = edit.queue.shift(); if (!task) break;
+        if (edit.locked || messages.current.get(edit.scope.key)?.reload) { reject(edit, task, '先重新加载，核对前一次保存。', true); break; }
         if (same(task.field, edit.base[task.field], task.text)) {
           if (edit.drafts[task.field]?.version === task.version) delete edit.drafts[task.field];
           continue;
         }
         if (task.month !== edit.base.month || !same(task.field, edit.base[task.field], task.base)) {
-          clearQueue(edit); message(edit.scope, '版本冲突，输入已保留。请重新加载核对。', true); break;
+          reject(edit, task, '版本冲突，输入已保留。请重新加载核对。', true); break;
         }
         void client.cancelQueries({ queryKey: ['ledger', edit.scope.owner, edit.scope.project] });
         const before = edit.base;
@@ -238,16 +257,17 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
               for (const queued of other.queue) if (queued.field === task.field && same(task.field, queued.base, task.base)) queued.base = saved[task.field];
             }
           }
-          edit.base = saved; edit.locked = false; message(edit.scope, '');
+          edit.base = saved; edit.locked = false;
+          if (!messages.current.get(edit.scope.key)?.reload) message(edit.scope, '');
         } catch (error) {
           clearQueue(edit); message(edit.scope, `已保存，读取失败；请重新加载，不必重复提交。${error instanceof Error ? error.message : ''}`, true); break;
         }
       }
     } catch (error) {
-      clearQueue(edit);
       const text = error instanceof Error ? error.message : '请刷新核对后重试。';
       const unknown = uncertainWrite(error);
-      message(edit.scope, unknown ? `保存结果未确认：${text}请刷新核对，输入已保留。` : /已变化|冲突/.test(text) || (error instanceof ApiError && error.status === 409) ? `版本冲突：${text}输入已保留，请刷新核对。` : `保存被拒：${text}输入已保留，请修改后重试。`, unknown || (error instanceof ApiError && error.status === 409) || /已变化|冲突/.test(text));
+      const conflict = (error instanceof ApiError && error.status === 409) || /已变化|冲突/.test(text);
+      if (task) reject(edit, task, unknown ? `保存结果未确认：${text}请重新加载核对，输入已保留。` : conflict ? `版本冲突：${text}输入已保留，请重新加载核对。` : `保存被拒：${text}输入已保留。`, unknown || conflict);
     } finally { edit.saving = false; changed(); }
   }
   function hasDrafts(s: Scope) { return [...edits.current.values()].some(edit => edit.scope.key === s.key && Object.keys(edit.drafts).length > 0); }
@@ -267,6 +287,25 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     finally { acting.current = false; if (mounted.current) setControlBusy(false); }
   }
   const actions = useRef<Actions>(null!);
+  function commit(edit: Edit, field: Field, retry = false) {
+    const draft = edit.drafts[field];
+    if (!draft || draft.queued || draft.error && !retry) return;
+    if (messages.current.get(edit.scope.key)?.reload || !actions.current.writable()) {
+      draft.error = interrupted; changed(); return;
+    }
+    if (same(field, draft.text, draft.base) && !edit.saving && !edit.queue.length) { delete edit.drafts[field]; changed(); return; }
+    delete draft.error;
+    draft.queued = true; edit.queue.push({ ...draft, field });
+    const job = drain(edit); jobs.current.add(job); void job.finally(() => jobs.current.delete(job));
+  }
+  function cancelFailed(edit: Edit, field: Field) {
+    if (!edit.drafts[field]?.error || edit.saving || acting.current || !actions.current.writable()) return;
+    delete edit.drafts[field];
+    const grid = grids.current[edit.base.category];
+    const node = grid?.getRowNode(edit.base.key);
+    if (node) grid?.refreshCells({ rowNodes: [node], columns: [field], force: true });
+    changed();
+  }
   actions.current = {
     writable: () => Boolean(current.current.me) && !current.current.blocked && !current.current.historyBusy && !current.current.historyUncertain,
     busy: () => acting.current,
@@ -275,17 +314,10 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       const edit = state(s, row), previous = edit.drafts[field], own = edit.own.get(row.token);
       edit.drafts[field] = { text, base: previous?.base ?? own?.[field] ?? base, version: ++serial.current,
         queued: false, month: previous?.month ?? own?.month ?? row.month };
-      // The cell already displays its text. Only a new draft changes the page's guards.
-      if (!previous) changed();
+      // The cell already displays its text. Update the guard or the failure controls when either changes.
+      if (!previous || previous.error) changed();
     },
-    commit: (s, row, field) => {
-      if (messages.current.get(s.key)?.reload) return;
-      const edit = state(s, row); const draft = edit.drafts[field]; if (!draft || draft.queued) return;
-      if (current.current.blocked || current.current.historyBusy || current.current.historyUncertain || !current.current.me) { message(s, '输入已保留；账号恢复后重新离格保存。'); return; }
-      if (same(field, draft.text, draft.base) && !edit.saving && !edit.queue.length) { delete edit.drafts[field]; changed(); return; }
-      draft.queued = true; edit.queue.push({ ...draft, field });
-      const job = drain(edit); jobs.current.add(job); void job.finally(() => jobs.current.delete(job));
-    },
+    commit: (s, row, field) => commit(state(s, row), field),
     remove: (s, row) => { void control(s, async () => {
       const edit = state(s, row);
       if (edit.locked) throw new ApiError('请先刷新核对，再删除历史行。');
@@ -315,6 +347,11 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const sharedGuard = [...messages.current.values()].some(item => item.reload) || [...edits.current.values()].some(edit => edit.locked) ? '台账操作结果待核实，请返回台账重新加载。' : controlBusy || [...edits.current.values()].some(edit => edit.saving) ? '台账正在保存，请稍候。' : [...edits.current.values()].some(edit => Object.keys(edit.drafts).length > 0) ? '台账有未保存输入，请返回台账处理。' : '';
   useEffect(() => { onExportGuard(sharedGuard); }, [onExportGuard, sharedGuard]);
   const receipt = messages.current.get(scope.key);
+  const failedCells = [...edits.current.values()].filter(edit => edit.scope.key === scope.key).flatMap(edit =>
+    (Object.keys(edit.drafts) as Field[]).flatMap(field => {
+      const draft = edit.drafts[field];
+      return draft?.error ? [{ edit, field, draft }] : [];
+    }));
   const exportUnavailable = historyBusy || historyUncertain ? '全局操作正在处理或结果待核实，请在顶栏重读核对。' : !me ? '登录后可导出。' : blocked ? '正在核实账号，暂不能导出。' : controlBusy ? '正在处理操作，请稍候。' : receipt?.reload ? '操作结果待核实，请先重新加载核对。' : query.isError ? '台账读取失败，请先重新加载。' : projects.isError ? '项目读取失败，请先重试。' : projects.isPending ? '正在读取项目…' : '';
   const status = <div className="ledger-status">
     {receipt?.text && <span role="alert" aria-label="保存回执">{receipt.text}</span>}
@@ -323,14 +360,25 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
     <section className="ledger-card" aria-labelledby="ledger-title">
-      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports"><Button htmlType="submit" disabled={blocked || controlBusy || !hasDrafts(scope)} onMouseDown={e => e.preventDefault()} onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } if (messages.current.get(scope.key)?.reload) message(scope, '未保存输入已放弃；保存结果仍待核实，请重新加载。', true); else success(scope, '已放弃未保存输入'); changed(); }}>放弃未保存输入</Button>{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
+      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
       <div className="ledger-card-body">
         <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
+        {failedCells.map(({ edit, field, draft }) => {
+          const row = edit.base;
+          const disabled = !actions.current.writable() || controlBusy || edit.saving;
+          const stale = row.month !== draft.month || !same(field, row[field], draft.base);
+          const reason = stale && !receipt?.reload ? '该格的已保存值已变化，请取消这项修改后重新编辑。' : draft.error;
+          return <div className="ledger-status ledger-draft-error" key={`${row.key}:${field}`}>
+            <span role="alert">{row.category === 'material' ? '辅材' : '机械'} {row.month_label || row.month} {labels[field]}「{draft.text || '清空'}」：{reason}</span>
+            <Button size="small" disabled={disabled || Boolean(receipt?.reload) || stale} onMouseDown={e => e.preventDefault()} onClick={() => commit(edit, field, true)}>重试保存</Button>
+            <Button size="small" disabled={disabled} onClick={() => cancelFailed(edit, field)}>取消这项修改</Button>
+          </div>;
+        })}
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}
         <div ref={content} className="ledger-content" style={!shown && retainedHeight.current ? {height:retainedHeight.current,minHeight:retainedHeight.current} : undefined} aria-busy={!shown && !query.isError && project > 0}>
         {!shown && <div className="ledger-placeholder" aria-hidden="true"><span/><span/></div>}
         {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
-        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side active={active && !blocked} scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
+        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side active={active && !blocked} scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} grids={grids.current} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
         </div>
       </div>
     </section>

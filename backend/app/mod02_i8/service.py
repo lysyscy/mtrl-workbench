@@ -7,7 +7,7 @@ def recent_records(session, *, run_type: str, limit: int):
     return repository.recent_records(session, run_type=run_type, limit=limit)
 
 
-def marked_fetch(session, marker: str, *, run_id: int | None = None):
+def marked_fetch(session, marker: str, *, run_id: int):
     from app.mod02_i8 import repository
     return repository.marked_fetch(session, marker, run_id=run_id)
 

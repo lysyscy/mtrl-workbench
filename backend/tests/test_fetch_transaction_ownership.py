@@ -12,6 +12,8 @@ from app.core import db, history
 from app.core.history import OperationHistory, actor_key
 from app.mod01_projects import repository as projects
 from app.mod01_projects.models import TYPE_NORMAL
+from app.mod02_i8 import browser_relay
+from app.mod02_i8.browser_broker import ConnectionInfo
 from app.mod02_i8.models import RunRecord
 
 
@@ -91,6 +93,8 @@ def test_fetch_releases_connection_and_actor_lock_until_atomic_apply(domain, mon
         monkeypatch.setattr(fetch, 'default_loaders', lambda c: (common, lambda: external('warehouse', [])))
 
     monkeypatch.setattr(fetch, 'open_i8_client', lambda **kw: external('factory', client))
+    monkeypatch.setattr(browser_relay, '_browser_connection',
+                        lambda owner, device: external('connection', ConnectionInfo(owner, device, 'https://i8.test')))
     if domain != 'jc':
         monkeypatch.setattr(fetch.report_export, 'export', lambda *a, **kw: external('export', content))
     original_record = fetch.save_run_record
@@ -111,8 +115,8 @@ def test_fetch_releases_connection_and_actor_lock_until_atomic_apply(domain, mon
     finally:
         history.end_request(token)
     assert lock_available()
-    assert set(calls) == ({'factory', 'list', 'detail', 'common', 'warehouse', 'close'} if domain == 'jc'
-                          else {'factory', 'export', 'warehouse', 'close'})
+    assert set(calls) == ({'connection', 'factory', 'list', 'detail', 'common', 'warehouse', 'close'} if domain == 'jc'
+                          else {'connection', 'factory', 'export', 'warehouse', 'close'})
     with db.session_scope() as session:
         assert session.get(RunRecord, result['run_record_id']) is not None
         operations = session.scalars(select(OperationHistory).where(OperationHistory.actor == actor_key(actor))).all()

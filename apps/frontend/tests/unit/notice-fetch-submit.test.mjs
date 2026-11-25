@@ -82,15 +82,15 @@ registerHooks({
       return stub("export const TimePicker = 'time-picker'; export const BusinessDate = 'business-date';");
     }
     if (specifier === './workspace-motion') return stub("export const DialogPresence = 'presence';");
-    if (specifier === './business-grid') return stub("export const ReadGrid = 'grid';");
+    if (specifier === './business-grid') return stub("export const ReadGrid = 'grid'; export const BusinessGrid = 'grid';");
     if (specifier === './bounded-grid') return stub("export const BoundedGrid = 'grid';");
     if (specifier === './ownership') return stub(
       "export const OwnershipDialog = 'ownership'; export const OwnershipProjectLink = 'project-link';" +
-      "export function useContractOwnershipPending() {return {read: {}, omit() {}};}",
+      "export function useContractOwnershipPending() {return {read: globalThis.__contractPending ?? {}, omit() {}};}",
     );
     if (specifier === 'react-router') return stub("export const Link = 'link';");
     if (specifier === './grid') return stub("export const numberColumnWidth = () => ({}); export const textWidth = numberColumnWidth;");
-    if (specifier === './grid-text') return stub("export const EllipsisText = 'ellipsis';");
+    if (specifier === './grid-text') return stub("export const EllipsisText = 'ellipsis'; export const completeColumnWidth = () => ({});");
     if (specifier === './mechanical-details') return stub("export const MechanicalDialog = 'mechanical-dialog';");
     if (specifier === 'antd') return stub("export const Button = 'button'; export const Checkbox = 'checkbox'; export const Input = {}; export const Select = 'select';");
     if (specifier.startsWith('antd/es/')) {
@@ -148,6 +148,7 @@ afterEach(() => {
   delete globalThis.__relayCells;
   delete globalThis.__relayQuery;
   delete globalThis.__relaySession;
+  delete globalThis.__contractPending;
 });
 
 test('共用抓取动作防双击，收发结存走专属端点并可靠重读', async () => {
@@ -502,6 +503,44 @@ const fetchSurfaces = [
       unsettled: [{contract_no: 'CT-3', project_name: '项目甲', kind: 'needs_keyword'}]}},
     p => p.data?.id === 13 && p.pending?.[0]?.contract === 'CT-3'],
 ];
+
+test('contract rule confirmation follows the selected contract through pending-list refresh', async () => {
+  const a = { contract_no: 'CT-A', project_name: '项目甲', doc_name: '合同甲', kind: 'not_archived' };
+  const b = { contract_no: 'CT-B', project_name: '项目乙', doc_name: '合同乙', kind: 'not_archived' };
+  const calls = [];
+  globalThis.fetch = async (path, init) => {
+    if (path === '/api/m11/fetch') return response({ ok: true, receipt: {
+      id: 13, matched: 0, started_at: '2026-11-20', status: 'success', unsettled: [a, b],
+    } });
+    calls.push([path, JSON.parse(init.body)]);
+    return response({ ok: true });
+  };
+  globalThis.__contractPending = { data: [a, b], refetch: async () => {} };
+  function renderContract() {
+    cells.index = 0;
+    cells.month = null;
+    return ContractFetch({ me, blocked: false, initialSince: '', close() {}, refresh: async () => {} });
+  }
+  function rowActions(contract) {
+    const [{ props }] = walk(renderContract(), node => typeof node.props?.actions === 'function');
+    return props.actions(props.pending.find(row => row.contract === contract));
+  }
+  const buttons = (number, label) => walk(rowActions(number), node => node.props?.children === label);
+
+  actionsOf(renderContract()).onRun();
+  await settle();
+  buttons('CT-A', '仅剔除这份合同')[0].props.onClick();
+  globalThis.__contractPending.data = [b];
+  assert.equal(buttons('CT-B', '确认加入剔除规则').length, 0);
+  assert.deepEqual(calls, []);
+
+  buttons('CT-B', '仅剔除这份合同')[0].props.onClick();
+  assert.equal(walk(rowActions('CT-B'), node => node.props?.children === '下次抓取时，跳过合同「CT-B」。').length, 1);
+  buttons('CT-B', '确认加入剔除规则')[0].props.onClick();
+  await settle();
+  assert.deepEqual(calls, [['/api/m14/jc-ignore', { kind: 'contract', contract_no: 'CT-B' }]]);
+});
+
 for (const [name, component, props, path, result, hasReceipt] of fetchSurfaces) {
   function surface(close = () => {}) {
     cells.index = 0;

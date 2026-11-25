@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkedValueFilterNodes, compareFilterValues, searchValueFilterTree, toggleValueFilter, valueFilterCandidates, valueFilterKey, valueFilterPasses, valueFilterTree } from '../../src/grid-value-filter-model.ts';
+import { checkedValueFilterNodes, compareFilterValues, normalizeDateFilterValue, searchValueFilterTree, toggleValueFilter, valueFilterCandidates, valueFilterKey, valueFilterPasses, valueFilterTree } from '../../src/grid-value-filter-model.ts';
 
 test('inactive and last-unchecked selections show all; changing one column preserves the others',()=>{
   const first=valueFilterKey('甲','text'), second=valueFilterKey('乙','text');
@@ -52,6 +52,20 @@ test('search only narrows displayed candidates and keeps selection/counts and fu
   assert.deepEqual(model,{values:['t:原始数据']});
 });
 
+test('inventory date filtering groups native Excel and ISO timestamps by their source calendar day', () => {
+  const excel = '2026-08-05 00:00:00';
+  const invalid = ['2026-02-30 00:00:00', '2026-08-05T25:00:00', '2026-08-05备注', '原始数据'];
+  const values = [excel, '2026-08-05T23:30:00.123-04:00', '2026-08-05', '2026-08-06', ...invalid];
+  const tree = valueFilterTree(valueFilterCandidates(values.map(normalizeDateFilterValue), 'date'), 'date');
+  const year = tree.find(node => node.label === '2026年');
+  const month = year.children.find(node => node.label === '8月');
+  const day = month.children.find(node => node.label === '5日');
+  assert.equal(day.count, 3);
+  const model = toggleValueFilter(null, day.values, true);
+  assert.deepEqual(values.filter(value => valueFilterPasses(model, normalizeDateFilterValue(value), 'date')), values.slice(0, 3));
+  for (const value of invalid) assert.equal(tree.find(node => node.key === `t:${value}`)?.label, value);
+});
+
 test('numeric candidates and sort compare decimal values, including negatives, zero and large cents',()=>{
   const candidates=valueFilterCandidates(['10.00','2.00','-1.25','0.00','2.0','9999999999999999.98','9999999999999999.99'],'number');
   assert.deepEqual(candidates.slice(0,4).map(c=>c.label),['-1.25','0','2','10']);
@@ -61,4 +75,14 @@ test('numeric candidates and sort compare decimal values, including negatives, z
   assert.equal(valueFilterPasses({values:['n:0']},'0.00','number'),true);
   assert.equal(valueFilterPasses({values:['n:2']},'2.00','number'),true);
   assert.equal(valueFilterPasses({values:['n:2']},'20.00','number'),false);
+});
+
+test('a blank adjustment candidate stays separate from an explicit zero amount',()=>{
+  const candidates=valueFilterCandidates(['',null,'0.00','0'], 'number', value => Number(value).toFixed(2));
+  assert.deepEqual(candidates, [
+    {key:'n:0',label:'0.00',count:2},
+    {key:'blank:',label:'（空白）',count:2},
+  ]);
+  assert.equal(valueFilterPasses({values:['blank:']},'','number'),true);
+  assert.equal(valueFilterPasses({values:['blank:']},'0.00','number'),false);
 });

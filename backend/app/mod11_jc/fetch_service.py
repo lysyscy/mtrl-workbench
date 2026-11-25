@@ -23,7 +23,7 @@ from __future__ import annotations
 # ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
 #    —— 不传 ⇒ 耗时恒 0，用户实测报过）
 from contextlib import ExitStack
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Callable
 
 from sqlalchemy.orm import Session
@@ -121,10 +121,12 @@ def default_loaders(client):
 
 #: 增量抓的**回看天数**（默认起点 = 库里最大合同日期 − 这个数）。
 SINCE_LOOKBACK_DAYS = 3
+RECEIPT_ITEM_LIMIT = 200
+RECEIPT_STATUS_ORDER = {"inserted": 0, "updated": 1, "unchanged": 2}
 
 
 def default_since(s: Session) -> str:
-    """增量抓的**默认起点**（`YYYY-MM-DD`）= 库里**最大合同日期 − 3 天**；库空 ⇒ `""`（= 全量）。
+    """增量起点为整张合同表的最新有效日期提前 3 个日历日。
 
     ⭐ **为什么不另存"上次抓取日期"这个状态**：那要**再开一份状态**（新表 / 新设置项），
       而状态会**漂移** —— 清了库、换了机器、手改了数据 ⇒ 状态就**假了**，而且是静默地假。
@@ -133,21 +135,33 @@ def default_since(s: Session) -> str:
       ⇒ 起点卡在"最后一天"会**漏掉它们**。而落库按 `BillNo` **幂等** ⇒ 推早只是多拿几条、**不会重复插**。
     ⚠️ 库空（首次抓取）⇒ 回空串 ⇒ 走**全量**（~40 秒）；此后都是 **1~5 秒**。
     """
-    from datetime import date, timedelta
-
     from sqlalchemy import func, select
 
     from app.mod11_jc.models import JcContract
 
-    latest = str(s.execute(select(func.max(JcContract.contract_date))).scalar() or "").strip()[:10]
+    column = JcContract.contract_date
+    latest = s.scalar(select(func.max(column)))
     if not latest:
         return ""
-    try:
-        return (date.fromisoformat(latest) - timedelta(days=SINCE_LOOKBACK_DAYS)).isoformat()
-    except ValueError:
-        # ⚠️ 日期不认 ⇒ **保守全量**（⛔ 不猜、也⛔ 不静默少抓 —— 少抓是最坏的一类错）
-        logger.warning("合同日期 {:r} 不像日期 ⇒ 增量起点回落「全量」", latest)
-        return ""
+
+    def start(value: str) -> str | None:
+        try:
+            day = date.fromisoformat(value)
+        except ValueError:
+            return None
+        if day.isoformat() != value:
+            return None
+        return (day - timedelta(days=SINCE_LOOKBACK_DAYS)).isoformat() if day.toordinal() > SINCE_LOOKBACK_DAYS else ""
+
+    since = start(latest)
+    if since is not None:
+        return since
+    # 历史脏值可能排在正常日期之后，只在这种情况下继续找有效日期。
+    for value in s.scalars(select(column).where(column < latest, column != "").distinct().order_by(column.desc())):
+        since = start(value)
+        if since is not None:
+            return since
+    return ""
 
 
 def run_fetch(
@@ -272,6 +286,7 @@ def run_fetch(
 
             # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
             stats = {"inserted": 0, "refreshed": 0, "changed": 0, "skipped": 0}
+            matched_items = []
             by_pid: dict[int, list[dict]] = {}
             for row in m["matched"]:
                 by_pid.setdefault(int(row["project_id"]), []).append({
@@ -281,8 +296,10 @@ def run_fetch(
                 part = R.upsert_fetched_contracts(s, project_id=pid, rows=group)
                 for k in stats:
                     stats[k] += int(part.get(k) or 0)
+                matched_items.extend(part["items"])
 
             ignored_projects = _tally(ignored_rows, "project_name")
+            matched_items.sort(key=lambda item: RECEIPT_STATUS_ORDER[item["status"]])
             summary = {
                 "source_count": source_count, "identified_count": len(fetched_rows),
                 "inserted": stats["inserted"], "changed": stats["changed"],
@@ -297,6 +314,8 @@ def run_fetch(
                         **R.fetch_detail(
                             jc_scope=scope,
                             jc_summary=summary,
+                            jc_matched_items=matched_items[:RECEIPT_ITEM_LIMIT],
+                            jc_matched_items_total=len(matched_items),
                             jc_sync_warning=sync_result.get("message") if sync_result.get("degraded") else None,
                             jc_ignored_projects=ignored_projects,
                             jc_unsettled_count=len(m["unmatched"]),
@@ -306,9 +325,9 @@ def run_fetch(
                                  "project_name": str(r.get("project_name") or ""),
                                  "doc_name": bill_name(r),
                                  "kind": r.get("unsettled_kind")}
-                                for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
+                                for r in m["unmatched"][:RECEIPT_ITEM_LIMIT]
                             ],
-                            jc_ignored=ignored_rows[:200])},
+                            jc_ignored=ignored_rows[:RECEIPT_ITEM_LIMIT])},
                 operator=operator, started_at=t0)
             return {
                 "ok": True, "degraded": False,

@@ -63,6 +63,7 @@ def api_list(request: Request) -> dict:
             supplier=str(p.get("supplier") or ""),
             project_key=str(p.get("project") or ""),
         )
+        fetch_default_since = FS.default_since(s)
     return {
         "rows": [_row(r) for r in data["rows"]],
         "count": int(data["count"]),
@@ -73,6 +74,7 @@ def api_list(request: Request) -> dict:
         # 三态取值域（壳的筛选下拉与批量标记按钮都用它 ⇒ ⛔ 别在壳里另抄一份）
         "tags": list(D.TAGS),
         "payment_methods": list(D.PAY_METHODS),
+        "fetch_default_since": fetch_default_since,
     }
 
 
@@ -133,12 +135,12 @@ class AddIn(BaseModel):
 class FetchIn(BaseModel):
     """抓取入参 —— ⚠️ `confirm` **必须为真**（防静默抓取，`D9`；同 `m08` 的口径）。
 
-    ⭐ `since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空 = 让后端用 `default_since`（增量），
-       显式传 `""` 也走增量（想**全量**请传一个很早的日期，如 `2000-01-01`）。
+    `since` 不传（`None`）时，默认从最新有效合同日期（`max(contract_date)`）往前 3 天抓取。
+    台账无有效日期时默认全量。显式传 `""` 始终全量，传 `YYYY-MM-DD` 则使用指定起点。
     """
 
     confirm: bool = False
-    since: str | None = None          # `None` = 没传（用默认）；`""` = 显式要默认；有值 = 用它
+    since: str | None = None          # None：默认增量（最新有效合同日期往前 3 天），""：全量，有日期：指定起点
     session_mode: str = ""
     #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
     device_id: str = ""
@@ -180,7 +182,7 @@ class SubRowIn(BaseModel):
 
 @router.post("/api/m11/fetch")
 def api_fetch(payload: FetchIn) -> dict:
-    """抓采购合同（`API-04`）⇒ 回执（含**匹配预览**：匹配上 / 匹配不上的项目分布）。
+    """抓采购合同（`API-04`），返回批次统计、匹配合同和待处理明细。
 
     ⭐ 编排在 `fetch_service.run_fetch`：抓合同 → **补材料名** → **同步常用项目** → 再匹配 → 落库。
     ⭐ **增量**：`since` 不传 ⇒ 后端用 `default_since`（库里最大合同日期 **− 3 天**）

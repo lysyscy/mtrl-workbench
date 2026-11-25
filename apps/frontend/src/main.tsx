@@ -24,6 +24,7 @@ type WorkspacePageProps = {
   me: Identity | null; blocked: boolean; active: boolean;
   project: number; setProject: (project: number) => void;
   onExportGuard: (guard: string) => void; exportGuard: string;
+  onHistoryGuard: (guard: string) => void;
 };
 
 // The default landing page can prepare alongside the first identity read.
@@ -94,6 +95,8 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
     return () => query.removeEventListener('change', update);
   }, []);
   const [ledgerExportGuard, setLedgerExportGuard] = useState('');
+  const [mechanicalHistoryGuard, setMechanicalHistoryGuard] = useState('');
+  const historyGuard = ledgerExportGuard || mechanicalHistoryGuard;
   const [ledgerProject, setLedgerProject] = useState(0);
   const page = useLocation().pathname;
   const [navigation, setNavigation] = useState({ page, direction: 1 });
@@ -113,20 +116,20 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
       window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <MotionAccess.Provider value={!blocked && !obscured}><QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={ledgerExportGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}>
+  return <MotionAccess.Provider value={!blocked && !obscured}><QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={historyGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}>
     {fontError && !obscured && <div className={preparing ? 'page-loading' : 'session-notice'} role="alert"><span>{fontError}</span><WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton></div>}
     <div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{({ isActive }) => <>{isActive && <WorkspaceMarker className="navigation-marker" layoutId="workspace-navigation" />}<span className="navigation-label">{entry.title}</span></>}</NavLink>)}</div>)}
     </nav></aside>
-    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
+    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={historyGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<div className="page-view"><section className="page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="not-found-title"><h2 id="not-found-title">没有找到这个页面</h2><NavLink to="/">返回首页</NavLink></section></div>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <PageErrorBoundary key={entry.path} active={active} title={entry.title}><PageSurface active={active} direction={navigation.direction} position={Math.sign(pages.indexOf(entry) - pages.findIndex(item => item.path === page))} title={entry.title}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface></PageErrorBoundary>;
+          return <PageErrorBoundary key={entry.path} active={active} title={entry.title}><PageSurface active={active} direction={navigation.direction} position={Math.sign(pages.indexOf(entry) - pages.findIndex(item => item.path === page))} title={entry.title}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} onHistoryGuard={setMechanicalHistoryGuard} /></Suspense></PageSurface></PageErrorBoundary>;
         })}</HistoryGate></main>
     </div>
     <DialogPresence>{appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}</DialogPresence>

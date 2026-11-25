@@ -1,8 +1,13 @@
+import Decimal from 'decimal.js';
 import { ApiError, record } from './api';
 
 export type Category = 'zero' | 'monthly';
 export interface DetailRow { id: string; [field: string]: unknown }
 export interface Detail { warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[]; totals: { gross: string | null; net: string | null }; issues: { id: string; fields: string[] }[] }
+export interface DetailDraft {
+  warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[];
+  version: number; error: string; conflicted?: boolean;
+}
 export interface Effective { warehouse: string; ym: string; signature: string; values: Record<string, string | null>; sources: Record<string, { mode: string }> }
 export type InternalColumn = 'mech_0' | 'mech_1';
 export function internalAmount(value: string): string | null {
@@ -35,6 +40,31 @@ export interface CompanySummaryRow { id: string; [column: string]: string | null
 export function readDetail(value: unknown): Detail {
   if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !nullableAmount(value.totals.gross) || !nullableAmount(value.totals.net)) throw invalid();
   return value as unknown as Detail;
+}
+
+function canonicalDetailRow({ net: _net, plateRequired: _plateRequired, ...inputs }: DetailRow) {
+  // Match the API's decimal normalization without rounding source precision.
+  const nullableAmounts = ['amount', 'rate', 'sourceNet', 'original'];
+  for (const field of [...nullableAmounts, 'qty', 'plan', 'used']) {
+    const value = inputs[field];
+    if (value === '' && nullableAmounts.includes(field)) {
+      inputs[field] = null;
+    } else if ((typeof value === 'string' || typeof value === 'number') && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(String(value).trim())) {
+      inputs[field] = new Decimal(String(value).trim()).toString();
+    }
+  }
+  return JSON.stringify(inputs, (_key, value: unknown) => record(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
+}
+
+export function reconcileDetailDraft(current: DetailDraft, submitted: DetailDraft, saved: Detail | undefined): DetailDraft | undefined {
+  if ((saved?.revision ?? 0) === submitted.revision) return current;
+  if (!saved || saved.revision < submitted.revision || saved.rows.length !== submitted.rows.length
+    || !saved.rows.every((row, index) => canonicalDetailRow(row) === canonicalDetailRow(submitted.rows[index]!))) {
+    return { ...current, conflicted: true, error: '已保存明细有变化。请核对已保存明细和保留输入，取消这项修改后可按最新明细重新编辑。' };
+  }
+  if (current.version === submitted.version) return undefined;
+  return { ...current, revision: saved.revision, conflicted: false, error: '已保存本次提交，后续输入已保留，可重试保存。' };
 }
 export interface ReportCell { value: string; rowspan: number; colspan: number; column: number }
 export interface ReportSheet { name: string; rows: ReportCell[][]; project_rows: { warehouse: string; row: number }[] }

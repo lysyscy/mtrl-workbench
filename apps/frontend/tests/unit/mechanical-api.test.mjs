@@ -1,6 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {companySummaryRows,historyInitialization,internalAmount,readInternalSave,readI8Preview,readMechanicalReport,readWorkbench,readWorkbenchPage,readWorkResult} from '../../src/mechanical-api.ts';
+import {companySummaryRows,historyInitialization,internalAmount,readInternalSave,readI8Preview,readMechanicalReport,readWorkbench,readWorkbenchPage,readWorkResult,reconcileDetailDraft} from '../../src/mechanical-api.ts';
+
+const submittedDetail = {
+  warehouse: '甲', ym: '2026-10', category: 'zero', revision: 4, version: 1, error: '保存已中断',
+  rows: [{ id: 'row-1', amount: '001.234500', rate: '', qty: '2e0', memo: '原输入', metadata: { file: '原报', line: 7 } }],
+};
+const persistedDetail = {
+  warehouse: '甲', ym: '2026-10', category: 'zero', revision: 5,
+  rows: [{ metadata: { line: 7, file: '原报' }, memo: '原输入', qty: '2', rate: null, amount: '1.2345', id: 'row-1', plateRequired: true, net: '1.10' }],
+  issues: [], totals: { gross: '1.23', net: '1.10' },
+};
+
+test('detail readback retires committed input despite decimal normalization and computed fields', () => {
+  assert.equal(reconcileDetailDraft(submittedDetail, submittedDetail, persistedDetail), undefined);
+  const later = { ...submittedDetail, version: 2, rows: [{ ...submittedDetail.rows[0], memo: '后续输入' }] };
+  const recovered = reconcileDetailDraft(later, submittedDetail, persistedDetail);
+  assert.strictEqual(recovered.rows, later.rows);
+  assert.equal(recovered.version, 2);
+  assert.equal(recovered.revision, 5);
+  assert.equal(recovered.conflicted, false);
+  assert.match(recovered.error, /可重试保存/);
+});
+
+test('detail readback at the submitted revision preserves the retryable draft', () => {
+  const saved = { ...persistedDetail, revision: 4, rows: [{ id: 'row-1', amount: '9.00' }] };
+  assert.strictEqual(reconcileDetailDraft(submittedDetail, submittedDetail, saved), submittedDetail);
+  const first = { ...submittedDetail, revision: 0 };
+  assert.strictEqual(reconcileDetailDraft(first, first, undefined), first);
+});
+
+test('changed detail revision with different persisted rows requires reconciliation', () => {
+  const saved = { ...persistedDetail, rows: [{ ...persistedDetail.rows[0], amount: '1.2346' }] };
+  const recovered = reconcileDetailDraft(submittedDetail, submittedDetail, saved);
+  assert.equal(recovered.conflicted, true);
+  assert.equal(recovered.revision, submittedDetail.revision);
+  assert.strictEqual(recovered.rows, submittedDetail.rows);
+  assert.match(recovered.error, /请核对已保存明细/);
+});
 
 const cell=(value,column=1,colspan=1)=>({value,column,colspan,rowspan:1});
 function report(){return {ok:true,ym:'2026-10',projects:[{warehouse:'甲'}],sheets:[

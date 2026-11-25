@@ -26,6 +26,13 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
         'scope': '全部合同', 'unsettled_count': 4, 'ignored_count': 0,
         'unsettled': pending, 'ignored': [],
         'summary': {'source_count': 8, 'identified_count': 8, 'inserted': 0, 'changed': 1, 'unchanged': 3},
+        'matched_items_total': 4,
+        'matched_items': [
+            {'contract_no': f'FETCHED-{index}', 'project_name': shell, 'bill_name': '测试采购单据',
+             'material_name': '测试材料', 'supplier_name': '测试供应商', 'contract_date': '2026-11-12',
+             'i8_amount': '1234.56', 'status': 'updated' if index == 0 else 'unchanged'}
+            for index in range(4)
+        ],
     }
 
     def save(route):
@@ -38,7 +45,23 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
     page.route('**/api/m02/config', lambda route: route.fulfill(json={
         'ready': True, 'account': me['account'], 'i8_user': 'offline-test', 'message': '',
     }))
-    page.route('**/api/m11/fetch', lambda route: route.fulfill(json={'ok': True, 'receipt': receipt}))
+    ledger_available = True
+    fetch_payloads = []
+
+    def fetch_contracts(route):
+        nonlocal ledger_available
+        fetch_payloads.append(route.request.post_data_json)
+        ledger_available = False
+        route.fulfill(json={'ok': True, 'receipt': receipt})
+
+    def read_ledger(route):
+        if ledger_available:
+            route.continue_()
+        else:
+            route.fulfill(status=503, json={'message': '台账读取暂时失败'})
+
+    page.route('**/api/m11/fetch', fetch_contracts)
+    page.route('**/api/m11/list', read_ledger)
     pending_available = True
 
     def read_pending(route):
@@ -56,12 +79,28 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
     page.route('**/api/m03/notices/ownership-assign', save)
     page.route('**/api/m14/jc-ignore', save)
     page.set_viewport_size({'width': 900, 'height': 760})
+    default_since = get(api, '/api/m11/list')['fetch_default_since']
+    assert default_since, '测试副本没有可用于回填的合同日期'
     open_page(page, server, 'contracts', '集采台账')
     page.get_by_role('button', name='抓取采购合同信息').click()
     dialog = page.get_by_role('dialog', name='抓取采购合同', exact=True)
+    expect(dialog.get_by_label('合同日期起点')).to_have_value(default_since)
     dialog.get_by_role('button', name='确认抓取').click()
+    expect(dialog.get_by_text('抓取已完成，台账暂未刷新。', exact=False)).to_be_visible()
+    expect(dialog.get_by_text('结果待核实', exact=False)).to_have_count(0)
+    assert [payload['since'] for payload in fetch_payloads] == [default_since]
     expect(dialog.get_by_text('i8 返回 8 条')).to_be_visible()
     expect(dialog.get_by_text('实际变更 1 条')).to_be_visible()
+    table = dialog.get_by_role('region', name='匹配合同明细', exact=True)
+    changed = table.get_by_role('row').filter(has_text='FETCHED-0')
+    expect(changed).to_contain_text('实际变更')
+    expect(changed).to_contain_text('测试材料')
+    expect(changed).to_contain_text('测试供应商')
+    expect(changed).to_contain_text('1,234.56')
+    expect(table.get_by_role('row').filter(has_text='FETCHED-3')).to_contain_text('无变更')
+    ledger_available = True
+    dialog.get_by_role('button', name='重读台账').click()
+    expect(dialog.get_by_text('抓取已完成，台账暂未刷新。', exact=False)).to_have_count(0)
     dialog.get_by_role('button', name='补归属关键词').click()
     editor = page.get_by_role('dialog', name='指定项目归属')
     editor.get_by_label('归属小微').select_option(str(small['id']))
@@ -99,6 +138,7 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
     dialog.get_by_role('button', name='关闭', exact=True).click()
     page.get_by_role('button', name='抓取采购合同信息').click()
     expect(dialog.get_by_role('button', name='确认抓取')).to_be_visible()
+    expect(dialog.get_by_label('合同日期起点')).to_have_value(default_since)
     expect(dialog.get_by_text(pending[3]['contract_no'], exact=True)).to_have_count(0)
 
 

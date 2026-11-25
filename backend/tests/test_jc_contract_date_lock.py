@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project
 from app.mod11_jc import repository as R
+from app.mod11_jc.fetch_service import default_since
 from app.mod11_jc.models import JcContract, TAG_OUT
 
 
@@ -41,6 +42,8 @@ def test_protected_date_and_other_sync_fields(session, source_date, locked):
     result = R.upsert_fetched_contracts(session, project_id=2, rows=[fetched("REVIEWED", source_date)])
     session.expire_all()
     row = session.get(JcContract, row.id)
+    item, = result.pop("items")
+    assert (item["status"], item["contract_date"]) == ("updated", source_date or "")
     assert result == {"inserted": 0, "refreshed": 1, "changed": 1, "skipped": 0}
     assert row.contract_date == ("2025-02-25" if locked else source_date or "")
     assert row.contract_date_locked is locked
@@ -52,6 +55,8 @@ def test_protected_date_and_other_sync_fields(session, source_date, locked):
 def test_new_contract_is_unprotected_and_missing_number_skips(session):
     result = R.upsert_fetched_contracts(session, project_id=1, rows=[fetched("NEW", "2026-10-12"), fetched("", "")])
     row = session.execute(select(JcContract)).scalar_one()
+    item, = result.pop("items")
+    assert (item["contract_no"], item["status"]) == ("NEW", "inserted")
     assert result == {"inserted": 1, "refreshed": 0, "changed": 0, "skipped": 1}
     assert row.contract_date == "2026-10-12"
     assert row.contract_date_locked is False
@@ -68,6 +73,18 @@ def test_cached_unprotected_row_reloads_new_protection(session):
     assert row.contract_date_locked is False  # 此Session尚缓存旧状态。
     R.upsert_fetched_contracts(session, project_id=1, rows=[fetched("CACHED", "2025-11-14")])
     assert row.contract_date == "2025-02-25" and row.contract_date_locked is True
+
+
+def test_default_fetch_start_uses_latest_valid_calendar_date(session):
+    assert default_since(session) == ""
+    session.add(JcContract(project_id=1, contract_date="2024-02-31"))
+    assert default_since(session) == ""
+    session.add_all([
+        JcContract(project_id=1, contract_date="2024-02-29"),
+        JcContract(project_id=2, contract_date="2024-03-02", tag=TAG_OUT),
+        JcContract(project_id=2, contract_date="未登记"),
+    ])
+    assert default_since(session) == "2024-02-28"
 
 
 def test_migration_defaults_and_downgrade_keep_dates():

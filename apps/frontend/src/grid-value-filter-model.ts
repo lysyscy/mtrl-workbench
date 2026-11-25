@@ -6,16 +6,26 @@ export interface ValueFilterModel { values: string[] }
 export interface ValueCandidate { key: string; label: string; count: number }
 export interface ValueFilterNode { key: string; label: string; count: number; values: string[]; search: string; children?: ValueFilterNode[] }
 
+function isCalendarDate(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const parsed = new Date(text);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+}
+
+export function normalizeDateFilterValue(value: string): string {
+  const timestamp = /^(\d{4}-\d{2}-\d{2})[ T](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?$/i.exec(value);
+  const date = timestamp?.[1];
+  // Keep the source's calendar day, even when its offset crosses midnight in UTC.
+  return date && isCalendarDate(date) ? date : value;
+}
+
 export function valueFilterKey(value: FilterValue, kind: ValueFilterKind): string {
   if (value === null || value === undefined || value === '') return 'blank:';
   const text = String(value);
   if (kind === 'number') {
     try { const number = new Decimal(text); if (number.isFinite()) return `n:${number.toFixed()}`; } catch { /* Preserve unexpected source text rather than making it zero. */ }
   }
-  if (kind === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    const parsed = new Date(`${text}T00:00:00Z`);
-    if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text) return `d:${text}`;
-  }
+  if (kind === 'date' && isCalendarDate(text)) return `d:${text}`;
   return `t:${text}`;
 }
 export function valueFilterPasses(model: ValueFilterModel | null | undefined, value: FilterValue, kind: ValueFilterKind): boolean {

@@ -55,5 +55,5 @@
 .jc-receipt-rule-confirm{width:100%;padding:.5rem .65rem;background:var(--sf2);border-radius:var(--radius-input)}
 .jc-receipt-rule-confirm .ant-btn{margin:.35rem .45rem 0 0}
 .jc-receipt-matches{margin:.2rem 0;padding-inline-start:1.1em}
-.jc-receipt-actions{align-items:center;justify-content:space-between}
-.jc-receipt-actions a{color:var(--pri-d)}
+.jc-receipt-matched-grid{margin-block:.5rem}
+.jc-receipt-added{color:var(--ok-d)}

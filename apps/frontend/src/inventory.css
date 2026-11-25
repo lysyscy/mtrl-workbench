@@ -1,19 +1,17 @@
 .inventory-page{min-width:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.inventory-toolbar,.inventory-toolbar>div,.inventory-filter,.inventory-summary{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale))}
-.inventory-toolbar{justify-content:space-between;gap:calc(12px * var(--fscale));padding:calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
-.inventory-toolbar>div{gap:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
-.inventory-toolbar label,.inventory-fields,.inventory-remark{display:flex;gap:calc(8px * var(--fscale));align-items:center;min-width:0;max-width:100%}
-.inventory-toolbar .business-project-picker{min-width:calc(180px * var(--fscale));max-width:min(calc(360px * var(--fscale)),100%)}
-.inventory-toolbar .ant-select{min-width:7em}
-.inventory-toolbar .business-time-picker .ant-picker,.inventory-dialog .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
-.inventory-page .ant-btn,.inventory-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
+.inventory-toolbar,.inventory-toolbar-field{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
+.inventory-toolbar{flex-wrap:wrap;padding:calc(6px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
+.inventory-toolbar-field{max-width:100%;white-space:nowrap}
+.inventory-toolbar .business-period-trigger{width:auto;gap:calc(8px * var(--fscale))}
+.inventory-toolbar .business-project-picker{min-width:min(calc(180px * var(--fscale)),100%);max-width:min(calc(360px * var(--fscale)),100%)}
+.inventory-toolbar .ant-select-single{min-width:7em}
+.inventory-toolbar :is(.ant-select,.ant-checkbox-wrapper){height:var(--control-h);min-height:var(--control-h)}
+.inventory-toolbar .ant-checkbox-wrapper{align-items:center;white-space:nowrap}
+.inventory-export-hint,.inventory-count{color:var(--tx2);font-size:calc(12px * var(--fscale))}
+.inventory-count{margin-inline-start:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.inventory-dialog .business-time-picker .ant-picker{height:var(--control-h);min-height:var(--control-h)}
+.inventory-page .ant-btn,.inventory-dialog .ant-btn{height:var(--control-h);min-height:var(--control-h);font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
 .inventory-grid .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
-.inventory-filter{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf2);border-bottom:1px solid var(--bd2)}
-.inventory-filter>.ant-select{width:14em;max-width:100%}.inventory-filter>.ant-select-multiple{width:24em}.inventory-filter>.ant-input{width:14em;max-width:100%}
-.inventory-filter label{display:flex;align-items:center;gap:calc(6px * var(--fscale));max-width:100%}.inventory-filter label .ant-input{width:10em;max-width:100%}
-.inventory-filter .ant-select,.inventory-filter .ant-input{min-height:calc(32px * var(--fscale))}
-.inventory-summary{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
-.inventory-summary .ant-tag{margin:0}
 .inventory-grid{width:100%;scrollbar-color:var(--bd3) var(--sf2)}
 .business-modal .inventory-dialog{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .inventory-dialog h2{font-size:calc(18px * var(--fscale));line-height:1.4;margin:0;font-weight:600}
@@ -21,6 +19,7 @@
 .inventory-dialog p{line-height:1.55;overflow-wrap:anywhere}
 .inventory-details{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(8px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55}
 .inventory-details dt{color:var(--tx2)}.inventory-details dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.inventory-fields,.inventory-remark{display:flex;align-items:center;gap:calc(8px * var(--fscale));min-width:0;max-width:100%}
 .inventory-fields{flex-wrap:wrap;margin-block:calc(16px * var(--fscale))}
 .inventory-fields label{display:flex;flex:1;min-width:min(12em,100%);flex-direction:column;align-items:stretch;gap:calc(6px * var(--fscale))}
 .inventory-fields .ant-input{height:calc(32px * var(--fscale));border-radius:var(--radius-input);font-variant-numeric:tabular-nums}
@@ -31,7 +30,7 @@
 .inventory-warning{padding:calc(12px * var(--fscale));background:var(--wn-l);color:var(--wn-d);line-height:1.55;overflow-wrap:anywhere}
 .inventory-warning .ant-btn+.ant-btn,.inventory-trail .ant-btn+.ant-btn{margin-inline-start:calc(8px * var(--fscale))}
 .inventory-location{display:flex;align-items:center;flex-wrap:wrap;gap:calc(12px * var(--fscale));padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));margin:0;background:var(--pri-l);color:var(--pri-d);line-height:1.55}
-@media(max-width:800px){.inventory-toolbar>div{max-width:100%}.inventory-toolbar label{flex-wrap:wrap}.business-modal .inventory-dialog{padding:calc(16px * var(--fscale))}.inventory-details{grid-template-columns:1fr;gap:calc(4px * var(--fscale))}.inventory-details dd{margin-bottom:calc(8px * var(--fscale))}}
+@media(max-width:800px){.business-modal .inventory-dialog{padding:calc(16px * var(--fscale))}.inventory-details{grid-template-columns:1fr;gap:calc(4px * var(--fscale))}.inventory-details dd{margin-bottom:calc(8px * var(--fscale))}}
 
 .inventory-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
 .inventory-grid .ag-cell{line-height:1.55;padding:calc(6px * var(--fscale));overflow-wrap:anywhere}
@@ -50,6 +49,6 @@
 
 .inventory-actions>:is([role=status],[role=alert],.inventory-warning,.inventory-trail){flex-basis:100%;margin:0;text-align:left}
 
-/* The inventory table keeps its placeholder. Only a failure adds a line below the summary. */
+/* The inventory table keeps its placeholder. Only a failure adds a read status line. */
 .inventory-read-status{--read-status-pad:calc(16px * var(--fscale))}
 .inventory-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}

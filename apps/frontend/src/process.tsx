@@ -96,6 +96,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
       return '';
     },
     acknowledge:acknowledgeDraft,
+    recoverInterrupted:true,
     describe:draft=>`${name(draft.warehouse)}，${draft.ym} ${matrixColumns.find(column=>column.field===draft.column)?.label??draft.column} `,
     saved:()=>'',
   },{key:'process',label:'过程资料'});
@@ -117,7 +118,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     return Boolean(query.data?.detailSignatures[draft.warehouse]?.[draft.ym]) || query.data?.sources[draft.warehouse]?.[draft.ym]?.[draft.column]?.mode==='detail';
   }
   function save(key:string,retry=false) {
-    const draft=drafts[key];if(!draft||disabled||source)return;
+    const draft=drafts[key];if(!draft||disabled||source||draft.error&&!retry)return;
     if(mechKeys.includes(draft.column)) {
       try {
         const next=draft.value.trim()?cents(draft.value):null;
@@ -191,7 +192,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   return <section className={`process-page page-shell page-shell--${pageLayout}`} data-page-layout={pageLayout} aria-label="过程资料">
     <div data-page-chrome className="process-toolbar"><h2>过程资料</h2><ProcessExport projects={candidates} current={warehouse} tab={tab} paused={paused} reason={reason} /></div>
     <div data-page-chrome className="process-filters"><span>项目</span><ProjectPicker label="过程资料项目" projects={candidates} selected={candidates.filter(p=>p.warehouse_name===warehouse).map(p=>p.id)} pick={ids=>{const p=candidates.find(p=>p.id===ids[0]);if(p?.warehouse_name){setWarehouse(p.warehouse_name);saves.clearFeedback();}}} disabled={paused||projects.isPending||projects.isError||query.isPending} />{tab!==2&&matrix&&<div className="process-history"><label>增加历史月份 <Input type="month" aria-label="增加历史月份" max="2025-11" value={newMonth} onChange={e=>setNewMonth(e.target.value)} /></label><Button disabled={disabled||!/^\d{4}-(0[1-9]|1[0-2])$/.test(newMonth)||newMonth>'2025-11'||displayRows.some(row=>row.ym===newMonth)} onClick={()=>{setExtraMonths(current=>({...current,[warehouse]:[...(current[warehouse]??[]),newMonth]}));setNewMonth('');}}>增加月份</Button><span>填写金额后保存月份</span></div>}</div>
-    <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{Object.values(drafts).some(draft=>draft.error)&&<span>有未保存的修改，请查看对应金额格。</span>}<Button disabled={paused||busy||uncertain||!currentDrafts.length} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button></div>
+    <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{Object.values(drafts).some(draft=>draft.error)&&<span>有未保存的修改，请查看对应金额格。</span>}</div>
     <ReadStatusLane phase={readState} announce="正在读取过程资料…" className="process-read-status">
       {(readState==='error'||readState==='stale')&&<ReadFailure read={query}/>}
       {projects.isError&&<ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}

@@ -6,7 +6,6 @@ import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
-import { JcFetchReceipt } from './jc-fetch-receipt';
 import { jcCondition, jcRuleKinds, jcRulesPath } from './jc-rule-data';
 import type { JcRule, JcRuleKind } from './jc-rule-data';
 import { body } from './notices-api';
@@ -24,7 +23,6 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
 }) {
   const [filter, setFilter] = useState<JcRuleKind | ''>('');
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [receiptOpen, setReceiptOpen] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,7 +75,6 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
     <div className="rules-head">
       <h2>集采合同抓取剔除{rows && <span className="rules-count">（{rows.length} 条）</span>}</h2>
       <div className="rules-head-tools">
-        <Button disabled={!active} onClick={() => setReceiptOpen(true)}>最近抓取结果</Button>
         <Button className="primary" disabled={!canWrite} onClick={() => open({ type: 'add', draft: blank })}>+ 新增剔除规则</Button>
       </div>
     </div>
@@ -131,6 +128,5 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
         </form>
       </DialogContents>
     </BusinessModal>}</DialogPresence>
-    <DialogPresence>{receiptOpen && <JcFetchReceipt active={active} close={() => setReceiptOpen(false)} />}</DialogPresence>
   </div>;
 }

@@ -12,6 +12,7 @@ export interface CellSaveOptions<D, R> {
   describe?: (submitted: D) => string;
   validate?: (draft: D) => string;
   stopOnRejection?: boolean;
+  recoverInterrupted?: boolean;
 }
 interface Snapshot<D> {
   drafts: Drafts<D>; busy: boolean; uncertain: boolean; verified: boolean; error: string; feedback: string;
@@ -39,7 +40,22 @@ export class CellSaveQueue<D extends { error: string }, R> {
   }
   mount = () => { this.alive = true; if (this.request.signal.aborted) this.request = new AbortController(); };
   dispose = () => { this.alive = false; this.queue = []; this.request.abort(); };
-  pause = () => { this.queue = []; };
+  pause = () => { this.interrupt(); };
+  private interrupt(key?: string) {
+    const waiting = this.queue;
+    this.queue = [];
+    if (!this.options().recoverInterrupted) return;
+    if (key) waiting.push(key);
+    if (!waiting.length) return;
+    this.update(current => {
+      const next = { ...current };
+      for (const id of waiting) {
+        const draft = next[id];
+        if (draft && !draft.error) next[id] = { ...draft, error: '保存已中断，输入已保留。' };
+      }
+      return next;
+    });
+  }
   update = (change: (drafts: Drafts<D>, writing: boolean) => Drafts<D>) => { this.publish({ drafts: change(this.snapshot.drafts, this.snapshot.busy) }); };
   clearFeedback = () => { this.publish({ error: '', feedback: '' }); };
   private allowed() { return this.alive && this.options().enabled && this.options().canWrite !== false && !this.snapshot.uncertain; }
@@ -73,8 +89,9 @@ export class CellSaveQueue<D extends { error: string }, R> {
       message => this.update(current => current[key] === submitted ? { ...current, [key]: { ...submitted, error: message } } : current),
       adapter.describe?.(submitted) ?? '',
       submitted,
+      key,
     );
-    if (outcome === 'rejected' && adapter.stopOnRejection) this.pause();
+    if (outcome === 'rejected' && adapter.stopOnRejection) this.interrupt(key);
     void this.drain();
   }
   // Non-cell actions on the same page share the write lock and readback rules.
@@ -84,7 +101,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
     const outcome = await this.perform(write, saved, undefined, undefined, description); void this.drain(); return outcome;
   };
   private async perform(write: (signal: AbortSignal) => Promise<void>, saved: (result: R) => string,
-    acknowledge?: () => void, rejected?: (message: string) => void, description = '', submitted?: D): Promise<SaveOutcome> {
+    acknowledge?: () => void, rejected?: (message: string) => void, description = '', submitted?: D, key?: string): Promise<SaveOutcome> {
     if (this.snapshot.busy || !this.allowed()) return 'blocked';
     const adapter = this.options();
     this.pendingDraft = submitted;
@@ -105,7 +122,7 @@ export class CellSaveQueue<D extends { error: string }, R> {
       if (!this.alive) return 'blocked';
       const message = failure instanceof Error ? failure.message : '保存失败，请重试。';
       if (written || uncertainWrite(failure)) {
-        this.pause();
+        this.interrupt(key);
         this.publish({ uncertain: true, verified: false, error: `${description}${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。` });
         return 'uncertain';
       }

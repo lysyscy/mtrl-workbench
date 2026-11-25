@@ -38,8 +38,12 @@ function modeOf(value: string): TimeMode {
   return value.length === 4 ? '年' : '月';
 }
 export function timeLabel(value: string) { return !value || value === '全部' ? '全部时间' : value.replace('~', ' ~ '); }
-export function BusinessDate({ value, onChange, disabled = false, label }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string }) {
-  return <DatePicker aria-label={label} value={value ? dayjs(value) : null} onChange={date => onChange(date ? date.format('YYYY-MM-DD') : '')}
+export function BusinessDate({ value, onChange, disabled = false, label, id, describedBy }: {
+  value: string; onChange: (value: string) => void; disabled?: boolean; label: string; id?: string; describedBy?: string;
+}) {
+  return <DatePicker {...(id ? { id } : {})} {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+    aria-label={label} value={value ? dayjs(value) : null}
+    onChange={date => onChange(date ? date.format('YYYY-MM-DD') : '')}
     disabled={disabled} format="YYYY-MM-DD" className="business-date-picker" classNames={{ popup: { root: 'ag-custom-component-popup' } }}
     getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body} />;
 }

@@ -38,21 +38,22 @@ queryfilter = {"queryFilter": "{\"BillDt*date*ge*1\":\"2026-09-06\"}"}
 ⭐ **项目匹配字段 = `PhidPc_EXName`** —— 与 `API-01`（付款通知书）**用的是同一个字段**
   ⇒ 「和付款通知书一个匹配逻辑」在工程上**天然成立**，⛔ 不必新造匹配器。
 
-⚠️ 本模块**复用** `notice_source` 的 `_first` / `_amount` / `_extract_records` / `approve_status_of`
+⚠️ 本模块**复用** `notice_source` 的 `_first` / `_extract_records` / `approve_status_of`
   （同层基础设施，避免在同一件事上出现第二份实现）；⛔ 不复制粘贴。
 """
 
 from __future__ import annotations
 
 import time
+from decimal import Decimal
 from typing import Any
 
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import NotConfiguredError
 from app.core.logging import get_logger
+from app.core.money import MoneyError, try_money
 from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.notice_source import (  # noqa: PLC2701 —— 同层复用，见模块头
-    _amount,
     _extract_records,
     _first,
     approve_status_of,
@@ -266,6 +267,18 @@ def _supplier_of(rec: dict) -> str:
                   "PhidSenComp_EXName", "InvoiceCmp_EXName")
 
 
+def _contract_amount(rec: dict) -> Decimal | None:
+    for key in ("CntSumVat", "CntOrgSumVat", "合同金额"):
+        raw = rec.get(key)
+        try:
+            amount = try_money(str(raw) if raw is not None else None)
+        except MoneyError:
+            continue
+        if amount is not None:
+            return amount
+    return None
+
+
 def _map_record(rec: dict) -> dict | None:
     """`API-04` 记录 → 落库字段；**无法识别编号 ⇒ `None`**（调用方丢弃并计数）。
 
@@ -288,7 +301,7 @@ def _map_record(rec: dict) -> dict | None:
         # ⭐ 供应商：取 i8 的 `_EXName`（⛔ 不再拆第 3 段 —— 那只是人写的简称、段位还不固定）
         "supplier_name": _supplier_of(rec),
         "sign_date": _first(rec, "BillDt", "billDt")[:10],
-        "contract_amt": _amount(rec, "CntSumVat", "CntOrgSumVat", "合同金额"),
+        "contract_amt": _contract_amount(rec),
         "cnt_type": _first(rec, "CntType_EXName", "CntType"),
         "approve_status": approve_status_of(rec),
         "remark": _first(rec, "Remarks", "Remark"),

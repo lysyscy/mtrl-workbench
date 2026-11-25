@@ -92,10 +92,13 @@ def test_detail_draft_keeps_inputs_and_complete_totals(server, browser_page, api
     # Filtering rows must not replace the complete group total.
     expect(group.locator('[col-id=amount]')).to_have_text(format(original + Decimal('123.45'), ',.2f'))
     page.get_by_role('checkbox', name='仅看待补字段', exact=True).uncheck()
-    row.get_by_role('button', name='移除', exact=True).click()
+    expect(page.get_by_role('button', name='表1 公司汇总', exact=True)).to_be_enabled()
+    with page.expect_response('**/api/m06/workbench/details-save') as removal:
+        row.get_by_role('button', name='移除', exact=True).click()
+    assert removal.value.ok
     expect(grid.locator('input[aria-label$="设备名称"]')).to_have_count(before)
-    page.get_by_role('button', name='撤销未保存修改', exact=True).click()
-    page.get_by_role('button', name='确认撤销', exact=True).click()
+    expect(page.get_by_role('button', name='表1 公司汇总', exact=True)).to_be_enabled()
+    expect(page.get_by_role('button', name='撤销未保存修改', exact=True)).to_have_count(0)
     preview_screenshot('pilot-mechanical-details')
 
 

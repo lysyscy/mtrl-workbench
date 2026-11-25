@@ -92,7 +92,7 @@ def test_字段真名映射到落库字段(monkeypatch):  # noqa: ANN001
     row = rows[0]
     assert row["contract_no"] == "CGHT2026090188"              # ⭐ 幂等键
     assert row["project_name"] == "晋江市污泥处置中心一期工程核心设备安装工程"
-    assert row["contract_amt"] == 27269.82
+    assert str(row["contract_amt"]) == "27269.82"
     assert row["bill_name"].startswith("四分晋江污泥处置项目/主材钢材"), "⭐ i8 原文必须留存（可回溯）"
     # ⚠️ 材料名**不在这里取**：i8 列表接口**没有**材料字段（88 个字段全查过）
     #    ⇒ 由 `fetch_service` 落库前**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。

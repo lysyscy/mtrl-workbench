@@ -26,7 +26,10 @@ const detail = () => ({ data: { ...base, supplier_invoices: [{ id: 2, kind: 'sup
 test('list and detail keep their actual distinct contracts and extra input fields', () => {
   const input = row(); const extra = {}; input.extra = extra;
   const envelope = list(input); envelope.columns[0].extra = extra;
+  assert.equal(readContracts(envelope).fetch_default_since, '');
+  envelope.fetch_default_since = '2026-11-09';
   const result = readContracts(envelope);
+  assert.equal(result.fetch_default_since, '2026-11-09');
   assert.equal(result.rows[0], input);
   assert.equal(result.rows[0].extra, extra);
   assert.equal(result.rows[0].approve_status, null);

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import any_ids
 from app.core.errors import MustReportError
+from app.core.money import ZERO, try_money
 from app.mod01_projects import service as PS
 from app.mod01_projects.domain import norm_full_name
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
@@ -476,7 +477,7 @@ def one_by_no(s: Session, contract_no: str, *, for_update: bool = False) -> JcCo
 
 
 def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -> dict:
-    """抓取结果 → **增量落库**（`M5-6`）⇒ `{"inserted", "refreshed", "skipped"}`。
+    """增量落库并返回统计及本批合同的 i8 字段与写入结果。
 
     ⭐ 幂等键 = **`contract_no`**（i8 的 `BillNo`）：
 
@@ -488,13 +489,15 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
         ⛔ 也**不许**把人工标的「不纳入」改回来（判据 `001-10` 的铁律）。
     """
     inserted = refreshed = skipped = changed = 0
+    items = []
     for row in rows or ():
         no = str(row.get("contract_no") or "").strip()
         if not no:
             skipped += 1
             continue
         cur = one_by_no(s, no, for_update=True)
-        _amt = Decimal(str(row.get("contract_amt") or 0))
+        i8_amount = try_money(row.get("contract_amt"))
+        _amt = i8_amount if i8_amount is not None else ZERO
         _party = str(row.get("party_kind") or KIND_PARTY_UNKNOWN)
         _is_trade = _party == KIND_PARTY_TRADE
         _party_name = str(row.get("party_name") or "")[:128]
@@ -519,6 +522,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
                 remark=str(row.get("remark") or "")[:255],
             ))
             inserted += 1
+            status = "inserted"
         else:
             # ① 已审核锁定的日期保留；其他事实列与未锁定日期沿用原刷新策略（含空值）。
             for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
@@ -556,10 +560,22 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             #    人工标的「不纳入」⇒ 原样保留；其余（含新抓的）一律「纳入台账」。
             cur.tag = D.tag_after_fetch(cur.tag)
             refreshed += 1
-            if s.is_modified(cur, include_collections=False):
-                changed += 1
+            modified = s.is_modified(cur, include_collections=False)
+            changed += int(modified)
+            status = "updated" if modified else "unchanged"
+        items.append({
+            "contract_no": no,
+            "project_name": str(row.get("project_name") or ""),
+            "bill_name": str(row.get("bill_name") or ""),
+            "material_name": str(row.get("material_name") or ""),
+            "supplier_name": str(row.get("supplier_name") or ""),
+            "contract_date": str(row.get("sign_date") or "")[:10],
+            "i8_amount": str(i8_amount) if i8_amount is not None else None,
+            "approval_status": approve_status,
+            "status": status,
+        })
     s.flush()
-    return {"inserted": inserted, "refreshed": refreshed, "changed": changed, "skipped": skipped}
+    return {"inserted": inserted, "refreshed": refreshed, "changed": changed, "skipped": skipped, "items": items}
 
 
 # ============================================================ 甲方单位分类（`M5-6b`）
@@ -630,7 +646,7 @@ __all__ = [
 # ==================================================== TAIL-93 · 抓取记录的标记 ＋ 未走完读回
 
 
-#: 集采抓取运行记录的标记（读侧靠它认「最近一次集采抓取」）—— 口径同 `mod03_notice.repository.FETCH_MARK`
+#: 集采抓取运行记录的标记，用于按来源核对批次。
 JC_FETCH_MARK = "jc_fetch"
 
 #: 找"最近一次集采抓取"时**最多回看**多少条运行记录（技术台账，量很小；够用即可）
@@ -657,6 +673,8 @@ def fetch_receipt(run) -> dict:
         "matched": run.success_count,
         "scope": detail.get("jc_scope"),
         "summary": detail.get("jc_summary"),
+        "matched_items": detail.get("jc_matched_items"),
+        "matched_items_total": detail.get("jc_matched_items_total"),
         "sync_warning": detail.get("jc_sync_warning"),
         "ignored_projects": detail.get("jc_ignored_projects"),
         "unsettled": detail.get("jc_unsettled"),

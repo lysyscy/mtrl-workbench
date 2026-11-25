@@ -196,7 +196,7 @@ def test_inventory_does_not_wait_for_retained_i8_read(server,browser_page):
             page.get_by_role('link',name='库存单据与调整单',exact=True).click()
         assert inventory.value.ok
         assert held, 'The unrelated local records read was not held'
-        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_visible()
+        expect(page.get_by_role('button',name=re.compile('^库存核算期间：'))).to_be_visible()
         expect(page.locator('.inventory-grid')).to_be_visible()
     finally:
         for route in held:route.continue_()
@@ -214,10 +214,10 @@ def test_inventory_tools_publish_while_its_own_first_read_is_pending(server,brow
         # The page frame and its tools publish on their own; only the data area reports the read.
         expect(page.locator('.page-view:not([hidden])')).to_be_visible()
         expect(page.locator('.page-loading')).to_have_count(0)
-        period=page.get_by_role('button',name='库存核算期间',exact=True)
+        period=page.get_by_role('button',name=re.compile('^库存核算期间：'))
         expect(period).to_be_visible()
         expect(period).to_be_enabled()
-        expect(page.get_by_role('button',name='列筛选',exact=True)).to_be_enabled()
+        expect(page.get_by_role('button',name='按月抓取…',exact=True)).to_be_enabled()
         # The unread data area keeps its reserved box and never claims an empty list or a zero count.
         expect(page.locator('.inventory-grid.inventory-read-reserve')).to_be_visible()
         expect(page.locator('.inventory-grid [role="grid"]')).to_have_count(0)
@@ -230,7 +230,12 @@ def test_inventory_tools_publish_while_its_own_first_read_is_pending(server,brow
     expect(page.locator('.inventory-read-status [role="status"]')).to_have_count(0)
     expect(page.locator('.inventory-read-reserve')).to_have_count(0)
     expect(page.locator('.inventory-grid')).to_have_attribute('aria-busy','false',timeout=30000)
+    expect(page.locator('.inventory-grid .ag-header-cell[col-id="material"] .ag-header-cell-filter-button')).to_be_visible()
     expect(page.locator('.inventory-count-feedback')).to_have_text(re.compile(r'^\d+ / \d+ 行$'))
+    heights=page.locator('.inventory-toolbar :is(.ant-select,.ant-btn,.ant-checkbox-wrapper)').evaluate_all('''
+        controls => controls.map(control => control.getBoundingClientRect().height)
+    ''')
+    assert len(heights)==6 and max(heights)-min(heights)<1, heights
 
 
 def test_inventory_tools_publish_while_the_project_list_is_pending(server,browser_page):
@@ -242,7 +247,7 @@ def test_inventory_tools_publish_while_the_project_list_is_pending(server,browse
         expect(page.locator('.inventory-toolbar .business-project-picker')).to_be_visible()
         assert held
         expect(page.locator('.page-loading')).to_have_count(0)
-        expect(page.get_by_role('button',name='库存核算期间',exact=True)).to_be_enabled()
+        expect(page.get_by_role('button',name=re.compile('^库存核算期间：'))).to_be_enabled()
         # The project list is a secondary dependency: the page says it is missing, gates only the
         # picker that needs it, and keeps the table usable.
         expect(page.locator('.inventory-toolbar .business-project-picker')).to_be_visible()

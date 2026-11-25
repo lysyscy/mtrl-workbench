@@ -2,7 +2,7 @@ import { DialogPresence } from './workspace-motion';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import Select from 'antd/es/select';
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, confirmWrite, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
@@ -14,8 +14,9 @@ import { DialogContents, useDialogClose } from './dialog-close';
 import { contractWrite } from './contracts-api';
 import { body, receipt } from './notices-api';
 import { I8FetchActions, I8FetchRecovery, I8FetchStatus, useI8FetchAction } from './i8-fetch';
-import { JcReceiptContents, readReceipt, readReceiptRows } from './jc-fetch-receipt';
-import type { ReceiptRow } from './jc-fetch-receipt';
+import { JcReceiptContents } from './jc-fetch-receipt';
+import { readReceipt, readReceiptRows } from './jc-fetch-receipt-data';
+import type { ReceiptRow } from './jc-fetch-receipt-data';
 import { jcRulesPath } from './jc-rule-data';
 import { ReadFailure } from './read-region';
 import { useHistoryGuard } from './history';
@@ -30,23 +31,30 @@ function readContractFetch(value: unknown) {
   return { ...result, id: result.id };
 }
 
-export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
+export function ContractFetch({ me, blocked, close, refresh, initialSince }: ToolProps & { initialSince: string }) {
   const client = useQueryClient();
-  const [since, setSince] = useState('');
+  const dateId = useId();
+  const [defaultSince] = useState(initialSince);
+  const [since, setSince] = useState(defaultSince);
   const [all, setAll] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof readContractFetch>>();
   const [fallbackPending, setFallbackPending] = useState<ReceiptRow[]>([]);
   const [ownership, setOwnership] = useState<OwnershipDocument | null>(null);
-  const [rule, setRule] = useState<{ row: ReceiptRow; kind: 'project' | 'contract' } | null>(null);
+  const [rule, setRule] = useState<{ rowId: string; kind: 'project' | 'contract' } | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleError, setRuleError] = useState('');
   const [feedback, setFeedback] = useState('');
   const ruleLock = useRef(false);
   const action = useI8FetchAction({ me, paused: blocked, refresh, source: 'contracts', scopeKey: JSON.stringify([all, since]) });
-  const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && Boolean(since || all),
+  const closing = useDialogClose({ busy: action.busy || action.refreshing || saving, dirty: !action.sent && (since !== defaultSince || all),
     beforeRequestClose: action.cancelWaiting, close: () => { void action.cancelKick(); close(); }, active: !blocked });
   const { read: pendingRead, omit } = useContractOwnershipPending(result?.id ?? 0, !blocked && Boolean(result?.unsettled.length));
-  const pending = pendingRead.data ? readReceiptRows(pendingRead.data, false) : fallbackPending;
+  const pending = useMemo(() => pendingRead.data ? readReceiptRows(pendingRead.data, false) : fallbackPending,
+    [pendingRead.data, fallbackPending]);
+  const ruleRow = rule ? pending.find(row => row.id === rule.rowId) : undefined;
+  useEffect(() => {
+    if (rule && !ruleRow) setRule(null);
+  }, [rule, ruleRow]);
   useHistoryGuard('jc-fetch-rule', () => ruleLock.current ? '集采剔除规则正在保存，请稍候。' : '');
 
   async function run() {
@@ -55,6 +63,7 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
       payload: { confirm: true, ...(all ? { since: '' } : since ? { since } : {}) },
       parse: readContractFetch,
       onSuccess: fetched => {
+        setRule(null);
         setFallbackPending(fetched.unsettled);
         setResult(fetched);
       },
@@ -64,12 +73,12 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
   function selectRule(row: ReceiptRow, kind: 'project' | 'contract') {
     if (ruleLock.current) return;
     setRuleError('');
-    setRule({ row, kind });
+    setRule({ rowId: row.id, kind });
   }
 
   async function saveRule() {
-    if (!rule || !result || !me || blocked || ruleLock.current) return;
-    const { row, kind } = rule;
+    if (!rule || !ruleRow || !result || !me || blocked || ruleLock.current) return;
+    const { kind } = rule, row = ruleRow;
     ruleLock.current = true;
     setSaving(true);
     setRuleError('');
@@ -80,7 +89,8 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
       confirmWrite(record(response) && response.ok === true, '规则保存回执不完整。');
       setRule(null);
       setFallbackPending(rows => rows.filter(item => kind === 'project' ? item.project !== row.project : item.contract !== row.contract));
-      omit(item => kind === 'project' ? item.project_name === row.project : item.contract_no === row.contract);
+      omit(item => kind === 'project' ? item.project_name === row.project
+        : typeof item.contract_no === 'string' && item.contract_no.trim() === row.contract);
       setFeedback(record(response) && response.reused === true ? '已有相同剔除规则' : '已加入剔除规则');
       void client.invalidateQueries({ queryKey: ['rules', 'jc-ignore'], refetchType: 'none' });
       try {
@@ -110,8 +120,8 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
         }}>补归属关键词</Button>}
       <Button size="small" disabled={saving || blocked || !me || !row.project.trim()} onClick={() => selectRule(row, 'project')}>剔除这个项目</Button>
       <Button size="small" disabled={saving || blocked || !me || !row.contract.trim()} onClick={() => selectRule(row, 'contract')}>仅剔除这份合同</Button>
-      {rule?.row.id === row.id && <div className="jc-receipt-rule-confirm">
-        <p>{rule.kind === 'project' ? `下次抓取时，跳过「${row.project}」的所有合同。` : `下次抓取时，跳过合同「${row.contract}」。`}</p>
+      {rule && ruleRow === row && <div className="jc-receipt-rule-confirm">
+        <p>{rule.kind === 'project' ? `下次抓取时，跳过「${ruleRow.project}」的所有合同。` : `下次抓取时，跳过合同「${ruleRow.contract}」。`}</p>
         {ruleError && <p className="notice" role="alert">{ruleError}</p>}
         <Button size="small" disabled={saving} onClick={() => setRule(null)}>取消剔除</Button>
         <Button size="small" disabled={saving} type="primary" onClick={() => void saveRule()}>{saving ? '正在保存…' : '确认加入剔除规则'}</Button>
@@ -127,7 +137,12 @@ export function ContractFetch({ me, blocked, close, refresh }: ToolProps) {
           <label className="contract-field">抓取范围
             <Select aria-label="合同抓取范围" value={all ? 'all' : 'incremental'} disabled={action.busy} options={[{ value: 'incremental', label: '增量 / 指定起点' }, { value: 'all', label: '全部合同' }]} onChange={value => setAll(value === 'all')} />
           </label>
-          {!all && <label className="contract-field">合同日期起点（留空按现有合同增量）<BusinessDate label="合同日期起点" value={since} disabled={action.busy} onChange={setSince} /></label>}
+          {!all && <div className="contract-field">
+            <label htmlFor={dateId}>合同日期起点</label>
+            <BusinessDate id={dateId} describedBy={`${dateId}-help`} label="合同日期起点" value={since}
+              disabled={action.busy} onChange={setSince} />
+            <span id={`${dateId}-help`}>默认从台账最新合同日期往前 3 天，补抓较早单据。留空由系统按当前台账计算。</span>
+          </div>}
           <p>已审批和未审批合同均写入台账。命中剔除规则或未完成归属的合同不写入；保留人工标记、材料名、账期、付款方式和备注。</p>
         </>}
         {result && <>

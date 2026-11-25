@@ -171,7 +171,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
       </>}
     </div>
     <DialogPresence>{receipt && (receipt.source === 'contracts'
-      ? <JcFetchReceipt active={!blocked} close={() => setReceipt(null)} runId={receipt.id} history={false} />
+      ? <JcFetchReceipt active={!blocked} close={() => setReceipt(null)} runId={receipt.id} />
       : <I8FetchReceiptDialog active={!blocked} close={() => setReceipt(null)} runId={receipt.id} source={receipt.source} />)}</DialogPresence>
   </section>;
 }

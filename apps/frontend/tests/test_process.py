@@ -32,21 +32,19 @@ def test_real_process_enter_saves_without_clicking_elsewhere(server,browser_page
     open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
     field=page.get_by_label(row['ym']+' '+LABELS[0],exact=True)
     value=Decimal(str(row['mech_0'] or 0))+Decimal('1.25')
-    cancel=page.get_by_role('button',name='取消本项目修改',exact=True)
-    expect(cancel).to_be_disabled()
+    expect(page.get_by_role('button',name='取消本项目修改',exact=True)).to_have_count(0)
     grid=page.locator('.process-matrix')
     expect(grid).to_have_attribute('data-layout-state','ready')
-    before=grid.bounding_box();cancel_before=cancel.bounding_box()
+    before=grid.bounding_box()
     field.click()
     expect(field.locator('..').locator('small')).to_have_count(0)
     assert not field.get_attribute('title')
     background='async e=>{await Promise.all(e.getAnimations().map(animation=>animation.finished));return getComputedStyle(e).backgroundColor}'
     focused_color=field.evaluate(background)
-    field.fill(str(value));expect(cancel).to_be_enabled()
+    field.fill(str(value))
     assert field.evaluate(background)==focused_color
-    for element,previous in [(grid,before),(cancel,cancel_before)]:
-        current=element.bounding_box()
-        assert all(abs(current[key]-previous[key])<1 for key in ('x','y','width','height'))
+    current=grid.bounding_box()
+    assert all(abs(current[key]-before[key])<1 for key in ('x','y','width','height'))
     reads=[]
     page.on('request',lambda request:reads.append(request.url.split('/api/',1)[1].split('?',1)[0])
             if request.method=='GET' and '/api/' in request.url else None)
@@ -96,7 +94,7 @@ def test_rapid_process_saves_never_revert_or_move_view(server,browser_page,api,p
         assert pending,'后续保存未发出'
         route=pending.pop(0);response=route.fetch();assert response.ok;route.fulfill(response=response)
         page.wait_for_timeout(150)
-    expect(page.get_by_role('button',name='取消本项目修改',exact=True)).to_be_disabled()
+    expect(page.get_by_role('button',name='取消修改',exact=True)).to_have_count(0)
     page.wait_for_timeout(100);page.evaluate('window.editTrace=false')
     frames=page.evaluate('window.editFrames');start=page.evaluate('window.scrollStart')
     bad=[frame for frame in frames if frame['visibility']!='visible' or any(cell.get('wanted') is not None and cell.get('value') is not None and Decimal(cell['value'].replace(',','') or '0')!=Decimal(cell['wanted']) for cell in frame['cells'])]
@@ -253,6 +251,8 @@ def test_history_failure_keeps_draft_other_cell_saves_and_blank_differs_from_zer
         assert Decimal(str(row['out_工具']))==Decimal('12345.60')
         assert row['in_主辅材'] is None
     preview_screenshot('process-failed-cell-and-saved-neighbor')
+    failure.get_by_role('button',name='取消修改',exact=True).click()
+    saved(bad);expect(bad).to_have_value('')
     good.focus();expect(good).to_have_value(str(row['out_工具']))
     good.blur();box=good.bounding_box()
     offset=good.evaluate('e=>{const s=getComputedStyle(e),c=document.createElement("canvas").getContext("2d");c.font=s.font;return parseFloat(s.paddingRight)+c.measureText("45.60").width}')

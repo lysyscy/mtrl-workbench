@@ -16,10 +16,6 @@ export type CalculationBasis = Record<'amount'|'tax_total','unchanged'|'price'|'
 export type InventoryRow = Record<Field,string> & { id:number; ym:string; direction:string; project_full_name:string; adjusted:boolean; original_values:InventoryValues; edit_token:string; adjusted_values?:Partial<InventoryValues> };
 export interface Adjustment { id:number; row_id:number; before_amount:string; amount:string; remark:string; operator:string; changed_at:string; values:Partial<InventoryValues>; before_values:Partial<InventoryValues>|null }
 export interface Inventory { rows:InventoryRow[]; adjustments:Adjustment[]; projects:string[]; materialProperties:string[] }
-export interface ColumnFilter { q:string; min:string; max:string; values:string[] }
-export type Filters = Partial<Record<Field,ColumnFilter>>;
-export const emptyFilter = ():ColumnFilter => ({q:'',min:'',max:'',values:[]});
-export const filterOn = (f:ColumnFilter) => Boolean(f.q || f.min || f.max || f.values.length);
 const invalid = () => new ApiError('库存读取不完整，请重读。');
 function numeric(value:unknown):string {
   if (typeof value !== 'number' && typeof value !== 'string') throw invalid();
@@ -64,24 +60,6 @@ export const getInventory = async (signal?:AbortSignal) => readInventory(await r
 export function coarseRows(rows:InventoryRow[], period:string, warehouses:string[], direction:string, adjusted:boolean) {
   return rows.filter(r => timeMatches(period,`${r.ym}-01`) && (!warehouses.length || warehouses.includes(r.warehouse)) && (direction === '全部' || direction === r.direction) && (!adjusted || r.adjusted));
 }
-export function filterRows(rows:InventoryRow[], filters:Filters) {
-  const active = fields.flatMap(([key,,type]) => {
-    const f = filters[key];
-    return f && filterOn(f) ? [{key,type,q:f.q.toLocaleLowerCase(),min:f.min,max:f.max,
-      lower:Number(f.min.replace(/,/g,'')),upper:Number(f.max.replace(/,/g,'')),values:new Set(f.values)}] : [];
-  });
-  if (!active.length) return rows;
-  return rows.filter(r => active.every(f => {
-    const raw = r[f.key];
-    if (f.type === 'num') {
-      if (!raw) return false;
-      if (f.min && (!Number.isFinite(f.lower) || Number(raw) < f.lower)) return false;
-      if (f.max && (!Number.isFinite(f.upper) || Number(raw) > f.upper)) return false;
-    } else if (f.q && !raw.toLocaleLowerCase().includes(f.q)) return false;
-    return !f.values.size || f.values.has(raw);
-  }));
-}
-
 export function sumRows(rows:InventoryRow[], key:'qty'|'amount'|'adj_amount'|'tax_total') {
   const values = rows.map(r => r[key]).filter(Boolean);
   return values.length ? decimal(values.reduce((sum,value) => sum + cents(value),0n)) : '';

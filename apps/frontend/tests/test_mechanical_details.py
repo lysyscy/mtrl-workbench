@@ -1,12 +1,13 @@
 """Real-copy detail autosave, later drafts, first entry and last-row removal."""
 from decimal import Decimal
+import re
 import pytest
 from playwright.sync_api import expect
 from test_preview import server,browser_page
-from live_data import get,open_page
+from live_data import get,ledger_sample,open_page
 
 
-def select_project(page, name, ym):
+def select_project(page, name, ym, category='zero'):
     month=page.get_by_label('月份',exact=True)
     month.fill(ym);month.press('Enter')
     page.get_by_role('button',name='显示项目',exact=True).click()
@@ -14,7 +15,7 @@ def select_project(page, name, ym):
     dialog.get_by_role('button',name='全不选',exact=True).click()
     dialog.get_by_role('checkbox',name=name,exact=True).check()
     dialog.get_by_role('button',name='应用项目选择',exact=True).click()
-    page.get_by_role('button',name='表2 零租明细',exact=True).click()
+    page.get_by_role('button',name='表2 零租明细' if category=='zero' else '表3 包月明细',exact=True).click()
     expect(page.locator('.mechanical-detail-table .business-grid')).to_have_attribute('data-layout-state','ready')
 
 
@@ -78,29 +79,117 @@ def test_real_first_amount_counts_and_removing_last_row_clears_process_amount(se
     assert state['mech_2'] is None and state['mech_4'] is None
 
 
-def test_lost_detail_receipt_can_reread_and_resume_without_another_write(server,browser_page,api,projects,disposable):
+@pytest.mark.parametrize('category', ['zero', 'monthly'])
+def test_rejected_detail_has_scoped_retry_and_cancel(server,browser_page,api,projects,disposable,category):
+    state=get(api,'/api/m06/workbench')
+    group=next(d for d in state['details'] if d['category']==category and d['rows'])
+    name=next(p['disp'] for p in projects if p['warehouse_name']==group['warehouse'])
+    project,side,row,_=ledger_sample(api,projects,editable=True)
+    remark='机械明细撤销保护核验'
+    if row['remark']==remark:remark+=' 2'
+    seed=api.post('/api/m05/history/save',json={
+        'id':row['record_id'],'project_id':project['id'],'category':side['category'],
+        'entry_kind':row['row_kind'],'cutoff_ym':row['month'],'settle_amount':row['other_expense'],
+        'paid_amount':row['payment'],'remark':remark,'token':row['token'],
+    })
+    assert seed.is_success and seed.json()['ok']
+    head=get(api,'/api/history/status')['undo']
+    assert head,'本次核验需要可撤销的历史记录'
+    page,_=browser_page;open_page(page,server,'mechanical','机械费');select_project(page,name,group['ym'],category)
+    field=page.get_by_label(name+' 第1行 合价（元）',exact=True)
+    original=field.input_value()
+    export=page.get_by_role('button',name='导出台账',exact=True)
+    undo=page.locator('.history-tools').get_by_role('button',name='撤销',exact=True)
+    expect(undo).to_be_enabled()
+    expect(undo).to_have_attribute('title',head['label'])
+    expect(export).to_be_enabled()
+    expect(page.get_by_role('button',name='重试保存',exact=True)).to_have_count(0)
+    expect(page.get_by_role('button',name='撤销未保存修改',exact=True)).to_have_count(0)
+    with page.expect_response('**/api/m06/workbench/details-save') as rejected:
+        field.fill('-1');field.press('Enter')
+    assert 400 <= rejected.value.status < 500
+    failure=page.locator('.mechanical-feedback').filter(has=page.get_by_role('alert').filter(has_text=name))
+    expect(failure).to_contain_text(group['ym'])
+    expect(field).to_have_value('-1')
+    expect(export).to_be_disabled()
+    expect(undo).to_be_disabled()
+    expect(undo).to_have_attribute('title','机械费有未保存输入，请先处理。')
+    with page.expect_response('**/api/m06/workbench/details-save') as retried:
+        failure.get_by_role('button',name='重试保存',exact=True).click()
+    assert 400 <= retried.value.status < 500
+    failure.get_by_role('button',name='取消这项修改',exact=True).click()
+    expect(failure).to_have_count(0)
+    expect(field).to_have_value(original)
+    expect(export).to_be_enabled()
+    expect(undo).to_be_enabled()
+    expect(undo).to_have_attribute('title',head['label'])
+    undo.click()
+    confirmation=page.get_by_role('dialog',name=re.compile(r'^撤销 ·'))
+    expect(confirmation).to_be_visible()
+    confirmation.get_by_role('button',name='取消',exact=True).click()
+
+
+@pytest.mark.parametrize('outcome',['committed','unchanged','diverged'])
+def test_lost_detail_receipt_recovers_by_persisted_revision(server,browser_page,api,projects,disposable,outcome):
     state=get(api,'/api/m06/workbench')
     group=next(d for d in state['details'] if d['category']=='zero' and d['rows'] and d['rows'][0].get('amount') is not None)
     project=next(p for p in projects if p['warehouse_name']==group['warehouse']);name=project['disp']
     page,_=browser_page;open_page(page,server,'mechanical','机械费');select_project(page,name,group['ym'])
     writes=[]
     def lose_receipt(route):
-        response=route.fetch();assert response.ok
-        writes.append(route.request.post_data_json);route.abort('failed')
+        writes.append(route.request.post_data_json)
+        if outcome=='committed':
+            response=route.fetch();assert response.ok
+        route.abort('failed')
     page.route('**/api/m06/workbench/details-save',lose_receipt)
     field=page.get_by_label(name+' 第1行 合价（元）',exact=True)
     value=Decimal(str(group['rows'][0]['amount']))+Decimal('1.25')
     field.fill(str(value));field.press('Enter')
     expect(page.get_by_role('alert').filter(has_text='保存结果待核实')).to_be_visible()
     expect(field).not_to_be_editable()
+    cancel=page.get_by_role('button',name='取消这项修改',exact=True)
+    expect(cancel).to_be_disabled()
+    assert len(writes)==1
+    rival_value=value+Decimal('2.00')
+    if outcome=='diverged':
+        rival={**writes[0], 'rows':[{**writes[0]['rows'][0], 'amount':str(rival_value)}, *writes[0]['rows'][1:]]}
+        response=api.post('/api/m06/workbench/details-save',json=rival)
+        assert response.is_success and response.json()['ok']
     page.get_by_role('button',name='重读明细',exact=True).click()
     resume=page.get_by_role('button',name='已核对，继续',exact=True)
-    expect(resume).to_be_enabled();resume.click()
+    expect(resume).to_be_enabled()
+    if outcome=='diverged':expect(field).to_have_value(str(rival_value))
+    resume.click()
+    retry=page.get_by_role('button',name='重试保存',exact=True)
+    assert len(writes)==1
+    if outcome=='unchanged':
+        expect(field).to_have_value(str(value))
+        expect(retry).to_be_enabled()
+        page.unroute('**/api/m06/workbench/details-save')
+        with page.expect_response('**/api/m06/workbench/details-save') as retried:
+            retry.click()
+        assert retried.value.ok
+        assert retried.value.request.post_data_json==writes[0]
+    elif outcome=='diverged':
+        expect(field).not_to_be_editable()
+        expect(retry).to_have_count(0)
+        page.get_by_role('button',name='查看保留输入',exact=True).click()
+        expect(field).to_have_value(str(value))
+        expect(field).not_to_be_editable()
+        page.get_by_role('button',name='查看已保存明细',exact=True).click()
+        expect(field).to_have_value(str(rival_value))
+        cancel.click()
+    else:
+        expect(retry).to_have_count(0)
+        expect(cancel).to_have_count(0)
     expect(field).to_be_editable()
+    expected=rival_value if outcome=='diverged' else value
+    expect(field).to_have_value(str(expected))
+    expect(page.get_by_role('button',name='导出台账',exact=True)).to_be_enabled()
     assert len(writes)==1
     saved=next(d for d in get(api,'/api/m06/workbench')['details']
                if d['warehouse']==group['warehouse'] and d['ym']==group['ym'] and d['category']=='zero')
-    assert Decimal(saved['rows'][0]['amount'])==value
+    assert Decimal(saved['rows'][0]['amount'])==expected
 
 
 def internal_fields(page,server,api,projects):

@@ -39,6 +39,7 @@ const listSchema = v.object({
   rows: v.custom<unknown[]>(Array.isArray),
   columns: v.array(v.intersect([v.object({ key: v.string(), label: v.string(), type: v.string() }), nonArrayObject])),
   tags: v.array(v.string()), payment_methods: v.array(v.string()),
+  fetch_default_since: v.optional(v.string()),
 });
 export type ContractBase = v.InferOutput<typeof contractSchema>;
 export type ContractRow = ContractBase & v.InferOutput<typeof rowFields>;
@@ -57,7 +58,8 @@ export function readContracts(value: unknown): ContractList {
     if (!v.is(rowFields, row)) throw new ApiError('合同归属或关联读取不完整，请重读。');
     return row;
   });
-  return { rows, columns: value.columns, tags: value.tags, payment_methods: value.payment_methods };
+  return { rows, columns: value.columns, tags: value.tags, payment_methods: value.payment_methods,
+    fetch_default_since: value.fetch_default_since ?? '' };
 }
 export function readContractDetail(value: unknown): ContractDetail {
   if (!record(value) || !record(value.data)) throw new ApiError('合同详情读取不完整，请重读。');

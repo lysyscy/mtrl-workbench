@@ -103,3 +103,45 @@ test('an older rejection does not poison a newer queued draft of the same cell',
   for(let i=0;i<20&&(queue.getSnapshot().busy||writes.length<2);i++)await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(writes,['bad','12.00']);assert.equal(queue.getSnapshot().drafts.a,undefined);assert.equal(queue.getSnapshot().uncertain,false);queue.dispose();
 });
+
+for (const [name, error] of [['rejected', new ApiError('invalid amount', 400)], ['unknown', new TypeError('network interrupted')]]) {
+  test(`save outcome ${name} exposes interrupted submissions for scoped recovery`, async () => {
+    let reject;
+    const pending = new Promise((_, no) => { reject = no; });
+    const writes = [];
+    const queue = new CellSaveQueue(() => ({
+      enabled: true, stopOnRejection: true, recoverInterrupted: true,
+      write: async draft => {
+        writes.push(draft.value);
+        if (draft.value === 'first') await pending;
+      },
+      read: async () => ({}), acknowledge: () => undefined, saved: () => '',
+    }));
+    queue.update(() => ({
+      a: { value: 'first', error: '' },
+      b: { value: 'second', error: '' },
+      c: { value: 'still editing', error: '' },
+    }));
+    queue.save('a'); queue.save('b');
+    reject(error);
+    await new Promise(resolve => setImmediate(resolve));
+    const { drafts, uncertain } = queue.getSnapshot();
+    assert.equal(uncertain, name === 'unknown');
+    assert.equal(drafts.a.error, uncertain ? '保存已中断，输入已保留。' : 'invalid amount');
+    assert.equal(drafts.b.error, '保存已中断，输入已保留。');
+    assert.equal(drafts.c.error, '');
+    assert.deepEqual(writes, ['first']);
+    if (uncertain) {
+      queue.save('b', true);
+      assert.deepEqual(writes, ['first']);
+      assert.equal(await queue.reread(), true);
+      queue.confirm();
+    }
+    queue.update(({ a, ...rest }) => rest);
+    queue.save('b', true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(writes, ['first', 'second']);
+    assert.deepEqual(queue.getSnapshot().drafts, { c: { value: 'still editing', error: '' } });
+    queue.dispose();
+  });
+}

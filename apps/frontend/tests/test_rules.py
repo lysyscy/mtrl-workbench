@@ -1,6 +1,7 @@
 """Real exclusion rules and recovery of their write results."""
 from uuid import uuid4
 
+import pytest
 from playwright.sync_api import expect
 from test_preview import server,browser_page,login
 from live_data import get,open_page
@@ -20,11 +21,9 @@ def test_actual_rules_and_anonymous_write_protection(server,browser_page,api):
     assert page.request.delete(server+'/api/m14/jc-ignore/1').status==401
 
 
-def test_procurement_rule_create_search_filter_delete_and_receipt(server, browser_page, api, disposable):
+def test_procurement_rule_create_search_filter_delete(server, browser_page, api, disposable):
     page, _ = browser_page
     number = 'QA-' + uuid4().hex
-    receipt_calls = []
-    page.on('request', lambda request: receipt_calls.append(request.url) if '/api/m14/jc-ignore/receipt' in request.url else None)
     open_page(page, server, 'rules', '规则配置')
     nav = page.get_by_role('navigation', name='规则所属业务')
     expect(nav.get_by_role('button')).to_have_text(['付款通知书', '集采台账'])
@@ -54,17 +53,8 @@ def test_procurement_rule_create_search_filter_delete_and_receipt(server, browse
     expect(row).to_have_count(0)
     assert all(rule['contract_no'] != number for rule in get(api, '/api/m14/jc-ignore')['items'])
 
-    assert not receipt_calls
-    page.get_by_role('button', name='最近抓取结果', exact=True).click()
-    receipt = page.get_by_role('dialog', name='最近一次集采抓取结果')
-    expect(receipt.locator('.i8-receipt-summary, .state').first).to_be_visible()
-    assert len(receipt_calls) == 1
-    receipt.get_by_role('link', name='i8 接入层 · 执行记录').click()
-    expect(page.locator('#page-title')).to_have_text('i8 接入层')
-    expect(page.locator('#execution-records')).to_be_visible()
-
-
-def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server, browser_page):
+@pytest.mark.parametrize('has_matched_items', [False, True])
+def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server, browser_page, has_matched_items):
     page, _ = browser_page
     rule = {
         'id': 8, 'kind': 'keyword', 'name_full': '回执测试项目',
@@ -72,7 +62,7 @@ def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server,
         'operator': '', 'created_at': '',
     }
     receipt = {
-        'id': 12, 'started_at': '2026-11-12T10:06:00', 'status': 'success', 'matched': 3,
+        'id': 12, 'started_at': '2026-11-12T10:06:00', 'status': 'success', 'matched': 1,
         'unsettled': [{'contract_no': 'QA-01', 'project_name': '待归属项目',
                        'doc_name': '材料采购合同', 'kind': 'not_archived'}],
         'ignored': [{'contract_no': 'QA-02', 'project_name': '回执测试项目',
@@ -80,15 +70,37 @@ def test_receipt_shows_recorded_contracts_and_conditions_from_i8_history(server,
                     {'contract_no': 'QA-03', 'project_name': '旧回执项目'}],
         'unsettled_count': 1, 'ignored_count': 2,
     }
+    if has_matched_items:
+        receipt['matched'] = 203
+        receipt.update(matched_items_total=203, matched_items=[{
+            'contract_no': f'QA-MATCHED-{index:03}', 'project_name': '回执测试项目', 'bill_name': '已匹配合同',
+            'supplier_name': '测试供应商', 'contract_date': '2026-11-12',
+            'i8_amount': '100.00', 'status': 'inserted' if index == 0 else 'unchanged',
+        } for index in range(200)])
     page.route('**/api/m14/jc-ignore/receipt?run_id=12', lambda route: route.fulfill(json={'receipt': receipt}))
     page.route('**/api/m02/fetch/records*', lambda route: route.fulfill(json=[{
         'id': 12, 'run_type': 'fetch', 'target': 'jc_contract 全量', 'status': 'success',
-        'success_count': 3, 'fail_count': 0, 'error_message': '',
+        'success_count': receipt['matched'], 'fail_count': 0, 'error_message': '',
         'started_at': receipt['started_at'], 'finished_at': None, 'triggered_by': '验看账号', 'duration_seconds': None,
     }]))
     open_page(page, server, 'i8', 'i8 接入层')
     page.get_by_role('button', name='查看明细', exact=True).click()
     dialog = page.get_by_role('dialog', name='集采抓取明细')
+    if has_matched_items:
+        table = dialog.get_by_role('region', name='匹配合同明细', exact=True)
+        expect(table.get_by_role('row').filter(has_text='QA-MATCHED-000')).to_contain_text('新增')
+        expect(dialog.get_by_text('共 203 条，显示 200 条，其余 3 条未记录。')).to_be_visible()
+        unchanged = dialog.get_by_role('region', name='无变更合同明细', exact=True)
+        expect(unchanged).to_have_count(0)
+        dialog.get_by_text('无变更合同', exact=False).click()
+        last = unchanged.get_by_role('row').filter(has_text='QA-MATCHED-199')
+        expect(last).to_contain_text('无变更')
+        last.scroll_into_view_if_needed()
+        assert unchanged.evaluate("(grid) => grid.closest('.dialog-body').scrollTop > 0")
+        viewport = unchanged.locator('.ag-grid-viewport,.ag-body-viewport').first
+        assert viewport.evaluate("(el) => el.scrollHeight <= el.clientHeight + 1")
+    else:
+        expect(dialog.get_by_text('该批次未记录逐条合同明细。')).to_be_visible()
     expect(dialog.get_by_role('listitem').filter(has_text='QA-01')).to_contain_text('项目未建档')
     expect(dialog.get_by_text('范围未记录', exact=True)).to_be_visible()
     matched = dialog.get_by_role('listitem').filter(has_text='QA-02')

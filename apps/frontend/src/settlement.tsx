@@ -101,6 +101,7 @@ function Extract({ me, blocked, active }: Props) {
   const query=useQuery({queryKey,enabled:active&&!blocked,queryFn:({signal})=>getExtract(year,status,signal)});
   const saves=useCellSaveQueue<Draft,Awaited<ReturnType<typeof getExtract>>>({
     enabled:active&&!blocked&&Boolean(me),canWrite:!query.isError&&!query.isPending,
+    recoverInterrupted:true,
     read:reload,write:(draft,signal)=>saveBalance(draft.kind,draft.warehouse,draft.value,signal),
     acknowledge:(current,submitted)=>current.value===submitted.value?undefined:current,
     saved:()=>'',
@@ -121,7 +122,7 @@ function Extract({ me, blocked, active }: Props) {
   const placeheld = query.data === undefined;
   return <>
     <div data-page-chrome className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
-      <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label><Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button></div>
+      <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label></div>
       <SettlementExport scope={`${year} 焊材 / 气体`} url={`/api/m07/extract/export?${new URLSearchParams({period:year,status})}`} paused={!active || blocked} disabled={!query.data || query.isFetching || query.isError || busy || dirty || uncertain}>
         <p>{year}，{status}，焊材 {query.data?.annual.焊材.rows.length} 仓 / 气体 {query.data?.annual.气体.rows.length} 仓</p>
         <p>保留原模板，并附年度汇总；合计包含历史值与所选年 12 个月，2025 年 1–11 月留空。</p>
@@ -136,7 +137,7 @@ function Extract({ me, blocked, active }: Props) {
     </ReadStatusLane>
     {Object.entries(drafts).filter(([,d])=>d.error).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}<span role="alert">，{d.error}</span></span>
       <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {save(key,true);}}>保存这项</Button>
-      <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消修改</Button></div>)}
+      <Button disabled={blocked||busy||uncertain} onMouseDown={e => e.preventDefault()} onClick={() => {saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消修改</Button></div>)}
     {placeheld ? <div className="settlement-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : query.data && <Cells.Provider value={{drafts,disabled,save,
       change:(kind,warehouse,original,value)=>{const key=keyOf(kind,warehouse);saves.update((drafts,writing)=>{const old=drafts[key],next={...drafts,[key]:{kind,warehouse,original:old?.original??original,value,error:''}};if(value===(old?.original??original)&&!writing)delete next[key];return next;});},
       cancel:key=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[key];return next;})}}>

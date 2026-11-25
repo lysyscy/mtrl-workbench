@@ -71,7 +71,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
   const query = useQuery({queryKey,enabled:active && !blocked,queryFn:({signal}) => getBig(ym,signal)});
   const [picking,setPicking]=useState(false),revision=useRef(0);
   const saves=useCellSaveQueue<Draft,BigData>({
-    enabled:active&&!blocked&&Boolean(me),canWrite:!query.isPending&&!query.isError,stopOnRejection:true,
+    enabled:active&&!blocked&&Boolean(me),canWrite:!query.isPending&&!query.isError,stopOnRejection:true,recoverInterrupted:true,
     read:reload,
     write:(draft,signal)=>saveBigCell(ym,draft.warehouse,draft.key,draft.value,signal),
     validate:draft=>query.data?.rows.some(row=>row.warehouse===draft.warehouse)?'':'项目已不在大表中，请取消此项或重新选题。',
@@ -153,7 +153,6 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
   const presentation = useGridPresentation({table: 'monthly-big', root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
   return <>
     <div data-page-chrome className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : readState === 'error' ? '项目数尚未读取' : readState === 'reading' ? '正在读取项目数…' : '尚未读取项目数'}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
-      <Button disabled={blocked||busy||!dirty} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(()=>({}))}>取消未保存修改</Button>
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
       <SettlementExport method="POST" onSettled={reconcileExport} scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
         <p>{ym}，{query.data?.rows.length} 个项目，原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
@@ -169,7 +168,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
     </ReadStatusLane>
     {Object.entries(drafts).filter(([,d])=>d.error).map(([id,d])=><div className="big-draft" key={id}><span>{d.display}，{labels[d.key]}：{d.value || '清空，恢复带入'}<span role="alert">，{d.error}</span></span>
       <Button size="small" disabled={disabled || busy} onMouseDown={e=>e.preventDefault()} onClick={()=>save(id,true)}>保存这项</Button>
-      <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[id];return next;});}}>取消修改</Button></div>)}
+      <Button size="small" disabled={blocked||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[id];return next;});}}>取消修改</Button></div>)}
     <FirstReadRegion phase={query.data ? 'content' : readState === 'error' ? 'error' : 'pending'} placeholder={<div className="big-grid big-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div>}>
     {placeheld ? <div className="big-grid big-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'} /></div> : query.data && <BigCells.Provider value={{drafts,disabled,save,
       change:(row,key,value)=>{const id=keyOf(row.warehouse,key);saves.update((drafts,writing)=>{const old=drafts[id],next={...drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!writing&&value===next[id]!.original)delete next[id];return next;});},

@@ -45,7 +45,7 @@ def api_jc_ignore_delete(ignore_id: int) -> dict:
 
 
 @router.get("/receipt")
-def api_jc_ignore_receipt(run_id: int | None = Query(None, ge=1, le=2147483647)) -> dict:
+def api_jc_ignore_receipt(run_id: int = Query(..., ge=1, le=2147483647)) -> dict:
     with session_scope() as s:
         run = records.marked_fetch(s, R.JC_FETCH_MARK, run_id=run_id)
         return {"receipt": R.fetch_receipt(run) if run is not None else None}

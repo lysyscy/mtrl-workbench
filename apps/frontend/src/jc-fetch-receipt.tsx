@@ -1,77 +1,73 @@
 import Button from 'antd/es/button';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router';
-import { ApiError, record, requestJson } from './api';
+import type { ColDef } from 'ag-grid-community';
+import { requestJson } from './api';
+import { BusinessGrid } from './business-grid';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import { isJcRule, jcCondition, jcRuleKinds, jcRulesPath } from './jc-rule-data';
-import type { JcRule } from './jc-rule-data';
+import { textWidth } from './grid';
+import { completeColumnWidth } from './grid-text';
+import { jcCondition, jcRuleKinds, jcRulesPath } from './jc-rule-data';
+import { readReceipt } from './jc-fetch-receipt-data';
+import type { Receipt, ReceiptRow } from './jc-fetch-receipt-data';
 import { ReadFailure } from './read-region';
-import { I8ReceiptSummary, receiptCount as count } from './i8-receipt-summary';
+import { I8ReceiptSummary } from './i8-receipt-summary';
 
-export interface ReceiptRow {
-  id: string;
-  contract: string;
-  project: string;
-  document: string;
-  kind: string;
-  reason: string;
-  matches: JcRule[];
+const matchedStatus = {
+  inserted: '新增',
+  updated: '实际变更',
+  unchanged: '无变更',
+} as const;
+
+type MatchedRow = NonNullable<Receipt['matchedItems']>[number];
+const matchedRowId = (row: MatchedRow) => row.id;
+const showValue = ({ value }: { value?: string | null }) => value || '—';
+
+function MatchedTable({ rows, unchanged = false }: { rows: MatchedRow[]; unchanged?: boolean }) {
+  const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
+  const columns = useMemo<ColDef<MatchedRow>[]>(() => [
+    { field: 'status', headerName: '状态', ...completeColumnWidth(Object.values(matchedStatus), '状态', scale), wrapText: false,
+      valueFormatter: ({ data }) => data ? matchedStatus[data.status] : '',
+      cellClass: ({ data }) => data?.status === 'unchanged' ? 'muted' : data?.status === 'inserted' ? 'jc-receipt-added' : '' },
+    { field: 'contract', headerName: '合同编号', ...completeColumnWidth(rows.map(row => row.contract), '合同编号', scale) },
+    { field: 'project', headerName: '项目', ...textWidth(112, 240, scale), valueFormatter: showValue },
+    { field: 'document', headerName: '单据名 / 材料名', ...textWidth(164, 360, scale, 2), cellRenderer: ({ data }: { data?: MatchedRow }) => data && <div>
+      {data.document || '—'}{data.material && <div className="muted">材料名：{data.material}</div>}
+    </div> },
+    { field: 'supplier', headerName: '供应商', ...textWidth(112, 240, scale), valueFormatter: showValue },
+    { field: 'date', headerName: '合同日期', ...completeColumnWidth(rows.map(row => row.date), '合同日期', scale),
+      wrapText: false, valueFormatter: showValue },
+    { field: 'amount', headerName: 'i8 合同金额', ...completeColumnWidth(rows.map(row => row.amount), 'i8 合同金额', scale),
+      wrapText: false, cellClass: 'money', valueFormatter: showValue },
+  ], [rows, scale]);
+  return <BusinessGrid table={unchanged ? 'jc-receipt-unchanged' : 'jc-receipt-matched'} className="jc-receipt-matched-grid"
+    label={unchanged ? '无变更合同明细' : '匹配合同明细'} rows={rows} columns={columns} rowId={matchedRowId}
+    scale={scale} domLayout="autoHeight" />;
 }
 
-const ownershipReason: Record<string, string> = {
-  needs_keyword: '缺少小微识别词',
-  needs_choice: '命中多个项目',
-  not_archived: '项目未建档',
-};
-
-export function readReceiptRows(value: unknown, ignored: boolean): ReceiptRow[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(record).map((row, index) => {
-    const matches = Array.isArray(row.matches) ? row.matches.filter(isJcRule) : [];
-    return {
-      id: `${ignored ? 'ignored' : 'unsettled'}-${index}`,
-      contract: typeof row.contract_no === 'string' ? row.contract_no : '',
-      project: typeof row.project_name === 'string' ? row.project_name : '',
-      document: typeof row.doc_name === 'string' ? row.doc_name : '',
-      kind: typeof row.kind === 'string' ? row.kind : '',
-      reason: ignored ? matches.length ? '规则剔除' : '规则剔除 · 旧记录未保存命中条件'
-        : typeof row.kind === 'string' ? ownershipReason[row.kind] ?? '归属待指定' : '归属待指定',
-      matches,
-    };
-  });
+function MatchedContracts({ items, total }: { items: Receipt['matchedItems']; total: number | null }) {
+  const [showUnchanged, setShowUnchanged] = useState(false);
+  const { unchanged, visible } = useMemo(() => {
+    const unchanged = items?.filter(item => item.status === 'unchanged') ?? [];
+    return { unchanged, visible: unchanged.length > 8 ? items?.filter(item => item.status !== 'unchanged') : items };
+  }, [items]);
+  return <section className="i8-receipt-section" aria-label="已匹配合同">
+    <h3>已匹配合同</h3>
+    {items === null ? <p className="state">该批次未记录逐条合同明细。</p>
+      : total === 0 ? <p className="state">本次没有匹配到合同。</p> : <>
+        {total !== null && total > items.length && <p className="muted">
+          共 {total} 条，显示 {items.length} 条，其余 {total - items.length} 条未记录。
+        </p>}
+        {visible && visible.length > 0 && <MatchedTable rows={visible} />}
+        {unchanged.length > 8 && <details onToggle={event => setShowUnchanged(event.currentTarget.open)}>
+          <summary>无变更合同 <span>{unchanged.length} 条可查看</span></summary>
+          {showUnchanged && <MatchedTable rows={unchanged} unchanged />}
+        </details>}
+      </>}
+  </section>;
 }
-
-export function readReceipt(value: unknown) {
-  if (record(value) && value.receipt === null) return null;
-  if (!record(value) || !record(value.receipt)) throw new ApiError('抓取结果读取不完整，请重试。');
-  const item = value.receipt;
-  if (typeof item.started_at !== 'string' || typeof item.status !== 'string' || typeof item.matched !== 'number') {
-    throw new ApiError('抓取结果读取不完整，请重试。');
-  }
-  const ignored = readReceiptRows(item.ignored, true);
-  const unsettled = readReceiptRows(item.unsettled, false);
-  const summary = record(item.summary) ? item.summary : {};
-  const groups = Array.isArray(item.ignored_projects) ? item.ignored_projects.flatMap(group =>
-    record(group) && typeof group.name === 'string' && count(group.count) !== null
-      ? [{ name: group.name, count: Number(group.count) }] : []) : [];
-  return {
-    id: count(item.id),
-    startedAt: item.started_at.replace('T', ' '), status: item.status, matched: item.matched,
-    duration: typeof item.duration_seconds === 'number' && item.duration_seconds >= 0 ? item.duration_seconds : null,
-    scope: typeof item.scope === 'string' ? item.scope : '',
-    sourceCount: count(summary.source_count), identifiedCount: count(summary.identified_count),
-    inserted: count(summary.inserted), changed: count(summary.changed), unchanged: count(summary.unchanged),
-    materialBlank: count(summary.material_blank),
-    syncWarning: typeof item.sync_warning === 'string' ? item.sync_warning.replaceAll('**', '') : '',
-    ignoredCount: count(item.ignored_count), unsettledCount: count(item.unsettled_count),
-    ignored, unsettled, groups,
-  };
-}
-
-type Receipt = NonNullable<ReturnType<typeof readReceipt>>;
 
 function ContractEvidence({ row }: { row: ReceiptRow }) {
   return <>
@@ -118,7 +114,7 @@ export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
         breakdown: [{ label: '材料名未补齐', value: data.materialBlank || null }] },
     ]} />
     {data.syncWarning && <p className="notice" role="alert">{data.syncWarning}</p>}
-    {(data.unsettled.length > 0 || projects.length > 0) ? <div className="jc-receipt-detail" role="region" aria-label="合同抓取明细">
+    <div className="jc-receipt-detail">
       {pending.length > 0 && <section className="i8-receipt-section" aria-label="待指定归属">
         <h3>待指定归属（{data.unsettledCount === null ? '已记录 ' : ''}{pending.length} 条{
           data.unsettledCount !== null && data.unsettledCount > data.unsettled.length ? '可查看' : ''}）</h3>
@@ -127,6 +123,7 @@ export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
           {actions?.(row)}
         </li>)}</ul>
       </section>}
+      {data.status !== 'failed' && <MatchedContracts items={data.matchedItems} total={data.matchedItemsTotal} />}
       {projects.length > 0 && <section className="i8-receipt-section" aria-label="规则剔除">
         <div className="i8-receipt-section-head">
           <h3>规则剔除{data.ignoredCount !== null ? `（${data.ignoredCount} 条）` : ''}</h3>
@@ -141,31 +138,33 @@ export function JcReceiptContents({ data, pending = data.unsettled, actions }: {
             : <p className="state">本组明细未记录</p>}
         </details>)}
       </section>}
-    </div> : data.status !== 'failed' && <p className="state">{data.unsettledCount === 0 && data.ignoredCount === 0
-      ? '无归属待指定或规则剔除明细' : '该批次未记录归属或剔除明细。'}</p>}
+      {!data.unsettled.length && !projects.length && data.status !== 'failed' && <p className="state">{
+        data.unsettledCount === 0 && data.ignoredCount === 0
+          ? '无归属待指定或规则剔除明细' : '该批次未记录归属或剔除明细。'
+      }</p>}
+    </div>
   </>;
 }
 
-export function JcFetchReceipt({ active, close, runId, history = true }: {
-  active: boolean; close: () => void; runId?: number; history?: boolean;
+export function JcFetchReceipt({ active, close, runId }: {
+  active: boolean; close: () => void; runId: number;
 }) {
   const query = useQuery({
-    queryKey: ['jc-fetch-receipt', runId ?? 'latest'],
+    queryKey: ['jc-fetch-receipt', runId],
     enabled: active, staleTime: 0, refetchOnMount: 'always',
     queryFn: async ({ signal }) => readReceipt(await requestJson(
-      jcRulesPath + '/receipt' + (runId === undefined ? '' : `?run_id=${runId}`), { signal })),
+      `${jcRulesPath}/receipt?run_id=${runId}`, { signal })),
   });
   const closing = useDialogClose({ busy: false, dirty: false, close, active });
   const data = query.data;
   return <BusinessModal open={active} layout="scroll-body" className="rules-dialog jc-receipt-dialog" titleId="jc-receipt-title" requestClose={closing.requestClose}>
-    <DialogContents title={runId === undefined ? '最近一次集采抓取结果' : '集采抓取明细'} titleId="jc-receipt-title" closing={closing}
-      footer={<div className="dialog-actions jc-receipt-actions">
-        {history && <Link to="/i8#execution-records" onClick={close}>i8 接入层 · 执行记录</Link>}
+    <DialogContents title="集采抓取明细" titleId="jc-receipt-title" closing={closing}
+      footer={<div className="dialog-actions">
         <Button onClick={closing.requestClose}>关闭</Button>
       </div>}>
       {query.isFetching && <p role="status">正在读取抓取结果…</p>}
       {query.isError && <ReadFailure read={query} />}
-      {!query.isFetching && (data ? <JcReceiptContents data={data} /> : !query.isError && <p className="state">暂无集采抓取记录</p>)}
+      {!query.isFetching && (data ? <JcReceiptContents data={data} /> : !query.isError && <p className="state">未找到该批集采抓取记录</p>)}
     </DialogContents>
   </BusinessModal>;
 }

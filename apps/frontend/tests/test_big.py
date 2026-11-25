@@ -86,7 +86,7 @@ def test_real_contract_save_reads_back_with_missing_output(server, browser_page,
             page.get_by_role('heading', name='月度会大表', exact=True).click()
     assert save.value.ok and save.value.json()['ok']
     assert readback.value.ok, f'保存后的大表重读 HTTP {readback.value.status}'
-    expect(page.get_by_role('button', name='取消未保存修改')).to_be_disabled()
+    expect(page.get_by_role('button', name='取消未保存修改', exact=True)).to_have_count(0)
     expect(field).to_have_value('200.00')
     expect(rate).to_have_text('—')
 
@@ -117,7 +117,7 @@ def test_real_contract_save_reads_back_with_missing_output(server, browser_page,
     confirm.click()
     expect(field).to_be_editable()
     expect(field).to_have_value('201.25')
-    expect(page.get_by_role('button', name='取消未保存修改')).to_be_disabled()
+    expect(page.get_by_role('button', name='取消修改', exact=True)).to_have_count(0)
     assert len(writes) == 1
 
 

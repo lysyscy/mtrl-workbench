@@ -62,7 +62,7 @@ def test_rule_receipt_preserves_matched_conditions_and_existing_contract():
                 save_run_record(s, run_type="fetch", target=f"其他来源 {index}", status="success",
                                 success_count=0, fail_count=0, total_count=0, error_message="", detail={},
                                 started_at=None)
-            run = records.marked_fetch(s, R.JC_FETCH_MARK)
+            run = records.marked_fetch(s, R.JC_FETCH_MARK, run_id=result["run_record_id"])
             assert run.id == result["run_record_id"]
             assert R.fetch_receipt(run) == result["receipt"]
             assert result["receipt"]["summary"]["source_count"] == 2
@@ -197,9 +197,14 @@ def test_未二次确认不写执行记录也不动数据():
 def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rollback_db):
     """走真实取数映射、编排和数据库写入，防止只在映射层放行。"""
     from decimal import Decimal
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from app.mod02_i8 import contract_source
+    from app.mod02_i8 import service as history
+    from app.mod11_jc import api as jc_api
     from app.mod11_jc.models import TAG_OUT
+    from app.mod14_config import jc_ignore_api
 
     monkeypatch.setattr(contract_source, 'configured_url', lambda: 'http://i8.test/contracts')
     monkeypatch.setattr(contract_source, 'configured_detail_url', lambda: 'http://i8.test/detail')
@@ -217,36 +222,95 @@ def test_未审批合同实际写入且审批后重抓只刷新(monkeypatch, rol
         return {'Data': {'Grid': {'results': [{'ItemName': '测试材料'}]}}}
 
     client = SimpleNamespace(post_json=post_json, close=lambda: None)
+    monkeypatch.setattr(jc_api, 'unified_i8_session', lambda *args, **kwargs: nullcontext())
+    monkeypatch.setattr(FS, 'open_i8_client', lambda **kwargs: client)
+    monkeypatch.setattr(FS, 'default_loaders', lambda client: (lambda: [], lambda: []))
+    monkeypatch.setattr(FS, 'sync_and_archive', lambda *args, **kwargs: {})
+    app = FastAPI()
+    app.include_router(jc_api.router)
+    app.include_router(jc_ignore_api.router)
+    http = TestClient(app)
+
+    def post_fetch():
+        reply = http.post('/api/m11/fetch', json={'confirm': True})
+        assert reply.status_code == 200, reply.text
+        return reply.json()
+
+    def history_receipt(run_id):
+        reply = http.get('/api/m14/jc-ignore/receipt', params={'run_id': run_id})
+        assert reply.status_code == 200, reply.text
+        return reply.json()['receipt']
+
     with session_scope() as s:
         project = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full=FULL_NEW,
                                          warehouse_name=WH_NEW, phid='approval')
-        s.flush()
-        out = _run_fetch(s, confirmed=True, client_factory=lambda: client,
-                         sync=lambda *args, **kwargs: {})
-        assert out['ok'] is True
-        assert (out['fetched'], out['matched'], out['stats']['inserted']) == (2, 2, 2)
-        assert out['receipt']['summary']['source_count'] == 3
-        assert out['receipt']['summary']['identified_count'] == 2
+        project_id = project.id
+    out = post_fetch()
+    assert out['ok'] is True
+    assert (out['fetched'], out['matched'], out['stats']['inserted']) == (2, 2, 2)
+    assert out['receipt']['summary']['source_count'] == 3
+    assert out['receipt']['summary']['identified_count'] == 2
+    assert out['receipt']['matched_items_total'] == 2
+    assert out['receipt']['matched_items'][0] == {
+        'contract_no': '__approval_0__', 'project_name': FULL_NEW, 'bill_name': '审批范围测试合同',
+        'material_name': '测试材料', 'supplier_name': '测试供应商', 'contract_date': '2026-11-06',
+        'i8_amount': '100.00', 'approval_status': '未审批', 'status': 'inserted',
+    }
+    assert history_receipt(out['run_record_id']) == out['receipt']
+
+    with session_scope() as s:
         pending = R.one_by_no(s, '__approval_0__')
         approved = R.one_by_no(s, '__approval_1__')
         assert pending is not None and approved is not None
         assert (pending.approve_status, approved.approve_status) == ('未审批', '已审批')
-        assert pending.project_id == approved.project_id == project.id
+        assert pending.project_id == approved.project_id == project_id
         assert pending.contract_amt == approved.contract_amt == Decimal('100.00')
         assert pending.material_name == '测试材料'
         pending_id = pending.id
         pending.tag, pending.remark = TAG_OUT, '保留人工备注'
-        s.flush()
+        old_run = history.save_run_record(
+            s, run_type='fetch', target='jc_contract 全量', status='success',
+            success_count=7, detail=R.fetch_detail(), started_at=None,
+        )
+        old_run_id = old_run.id
 
-        records[0].update(AppStatus=1, CntSumVat='125.00')
-        again = _run_fetch(s, confirmed=True, client_factory=lambda: client,
-                           sync=lambda *args, **kwargs: {})
-        assert (again['stats']['inserted'], again['stats']['refreshed']) == (0, 2)
-        assert again['receipt']['summary']['changed'] == 1
-        assert again['receipt']['summary']['unchanged'] == 1
-        s.expire_all()
+    assert http.get('/api/m14/jc-ignore/receipt').status_code == 422
+    old_receipt = history_receipt(old_run_id)
+    assert old_receipt['matched'] == 7
+    assert old_receipt['matched_items'] is old_receipt['matched_items_total'] is None
+
+    records[0].update(AppStatus=1, CntSumVat='125.00')
+    records.append({**records[1], 'BillNo': '__approval_new__', 'BillDt': '2026-11-09',
+                    'CntSumVat': '9999999999999999.99'})
+    again = post_fetch()
+    assert (again['stats']['inserted'], again['stats']['refreshed']) == (1, 2)
+    assert again['since'] == '2026-11-03'
+    assert again['receipt']['summary']['changed'] == 1
+    assert again['receipt']['summary']['unchanged'] == 1
+    assert again['receipt']['matched_items_total'] == 3
+    assert [(item['contract_no'], item['status'], item['i8_amount']) for item in again['receipt']['matched_items']] == [
+        ('__approval_new__', 'inserted', '9999999999999999.99'),
+        ('__approval_0__', 'updated', '125.00'),
+        ('__approval_1__', 'unchanged', '100.00'),
+    ]
+    assert history_receipt(again['run_record_id']) == again['receipt']
+    ledger = http.get('/api/m11/list')
+    assert ledger.status_code == 200
+    assert ledger.json()['fetch_default_since'] == '2026-11-06'
+    with session_scope() as s:
         same = R.one_by_no(s, '__approval_0__')
         assert same.id == pending_id
         assert same.approve_status == '已审批'
         assert same.contract_amt == Decimal('125.00')
         assert (same.tag, same.remark) == (TAG_OUT, '保留人工备注')
+
+    monkeypatch.setattr(FS, 'RECEIPT_ITEM_LIMIT', 2)
+    records[0].update(CntSumVat='130.00')
+    records.append({**records[1], 'BillNo': '__approval_latest__', 'CntSumVat': ''})
+    capped = post_fetch()['receipt']
+    assert capped['matched_items_total'] == 4
+    assert [(item['contract_no'], item['status'], item['i8_amount']) for item in capped['matched_items']] == [
+        ('__approval_latest__', 'inserted', None),
+        ('__approval_0__', 'updated', '130.00'),
+    ]
+    assert history_receipt(capped['id']) == capped

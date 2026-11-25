@@ -3,6 +3,7 @@
 .ledger-card-head{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf);border-radius:var(--radius-card) var(--radius-card) 0 0;flex-wrap:wrap}
 .ledger-card-head h1{font-size:calc(15px * var(--fscale));font-weight:600}
 .ledger-card-body{padding:calc(16px * var(--fscale))}
+.ledger-draft-error{margin-block-end:.5em;overflow-wrap:anywhere}
 .ledger-view-project,.ledger-summary,.ledger-exports{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .ledger-card .ant-btn,.ledger-export-dialog .ant-btn{border-radius:var(--radius-pill);font-size:calc(12px * var(--fscale));height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));padding:0 calc(12px * var(--fscale))}
 .ledger-summary>button,.ledger-card .ledger-delete{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale))}

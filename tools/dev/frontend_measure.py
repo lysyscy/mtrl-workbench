@@ -61,7 +61,7 @@ def quality(rows, *, expected=None, interactions=()):
         if row['font_status'] != 'loaded':
             warnings.append({'sample': key, 'reason': 'font-set-still-loading'})
     for row in interactions:
-        if row['action'] in {'inventory-input', 'inventory-clear'} and row.get('api'):
+        if row['action'] in {'inventory-input', 'inventory-apply', 'inventory-clear'} and row.get('api'):
             errors.append({'action': row['action'], 'reason': 'unexpected-filter-request'})
         if row.get('next_two_frames_ms') is not None and row['action'].endswith('return'):
             warnings.append({'action': row['action'],
@@ -182,23 +182,30 @@ def prime(page, base):
 
 def inventory_interactions(page):
     page.evaluate(EVENT_OBSERVER)
-    sys.path.insert(0, str(ROOT/'apps/frontend/tests'))
-    from preview_select import pick_option
     page.locator('.sidebar nav a').filter(has_text='库存单据与调整单').click()
     ready(page, '库存单据与调整单')
-    pick_option(page, '库存核算期间模式', '全部')
-    page.get_by_role('button', name='列筛选', exact=True).click()
-    field = page.get_by_label('列包含文字', exact=True)
-    clear = page.get_by_role('button', name='清除全部列', exact=True)
-    field.press_sequentially('钢')
-    clear.click()
-    ready(page, '库存单据与调整单')
+    page.locator('.inventory-toolbar .business-period-trigger').click()
+    page.get_by_role('dialog', name='库存核算期间选择', exact=True).get_by_text('全部', exact=True).click()
+    page.keyboard.press('Escape')
+    grid = page.locator('.inventory-grid')
+    trigger = grid.locator('.ag-header-cell[col-id="material"] .ag-header-cell-filter-button')
+    popup = page.get_by_role('group', name='物料筛选', exact=True)
     rows = []
-    for n in range(1, 6):
-        for name, fn in [('inventory-input', lambda: field.press_sequentially('钢')), ('inventory-clear', clear.click)]:
+    for n in range(6):
+        for name in ('inventory-apply', 'inventory-clear'):
+            grid.and_(page.locator('[aria-busy="false"]')).wait_for(timeout=30000)
+            trigger.click()
+            if name == 'inventory-apply':
+                candidate = popup.locator('.grid-value-filter-candidate').first
+                candidate.hover()
+                action = candidate.get_by_role('button')
+            else:
+                action = popup.get_by_role('button', name='清除筛选', exact=True)
             start = page.evaluate('performance.now()')
-            fn()
+            action.click()
             ready(page, '库存单据与调整单')
+            if n == 0:
+                continue
             page.wait_for_timeout(100)
             data = page.evaluate("""start=>({events:window.__measure.events.filter(x=>x.start>=start),longs:window.__measure.long.filter(x=>x.start>=start),api:performance.getEntriesByType('resource').filter(x=>x.startTime>=start&&x.name.includes('/api/')).map(x=>({path:x.name.replace(location.origin,''),duration:x.duration}))})""", start)
             rows.append(dict(action=name, sample=n, **data))
