@@ -45,7 +45,7 @@ registerHooks({
       'export const contentWidth = numberColumnWidth, fixedWidth = numberColumnWidth, textWidth = numberColumnWidth, gridTheme = {};');
     if (specifier === './dialog-close') return data('export const DialogContents = props => props.children; export const useDialogClose = ({close}) => ({requestClose: close});');
     if (specifier === 'react-router') return data('export const Link = "link"; export const useSearchParams = () => [new URLSearchParams()];');
-    if (specifier === 'antd/es/app') return data('export default {useApp: () => ({message: {info() {}, error() {}}})};');
+    if (specifier === 'antd/es/app') return data('export default {useApp: () => ({message: {info() {}, error() {}, success() {}}})};');
     if (specifier.startsWith('antd/es/')) return data(placeholder);
     if (specifier === '@tanstack/react-query') return data('export const useQueryClient = () => ({});');
     if (specifier === './history') return data('export const useHistoryGuard = () => {}; export const readHistory = () => {};');
@@ -70,12 +70,12 @@ const root = '/api/m03/print-batches';
 
 function walk(value) {
   if (Array.isArray(value)) return value.flatMap(walk);
-  return value?.props ? [value, ...walk(value.props.children)] : [];
+  return value?.props ? [value, ...walk(value.props.children), ...walk(value.props.footer)] : [];
 }
 
 function text(value) {
   if (Array.isArray(value)) return value.map(text).join('');
-  if (value?.props) return text(value.props.children);
+  if (value?.props) return text(value.props.children) + text(value.props.footer);
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
@@ -195,13 +195,13 @@ function mountNotices(t, handle) {
     if (surface === dialog) dialog();
   }
   return {
-    dialog, click, checkbox,
+    page, dialog, click, checkbox,
     check: (id, checked) => checkbox(id).onChange({target: {checked}}),
     count: () => text(walk(page()).find(node => node.props.className === 'notice-selection').props.children[0]),
     paste(ids) {
       click('粘贴单据号勾选');
       const paste = walk(page()).find(node => node.type === 'NoticePaste');
-      assert.equal(paste.props.open, true);
+      assert.ok(paste, 'the paste dialog opens when requested');
       paste.props.apply(ids);
       paste.props.close();
     },
@@ -213,6 +213,27 @@ function mountNotices(t, handle) {
     },
   };
 }
+
+test('Excel export downloads directly and keeps a failure at the toolbar', async t => {
+  const replies = [Response.json({ ok: false, message: '合成导出错误' }, {status: 503}),
+    { ok: true, rows: 3, filename: 'notices.xlsx', content_b64: 'c2FtcGxl' }];
+  const downloads = [];
+  globalThis.document = {createElement: () => ({click() { downloads.push(this.download); }})};
+  t.after(() => { delete globalThis.document; });
+  const ui = mountNotices(t, (path, request) => {
+    assert.equal(path, '/api/m03/notices/export');
+    assert.deepEqual(JSON.parse(request.body), {ids: [1, 2, 3]});
+    return replies.shift();
+  });
+  ui.click('导出 Excel');
+  assert.equal(walk(ui.page()).find(node => text(node) === '导出 Excel' && node.props.onClick).props.loading, true);
+  await until(() => text(ui.page()).includes('Excel 导出失败。合成导出错误'));
+  assert.equal(walk(ui.page()).filter(node => node.props.titleId === 'notice-export-title').length, 0);
+  ui.click('导出 Excel');
+  await until(() => downloads.length === 1);
+  assert.deepEqual(downloads, ['notices.xlsx']);
+  assert.doesNotMatch(text(ui.page()), /合成导出错误/);
+});
 
 for (const closeDuringDispatch of [false, true]) {
   test('accepted single print clears the original checkbox and paste priority' + (closeDuringDispatch ? ' after closing' : ''), async t => {
@@ -384,7 +405,7 @@ test('preparation shows server counts and reconfirmation is required before send
   });
 
   dialog.click('确认本批');
-  await until(() => text(dialog.render()).includes('准备 PDF 1/3 · PN-2'));
+  await until(() => text(dialog.render()).includes('准备 PDF 1/3，当前单据 PN-2'));
   const progress = walk(dialog.render()).find(node => node.type === 'progress');
   assert.equal(progress.props.value, 1);
   assert.equal(progress.props.max, 3);
@@ -469,6 +490,9 @@ test('A4 block exports prepared bytes and switches to IPP on the same batch', as
   dialog.click('导出本批 PDF');
   await until(() => downloads.length > 0 && text(dialog.render()).includes('下载 prepared.pdf'));
   assert.deepEqual(downloads, ['prepared.pdf']);
+  const buttons = walk(dialog.render()).filter(node => node.props.onClick);
+  assert.equal(buttons.find(node => text(node) === '导出本批 PDF').props.type, 'default');
+  assert.deepEqual(buttons.filter(node => node.props.type === 'primary').map(text), ['下载 prepared.pdf']);
   assert.deepEqual(dialog.calls.map(({method, path}) => [method, path]), [
     ['POST', root + '/prepare'], ['POST', path + '/dispatch'],
     ['POST', path + '/export-pdf'], ['GET', '/api/m03/pdf/token'],
@@ -511,7 +535,7 @@ test('refresh finds the exact owner batch, resumes live progress and keeps the t
   const recovered = await recoverNoticePrint(dialog.owner);
   assert.equal(recovered.batch_id, 'live');
   dialog.remount(recovered);
-  assert.match(text(dialog.render()), /投递打印机 1\/3 · PN-2/);
+  assert.match(text(dialog.render()), /投递打印机 1\/3，当前单据 PN-2/);
   assert.equal(walk(dialog.render()).find(node => node.type === 'progress').props.value, 1);
   assert.ok(text(dialog.render()).includes('待投递'));
   const exact = await recoverNoticePrint(dialog.owner);
@@ -523,7 +547,7 @@ test('refresh finds the exact owner batch, resumes live progress and keeps the t
   dialog.remount(exact);
   await until(() => text(dialog.render()).includes('结果待核实'));
   const displayed = text(dialog.render());
-  assert.match(displayed, /PN-1：打印机已接收 · IPP · 作业号 123/);
+  assert.match(displayed, /PN-1：打印机已接收，通道 IPP，作业号 123/);
   assert.match(displayed, /PN-2：明确失败.*第一通道拒绝.*第二通道拒绝/);
   assert.match(displayed, /PN-3：结果待核实.*勿盲目重打/);
   assert.equal(dialog.calls.filter(call => call.method === 'POST').length, 0);

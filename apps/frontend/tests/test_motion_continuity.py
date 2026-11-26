@@ -88,15 +88,18 @@ def test_appearance_close_keeps_the_next_input_and_one_layout_slot(server, brows
     assert page.locator('.main').evaluate('e => e.clientWidth') >= width - panel_width - 1
 
 
-def test_controlled_modal_finishes_when_motion_preference_changes_during_exit(server, browser_page):
+def test_notice_paste_reopens_fresh_after_reducing_motion_during_exit(server, browser_page):
     page, _ = browser_page
     login(page, server)
     page.get_by_role('link', name='付款通知书', exact=True).click()
-    page.get_by_role('button', name='导出 Excel', exact=True).click()
-    expect(page.get_by_role('dialog', name='导出付款通知书台账', exact=True)).to_be_visible()
-    page.get_by_role('dialog').get_by_role('button', name='取消', exact=True).click()
+    trigger = page.get_by_role('button', name='粘贴单据号勾选', exact=True)
+    trigger.click()
+    dialog = page.get_by_role('dialog', name='粘贴单据号勾选', exact=True)
+    dialog.get_by_role('textbox', name='单据号', exact=True).fill('已放弃的单据号')
+    dialog.get_by_role('button', name='取消', exact=True).click()
+    page.get_by_role('button', name='放弃并关闭', exact=True).click()
     page.locator('.business-dialog-motion-leave-active').wait_for(state='attached')
     page.emulate_media(reduced_motion='reduce')
     expect(page.locator('.business-modal-root .ant-modal-wrap')).to_be_hidden(timeout=1500)
-    page.get_by_role('button', name='导出 Excel', exact=True).click()
-    expect(page.get_by_role('dialog', name='导出付款通知书台账', exact=True)).to_be_visible()
+    trigger.click()
+    expect(dialog.get_by_role('textbox', name='单据号', exact=True)).to_have_value('')

@@ -1,4 +1,5 @@
 import Button from 'antd/es/button';
+import { useId } from 'react';
 import type { NoticeRow } from './notices-api';
 import { money } from './notices-api';
 import type { Candidate } from './notice-contract';
@@ -11,6 +12,7 @@ interface Props {
   current: Candidate | undefined; disabled: boolean;
 }
 export function SupplierStep({row,supplier,choose,matches,loading,error,retry,contracts,contractLoading,contractError,retryContracts,current,disabled}: Props) {
+  const radioName = useId();
   const names = matches?.cands ?? [];
   const pool = matches?.pool.filter(name => !names.includes(name) && name.includes(supplier.trim())) ?? [];
   return <div className="association-supplier-pane">
@@ -27,7 +29,7 @@ export function SupplierStep({row,supplier,choose,matches,loading,error,retry,co
       {error && <p role="alert" className="notice">{error}<Button onClick={retry}>重读供应商</Button></p>}
       {matches && <p>{matches.level_name}，命中 {names.length} 家{names.length > 1 ? '，请选择，不自动取第一家。' : names.length === 1 ? '，请核对后继续。' : '，可手工指定。'}</p>}
       {matches?.level === 4 && <p className="danger">仅2字片段命中，请核对供应商全名。</p>}
-      {names.length > 0 && <div className="association-candidate-list" role="radiogroup" aria-label="匹配的供应商">{names.map(name => <label className="notice-choice" key={name}><input type="radio" name="supplier-candidate" checked={supplier === name} disabled={disabled} onChange={() => choose(name)} /><span>{name}</span></label>)}</div>}
+      {names.length > 0 && <div className="association-candidate-list" role="radiogroup" aria-label="匹配的供应商">{names.map(name => <label className="notice-choice" key={name}><input type="radio" name={radioName} checked={supplier === name} disabled={disabled} onChange={() => choose(name)} /><span>{name}</span></label>)}</div>}
       <label className="association-supplier-input">供应商名称<input value={supplier} maxLength={128} disabled={disabled} onChange={e => choose(e.target.value)} /></label>
       {matches && !matches.pool.length && <p>本项目暂无集采合同供应商，可直接录入全名。</p>}
       {pool.length > 0 && (supplier.trim() || names.length === 0) && <div className="association-candidate-list" role="group" aria-label="本项目其他供应商">{pool.map(name => <Button className="notice-pool" key={name} disabled={disabled} onClick={() => choose(name)}>{name}</Button>)}</div>}

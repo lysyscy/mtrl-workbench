@@ -10,7 +10,6 @@ import Checkbox from 'antd/es/checkbox';
 import { EnumTag } from './enum-tag';
 import Button from 'antd/es/button';
 import { readHistory, useHistoryGuard } from './history';
-import { BusinessModal } from './business-modal';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -40,8 +39,8 @@ import { NoticePrint, PrinterSettings, recoverNoticePrint } from './notice-print
 import type { BatchView } from './notice-print';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { NoticeFlows } from './notice-flows';
+import { saveBlob } from './flow-api';
 import { TimePicker, timeMatches, timeRange } from './time-picker';
-import { DialogContents, useDialogClose } from './dialog-close';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const noticeRowId = (row: NoticeRow) => String(row.notice_id);
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }
@@ -105,7 +104,9 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const client = useQueryClient(), api = useRef<GridApi<NoticeRow> | null>(null), gridRoot = useRef<HTMLDivElement>(null), pageRoot = useRef<HTMLDivElement>(null), lock = useRef(false), mounted = useRef(true);
   const [filters, setFilters] = useState(defaults);
   const [{picked, pasteOrder}, setSelection] = useState(() => ({picked: new Map<number, symbol>(), pasteOrder: new Set<number>()}));
-  const [busy, setBusy] = useState(false), [warning, setWarning] = useState(''), [error, setError] = useState(''), [fetchOpen, setFetchOpen] = useState(false), [exportOpen, setExportOpen] = useState(false), [pasteOpen,setPasteOpen] = useState(false), [pasteScope,setPasteScope] = useState<number[] | null>(null);
+  const [busy, setBusy] = useState(false), [warning, setWarning] = useState(''), [error, setError] = useState(''), [fetchOpen, setFetchOpen] = useState(false), [pasteOpen,setPasteOpen] = useState(false), [pasteScope,setPasteScope] = useState<number[] | null>(null);
+  const exportLock = useRef(false);
+  const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState('');
   function clearSelection() {
     setSelection(old => ({picked: new Map(), pasteOrder: old.pasteOrder.size ? new Set() : old.pasteOrder}));
   }
@@ -122,7 +123,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   }
   const printLock = useRef(false);
   const [flowNotice,setFlowNotice] = useState<NoticeRow|null>(null);
-  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[];resumed?:BatchView; single?: SinglePrintSelection}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
+  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[];resumed?:BatchView;hiddenIds?: ReadonlySet<number>;single?: SinglePrintSelection}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
   const pendingPrintSelections = useRef(new Map<string, SinglePrintSelection>());
   function observePrintBatch(batch: BatchView) {
     const selection = pendingPrintSelections.current.get(batch.batch_id);
@@ -276,6 +277,12 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const actionsUnavailable = unavailable || searchBusy;
   const batchUnavailable = actionsUnavailable || !picked.size || hidden > 0;
   const batchReason = searchBusy ? '正在更新筛选结果' : hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
+  function openManualLink(noticeId: number) {
+    const row = sourceRows.find(item => item.notice_id === noticeId);
+    if (!row || row.is_excluded || row.is_revoked || row.category !== 'jc') return false;
+    setMaintenance({ kind: 'link', row });
+    return true;
+  }
   function openPayment() {
     if (batchUnavailable || !selectedPay.length || draft) return;
     const updates: Record<number, PayOverride> = {};
@@ -346,7 +353,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   function startPrint(mode: 'print'|'pdf') {
-    if (unavailable || printLock.current || !picked.size || draft) return;
+    if (actionsUnavailable || printLock.current || !picked.size || draft) return;
     const grid = api.current;
     const orderedRows = noticePrintRows(selected, pasteOrder, grid?.isDestroyed() ? null : grid);
     printLock.current = true;
@@ -354,7 +361,8 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     const originalPick = row && picked.get(row.notice_id);
     const single = mode === 'print' && picked.size === 1 && orderedRows.length === 1 && row && originalPick
       ? {noticeId: row.notice_id, originalPick} : undefined;
-    setPrint({mode, rows: orderedRows, ...(single ? {single} : {})});
+    const hiddenIds = new Set(needle ? scope.filter(item => picked.has(item.notice_id) && !shownIds.has(item.notice_id)).map(item => item.notice_id) : []);
+    setPrint({mode, rows: orderedRows, hiddenIds, ...(single ? {single} : {})});
   }
   function pick(id: number, checked: boolean) {
     if (searchBusy) return;
@@ -422,7 +430,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const baseColumns = useMemo<ColDef<NoticeRow>[]>(() => ([
     selectionColumn,
     { field: 'doc_date', headerName: '单据日期', pinned: 'left', wrapText: false }, { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', wrapText: false },
-    { field: 'project_display', headerName: '付款项目', ...textWidth(96, 160, scale, 1), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? <EllipsisText text={p.data!.project_display} fullText={p.data!.project_name||p.data!.project_display}/> : <Button htmlType="submit" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
+    { field: 'project_display', headerName: '付款项目', ...textWidth(96, 160, scale, 1), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? <EllipsisText text={p.data!.project_display} fullText={p.data!.project_name||p.data!.project_display}/> : <Button htmlType="button" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
     { field: 'category_label', headerName: '分类', wrapText: true, cellRenderer: (p: ICellRendererParams<NoticeRow>) => { if (p.node.rowPinned) return ''; const r = p.data!, label = archiveLabel(r); return label ? <span><span className={`notice-tag ${r.is_excluded ? r.exclude_source : 'revoked'}`} title={r.exclude_rule_hint}>{label}</span>{r.is_revoked && (cents(r.amount_paid) > 0n || r.has_link) && <span className="notice-tag rule notice-revoke-hint">请先撤销付款 / 解绑关联</span>}</span> : <Select className="notice-category-select" aria-label={`${r.bill_no}分类`} value={r.category} disabled={current.current.unavailable} onChange={value => void current.current.action('/api/m03/actions/category', { ids: [r.notice_id], category: value })} options={Object.entries(categories).map(([value,label])=>({value,label}))} popupMatchSelectWidth={false} labelRender={option=><EnumTag kind="category" value={String(option.label)}/>}/>; } },
     ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(key==='biz_type'||key==='input_by' ? {} : key==='bill_name' ? textWidth(128,280,scale,2) : key==='payee' ? textWidth(112,240,scale,2) : textWidth(180,280,scale,1)),
       ...(key === 'jc_supplier' ? { cellRenderer: (p: ICellRendererParams<NoticeRow>) => { const r=p.data!; if(p.node.rowPinned || (r.category !== 'jc' || r.is_excluded || r.is_revoked) && !r.has_link) return '—'; return <Button data-contract-notice={r.notice_id} className="notice-association-trigger" htmlType="button" aria-label={`${r.bill_no}供应商与合同关联`} disabled={current.current.unavailable} onClick={() => current.current.open('link',r)}><EllipsisText text={r.jc_supplier || '选择供应商与合同'}/><small>{r.has_link ? '已关联合同' : '未关联合同'}</small></Button>; } } : key==='bill_name'||key==='payee' ? {cellRenderer:(p:ICellRendererParams<NoticeRow>)=><EllipsisText text={String(p.value??'')}/>} : {}) })),
@@ -441,7 +449,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         return key === 'amount_paid' ? <PaidAmountCell row={row} /> : <span>{money(row[key])}</span>;
       } })),
     { field: 'approve_status', headerName: '审批状态', cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已批' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> }, { field: 'pay_status', headerName: '付款状态', cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已付清' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
-    { colId: 'actions', headerName: '操作', wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="submit" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="submit" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="submit" className="danger" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
+    { colId: 'actions', headerName: '操作', wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="button" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="button" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="button" danger disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
     if (column.colId === 'pick') return column;
     const original = column.cellRenderer;
@@ -450,7 +458,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       const d = current.current.draft, editing = d && (p.data?.notice_id === -2 || String(p.data?.notice_id) === d.row_id);
       if (p.data?.notice_id === -2 && !d) return '';
       if (!editing) { const content = original ? original(p) : p.value ?? ''; return column.wrapText ? <div style={{width: '100%', minWidth: 0}}>{content}</div> : content; }
-      if (column.colId === 'actions') return <div className="notice-row-actions"><Button htmlType="submit" disabled={current.current.unavailable} onClick={() => void current.current.saveDraft()}>保存</Button><Button htmlType="submit" disabled={current.current.unavailable} onClick={current.current.cancelDraft}>取消</Button></div>;
+      if (column.colId === 'actions') return <div className="notice-row-actions"><Button htmlType="button" disabled={current.current.unavailable} onClick={() => void current.current.saveDraft()}>保存</Button><Button htmlType="button" disabled={current.current.unavailable} onClick={current.current.cancelDraft}>取消</Button></div>;
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
   }), [scale,Boolean(draft),selectionColumn, compareAmounts]);
@@ -478,28 +486,44 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     onGridReady: e => { api.current = e.api; }, postSortRows,
     overlayNoRowsTemplate: '当前筛选条件下没有付款通知书，请调整条件或按月抓取。',
   }), [focusId, postSortRows]);
-  const exportClosing = useDialogClose({ busy, dirty: false, close: () => setExportOpen(false) });
   async function exportExcel() {
-    if (actionsUnavailable || !shown.length || lock.current) return;
-    const ids: number[] = []; api.current?.forEachNodeAfterFilterAndSort(node => { if (node.data) ids.push(node.data.notice_id); });
-    lock.current = true; setBusy(true); setError('');
-    try { const value = await requestJson('/api/m03/notices/export', { method: 'POST', ...body({ ids }) }); if (!record(value) || typeof value.filename !== 'string' || typeof value.content_b64 !== 'string') throw new ApiError('导出结果不完整，请重试。'); const blob = new Blob([decodeBase64(value.content_b64)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = value.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setExportOpen(false); announce(`已导出 ${value.rows} 条通知书。`); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : '导出失败，请重试。'); }
-    finally { lock.current = false; setBusy(false); }
+    if (actionsUnavailable || !shown.length || exportLock.current) return;
+    const ids = new Set<number>();
+    const grid = api.current;
+    if (grid && !grid.isDestroyed()) grid.forEachNodeAfterFilterAndSort(({ data }) => {
+      if (data && shownIds.has(data.notice_id)) ids.add(data.notice_id);
+    });
+    for (const row of shown) ids.add(row.notice_id);
+    exportLock.current = true; setExporting(true); setExportError('');
+    try {
+      const value = await requestJson('/api/m03/notices/export', { method: 'POST', ...body({ ids: [...ids] }) });
+      if (!mounted.current) return;
+      if (!record(value) || typeof value.filename !== 'string' || typeof value.content_b64 !== 'string' || !Number.isSafeInteger(value.rows)) {
+        throw new ApiError('导出结果不完整，请重试。');
+      }
+      saveBlob(new Blob([decodeBase64(value.content_b64)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), value.filename);
+      announce(`已导出 ${value.rows} 条通知书。`);
+    } catch (failure) {
+      if (mounted.current) setExportError(failure instanceof Error ? failure.message : '导出失败，请重试。');
+    } finally {
+      exportLock.current = false;
+      if (mounted.current) setExporting(false);
+    }
   }
   return <NoticeCells.Provider value={cellSaves.cells}><NoticeSelectionContext.Provider value={current.current}><div className="notices-page page-shell page-shell--fill" data-page-layout="fill" ref={pageRoot}>
-    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{selectedAmounts.approved}</b> 元</span><span>本次应付 <b>{selectedAmounts.due}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={clearSelection}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)}
-      onClick={() => void recoverPrint()}>查看打印批次</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
+    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{selectedAmounts.approved}</b> 元</span><span>本次应付 <b>{selectedAmounts.due}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="button" onClick={clearSelection}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)}
+      onClick={() => void recoverPrint()}>查看打印批次</Button><Button htmlType="button" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="button" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
     {payError && <p className="notice" role="alert">{payError}</p>}
-    <section className="notice-card page-fill-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked.keys()], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked.keys()] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked.keys()] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={actionsUnavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={actionsUnavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
+    <section className="notice-card page-fill-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="button" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked.keys()], category: key }); }}>{label}</Button>)}<Button htmlType="button" danger disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked.keys()] }, true); }}>批量剔除</Button><Button htmlType="button" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked.keys()] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="button" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="button" disabled={actionsUnavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="button" loading={exporting} disabled={actionsUnavailable || !shown.length} onClick={() => void exportExcel()}>导出 Excel</Button></div></div>
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>
       <label>分类<Select aria-label="通知书分类" disabled={false} value={filters.category} onChange={value=>setFilters(f=>({...f,category:value, link: ''}))} options={[{value:'',label:'全部'},...Object.entries(categories).map(([value,label])=>({value,label})),{value:'exclude',label:'剔除'}]}/></label><label>合同关联（集采）<Select aria-label="合同关联" disabled={!['','jc'].includes(filters.category)} value={filters.link} onChange={value=>setFilters(f=>({...f,link:value}))} options={[{value:'',label:'全部'},{value:'no',label:'未关联'},{value:'yes',label:'已关联'}]}/></label>
-      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="submit" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label><Button htmlType="submit" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
-      <Button htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button></div>
-      <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setSelection({picked: new Map(ids.map(id => [id, Symbol()])), pasteOrder: new Set(ids)}); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { clearSelection(); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
-      {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
-      {warning && <p className="notice" role="alert">{warning}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setWarning('')).catch(e => setError(e.message))}>重读核对</Button></p>}{error && <p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
+      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="button" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label><Button htmlType="button" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
+      <Button htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button></div>
+      {exportError && <p className="notice notice-export-error" role="alert">Excel 导出失败。{exportError}</p>}
+      <DialogPresence>{pasteOpen && <NoticePaste blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setSelection({picked: new Map(ids.map(id => [id, Symbol()])), pasteOrder: new Set(ids)}); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { clearSelection(); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />}</DialogPresence>
+      {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="button" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
+      {warning && <p className="notice" role="alert">{warning}<Button htmlType="button" disabled={busy} onClick={() => void refresh().then(() => setWarning('')).catch(e => setError(e.message))}>重读核对</Button></p>}{error && <p className="notice" role="alert">{error}<Button htmlType="button" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
       {cellError && <p className="notice" role="alert">{cellError}</p>}
       {cellSaves.uncertain && <div className="notice-feedback"><Button disabled={blocked || cellSaves.busy} onClick={() => void cellSaves.reread('')}>重读核对金额</Button><Button disabled={blocked || cellSaves.busy || !cellSaves.verified} onClick={() => cellSaves.confirm()}>已核对，继续编辑</Button></div>}
       {cellSaves.uncertain && cellSaves.readback.map(item=><p key={item.key} className="notice" role="status">{item.bill}，{item.field}：当前输入 {item.input}，系统 {item.actual}{item.submitted !== null && `，本次提交 ${item.submitted}`}</p>)}
@@ -513,23 +537,23 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         </PublishedNotices.Provider>
       )}
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
-      {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
+      {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="button" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="button" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
       <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={document => { if (!unavailable) setMaintenance({ kind: 'ownership', document }); }} />
-      <DialogPresence>{autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
+      <DialogPresence>{autoIds && <AutoLinkDialog ids={autoIds} blocked={blocked || !active} close={() => setAutoIds(null)}
+        refresh={async () => { await refresh(); }} announce={announce} openManualLink={openManualLink} />}</DialogPresence>
       <DialogPresence>{maintenance?.kind === 'link' ? <ContractDialog row={maintenance.row} blocked={blocked || !active} close={() => { const id=maintenance.row.notice_id; setMaintenance(null); requestAnimationFrame(() => gridRoot.current?.querySelector<HTMLButtonElement>(`[data-contract-notice="${id}"]`)?.focus({preventScroll:true})); }} refresh={()=>refresh()} announce={announce} />
         : maintenance?.kind === 'ownership' ? <OwnershipDialog document={maintenance.document} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh('ownership')} announce={announce} />
         : maintenance && <NoticeDeleteDialog row={maintenance.row} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh()} announce={announce} />}</DialogPresence>
     </section>
-    <DialogPresence>{print && <NoticePrint key={printOwner} rows={print.rows} mode={print.mode} owner={printOwner} resumed={print.resumed} blocked={blocked || !active}
+    <DialogPresence>{print && <NoticePrint key={printOwner} rows={print.rows} hiddenIds={print.hiddenIds} scale={scale} mode={print.mode} owner={printOwner} resumed={print.resumed} blocked={blocked || !active}
       printSelection={{
         start: batchId => { if (print.single) pendingPrintSelections.current.set(batchId, print.single); },
         observe: observePrintBatch,
         pending: batchId => mounted.current && pendingPrintSelections.current.has(batchId),
       }} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
-    <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
+    <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} scale={scale} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
     <DialogPresence>{printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}</DialogPresence>
     <DialogPresence>{payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
     <DialogPresence>{fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} />}</DialogPresence>
-    <BusinessModal open={exportOpen && active && !blocked} className="project-dialog" titleId="notice-export-title" requestClose={exportClosing.requestClose}><DialogContents titleId="notice-export-title" title="导出付款通知书台账" closing={exportClosing}><p>导出当前筛选的 {shown.length} 条通知书，按表格显示顺序排列。</p>{error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={exportClosing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={actionsUnavailable || !shown.length} onClick={() => void exportExcel()}>保存到本地</Button></div></DialogContents></BusinessModal>
   </div></NoticeSelectionContext.Provider></NoticeCells.Provider>;
 }

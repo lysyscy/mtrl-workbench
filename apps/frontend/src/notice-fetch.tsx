@@ -14,11 +14,10 @@ export function NoticeFetch({ me, blocked, close }: { me: Identity | null; block
   const [month, setMonth] = useState(currentMonth);
   const [checking, setChecking] = useState(false);
   const [recovery, setRecovery] = useState<{ message: string; checked: boolean }>();
-  const initialMonth = useRef(month);
   const previousJob = useRef<number | undefined>(undefined);
   const action = useI8FetchAction({ me, paused: blocked, source: 'notices', scopeKey: month });
   const closing = useDialogClose({
-    busy: action.busy || checking, dirty: !action.sent && month !== initialMonth.current,
+    busy: action.busy || checking, dirty: false,
     beforeRequestClose: action.cancelWaiting, close: () => { void action.cancelKick(); close(); }, active: !blocked,
   });
   const validMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
@@ -51,15 +50,17 @@ export function NoticeFetch({ me, blocked, close }: { me: Identity | null; block
     } finally { setChecking(false); }
   }
 
-  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="compact" className="project-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
     <DialogContents titleId="notice-fetch-title" title="抓取 i8 付款通知书" closing={closing}>
       <div className="dialog-body">
-        <I8FetchStatus action={action} me={me} busyLabel="正在确认抓取任务…" />
-        {(!action.sent || action.busy) && <>
+        <div className="notice-fetch-connection" role="group" aria-label="账号与 i8 会话">
+          <I8FetchStatus action={action} me={me} busyLabel="正在确认抓取任务…" />
+        </div>
+        {(!action.sent || action.busy) && <div className="notice-fetch-range" role="group" aria-label="抓取范围">
           <div className="time-picker-field"><span>抓取月份</span><TimePicker label="抓取月份" value={month} modes={['月']}
             disabled={action.busy || blocked} onChange={value => { setMonth(value); setRecovery(undefined); action.reset(); }} /></div>
           <p>按所选月份全量抓取。保存后自动关联本次新增或刚转为已批、且依据明确的集采通知书。</p>
-        </>}
+        </div>}
         {action.pending && !action.busy && <div className="notice">
           <p>抓取任务是否已受理尚待核对。</p>
           <Button loading={checking} onClick={() => void recover()}>读取抓取任务</Button>

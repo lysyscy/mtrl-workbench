@@ -1,8 +1,8 @@
-import { createContext, memo, useContext, useMemo } from 'react';
+import { createContext, memo, useContext, useId, useLayoutEffect, useMemo, useRef } from 'react';
 import Button from 'antd/es/button';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import type { NoticeRow } from './notices-api';
 import { cents, decimal, money } from './notices-api';
 import { cacheFontMeasurement, cachedNumberColumnWidths, numberColumnWidth, fullTextWidth, textWidth } from './grid';
@@ -11,8 +11,14 @@ import { BoundedGrid } from './bounded-grid';
 import type { BoundedGridMetrics } from './bounded-grid';
 
 interface PayView { id:string; notice:NoticeRow|null; bill:string; project:string; approval:string; approved:string; paid:string; due:string; pay:string; reason:string }
-interface Editing { disabled:boolean; waiting:boolean; methods:string[]; draft:(row:NoticeRow)=>{amount:string;pay_method:string}; update:(row:NoticeRow,field:'amount'|'pay_method',value:string)=>void; remove:(id:number)=>void }
-const PaymentEditing=createContext<Editing>(null!);
+interface Editing {
+  disabled: boolean; waiting: boolean; methods: string[];
+  draft: (row: NoticeRow) => { amount: string; pay_method: string };
+  update: (row: NoticeRow, field: 'amount' | 'pay_method', value: string) => void;
+  remove: (id: number) => void;
+  amountErrors: ReadonlyMap<number, string>; validateOnBlur: (row: NoticeRow) => void;
+}
+const PaymentEditing = createContext<(Editing & { amountIdPrefix: string })>(null!);
 const MethodSelect = memo(function MethodSelect({row, value, disabled, methods, update}: Pick<Editing,'disabled'|'methods'|'update'> & {row: NoticeRow; value: string}) {
   const options = useMemo(() => methods.map(value => ({value, label:value})), [methods]);
   return <Select aria-label={row.bill_no+'实际付款方式'} disabled={disabled} value={value}
@@ -22,9 +28,47 @@ function Method({data}:ICellRendererParams<PayView>) {
   const edit = useContext(PaymentEditing), row = data!.notice;
   return row ? <MethodSelect row={row} value={edit.draft(row).pay_method} disabled={edit.disabled || Boolean(data!.reason) || edit.waiting} methods={edit.methods} update={edit.update}/> : null;
 }
-function Amount({data}:ICellRendererParams<PayView>){const edit=useContext(PaymentEditing),row=data!.notice;return row?<input aria-label={row.bill_no+'本次付款金额'} inputMode="decimal" disabled={edit.disabled||Boolean(data!.reason)||edit.waiting} value={edit.draft(row).amount} onChange={e=>edit.update(row,'amount',e.target.value)}/>:data!.pay;}
+function Amount({ data }: ICellRendererParams<PayView>) {
+  const edit = useContext(PaymentEditing);
+  const row = data?.notice;
+  if (!row) return data?.pay;
+  const inputId = `${edit.amountIdPrefix}-${row.notice_id}`;
+  const errorId = `${inputId}-error`;
+  const rowError = edit.amountErrors.get(row.notice_id);
+  return <div className="notice-pay-amount">
+    <input id={inputId} aria-label={row.bill_no + '本次付款金额'} inputMode="decimal"
+      aria-invalid={rowError ? 'true' : 'false'} aria-describedby={rowError ? errorId : undefined}
+      disabled={edit.disabled || Boolean(data?.reason) || edit.waiting} value={edit.draft(row).amount}
+      onChange={event => edit.update(row, 'amount', event.target.value)}
+      onBlur={() => edit.validateOnBlur(row)} />
+    {rowError && <small id={errorId} className="notice-pay-amount-error">{rowError}</small>}
+  </div>;
+}
 function Actions({data}:ICellRendererParams<PayView>){const edit=useContext(PaymentEditing);return data!.notice?<Button disabled={edit.disabled} onClick={()=>edit.remove(data!.notice!.notice_id)}>移出</Button>:null;}
-export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warningIds,scale,height,onMetrics,...editing}:Editing&{scale:number;rows:NoticeRow[];due:(row:NoticeRow)=>string;normalize:(value:string)=>string|null;warningIds:number[];height?:number|undefined;onMetrics?:(metrics:BoundedGridMetrics)=>void}){
+export const PaymentGrid = memo(function PaymentGrid({ rows, due, normalize, warningIds, scale, height, onMetrics, focusAmountIds, ...editing }: Editing & {
+  scale: number; rows: NoticeRow[]; due: (row: NoticeRow) => string; normalize: (value: string) => string | null;
+  warningIds: number[]; height?: number | undefined; onMetrics?: (metrics: BoundedGridMetrics) => void;
+  focusAmountIds: ReadonlySet<number> | null;
+}) {
+  const amountIdPrefix = useId();
+  const gridApi = useRef<GridApi<PayView> | null>(null);
+  useLayoutEffect(() => {
+    const api = gridApi.current;
+    if (!focusAmountIds || !api || api.isDestroyed()) return;
+    let firstId: number | undefined;
+    api.forEachNodeAfterFilterAndSort(node => {
+      const id = node.data?.notice?.notice_id;
+      if (firstId === undefined && id !== undefined && focusAmountIds.has(id)) firstId = id;
+    });
+    if (firstId === undefined) return;
+    const invalid = api.getRowNode(String(firstId));
+    if (!invalid) return;
+    const inputId = `${amountIdPrefix}-${firstId}`;
+    api.ensureColumnVisible('pay');
+    api.ensureNodeVisible(invalid, 'middle');
+    const frame = requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [amountIdPrefix, focusAmountIds]);
   const initialViews = useMemo(() => rows.map(row => {
     const available = due(row);
     return {id:String(row.notice_id), notice:row, bill:row.bill_no, project:row.project_display, approval:row.approve_status||'未批',
@@ -67,9 +111,15 @@ export const PaymentGrid = memo(function PaymentGrid({rows,due,normalize,warning
     {field:'approval',headerName:'审批状态',...approval,cellRenderer:({value,data}:ICellRendererParams<PayView>)=>data!.notice?<Tag className={'status-tag '+(value==='已批'?'status-positive':'status-pending')}>{value}</Tag>:null},
     ...(['approved','paid','due'] as const).map((field,index):ColDef<PayView>=>({field,headerName:['审批金额','已付金额','本次应付'][index]!,minWidth:floors[index]!,cellClass:'money',wrapText:false})),
     {colId:'method',headerName:'实际付款方式',minWidth:110*scale,cellRenderer:Method},
-    {field:'pay',headerName:'本次付款金额',minWidth:payFloor,cellClass:'money',cellRenderer:Amount},
+    {field:'pay',headerName:'本次付款金额',minWidth:payFloor,cellClass:'money',autoHeight:true,cellRenderer:Amount},
     {field:'reason',headerName:'不可付原因',minWidth:160*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
     {colId:'actions',headerName:'操作',...actions,cellRenderer:Actions},
   ],[signature,scale]);
-  return <PaymentEditing.Provider value={editing}><BoundedGrid singleLine fitAfterFonts minRows={4} height={height} onMetrics={onMetrics} table="notice-payment" label="本次付款清单" className="notice-pay-table" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale} grid={{getRowClass:p=>p.data?.notice&&warningIds.includes(p.data.notice.notice_id)?'payment-term-warning':''}}/></PaymentEditing.Provider>;
+  return <PaymentEditing.Provider value={{ ...editing, amountIdPrefix }}>
+    <BoundedGrid singleLine fitAfterFonts minRows={4} height={height} onMetrics={onMetrics} table="notice-payment" label="本次付款清单" className="notice-pay-table" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale}
+      grid={{
+        onGridReady: event => { gridApi.current = event.api; },
+        getRowClass: p => p.data?.notice && warningIds.includes(p.data.notice.notice_id) ? 'payment-term-warning' : '',
+      }} />
+  </PaymentEditing.Provider>;
 });

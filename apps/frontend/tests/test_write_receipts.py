@@ -70,6 +70,20 @@ def test_payment_date_recheck_keeps_dialog_and_input_positions(server,browser_pa
     assert len(frames)>3
     assert all(abs(frame[key]-frames[0][key])<1 for frame in frames for key in ('x','y','w','h','fx','fy')),frames
 
+    amount=dialog.get_by_label(row['bill_no']+'本次付款金额',exact=True)
+    original=amount.input_value()
+    expect(amount).to_have_attribute('aria-invalid','false')
+    amount.fill('1.001')
+    amount.blur()
+    expect(amount).to_have_attribute('aria-invalid','true')
+    expect(amount).to_have_accessible_description('请输入有效金额，最多两位小数。')
+    confirm.click()
+    expect(amount).to_be_focused()
+    assert not pending
+    amount.fill(original)
+    expect(amount).to_have_attribute('aria-invalid','false')
+    assert amount.get_attribute('aria-describedby') is None
+
 
 def notice_edit_sample(page, server, api):
     rows=get(api,'/api/m03/notice-list',period='')['items']

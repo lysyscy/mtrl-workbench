@@ -143,7 +143,7 @@ function render(mode, connected) {
 function warehouseButton(mode, connected) {
   const [select] = walk(render(mode, connected), node => node.type === 'select');
   select.props.onChange({ target: { value: 'new' } });
-  const [warehouseLabel] = walk(render(mode, connected), node => node.type === 'label' && node.props.children[0] === '新小微仓库名');
+  const [warehouseLabel] = walk(render(mode, connected), node => node.type === 'label' && node.props.children[0] === '新项目对应的仓库名称');
   warehouseLabel.props.children[1].props.onChange({ target: { value: '新建仓库A' } });
   const tree = render(mode, connected);
   const [button] = walk(tree, node => node.props?.children === '查询 i8 仓库名单');
@@ -202,7 +202,7 @@ test('仓库名变化后原下线确认失效', async () => {
   await click(warehouseButton('http', false));
   const tree = render('http', false);
   const [confirm] = walk(tree, node => node.props?.children === '让现有会话下线并继续');
-  const [label] = walk(tree, node => node.type === 'label' && node.props.children[0] === '新小微仓库名');
+  const [label] = walk(tree, node => node.type === 'label' && node.props.children[0] === '新项目对应的仓库名称');
   label.props.children[1].props.onChange({ target: { value: '新建仓库B' } });
   assert.equal(walk(render('http', false), node => node.props?.children === '让现有会话下线并继续').length, 0);
   await click(confirm);

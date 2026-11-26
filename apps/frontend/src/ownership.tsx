@@ -1,5 +1,5 @@
 import Button from 'antd/es/button';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -95,7 +95,10 @@ async function readCandidates(document: OwnershipDocument, signal: AbortSignal) 
     !Array.isArray(response.candidates) || !response.candidates.every(candidate)) {
     throw new ApiError('归属候选读取不完整，请重读。');
   }
-  return { reason: response.reason, shellId: response.shell_id, candidates: response.candidates };
+  const reason = response.kind === 'needs_choice' ? '单据名称匹配到多个归属项目，请选择其中一个。'
+    : response.kind === 'needs_keyword' ? '单据名称未匹配到归属项目，可选择现有项目或新建。'
+    : response.kind === 'not_archived' ? '项目尚未建档，请先补齐项目档案。' : clean(response.reason);
+  return { reason, shellId: response.shell_id, candidates: response.candidates };
 }
 
 export function OwnershipDialog({ document, blocked, close, refresh, announce }: {
@@ -104,6 +107,7 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
 }) {
   const client = useQueryClient();
   const lock = useRef(false);
+  const hintId = useId();
   const session = useI8Session();
   const [value, setValue] = useState(''), [keyword, setKeyword] = useState('');
   const [newName, setNewName] = useState(''), [forceWarehouse, setForceWarehouse] = useState(false);
@@ -134,6 +138,19 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
     ? data?.shellId && name && warehouseReady ? { shell_id: data.shellId, new_small_name: name } : null
     : data?.candidates.some(item => String(item.id) === value) ? { small_id: Number(value) } : null;
   const canSave = !disabled && !waiting && !kick.message && !query.isFetching && !query.isError && keywordMatches && target !== null;
+  let saveHint = '';
+  if (!disabled && !canSave) {
+    if (waiting || kick.message) saveHint = '请先完成 i8 仓库名单查询。';
+    else if (query.isError) saveHint = '请先重读归属项目选项。';
+    else if (query.isFetching || !data) saveHint = '正在读取归属项目选项。';
+    else if (!data.candidates.length && !data.shellId) saveHint = '暂无可选项目，请到项目档案补齐信息。';
+    else if (!value) saveHint = '请选择归属项目。';
+    else if (value === 'new' && !name) saveHint = '请填写新项目对应的仓库名称。';
+    else if (value === 'new' && !warehouseReady) saveHint = warehouse?.name === name
+      ? '请核对仓库名单，并确认是否按此名称建档。' : '请先查询 i8 仓库名单。';
+    else if (!target) saveHint = '请重新选择归属项目。';
+    else if (!keywordMatches) saveHint = word ? '关键词须出现在单据名称中。' : '请从单据名称中选择一段文字作为关键词。';
+  }
 
   async function checkWarehouse(kickToken?: string, choice: SessionChoice = session) {
     if (disabled || !name || lock.current || (!kickToken && kick.message)) return;
@@ -206,47 +223,55 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
     <DialogContents title="指定项目归属" titleId={titleId} closing={closing}>
       <form className="dialog-form" onSubmit={event => { event.preventDefault(); void submit(); }}>
         <div className="dialog-body">
-        <p>{document.number}，{document.name}，{document.project}</p>
+        <div className="ownership-document-name">
+          <span className="muted">{document.source === 'notice' ? '通知书名称' : '合同名称'}</span>
+          <strong>{document.name || '—'}</strong>
+        </div>
+        <p className="muted">单据编号 {document.number || '—'}，项目 {document.project || '—'}</p>
         {query.isPending && <p role="status">正在读取…</p>}
         {query.isError && <p className="notice" role="alert">{query.error.message}<Button disabled={disabled} onClick={() => void query.refetch()}>重读候选</Button></p>}
         {data && <>
-          <p>{data.reason && `${data.reason}。`}关键词须出现在单据名称里；补完档案后须重新抓取，不改本条既有关系。</p>
-          <label>归属小微<select value={value} disabled={disabled} onChange={event => setValue(event.target.value)}>
+          {data.reason && <p>{data.reason}</p>}
+          <p>补完档案后，重新抓取才会按新规则识别归属。</p>
+          <label>归属项目<select value={value} disabled={disabled} onChange={event => setValue(event.target.value)}>
             <option value="">请选择</option>
             {data.candidates.map(item => <option key={item.id} value={item.id}>{item.display}{item.archived ? '（归档）' : ''}</option>)}
-            {data.shellId && <option value="new">新建具体小微</option>}
+            {data.shellId && <option value="new">新建归属项目</option>}
           </select></label>
-          {value === 'new' && <>
-            <label>新小微仓库名<input value={newName} disabled={disabled} onChange={event => {
+          {value === 'new' && <div className="ownership-warehouse" role="group" aria-label="新项目仓库核对">
+            <label>新项目对应的仓库名称<input value={newName} disabled={disabled} onChange={event => {
               setNewName(event.target.value); setWarehouse(null); setForceWarehouse(false);
             }} /></label>
             <p>{session.mode === SESSION_MODE_BROWSER
-              ? '本次只查名单，不建档：查询由你浏览器里已登录的 i8 标签发出，不登录、不顶号；连接不在时会直接停下。'
-              : '本次只查名单。工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>
+              ? '查询名单时复用浏览器里的 i8 会话。确认补充档案后才会建档。'
+              : '工作台直连遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>
             {waiting && <I8ConnectionWaitStatus />}
             {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
-            <div role="status" className={kick.revocationNotice ? 'notice' : undefined}>{kick.revocationNotice}</div>
+            {kick.revocationNotice && <p role="status" className="notice">{kick.revocationNotice}</p>}
             {kick.message ? <I8KickConfirmationActions {...kick} disabled={disabled || waiting} />
               : <Button disabled={disabled || waiting || !name} onClick={() => void runWhenReady(choice => checkWarehouse(undefined, choice))}>查询 i8 仓库名单</Button>}
             {warehouse && <div>
               <p>{warehouse.degraded ? '未取到名单，不等于名单里没有。' : warehouse.found
                 ? `名单中有该仓库，所属项目：${warehouse.owners.join('、')}` : '名单中没有该仓库；将来同步可能重复建档。'}</p>
               {warehouse.from_cache && <p>使用上次名单：{warehouse.cached_at || '时间未知'}</p>}
-              {warehouse.found && !warehouse.owners.includes(document.project) && <p className="danger">该仓库所属项目与本条壳全名不一致，请核对。</p>}
-              <p>{warehouse.message}</p>
+              {warehouse.found && !warehouse.owners.includes(document.project) && <p className="danger">该仓库所属项目与单据项目不一致，请核对。</p>}
+              {warehouse.message && <p>{warehouse.message}</p>}
               {(!warehouse.found || warehouse.degraded) && <label className="notice-choice"><input type="checkbox" disabled={disabled} checked={forceWarehouse} onChange={event => setForceWarehouse(event.target.checked)} />已了解上述结果，仍按此名建档</label>}
             </div>}
-          </>}
+          </div>}
           <label>关键词<input value={keyword} disabled={disabled} onChange={event => setKeyword(event.target.value)} /></label>
           {word && !keywordMatches && <p className="danger">关键词必须出现在单据名称里。</p>}
         </>}
         {!disabled && <OwnershipProjectLink document={document} showNumber />}
         {error && <p className="notice" role="alert">{error}</p>}
         </div>
-        <div className="dialog-actions">
-          {readback ? <Button className="primary" disabled={busy || blocked} onClick={() => void reread()}>重读核对</Button>
-            : <><Button disabled={busy} onClick={closing.requestClose}>取消</Button>
-              <Button htmlType="submit" className="primary" disabled={!canSave}>确认补充档案</Button></>}
+        <div className="dialog-footer">
+          {saveHint && <p className="muted ownership-save-hint" id={hintId}>{saveHint}</p>}
+          <div className="dialog-actions">
+            {readback ? <Button htmlType="button" type="primary" loading={busy} disabled={blocked} onClick={() => void reread()}>重读核对</Button>
+              : <><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>
+                <Button htmlType="submit" type="primary" loading={busy} disabled={!canSave} aria-describedby={saveHint ? hintId : undefined}>确认补充档案</Button></>}
+          </div>
         </div>
       </form>
     </DialogContents>

@@ -4,9 +4,9 @@ import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { createContext, useContext, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, record, requestJson } from './api';
+import { ApiError, assertAmountText, confirmWrite, record, requestJson, uncertainWrite } from './api';
 import type { Project } from './api';
-import { body, categories, currentMonth, receipt } from './notices-api';
+import { body, categories, currentMonth, money, receipt } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
 
@@ -26,26 +26,38 @@ export function DraftField({ draft, field, label, projects }: { draft: Draft; fi
 }
 
 export function NoticeDeleteDialog({ row, blocked, close, refresh, announce }: {
-  row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<unknown>; announce: (message: string) => void;
+  row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<NoticeRow[]>; announce: (message: string) => void;
 }) {
   const lock = useRef(false);
-  const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [readback, setReadback] = useState<'saved' | 'unknown' | null>(null);
   const query = useQuery({
     queryKey: ['notice-maintenance', 'delete', row.notice_id, row.bill_no],
-    enabled: !blocked, refetchOnMount: 'always',
+    enabled: !blocked && readback === null, refetchOnMount: 'always',
     queryFn: async ({ signal }) => {
       const data = await requestJson('/api/m03/actions/manual-delete-impact', {
         method: 'POST', signal, ...body({ notice_id: row.notice_id }),
       });
-      if (!record(data) || typeof data.message !== 'string' || !Array.isArray(data.effects)) {
+      if (!record(data) || data.notice_id !== row.notice_id || typeof data.project_name !== 'string'
+        || typeof data.doc_date !== 'string' || !Array.isArray(data.effects)
+        || !data.effects.every(effect => typeof effect === 'string')) {
         throw new ApiError('删除影响读取不完整，请重读。');
       }
-      return data;
+      const { project_name, doc_date, stat_settle, stat_paid, amount_paid, effects } = data;
+      assertAmountText(stat_settle);
+      assertAmountText(stat_paid);
+      assertAmountText(amount_paid);
+      return { project_name, doc_date, stat_settle, stat_paid, amount_paid, effects };
     },
   });
   const data = query.data;
-  const unavailable = blocked || busy || done || query.isFetching || !data;
-  const closing = useDialogClose({ busy, dirty: false, close, active: !blocked });
+  const unavailable = blocked || busy || readback !== null || query.isFetching || query.isError || !data;
+  const closing = useDialogClose({ busy: busy || readback !== null, dirty: false, close, active: !blocked });
+
+  async function isStillListed() {
+    const latest = await refresh();
+    return latest.some(item => item.notice_id === row.notice_id);
+  }
 
   async function remove() {
     if (unavailable || lock.current) return;
@@ -55,11 +67,30 @@ export function NoticeDeleteDialog({ row, blocked, close, refresh, announce }: {
       const response = await requestJson('/api/m03/actions/manual-delete', {
         method: 'POST', ...body({ notice_id: row.notice_id }),
       });
-      saved = true; setDone(true);
-      announce(receipt(response)); await refresh(); close();
+      confirmWrite(record(response) && response.ok === true && response.notice_id === row.notice_id
+        && typeof response.message === 'string', '删除回执与本条通知书不一致。');
+      saved = true;
+      if (await isStillListed()) throw new Error('列表仍可见这条通知书。');
+      announce(receipt(response)); close();
     } catch (failure) {
       const detail = failure instanceof Error ? failure.message : '操作未完成，请重试。';
-      setError(saved ? '操作已保存，但读取尚待核对；请关闭后重读，勿重复保存。' + detail : detail);
+      if (saved || uncertainWrite(failure)) {
+        setReadback(saved ? 'saved' : 'unknown');
+        setError(`${saved ? '已收到删除回执，列表仍待核对。' : '删除结果待核实。'}请重读核对，勿重复提交。${detail}`);
+      } else setError(detail);
+    } finally { setBusy(false); lock.current = false; }
+  }
+
+  async function reread() {
+    if (blocked || lock.current || readback === null) return;
+    lock.current = true; setBusy(true);
+    try {
+      const listed = await isStillListed();
+      if (listed && readback === 'saved') throw new Error('列表仍可见这条通知书。');
+      announce(listed ? '已重读列表，这条通知书仍在。' : `已重读列表，${row.bill_no} 已移出。`);
+      close();
+    } catch (failure) {
+      setError(`删除结果仍待核实，请重读核对。${failure instanceof Error ? failure.message : ''}`);
     } finally { setBusy(false); lock.current = false; }
   }
 
@@ -69,17 +100,25 @@ export function NoticeDeleteDialog({ row, blocked, close, refresh, announce }: {
       <form onSubmit={event => { event.preventDefault(); void remove(); }}>
         <p>{row.bill_no}，{row.bill_name}，{row.project_display}</p>
         {query.isPending && <p role="status">正在读取…</p>}
-        {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()}>重读候选</Button></p>}
+        {query.isError && <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重试读取</Button></p>}
         {data && <>
-          <p className="danger">{receipt(data)}</p>
-          <dl>{[['项目', data.project_name], ['单据日期', data.doc_date], ['统计结算金额', data.stat_settle], ['统计付款金额', data.stat_paid], ['已付金额（流水）', data.amount_paid]].map(([label, number]) =>
-            <div key={String(label)}><dt>{String(label)}</dt><dd>{String(number)}</dd></div>)}</dl>
-          <ul>{(data.effects as string[]).map(effect => <li key={effect}>{effect.replace(/\*\*/g, '')}</li>)}</ul>
+          <h3>删除影响</h3>
+          <dl className="notice-delete-impact">
+            <div><dt>项目</dt><dd>{data.project_name || '—'}</dd></div>
+            <div><dt>单据日期</dt><dd>{data.doc_date || '—'}</dd></div>
+            {([['统计结算金额', data.stat_settle], ['统计付款金额', data.stat_paid], ['已付金额（流水）', data.amount_paid]] as const).map(([label, amount]) =>
+              <div key={label}><dt>{label}</dt><dd className="money">{money(amount)} 元</dd></div>)}
+          </dl>
+          <ul>{data.effects.map(effect => <li key={effect}>{effect.replace(/\*\*/g, '')
+            .replace(/-?\d+\.\d{2}(?![\d.])/g, amount => `${money(amount)} 元`)}</li>)}</ul>
         </>}
         {error && <p className="notice" role="alert">{error}</p>}
         <div className="dialog-actions">
-          <Button disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>
-          {!done && <Button htmlType="submit" className="danger" disabled={unavailable}>确认删除</Button>}
+          {readback ? <Button htmlType="button" type="primary" loading={busy} disabled={blocked} onClick={() => void reread()}>重读核对</Button>
+            : <>
+              <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>
+              <Button htmlType="submit" danger loading={busy} disabled={unavailable}>确认删除</Button>
+            </>}
         </div>
       </form>
     </DialogContents>

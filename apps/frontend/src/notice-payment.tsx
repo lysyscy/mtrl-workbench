@@ -2,6 +2,7 @@ import Input from 'antd/es/input';
 import type { Project } from './api';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
+import { Link } from 'react-router';
 import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
 import type { BoundedGridMetrics } from './bounded-grid';
@@ -10,7 +11,7 @@ import { PaymentGrid } from './notice-payment-grid';
 import { numberColumnWidth,fullTextWidth } from './grid';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
+import { ApiError, assertAmountText, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
 import { readPaymentContext } from './payment-context';
 import type { PaymentContext } from './payment-context';
@@ -29,6 +30,13 @@ export function amount(raw: string): string | null {
   const value = raw.replace(/[,，\s¥￥]/g, '');
   return /^-?\d+(?:\.\d{1,2})?$/.test(value) ? decimal(cents(value)) : null;
 }
+export function validatePaymentAmount(raw: string, due: string): { amount: string; error?: never } | { amount: null; error: string } {
+  const normalized = amount(raw);
+  if (normalized === null) return { amount: null, error: '请输入有效金额，最多两位小数。' };
+  if (cents(normalized) <= 0n) return { amount: null, error: '付款金额须大于 0 元。' };
+  if (cents(normalized) > cents(due)) return { amount: null, error: `付款金额不能超过 ${money(due)} 元。` };
+  return { amount: normalized };
+}
 export function PayAmountCell({ row, override, draft, disabled, change, edit }: { row: NoticeRow; override: PayOverride | undefined; draft: PayOverride | undefined; disabled: boolean; change: (row: NoticeRow, value: string) => void; edit: (row: NoticeRow, value: string | null) => void }) {
   const shown = override?.basis === basis(row) ? override.value : row.pay_amount;
   const draftValue = draft?.basis === basis(row) ? draft.value : shown;
@@ -46,6 +54,7 @@ export function PayAmountCell({ row, override, draft, disabled, change, edit }: 
 const emptyMethods: string[] = [];
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }
+type SendingPhase = 'sending' | 'sending-confirmed';
 export function NoticePayment({ ids, overrides, projects, blocked, remove, close, paid, refresh, announce }: { ids: number[]; overrides: Record<number,PayOverride>; projects: Project[]; blocked: boolean; remove: (id: number) => void; close: () => void; paid: (ids: number[]) => void; refresh: () => Promise<void>; announce: (message: string, needsAttention?: boolean) => void }) {
   const lock = useRef(false), requestId = useRef(''), removing = useRef<number | null>(null);
   const active = useRef(true), currentBlocked = useRef(blocked), preflight = useRef<AbortController | null>(null);
@@ -53,7 +62,12 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   useEffect(() => { active.current=true;return () => { active.current=false;preflight.current?.abort(); }; }, []);
   useEffect(() => { if (blocked) preflight.current?.abort(); }, [blocked]);
   const originalIds = useRef(ids), drafts = useRef<Record<number,Partial<PaymentDraft>>>({});
-  const [revision,setRevision] = useState(0), [phase,setPhase] = useState<'edit'|'checking'|'confirm'|'sending'|'saved'|'uncertain'>('edit');
+  const [revision,setRevision] = useState(0), [phase,setPhase] = useState<'edit'|'checking'|'confirm'|SendingPhase|'saved'|'uncertain'>('edit');
+  const dateId = useId();
+  const [checkedAmounts, setCheckedAmounts] = useState(new Set<number>());
+  const [lastAmountBlur, setLastAmountBlur] = useState<number | null>(null);
+  const [amountStatus, setAmountStatus] = useState('');
+  const [focusAmountIds, setFocusAmountIds] = useState<ReadonlySet<number> | null>(null);
   const [date,setDate] = useState(() => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
   const [remark,setRemark] = useState(''), [error,setError] = useState(''), [message,setMessage] = useState(''), [flows,setFlows] = useState<FlowReceipt[]>([]), [refreshFailed,setRefreshFailed] = useState(false);
   const query = useQuery({ queryKey: ['notice-payment',originalIds.current], enabled: !blocked && phase === 'edit', retry: false, refetchOnWindowFocus: false, queryFn: async ({signal}) => {
@@ -94,7 +108,30 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     setRevision(previous => previous + 1);
   }, []);
   function reason(row: NoticeRow): string { return row.pay_block_reason || (cents(paymentValue(row,overrides)) <= 0n ? '本次应付不大于0，请调整付款金额' : ''); }
-  const invalid = targets.some(row => reason(row)), busy = phase === 'checking' || phase === 'sending', editable = phase === 'edit';
+  const invalid = targets.some(row => reason(row));
+  const busy = phase === 'checking' || phase === 'sending' || phase === 'sending-confirmed';
+  const editable = phase === 'edit';
+  const confirming = phase === 'confirm' || phase === 'sending-confirmed';
+  const amountErrors = new Map<number, string>();
+  for (const row of targets) {
+    if (!checkedAmounts.has(row.notice_id) || reason(row)) continue;
+    const result = validatePaymentAmount(draft(row).amount, due(row));
+    if (result.error) amountErrors.set(row.notice_id, result.error);
+  }
+  const blurredRow = targets.find(row => row.notice_id === lastAmountBlur);
+  const blurError = blurredRow && amountErrors.get(blurredRow.notice_id);
+  const amountAnnouncement = blurError ? `${blurredRow.bill_no}，${blurError}` : '';
+  useEffect(() => {
+    setAmountStatus('');
+    if (!editable || !amountAnnouncement) return;
+    const timer = window.setTimeout(() => setAmountStatus(amountAnnouncement), 350);
+    return () => window.clearTimeout(timer);
+  }, [amountAnnouncement, editable]);
+  function validateAmountOnBlur(row: NoticeRow) {
+    if (!editable || blocked) return;
+    setCheckedAmounts(previous => previous.has(row.notice_id) ? previous : new Set([...previous, row.notice_id]));
+    setLastAmountBlur(row.notice_id);
+  }
   const dirty = phase !== 'saved' && (date !== initialDate.current || Boolean(remark) || Object.entries(drafts.current).some(([id,value]) => { const initial = initialDrafts.current[Number(id)]; return !initial || value.amount !== undefined && value.amount !== initial.amount || value.pay_method !== undefined && value.pay_method !== initial.pay_method; }));
   const closing = useDialogClose({ busy, dirty, close: () => { const id = removing.current; removing.current = null; if (id !== null) remove(id); close(); } });
   const paymentClosing = { ...closing, resume: () => { removing.current = null; closing.resume(); } };
@@ -111,15 +148,20 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   async function submit() {
     if (blocked || lock.current || !editable || invalid || missing.length || !targets.length || query.isFetching || query.isError || context.isPending || context.isFetching || context.isError) return;
     const next: Record<string,PaymentDraft> = {}, errors: string[] = [];
+    const invalidAmounts = new Set<number>();
     for (const row of targets) {
-      const d = draft(row), normalized = amount(d.amount), ceiling = cents(paymentValue(row,overrides));
-      if (normalized === null || cents(normalized) <= 0n) errors.push(`${row.bill_no}：付款金额须大于0`);
-      else if (cents(normalized) > ceiling) errors.push(`${row.bill_no}：付款金额超出本次应付 ${money(paymentValue(row,overrides))}`);
+      const d = draft(row), result = validatePaymentAmount(d.amount, due(row));
+      if (result.amount === null) invalidAmounts.add(row.notice_id);
+      else next[String(row.notice_id)] = {...d,amount:result.amount};
       if (d.pay_method === '其他' && !remark.trim()) errors.push(`${row.bill_no}：选择其他须填本批付款备注`);
-      next[String(row.notice_id)] = {...d,amount:normalized ?? d.amount};
     }
     if (!date) errors.push('请填写付款日期');
-    if (errors.length) { setError(errors.join('；'));return; }
+    if (invalidAmounts.size) {
+      setCheckedAmounts(previous => new Set([...previous, ...invalidAmounts]));
+      setLastAmountBlur(null);
+      setFocusAmountIds(invalidAmounts);
+    }
+    if (invalidAmounts.size || errors.length) { setError(errors.join('；'));return; }
     lock.current=true;setPhase('checking');setError('');
     try {
       const controller = new AbortController();preflight.current=controller;
@@ -129,16 +171,16 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       setChecked(latest);
       confirmed.current = {ids:targetIds,drafts:next,pay_date:date,remark:remark.trim()};
       if (!latest.available || latest.rows.some(row => row.term_warning)) { setPhase('confirm'); return; }
-      await sendPayment();
+      await sendPayment('sending');
     } catch (failure) {
       if (!active.current) return;
       setError(`合同账期核对失败，输入已保留。${failure instanceof Error ? failure.message : '请重试。'}`);setPhase('edit');
     } finally { lock.current=false; }
   }
-  async function sendPayment() {
+  async function sendPayment(sending: SendingPhase) {
     const payload = confirmed.current;
     if (!payload || !active.current || currentBlocked.current) return;
-    setPhase('sending');
+    setPhase(sending);
     requestId.current ||= randomUUID();
     let saved = false;
     try {
@@ -148,6 +190,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       saved=true;setPhase('saved');paid(targets.map(row => row.notice_id));
       const text = receipt(value);setMessage(text);
       if (!record(value) || !Array.isArray(value.flows) || !Array.isArray(value.created) || value.flows.length !== value.created.length || !value.flows.every(f => record(f) && Number.isSafeInteger(f.notice_id) && ['flow_no','amount','pay_date','pay_method','remark'].every(k => typeof f[k] === 'string'))) throw new ApiError('付款已登记，流水回执不完整，请到付款流水核对，勿重复付款。');
+      for (const flow of value.flows) assertAmountText(flow.amount);
       setFlows(value.flows as FlowReceipt[]);
       const skipped = targets.filter(row => !(value.created as number[]).includes(row.notice_id));
       if (skipped.length) { const attention = `${text}；本次未登记：${skipped.map(row => row.bill_no).join('、')}，请重读核对状态。`; setMessage(attention); announce(attention, true); }
@@ -166,10 +209,11 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   async function continuePayment() {
     if (blocked || lock.current || phase !== 'confirm') return;
     lock.current=true;
-    try { await sendPayment(); } finally { lock.current=false; }
+    try { await sendPayment('sending-confirmed'); } finally { lock.current=false; }
   }
   const draftAmount = useCallback((row: NoticeRow) => amount(draft(row).amount), [draft]);
   const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
+  const receiptTotal = decimal(flows.reduce((sum, flow) => sum + cents(flow.amount), 0n));
   const shownContext = phase === 'edit' ? (context.isError ? undefined : context.data) : checked;
   const warningIds = useMemo(() => shownContext?.rows.filter(item => item.term_warning).map(item => item.notice_id) ?? [], [shownContext]);
   const termsInvoiceCount = useMemo(() => (shownContext?.available ? shownContext.rows.reduce((sum, item) => sum + (item.term_warning?.invoices.length ?? 0), 0) : 0), [shownContext]);
@@ -236,25 +280,43 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
   ), [availableHeight, hasTerms, payMetrics, termsMetrics]);
   return <BusinessModal open={!blocked} layout="pane" className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     <div ref={stageRef} className="notice-pay-stage">
-      {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></p> : <>
+      {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读</Button></p> : <>
         {message && <p role="status" className="notice-feedback">{message}</p>}
         {excluded.length > 0 && <p className="notice" role="alert">已排除 {excluded.length} 条：{excluded.map(row => `${row.bill_no}（${row.pay_block_reason}）`).join('、')}</p>}
         {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
-        {phase === 'saved' ? flows.length > 0 && <BoundedGrid fill minRows={4} table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" rows={flows} rowId={flow=>flow.flow_no} columns={[
-          {colId:'bill',headerName:'单据编码',...fullTextWidth(rows.map(row=>row.bill_no)),wrapText:false,valueGetter:p=>rows.find(row=>row.notice_id===p.data!.notice_id)?.bill_no??''},
+        {phase === 'saved' ? flows.length > 0 && <BoundedGrid fill minRows={4} table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" rows={flows}
+          totals={[{ notice_id: -1, flow_no: '', amount: receiptTotal, pay_date: '', pay_method: '', remark: '' }]} rowId={flow=>flow.flow_no} columns={[
+          {colId:'bill',headerName:'单据编码',...fullTextWidth(['实付合计', ...rows.map(row=>row.bill_no)], scale),wrapText:false,valueGetter:p=>p.node?.rowPinned?'实付合计':rows.find(row=>row.notice_id===p.data?.notice_id)?.bill_no??''},
           {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
-          {field:'amount',headerName:'实付金额',...numberColumnWidth(flows.map(flow=>money(flow.amount))),cellClass:'money',valueFormatter:p=>money(p.value)},
-          {field:'remark',headerName:'备注',valueFormatter:p=>p.value||'—'},
-        ]}/> : <PaymentGrid scale={scale} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} height={allocated.payment} onMetrics={setPayMetrics} />}
-        {phase !== 'saved' && <div className="notice-pay-fields"><label>付款日期<BusinessDate label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></label><label>本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label></div>}
+          {field:'amount',headerName:'实付金额（元）',...numberColumnWidth([...flows.map(flow=>money(flow.amount)), money(receiptTotal)],scale),cellClass:'money',valueFormatter:p=>money(p.value)},
+          {field:'remark',headerName:'备注',valueFormatter:p=>p.node?.rowPinned?'':p.value||'—'},
+        ]}/> : <PaymentGrid scale={scale} rows={targets} due={due} draft={draft} update={update} remove={removeRow} disabled={!editable||blocked} waiting={!context.data&&context.isPending} methods={query.data?.methods??emptyMethods} normalize={amount} warningIds={warningIds} height={allocated.payment} onMetrics={setPayMetrics}
+          amountErrors={amountErrors} validateOnBlur={validateAmountOnBlur} focusAmountIds={focusAmountIds} />}
+        {phase !== 'saved' && <div className="notice-pay-fields">
+          <div className="notice-payment-date"><label htmlFor={dateId}>付款日期</label><BusinessDate id={dateId} label="付款日期" value={date} disabled={!editable||blocked} onChange={setDate} /></div>
+          <label className="notice-payment-remark">本批付款备注<Input aria-label="本批付款备注" value={remark} disabled={!editable||blocked} onChange={e => setRemark(e.target.value)} /></label>
+        </div>}
         {editable && context.isError && <p className="notice" role="alert">合同账期核对失败，输入已保留。{context.error.message}<Button onClick={() => void context.refetch()}>重试账期核对</Button></p>}
         {phase !== 'saved' && shownContext?.available === false && <p className="payment-confirmation" role="alert">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</p>}
         {phase !== 'saved' && shownContext?.available && <PaymentTerms rows={shownContext.rows} notices={rows} amount={draftAmount} scale={scale} height={allocated.terms} onMetrics={setTermsMetrics} />}
-        {phase === 'confirm' && <p className="payment-confirmation" role="alert">{checked?.available ? '该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？' : '本次未完成账期判断，请按合同人工核对后决定是否继续付款。'}</p>}
+        {confirming && <p className="payment-confirmation" role="alert">{checked?.available ? '该合同存在未满账期的发票，请核对本次付款。仍要继续付款吗？' : '本次未完成账期判断，请按合同人工核对后决定是否继续付款。'}</p>}
       </>}
       {error && <p className="notice" role="alert">{error}</p>}
-      {refreshFailed && <p className="notice" role="alert">{phase === 'saved' ? '付款已登记，列表尚待重读核对。' : '列表重读失败，提交结果尚未核实，请到付款流水核对，勿重复付款。'}<Button htmlType="submit" onClick={() => void reread()}>重读核对</Button></p>}
+      {refreshFailed && <p className="notice" role="alert">{phase === 'saved' ? '付款已登记，列表尚待重读核对。' : '列表重读失败，提交结果尚未核实，请到付款流水核对，勿重复付款。'}<Button htmlType="button" onClick={() => void reread()}>重读核对</Button></p>}
     </div>
-    <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>{phase === 'saved' ? '关闭' : '取消'}</Button>{phase === 'uncertain' && <Button htmlType="submit" onClick={() => void reread()}>重读列表核对</Button>}{editable && <Button htmlType="submit" className="primary" disabled={blocked||busy||query.isPending||query.isFetching||query.isError||context.isPending||context.isFetching||context.isError||!date||invalid||Boolean(missing.length)||!targets.length} onClick={() => void submit()}>确认付款</Button>}{phase === 'confirm' && <><Button onClick={() => { confirmed.current=null;setPhase('edit'); }}>返回修改</Button><Button className="primary" onClick={() => void continuePayment()}>继续付款</Button></>}{busy && <span role="status">{phase === 'checking' ? '正在核对合同账期…' : '正在提交…'}</span>}</div>
+    <div className="notice-pay-validation-status" role="status">{amountStatus}</div>
+    <div className="dialog-actions">
+      {phase === 'saved' && <Link className="notice-pay-ledger" to="/ledger" onClick={closing.requestClose}>查看付款流水</Link>}
+      {!confirming && <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{phase === 'saved' ? '关闭' : '取消'}</Button>}
+      {phase === 'uncertain' && <Button htmlType="button" onClick={() => void reread()}>重读列表核对</Button>}
+      {(editable || phase === 'checking' || phase === 'sending') && <Button htmlType="button" type="primary" loading={busy}
+        disabled={blocked||query.isPending||query.isFetching||query.isError||context.isPending||context.isFetching||context.isError||!date||invalid||Boolean(missing.length)||!targets.length}
+        onClick={() => void submit()}>确认付款</Button>}
+      {confirming && <>
+        <Button htmlType="button" disabled={busy} onClick={() => { confirmed.current=null;setPhase('edit'); }}>返回修改</Button>
+        <Button htmlType="button" type="primary" loading={busy} disabled={blocked} onClick={() => void continuePayment()}>继续付款</Button>
+      </>}
+      {busy && <span role="status">{phase === 'checking' ? '正在核对合同账期…' : '正在提交…'}</span>}
+    </div>
   </DialogContents></BusinessModal>;
 }

@@ -3,11 +3,12 @@ import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import Radio from 'antd/es/radio';
 import { Virtuoso } from 'react-virtuoso';
+import type { Components } from 'react-virtuoso';
 import { BusinessModal } from './business-modal';
 import { DialogHeading, DiscardConfirmation } from './dialog-close';
 import { BoundedGrid } from './bounded-grid';
 import { contentWidth, numberColumnWidth } from './grid';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
 import { body, cents, money, receipt } from './notices-api';
@@ -27,6 +28,10 @@ interface Candidates { current_contract_id: number | null; notice_amount: string
 interface Props { row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<NoticeRow[]>; announce: (message: string) => void }
 const contractName = (candidate: Candidate) => candidate.material.trim() || '材料名称未填';
 const hasTradeSide = (candidate: Candidate) => Boolean(candidate.trade_co || candidate.invoices.some(invoice => invoice.kind === 'trade'));
+const candidateList: Components<Candidate, string> = {
+  List: ({ context, ...props }) => <div {...props} role="list" aria-label={context} />,
+  Item: ({ context: _context, item: _item, ...props }) => <div {...props} role="listitem" />,
+};
 function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplier' | 'trade' }) {
   const invoices = candidate.invoices.filter(invoice => invoice.kind === kind);
   const trade = kind === 'trade', name = trade ? '贸易公司' : '供应商';
@@ -47,7 +52,8 @@ function Recommendation({ candidate, amount }: { candidate: Candidate; amount: s
   return <div className="contract-reasons">{reasons.map((reason,index) => <div key={index}><span>{reason.text}</span>{reason.kind === 'invoice' && reason.amounts && <strong>{reason.amounts.map(money).join(' + ')} = {money(amount)} 元</strong>}{reason.kind === 'combined_notices' && reason.prior_amount && reason.invoice_total && <><strong>{money(reason.prior_amount)} + {money(amount)} = {money(reason.invoice_total)} 元</strong><small>{reason.notice_codes?.join('、')}</small></>}</div>)}{combination_limited && <small>超过12笔，仅比较单笔和全部发票合计。</small>}</div>;
 }
 export function ContractDialog({ row, blocked, close, refresh, announce }: Props) {
-  const lock = useRef(false), decisionTitle = useRef<HTMLHeadingElement>(null), closeButton = useRef<HTMLButtonElement>(null);
+  const lock = useRef(false), decisionTitle = useRef<HTMLHeadingElement>(null);
+  const radioName = useId();
   const [selected,setSelected] = useState<number | null>(null), [decision,setDecision] = useState<'none'|'discard'|'unlink'>('none');
   const [step,setStep] = useState(row.has_link ? 2 : 1), [supplier,setSupplier] = useState(row.jc_supplier);
   const initialSupplier = useRef(row.jc_supplier), supplierBaseline = useRef(row.jc_supplier), supplierEdited = useRef(false), stepHeading = useRef<HTMLHeadingElement>(null);
@@ -78,7 +84,10 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
   function goStep(value: number) { setStep(value); }
   useHistoryGuard('contract', () => saved ? '关联结果待核实，请先重读核对。' : busy || lock.current ? '合同关联正在保存，请稍候。' : dirty ? '供应商与合同关联有未保存选择，请先处理。' : '');
   const modifying = Boolean(data?.current_contract_id), unavailable = blocked || busy || saved || query.isFetching || !data;
-  useEffect(() => { if (decision !== 'none') decisionTitle.current?.focus(); else stepHeading.current?.focus(); }, [decision,step]);
+  useEffect(() => {
+    if (decision === 'unlink') decisionTitle.current?.focus();
+    if (decision === 'none') stepHeading.current?.focus();
+  }, [decision,step]);
   function requestClose() { if (busy || saved) return; if (dirty) setDecision('discard'); else close(); }
   async function save(action: 'link'|'unlink'|'supplier' = 'link') {
     if (unavailable || lock.current || action !== 'unlink' && readOnly || action === 'supplier' && modifying || action === 'link' && (!chosen || chosen.id === current?.id || !rows.some(c => c.id === chosen.id))) return;
@@ -106,30 +115,52 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     } catch (failure) { setError(`结果仍待核实，请重读核对。${failure instanceof Error ? failure.message : ''}`); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} layout="pane" className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
-      <div className="contract-fixed-header"><div className="contract-dialog-heading"><DialogHeading id="contract-dialog-title">供应商与合同关联</DialogHeading><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
-      <nav className="association-steps" aria-label="关联步骤"><span aria-current={step === 1 ? 'step' : undefined}>1，确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2，选择合同</span><small>确认前不会改变现有关联</small></nav>
+  const candidateLabel = modifying ? '选择拟换合同' : '选择关联合同';
+  function renderCandidate(candidate: Candidate) {
+    const isCurrent = candidate.id === data?.current_contract_id;
+    const isSelected = selected === candidate.id;
+    const recommended = candidate.recommendation.reasons.length > 0;
+    return <div className="contract-candidate-item"><article className={`contract-candidate${isSelected ? ' is-selected' : ''}`}>
+      <div className="contract-candidate-heading">
+        <Radio className="contract-choice" name={radioName} aria-label={`选择${contractName(candidate)}，${candidate.contract_no}`}
+          checked={isSelected} disabled={unavailable || readOnly} onChange={() => setSelected(candidate.id)}>
+          <strong>{contractName(candidate)}</strong>
+          <small>{candidate.supplier}，{candidate.date || '合同日期未填'}，{candidate.contract_no || '合同号未填'}</small>
+        </Radio>
+        <div className="contract-states">
+          {isCurrent && <span className="contract-state">当前关联</span>}
+          {recommended && <span className="contract-state recommended">推荐</span>}
+          {isSelected && <span className="contract-state selected">{modifying && !isCurrent ? '拟换合同' : '已选择'}</span>}
+        </div>
+      </div>
+      <div className={`contract-invoice-grid${hasTradeSide(candidate) ? ' has-trade' : ''}`}><InvoiceSide candidate={candidate} kind="supplier" />{hasTradeSide(candidate) && <InvoiceSide candidate={candidate} kind="trade" />}</div>
+      <Recommendation candidate={candidate} amount={data?.notice_amount ?? row.amount_approved} />
+    </article></div>;
+  }
+
+  return <BusinessModal open={!blocked} layout="pane" className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>
+    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" danger loading={busy} disabled={unavailable} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
+      <div className="contract-fixed-header"><div className="dialog-close-heading contract-dialog-heading"><DialogHeading id="contract-dialog-title">供应商与合同关联</DialogHeading><Button htmlType="button" className="dialog-close-button" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
+      <div className="association-steps"><span aria-current={step === 1 ? 'step' : undefined}>1. 确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2. 选择合同</span><small>确认前不会改变现有关联</small></div>
       {step === 2 && <div className="contract-notice"><div><strong>{row.bill_name || row.bill_no}</strong><span>{row.project_display}，{row.bill_no}，{data?.supplier || row.jc_supplier || '供应商未录入'}</span></div><div className="contract-notice-amount"><span>通知书审批金额</span><strong>{money(data?.notice_amount ?? row.amount_approved)}<small> 元</small></strong></div></div>}
       </div>
       <h3 className="association-step-heading" ref={stepHeading} tabIndex={-1}>{step === 1 ? '确认供应商' : '选择合同'}</h3>
       {readOnly && <p className="notice">本条仅可查看、解除现有关联。供应商由当前合同确定。</p>}
       {step === 1 ? <SupplierStep row={row} supplier={supplier} choose={chooseSupplier} matches={matches.data} loading={matches.isLoading} error={matches.isError ? matches.error.message : ''} retry={() => void matches.refetch()} contracts={rows.filter(c => c.supplier === supplier.trim() || !supplier.trim())} contractLoading={query.isFetching} contractError={query.isError ? query.error.message : ''} retryContracts={() => void query.refetch()} current={current} disabled={unavailable || readOnly} /> : <>
-      {query.isPending ? <p role="status" className="contract-loading">正在读取合同与发票…</p> : query.isError ? <p role="alert" className="notice">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读候选</Button></p> : data && <>
+      {query.isPending ? <p role="status" className="contract-loading">正在读取合同与发票…</p> : query.isError ? <p role="alert" className="notice">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读候选</Button></p> : data && <>
         {modifying && <div className="contract-current"><span className="contract-state">当前关联</span><strong>{current ? contractName(current) : '当前合同不在候选中'}</strong><span>{current?.contract_no}</span><Link to={`/contracts?contract=${data.current_contract_id}`}>查看合同详情</Link></div>}
         {rows.filter(candidate => candidate.recommendation.reasons.some(reason => reason.kind === 'invoice')).length > 1 && <p className="contract-candidate-note">多份合同的发票金额均可对应，请核对材料和合同号。</p>}
-        {rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p> : <Virtuoso className="contract-candidates" role="radiogroup" aria-label={modifying ? '选择拟换合同' : '选择关联合同'} data={rows} computeItemKey={(_index,candidate)=>candidate.id} itemContent={(_index,candidate) => {
-          const isCurrent = candidate.id === data.current_contract_id, isSelected = selected === candidate.id, recommended = candidate.recommendation.reasons.length > 0;
-          return <div className="contract-candidate-item"><article className={`contract-candidate${isSelected ? ' is-selected' : ''}`} key={candidate.id}>
-            <div className="contract-candidate-heading"><label className="contract-choice"><Radio name="contract-choice" aria-label={`选择${contractName(candidate)}，${candidate.contract_no}`} checked={isSelected} disabled={unavailable || readOnly} onChange={() => setSelected(candidate.id)} /><span><strong>{contractName(candidate)}</strong><small>{candidate.supplier}，{candidate.date || '合同日期未填'}，{candidate.contract_no || '合同号未填'}</small></span></label><div className="contract-states">{isCurrent && <span className="contract-state">当前关联</span>}{recommended && <span className="contract-state recommended">推荐</span>}{isSelected && <span className="contract-state selected">{modifying && !isCurrent ? '拟换合同' : '已选择'}</span>}</div></div>
-            <div className={`contract-invoice-grid${hasTradeSide(candidate) ? ' has-trade' : ''}`}><InvoiceSide candidate={candidate} kind="supplier" />{hasTradeSide(candidate) && <InvoiceSide candidate={candidate} kind="trade" />}</div>
-            <Recommendation candidate={candidate} amount={data.notice_amount} />
-          </article></div>;
-        }}/>}
+        {rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p>
+          : rows.length <= 2 ? <ul className="contract-candidates" role="list" aria-label={candidateLabel}>
+            {rows.map(candidate => <li key={candidate.id}>{renderCandidate(candidate)}</li>)}
+          </ul> : <Virtuoso className="contract-candidates contract-candidates--virtual" components={candidateList}
+            context={candidateLabel} data={rows} computeItemKey={(_index, candidate) => candidate.id}
+            itemContent={(_index, candidate) => renderCandidate(candidate)} />}
       </>}
       {chosen && <div className="contract-selection" role="status"><div><span>{modifying ? chosen.id === current?.id ? '保持当前关联' : '拟换合同' : '已选合同'}</span><strong>{contractName(chosen)}</strong></div><div><span>关联前欠款</span><b>{money(chosen.debt)} 元</b></div><div><span>本条统计付款</span><b>{money(row.stat_paid)} 元</b></div><p className="contract-match">{cents(chosen.debt) === cents(row.stat_paid) ? '金额一致' : '金额不一致，仍可关联'}</p></div>}
       </>}
       {error && <p className="notice" role="alert">{error}{saved && <Button disabled={busy} onClick={() => void readBack()}>重读核对</Button>}</p>}
-      <div className="contract-footer"><div>{modifying && <Button htmlType="submit" className="danger" disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}</div><div className="dialog-actions">{step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}<Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>{step === 1 ? <>{!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}<Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button></> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}</div></div>
+      <div className="contract-footer"><div>{modifying && <Button htmlType="button" danger disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}</div><div className="dialog-actions">{step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}<Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>{step === 1 ? <>{!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}<Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button></> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}</div></div>
     </>}
   </BusinessModal>;
 }

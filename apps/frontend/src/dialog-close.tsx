@@ -1,9 +1,8 @@
 import Button from 'antd/es/button';
-import { useContext, useId } from 'react';
+import { useContext, useId, useRef, useState } from 'react';
 import { BusinessModalTitle } from './business-modal';
 import { useHistoryGuard } from './history';
-import { useEffect, useRef, useState } from 'react';
-import type { ComponentProps, MouseEvent, ReactNode, Ref, SyntheticEvent } from 'react';
+import type { ComponentProps, MouseEvent, ReactNode, SyntheticEvent } from 'react';
 import { useIsPresent } from 'motion/react';
 
 export function useDialogClose({ busy, dirty, close, beforeRequestClose, active = true }: {
@@ -13,15 +12,30 @@ export function useDialogClose({ busy, dirty, close, beforeRequestClose, active 
   const present = useIsPresent();
   useHistoryGuard(id, () => !active || !present ? '' : busy ? '正在处理操作，请稍候。' : dirty ? '有未保存输入，请先处理。' : '');
   const [confirming, setConfirming] = useState(false);
+  const previousFocus = useRef<HTMLElement | null>(null);
   function requestClose() {
     if (busy) return false;
     beforeRequestClose?.();
-    if (dirty) { setConfirming(true); return false; }
+    if (dirty) {
+      if (!confirming) {
+        const focused = globalThis.document?.activeElement;
+        previousFocus.current = focused && focused instanceof HTMLElement ? focused : null;
+      }
+      setConfirming(true);
+      return false;
+    }
     close(); return true;
   }
   return {
     busy, confirming, requestClose,
-    resume: () => setConfirming(false),
+    resume: () => {
+      setConfirming(false);
+      const target = previousFocus.current;
+      previousFocus.current = null;
+      if (target) requestAnimationFrame(() => {
+        if (target.isConnected && !target.closest('[hidden],[inert]')) target.focus({ preventScroll: true });
+      });
+    },
     discard: () => { if (!busy) { setConfirming(false); close(); } },
     dialogProps: {
       onCancel: (event: SyntheticEvent<HTMLDialogElement>) => { event.preventDefault(); requestClose(); },
@@ -39,23 +53,21 @@ export function DialogHeading({ id, ...props }: ComponentProps<'h2'>) {
   const titleId = useContext(BusinessModalTitle) ?? id;
   return <h2 {...props} id={titleId} />;
 }
-export function DiscardConfirmation({ titleId, headingRef, closing }: { titleId: string; headingRef: Ref<HTMLHeadingElement>; closing: Pick<DialogCloseState,'busy'|'resume'|'discard'> }) {
-  return <div className="dialog-discard"><DialogHeading ref={headingRef} tabIndex={-1} id={titleId}>放弃未保存的修改？</DialogHeading><p>本次输入和选择尚未保存。</p><div className="dialog-actions"><Button htmlType="button" disabled={closing.busy} onClick={closing.resume}>继续编辑</Button><Button htmlType="button" className="primary" disabled={closing.busy} onClick={closing.discard}>放弃并关闭</Button></div></div>;
+export function DiscardConfirmation({ titleId, closing }: { titleId: string; closing: Pick<DialogCloseState,'busy'|'resume'|'discard'> }) {
+  return <div className="dialog-discard">
+    <DialogHeading id={titleId}>放弃未保存的修改？</DialogHeading>
+    <p>本次输入和选择尚未保存。</p>
+    <div className="dialog-actions">
+      <Button htmlType="button" type="primary" autoFocus disabled={closing.busy} onClick={closing.resume}>继续编辑</Button>
+      <Button htmlType="button" danger disabled={closing.busy} onClick={closing.discard}>放弃并关闭</Button>
+    </div>
+  </div>;
 }
 
 export function DialogContents({ title, titleId: requestedTitleId, closing, footer, children }: { title: ReactNode; titleId: string; closing: DialogCloseState; footer?: ReactNode; children: ReactNode }) {
   const titleId = useContext(BusinessModalTitle) ?? requestedTitleId;
-  const decisionTitle = useRef<HTMLHeadingElement>(null), previousFocus = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (closing.confirming) {
-      previousFocus.current = document.activeElement as HTMLElement | null;
-      decisionTitle.current?.focus();
-    } else if (previousFocus.current?.isConnected) {
-      previousFocus.current.focus(); previousFocus.current = null;
-    }
-  }, [closing.confirming]);
   return <>
-    {closing.confirming && <DiscardConfirmation titleId={titleId} headingRef={decisionTitle} closing={closing} />}
+    {closing.confirming && <DiscardConfirmation titleId={titleId} closing={closing} />}
     <div className="dialog-frame" hidden={closing.confirming}>
       <div className="dialog-close-heading"><h2 id={closing.confirming ? undefined : titleId}>{title}</h2><Button htmlType="button" className="dialog-close-button" aria-label="关闭弹窗" disabled={closing.busy} onClick={closing.requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       {footer !== undefined ? <><div className="dialog-body">{children}</div><div className="dialog-footer">{footer}</div></> : children}

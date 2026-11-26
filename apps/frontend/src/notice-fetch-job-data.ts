@@ -54,6 +54,12 @@ export function fetchJobViews(jobs: readonly NoticeFetchJob[]) {
   };
 }
 
+export function noticeFetchResultView({ pathname, jobId, openedId }: {
+  pathname: string; jobId: number; openedId: number | null;
+}) {
+  return pathname === '/notices' || openedId === jobId ? 'dialog' : 'reminder';
+}
+
 export function fetchJobPollInterval(job: NoticeFetchJob | undefined) {
   return job?.status === 'running' ? 1000 : false;
 }

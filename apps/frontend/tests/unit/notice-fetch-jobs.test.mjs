@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  acknowledgeNoticeFetchJob, fetchJobPollInterval, fetchJobViews, latestFetchJob, pollNoticeFetchJob,
+  acknowledgeNoticeFetchJob, fetchJobPollInterval, fetchJobViews, latestFetchJob, noticeFetchResultView, pollNoticeFetchJob,
   readNoticeFetchJob, recoverNoticeFetchJob,
 } from '../../src/notice-fetch-job-data.ts';
 import { readMatchPreview, readyLinkSelections, reviewLinkSelections } from '../../src/notice-link-matches.ts';
@@ -24,6 +24,13 @@ const completed = {
   ...job, status: 'completed', stage: 'completed', stage_label: '抓取完成', result: saved,
   completed_at: '2026-11-26T10:00:20', updated_at: '2026-11-26T10:00:20',
 };
+
+test('后台抓取在其他页面显示提醒，点击仅打开对应任务', () => {
+  assert.equal(noticeFetchResultView({ pathname: '/projects', jobId: 12, openedId: null }), 'reminder');
+  assert.equal(noticeFetchResultView({ pathname: '/projects', jobId: 12, openedId: 12 }), 'dialog');
+  assert.equal(noticeFetchResultView({ pathname: '/projects', jobId: 13, openedId: 12 }), 'reminder');
+  assert.equal(noticeFetchResultView({ pathname: '/notices', jobId: 13, openedId: null }), 'dialog');
+});
 
 test('重新进入工作区恢复后台任务，轮询到终态，关闭后按原任务确认', async t => {
   const calls = [];

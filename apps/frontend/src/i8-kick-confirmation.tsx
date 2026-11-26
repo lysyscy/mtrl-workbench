@@ -64,14 +64,14 @@ export function useI8KickConfirmation(scopeKey: string) {
   return {message: confirmation?.scope === scope ? confirmation.message : '', revocationNotice, offer, confirm, cancel, dismiss};
 }
 
-export function I8KickConfirmationActions({message, confirm, cancel, disabled}: {
-  message: string; confirm: () => void; cancel: () => Promise<void>; disabled: boolean;
+export function I8KickConfirmationActions({message, descriptionId, confirm, cancel, disabled}: {
+  message: string; descriptionId?: string | undefined; confirm: () => void; cancel: () => Promise<void>; disabled: boolean;
 }) {
   const messageId = useId();
   return <>
-    <p id={messageId} className="notice" role="status">{message}</p>
+    {!descriptionId && <p id={messageId} className="notice" role="status">{message}</p>}
     <div className="dialog-actions">
-      <Button htmlType="button" aria-describedby={messageId} autoFocus onClick={() => void cancel()}>取消下线确认</Button>
+      <Button htmlType="button" aria-describedby={descriptionId ?? messageId} autoFocus onClick={() => void cancel()}>取消下线确认</Button>
       <Button htmlType="button" type="primary" danger disabled={disabled} onClick={confirm}>让现有会话下线并继续</Button>
     </div>
   </>;

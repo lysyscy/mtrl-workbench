@@ -1,5 +1,5 @@
 import Button from 'antd/es/button';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, body, requestJson, uncertainWrite } from './api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
@@ -13,11 +13,13 @@ import { MatchItems, ReadyMatchItem, ReviewMatchItem } from './notice-match-list
 
 type MatchGroups = Extract<ReturnType<typeof readMatchPreview>, { kind: 'preview' }>['groups'];
 
-export function AutoLinkDialog({ ids, blocked, close, refresh, announce }: {
+export function AutoLinkDialog({ ids, blocked, close, refresh, announce, openManualLink }: {
   ids: number[]; blocked: boolean; close: () => void; refresh: () => Promise<void>;
   announce: (message: string, needsAttention?: boolean) => void;
+  openManualLink: (noticeId: number) => boolean;
 }) {
   const lock = useRef(false);
+  const manualNotice = useRef<number | null>(null);
   const [groups, setGroups] = useState<MatchGroups>();
   const [choices, setChoices] = useState(new Map<number, number>());
   const [results, setResults] = useState(new Map<number, LinkConfirmationRow>());
@@ -33,13 +35,24 @@ export function AutoLinkDialog({ ids, blocked, close, refresh, announce }: {
   }, [scopeKey]);
   const { waiting, cancelWaiting, runWhenReady } = useI8ActionWait(scopeKey);
   const kick = useI8KickConfirmation(scopeKey);
+  const kickMessageId = useId();
   const closing = useDialogClose({
-    busy, dirty: false, active: !blocked,
-    close: () => { cancelWaiting(); kick.dismiss(); close(); },
+    busy, dirty: choices.size > 0, active: !blocked,
+    close: () => {
+      const noticeId = manualNotice.current;
+      manualNotice.current = null;
+      if (noticeId !== null && !openManualLink(noticeId)) {
+        setError('这条通知书已无法手动关联，请重读列表核对。');
+        return;
+      }
+      cancelWaiting(); kick.dismiss(); close();
+    },
   });
+  const closeState = { ...closing, resume: () => { manualNotice.current = null; closing.resume(); } };
 
   const ready = groups?.auto_ready.filter(row => !results.has(row.notice_id)) ?? [];
   const review = groups?.needs_review.filter(row => !results.has(row.notice_id)) ?? [];
+  const canSelectReview = review.some(row => row.candidates.some(candidate => candidate.selectable));
   const selected = reviewLinkSelections(review, choices);
   const linked = [...results.values()].filter(row => row.contract_id !== null);
   const skipped = [...(groups?.skipped ?? []), ...[...results.values()].filter(row => row.contract_id === null)];
@@ -79,6 +92,11 @@ export function AutoLinkDialog({ ids, blocked, close, refresh, announce }: {
       const value = await requestJson('/api/m11/auto-link', { method: 'POST', ...body({ selections }) });
       const result = readLinkConfirmation(value, selections);
       setResults(previous => new Map([...previous, ...result.rows.map(row => [row.notice_id, row] as const)]));
+      setChoices(previous => {
+        const next = new Map(previous);
+        for (const row of result.rows) next.delete(row.notice_id);
+        return next;
+      });
       verified = `已关联 ${result.linked} 条，跳过 ${selections.length - result.linked} 条。`;
       await refresh();
       announce(verified);
@@ -106,45 +124,51 @@ export function AutoLinkDialog({ ids, blocked, close, refresh, announce }: {
   }
 
   const confirmDisabled = blocked || busy || uncertain;
-  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-contract-dialog"
+  return <BusinessModal open={!blocked} layout={groups ? 'scroll-body' : 'compact'}
+    className={groups ? 'project-dialog notice-contract-dialog' : 'project-dialog'}
     titleId="auto-link-title" requestClose={closing.requestClose}>
-    <DialogContents title="批量关联集采合同" titleId="auto-link-title" closing={closing}>
+    <DialogContents title="批量关联集采合同" titleId="auto-link-title" closing={closeState}>
       <div className="dialog-body">
         {!groups && <p>预览 {ids.length} 条通知书。需要核对金额时会读取 i8 采购应付。</p>}
         {waiting && <I8ConnectionWaitStatus />}
         {busy && <p role="status">{groups ? '正在保存关联…' : '正在生成预览…'}</p>}
         {groups && <>
-          <section className="notice-match-section">
+          {ready.length ? <section className="notice-match-section">
             <div className="notice-match-heading"><h3>可直接关联 {ready.length} 条</h3>
-              {ready.length > 0 && <Button type="primary" disabled={confirmDisabled}
-                onClick={() => void confirm(readyLinkSelections(ready))}>关联这 {ready.length} 条</Button>}
+              <Button type="primary" disabled={confirmDisabled}
+                onClick={() => void confirm(readyLinkSelections(ready))}>关联这 {ready.length} 条</Button>
             </div>
             <MatchItems items={ready} itemKey={row => row.notice_id} render={row => <ReadyMatchItem row={row} />} />
-          </section>
+          </section> : <p className="notice-match-summary muted">可直接关联 0 条</p>}
           <section className="notice-match-section">
             <div className="notice-match-heading"><h3>需核对 {review.length} 条</h3>
-              {review.length > 0 && <Button disabled={confirmDisabled || !selected.length}
+              {canSelectReview && <Button disabled={confirmDisabled || !selected.length}
                 onClick={() => void confirm(selected)}>确认已选 {selected.length} 条</Button>}
             </div>
             <MatchItems items={review} itemKey={row => row.notice_id} render={row =>
               <ReviewMatchItem row={row} selected={choices.get(row.notice_id)} disabled={confirmDisabled}
-                choose={contractId => choose(row.notice_id, contractId)} />} />
+                choose={contractId => choose(row.notice_id, contractId)}
+                openManualLink={() => {
+                  manualNotice.current = row.notice_id;
+                  closing.requestClose();
+                }} />} />
           </section>
           {linked.length > 0 && <details className="notice-match-section">
             <summary>已关联 {linked.length} 条</summary>
             <MatchItems items={linked} itemKey={row => row.notice_id} render={row =>
-              <div className="notice-match-item">{row.code}　{row.contract_no}</div>} />
+              <div className="notice-match-item notice-match-facts"><strong>{row.code}</strong><span>{row.contract_no}</span></div>} />
           </details>}
           <details className="notice-match-section">
             <summary>已跳过 {skipped.length} 条</summary>
             <MatchItems items={skipped} itemKey={row => row.notice_id} render={row =>
-              <div className="notice-match-item">{row.code}　{row.reason}</div>} />
+              <div className="notice-match-item notice-match-facts"><strong>{row.code}</strong><span>{row.reason}</span></div>} />
           </details>
         </>}
         {error && <p className="notice" role="alert">{error}</p>}
+        {kick.message && <p className="notice" role="status" id={kickMessageId}>{kick.message}</p>}
         {kick.revocationNotice && <p className="notice" role="status">{kick.revocationNotice}</p>}
       </div>
-      {kick.message ? <I8KickConfirmationActions {...kick} disabled={blocked || busy || waiting} /> :
+      {kick.message ? <I8KickConfirmationActions {...kick} descriptionId={kickMessageId} disabled={blocked || busy || waiting} /> :
         <div className="dialog-actions">
           <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{groups ? '关闭' : '取消'}</Button>
           {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}

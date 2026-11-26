@@ -454,7 +454,8 @@ test('批量确认后保留需核对行并显示本地并发变化的跳过原�
   assert.equal(reads, 1);
   assert.deepEqual(announcements, [{message: '已关联 1 条，跳过 1 条。', needsAttention: false}]);
   const lists = walk(dialog, node => node.type === 'match-list').map(node => node.props.items);
-  assert.deepEqual(lists, [[], [unmatched], [linkedRow], [changed]]);
+  assert.deepEqual(lists, [[unmatched], [linkedRow], [changed]]);
+  assert.ok(walk(dialog, node => node.type === 'p' && textOf(node) === '可直接关联 0 条').length);
 });
 
 test('批量关联列表重读失败仍显示已知回执并提示核对', async () => {
@@ -516,6 +517,52 @@ test('浏览器断开时仍能预览本地候选并确认人工选择', async ()
       expected_jc_supplier: '', expected_warehouse_key: '仓库甲', expected_contract_supplier: '供应商'}]}],
   ]);
 });
+
+for (const pendingChoice of [false, true]) {
+  test(pendingChoice ? '手动关联前保留已有候选选择，明确弃稿后交接' : '无可选候选时隐藏批量确认并可直接手动关联', async () => {
+    const manual = {...unmatched, notice_id: 4, code: 'N4', candidates: [{...contract, selectable: false}]};
+    const preview = pendingChoice ? [unmatched, manual] : [manual];
+    globalThis.fetch = async (path) => {
+      assert.equal(path, '/api/m11/auto-link-preview');
+      return response({ok: true, rows: preview});
+    };
+    const opened = [];
+    let closed = 0;
+    function renderDialog() {
+      cells.index = 0;
+      cells.month = null;
+      return AutoLinkDialog({
+        ids: preview.map(row => row.notice_id), blocked: false, refresh: async () => {}, announce() {},
+        close() { closed++; }, openManualLink(id) { opened.push(id); return true; },
+      });
+    }
+    const closing = () => walk(renderDialog(), node => Boolean(node.props.closing))[0].props.closing;
+    function reviewRow(row) {
+      const [list] = walk(renderDialog(), node => node.type === 'match-list'
+        && node.props.items.some(item => item.notice_id === row.notice_id));
+      assert.ok(list);
+      return list.props.render(row).props;
+    }
+    button(renderDialog(), '确认读取并预览').props.onClick();
+    await settle();
+    if (pendingChoice) {
+      reviewRow(unmatched).choose(30);
+    } else {
+      assert.equal(button(renderDialog(), '确认已选 0 条'), undefined);
+    }
+    reviewRow(manual).openManualLink();
+    if (pendingChoice) {
+      assert.equal(closing().confirming, true);
+      assert.deepEqual(opened, []);
+      closing().resume();
+      assert.equal(button(renderDialog(), '确认已选 1 条').props.disabled, false);
+      reviewRow(manual).openManualLink();
+      closing().discard();
+    }
+    assert.deepEqual(opened, [4]);
+    assert.equal(closed, 1);
+  });
+}
 
 const actionsOf = tree => walk(tree, node => node.type === I8FetchActions)[0].props;
 const kickButton = (tree, label = '让现有会话下线并继续') =>
@@ -741,10 +788,12 @@ for (const [name, component, props, field, next] of [
   ['contract', ContractFetch, {blocked: false}, '合同抓取范围', 'all'],
 ]) {
   for (const exit of ['modal', 'heading']) {
-    test(name + ' cancels the browser wait before the ' + exit + ' close prompts to discard', async () => {
+    const dirty = component !== NoticeFetch;
+    test(name + ' cancels the browser wait on ' + exit + ' close ' + (dirty ? 'before prompting to discard' : 'without prompting to discard'), async () => {
       const calls = recorder();
       const ready = Promise.withResolvers();
       let signal;
+      let closed = 0;
       globalThis.__relaySession = {...globalThis.__relaySession, mode: 'browser', waitForBrowser(value) {
         signal = value;
         return ready.promise;
@@ -752,7 +801,7 @@ for (const [name, component, props, field, next] of [
       function surface() {
         cells.index = 0;
         if (component !== NoticeFetch) cells.month = null;
-        return component({...props, me, close: () => assert.fail('dirty dialog closed immediately'), refresh: async () => {}});
+        return component({...props, me, close: () => { assert.equal(signal.aborted, true); closed++; }, refresh: async () => {}});
       }
       const [input] = walk(surface(), node => (node.props?.label || node.props?.['aria-label']) === field);
       if (component === NoticeFetch) cells.month = next;
@@ -765,7 +814,8 @@ for (const [name, component, props, field, next] of [
       const requestClose = exit === 'modal' ? modal.props.requestClose : contents.props.closing.requestClose;
       requestClose();
       assert.equal(signal.aborted, true);
-      assert.equal(walk(surface(), node => node.props?.closing)[0].props.closing.confirming, true);
+      assert.equal(walk(surface(), node => node.props?.closing)[0].props.closing.confirming, dirty);
+      assert.equal(closed, dirty ? 0 : 1);
       ready.resolve(true);
       await settle();
       assert.deepEqual(calls, []);

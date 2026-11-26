@@ -3,12 +3,14 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Query } from '@tanstack/react-query';
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useLocation } from 'react-router';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import {
-  acknowledgeNoticeFetchJob, fetchJobPollInterval, fetchJobViews, latestFetchJob, pollNoticeFetchJob, recoverNoticeFetchJob,
+  acknowledgeNoticeFetchJob, fetchJobPollInterval, fetchJobViews, latestFetchJob, noticeFetchResultView, pollNoticeFetchJob, recoverNoticeFetchJob,
 } from './notice-fetch-job-data';
 import type { FinishedNoticeFetchJob, NoticeFetchJob } from './notice-fetch-job-data';
+import { DialogPresence, MotionAccess } from './workspace-motion';
 
 const FetchMatchDetails = lazy(() => import('./notice-match-list').then(module => ({ default: module.FetchMatchDetails })));
 
@@ -31,7 +33,10 @@ export function useNoticeFetchJobs() {
 
 export function NoticeFetchJobs({ account, paused, children }: { account: string; paused: boolean; children: ReactNode }) {
   const client = useQueryClient();
+  const { pathname } = useLocation();
+  const visible = useContext(MotionAccess);
   const [ids, setIds] = useState<number[]>([]);
+  const [openedId, setOpenedId] = useState<number | null>(null);
   const refreshed = useRef(new Set<number>());
   const enabled = Boolean(account) && !paused;
   const active = useQuery({
@@ -56,6 +61,8 @@ export function NoticeFetchJobs({ account, paused, children }: { account: string
   })) });
   const { running, finished } = fetchJobViews(reads.flatMap(read => read.data ?? []));
   const pollingError = reads.find(read => read.data?.id === running?.id)?.error;
+  const resultView = finished && enabled && visible
+    ? noticeFetchResultView({ pathname, jobId: finished.id, openedId }) : undefined;
 
   useEffect(() => {
     if (!finished || refreshed.current.has(finished.id)) return;
@@ -81,11 +88,18 @@ export function NoticeFetchJobs({ account, paused, children }: { account: string
     recover: async () => (await active.refetch({ throwOnError: true })).data,
   }}>
     {children}
-    {running && <aside className="notice-fetch-progress" role="status">
-      <span>{running.year_month} {pollingError ? '正在重读抓取进度…' : running.stage_label}</span>
-      <progress aria-label="付款通知书抓取进度" />
+    {enabled && visible && (running || resultView === 'reminder') && <aside className="notice-fetch-progress" aria-label="付款通知书抓取">
+      {running && <div className="notice-fetch-running" role="status">
+        <span>{running.year_month} {pollingError ? '正在重读抓取进度…' : running.stage_label}</span>
+        <progress aria-label="付款通知书抓取进度" />
+      </div>}
+      {finished && resultView === 'reminder' && <Button htmlType="button" className="notice-fetch-reminder"
+        onClick={() => setOpenedId(finished.id)}>
+        {finished.status === 'completed' ? '抓取完成，查看结果' : '抓取失败，查看详情'}
+        <span className="muted">{finished.year_month}</span>
+      </Button>}
     </aside>}
-    {finished && <FetchResult key={finished.id} job={finished} acknowledge={() => acknowledge(finished)} />}
+    <DialogPresence>{finished && resultView === 'dialog' && <FetchResult key={finished.id} job={finished} acknowledge={() => acknowledge(finished)} />}</DialogPresence>
   </JobContext.Provider>;
 }
 
@@ -115,11 +129,13 @@ function FetchResult({ job, acknowledge }: { job: FinishedNoticeFetchJob; acknow
         {result.payable_source_failed && <p className="notice" role="alert">
           通知书已保存，采购应付读取失败。{result.payable_source_error}
         </p>}
-        {(result.notices_saved || result.fetched > 0) && <dl className="notice-fetch-counts">
+        {(result.notices_saved || result.fetched > 0) && <dl className="i8-receipt-counts notice-fetch-counts">
           {([
-            ['i8 返回', result.fetched], ['已保存', result.saved], ['新增', result.created],
-            ['更新', result.updated], ['剔除', result.excluded], ['待归属未写入', result.unresolved],
-          ] as const).map(([label, count]) => <div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}
+            ['i8 返回', result.fetched, false], ['已保存', result.saved, false], ['新增', result.created, false],
+            ['更新', result.updated, false], ['剔除', result.excluded, true], ['待归属未写入', result.unresolved, true],
+          ] as const).map(([label, count, attention]) => <div key={label} className={attention && count > 0 ? 'i8-receipt-count is-attention' : 'i8-receipt-count'}>
+            <dt>{label}</dt><dd className="i8-receipt-count-value"><b>{count}</b> 条</dd>
+          </div>)}
         </dl>}
         {result.notices_saved && <Suspense fallback={<p role="status">正在加载关联明细…</p>}>
           <FetchMatchDetails result={result} />
