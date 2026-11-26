@@ -3,11 +3,20 @@ import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
-// Exercise the actual dialog, API serializer and request helpers without mounting a grid.
+// Exercise the page and dialog with fake HTTP responses and grid rendering.
 const hooks = { cells: [], index: 0, effects: [], session: null };
 globalThis.__noticePrintHooks = hooks;
 const data = source => ({ url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true });
 const placeholder = 'export default props => ({type: "button", props});';
+const pageComponents = {
+  './workspace-motion': ['DialogPresence'], './notice-fetch': ['NoticeFetch'],
+  './notice-paste': ['NoticePaste'], './notice-auto-link': ['AutoLinkDialog'],
+  './notice-maintenance': ['DraftField', 'manualDraft', 'NoticeDeleteDialog', 'NoticeDraftDisabled'],
+  './notice-contract': ['ContractDialog'], './notice-payment': ['NoticePayment', 'PayAmountCell', 'paymentValue', 'amount'],
+  './ownership': ['OwnershipDialog', 'OwnershipPending', 'refreshNoticeOwnershipPending'],
+  './ledger-controls': ['ProjectPicker'], './enum-tag': ['EnumTag'],
+  './notice-flows': ['NoticeFlows'], './notice-todos': ['resetNoticeTodos'],
+};
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'react/jsx-runtime') return data(
@@ -16,9 +25,11 @@ registerHooks({
     if (specifier === 'react') return data(
       'const h = globalThis.__noticePrintHooks;' +
       'const cell = () => h.cells[h.index++] ??= {};' +
-      'export function useState(value) {const s = cell(); if (!("value" in s)) s.value = typeof value === "function" ? value() : value; return [s.value, next => s.value = next];}' +
+      'export function useState(value) {const s = cell(); if (!("value" in s)) s.value = typeof value === "function" ? value() : value; return [s.value, next => s.value = typeof next === "function" ? next(s.value) : next];}' +
       'export function useRef(current) {const s = cell(); return s.ref ??= {current};}' +
       'export function useEffect(fn, deps) {const s = cell(); if (s.deps && deps.every((v, i) => Object.is(v, s.deps[i]))) return; s.deps = deps; h.effects.push(() => {s.cleanup?.(); s.cleanup = fn();});}' +
+      'export function useMemo(fn, deps) {const s = cell(); if (!s.deps || !deps.every((v, i) => Object.is(v, s.deps[i]))) {s.deps = deps; s.value = fn();} return s.value;}' +
+      'export const createContext = () => ({Provider: "provider"}); export const useContext = () => null;' +
       'export const useLayoutEffect = useEffect;',
     );
     if (specifier === './i8-session') return data(
@@ -29,15 +40,31 @@ registerHooks({
     if (specifier === './business-modal') return data('export const BusinessModal = props => props.children;');
     if (specifier === './business-grid') return data('export const ReadGrid = "grid";');
     if (specifier === './bounded-grid') return data('export const BoundedGrid = "grid";');
-    if (specifier === './grid') return data('export const numberColumnWidth = () => ({}); export const fullTextWidth = numberColumnWidth;');
+    if (specifier === './grid') return data('export const numberColumnWidth = () => ({}); export const fullTextWidth = numberColumnWidth;' +
+      'export const cacheFontMeasurement = fn => fn; export const cachedNumberColumnWidths = () => () => ({minWidth: 40});' +
+      'export const contentWidth = numberColumnWidth, fixedWidth = numberColumnWidth, textWidth = numberColumnWidth, gridTheme = {};');
     if (specifier === './dialog-close') return data('export const DialogContents = props => props.children; export const useDialogClose = ({close}) => ({requestClose: close});');
-    if (specifier === 'react-router') return data('export const Link = "link";');
-    if (specifier === 'antd/es/button') return data(placeholder);
+    if (specifier === 'react-router') return data('export const Link = "link"; export const useSearchParams = () => [new URLSearchParams()];');
+    if (specifier === 'antd/es/app') return data('export default {useApp: () => ({message: {info() {}, error() {}}})};');
+    if (specifier.startsWith('antd/es/')) return data(placeholder);
+    if (specifier === '@tanstack/react-query') return data('export const useQueryClient = () => ({});');
+    if (specifier === './history') return data('export const useHistoryGuard = () => {}; export const readHistory = () => {};');
+    if (specifier === './use-amount-comparator') return data('export const useAmountComparator = () => undefined;');
+    if (specifier === './grid-search') return data('export const useGridSearch = () => ({applied: "", pending: false, reset() {}}); export const searchWithinRows = rows => () => rows;');
+    if (specifier === './grid-text') return data('export const completeColumnWidth = () => 40; export const EllipsisText = "ellipsis";');
+    if (specifier === './notice-cell-save') return data('export const NoticeCells = {Provider: "provider"}, PublishedNotices = NoticeCells;' +
+      'export const useNoticeCellSaves = () => ({drafts: {}}); export const PaidAmountCell = "paid", StatCell = "stat";');
+    if (specifier === './read-region') return data('export const readPhase = () => "ready", ReadFailure = "error", ReadPlaceholder = "placeholder", ReadStatusLane = "lane";');
+    if (specifier === './grid-presentation') return data('export const PreparedGrid = "prepared-grid", useGridPresentation = props => ({...props, state: "ready"});');
+    if (specifier === './time-picker') return data('export const TimePicker = "TimePicker", timeMatches = () => true, timeRange = () => ({});');
+    if (specifier in pageComponents) return data(pageComponents[specifier].map(name => name === 'NoticeDraftDisabled'
+      ? `export const ${name} = {Provider: "provider"};` : `export const ${name} = "${name}";`).join(''));
     return nextResolve(specifier, context);
   },
 });
 
 const { NoticePrint, recoverNoticePrint } = await import('../../src/notice-print.tsx');
+const { NoticesPage } = await import('../../src/notices.tsx');
 const rows = [1, 2, 3].map(notice_id => ({notice_id, bill_no: 'PN-' + notice_id, amount_approved: '1.00'}));
 const root = '/api/m03/print-batches';
 
@@ -109,6 +136,220 @@ async function until(predicate) {
   }
   assert.fail('expected dialog state did not arrive');
 }
+
+function mountNotices(t, handle) {
+  const pageCells = [];
+  let dialogCells = [];
+  const storage = new Map();
+  const browser = new EventTarget();
+  browser.sessionStorage = {setItem: (key, value) => storage.set(key, value), getItem: key => storage.get(key)};
+  t.mock.method(globalThis, 'fetch', async (path, request) => {
+    const result = path === root + '/active' ? null : await handle(path, request);
+    return result instanceof Response ? result : Response.json(result);
+  });
+  globalThis.window = browser;
+  globalThis.requestAnimationFrame = () => 0;
+  hooks.session = {mode: 'browser', connected: true};
+  function removeDialog() {
+    dialogCells.forEach(cell => cell.cleanup?.());
+    dialogCells = [];
+  }
+  t.after(() => {
+    pageCells.forEach(cell => cell.cleanup?.());
+    removeDialog();
+    delete globalThis.window;
+    delete globalThis.requestAnimationFrame;
+  });
+
+  const query = {isSuccess: true, data: rows.map(row => ({...row, ownership_id: null,
+    pay_status: '未付清', amount_paid: '0.00', pay_amount: '1.00', stat_settle: '1.00', stat_paid: '0.00'}))};
+  const projects = {isSuccess: true, data: []};
+  const me = {account: 'notice-test-owner'};
+  function render(cells, component) {
+    hooks.cells = cells;
+    hooks.index = 0;
+    hooks.effects = [];
+    const tree = component();
+    for (const effect of hooks.effects) effect();
+    return tree;
+  }
+  function page() {
+    return render(pageCells, () => NoticesPage({me, active: true, blocked: false, query, projects}));
+  }
+  function dialog() {
+    const props = walk(page()).find(node => node.type === NoticePrint)?.props;
+    if (!props) { removeDialog(); return null; }
+    return render(dialogCells, () => NoticePrint(props));
+  }
+  function grid() { return walk(page()).find(node => node.type === 'prepared-grid').props; }
+  function checkbox(id) {
+    const {presentation} = grid();
+    const control = presentation.columns.find(column => column.colId === 'pick');
+    return control.cellRenderer({node: {}, data: query.data.find(row => row.notice_id === id)}).props;
+  }
+  function click(label, surface = page) {
+    const button = walk(surface()).find(node => node.props.onClick && text(node) === label);
+    assert.ok(button, 'missing button: ' + label);
+    assert.equal(Boolean(button.props.disabled), false, label);
+    button.props.onClick();
+    if (surface === dialog) dialog();
+  }
+  return {
+    dialog, click, checkbox,
+    check: (id, checked) => checkbox(id).onChange({target: {checked}}),
+    count: () => text(walk(page()).find(node => node.props.className === 'notice-selection').props.children[0]),
+    paste(ids) {
+      click('粘贴单据号勾选');
+      const paste = walk(page()).find(node => node.type === 'NoticePaste');
+      assert.equal(paste.props.open, true);
+      paste.props.apply(ids);
+      paste.props.close();
+    },
+    visibleOrder() {
+      const {grid: options, presentation} = grid();
+      const nodes = presentation.rows.map(data => ({data}));
+      options.postSortRows({nodes});
+      return nodes.map(({data}) => data.notice_id);
+    },
+  };
+}
+
+for (const closeDuringDispatch of [false, true]) {
+  test('accepted single print clears the original checkbox and paste priority' + (closeDuringDispatch ? ' after closing' : ''), async t => {
+    const terminal = Promise.withResolvers();
+    const ready = view('single', 'print', {total: 1, status: 'ready', stage: 'preparing', items: [item(2)]});
+    const running = {...ready, status: 'running', stage: 'dispatching'};
+    const complete = {...running, status: 'complete', dispatched_count: 1,
+      items: [item(2, {delivery_status: 'accepted', channel: 'ipp', job_id: 123})]};
+    let reads = 0;
+    const page = mountNotices(t, async (path, request) => {
+      if (path === root + '/prepare') {
+        assert.deepEqual(JSON.parse(request.body).ids, [2]);
+        return ready;
+      }
+      if (path === root + '/single/dispatch') return running;
+      if (path === root + '/single') {
+        const firstRead = ++reads === 1;
+        const receipt = await terminal.promise;
+        return firstRead && !closeDuringDispatch ? {...receipt, status: 'running'} : receipt;
+      }
+      assert.fail(path);
+    });
+    page.paste([2]);
+    assert.deepEqual(page.visibleOrder(), [2, 1, 3]);
+    page.click('批量打印');
+    page.click('确认本批', page.dialog);
+    await until(() => text(page.dialog()).includes('投递打印机'));
+    assert.equal(page.count(), '已勾选 1 行');
+    if (closeDuringDispatch) {
+      page.click('关闭', page.dialog);
+      assert.equal(page.dialog(), null);
+      page.check(1, true);
+    }
+    terminal.resolve(complete);
+    await until(() => !page.checkbox(2).checked);
+    assert.equal(page.count(), closeDuringDispatch ? '已勾选 1 行' : '已勾选 0 行');
+    assert.deepEqual(page.visibleOrder(), [1, 2, 3]);
+    if (!closeDuringDispatch) page.click('关闭', page.dialog);
+    page.check(2, true);
+    page.click('查看打印批次');
+    await until(() => text(page.dialog()).includes('PN-2：打印机已接收'));
+    assert.equal(page.checkbox(2).checked, true);
+    assert.equal(page.checkbox(1).checked, closeDuringDispatch);
+  });
+}
+
+for (const [status, label] of [['failed', '明确失败'], ['unknown', '结果待核实'], ['accepted', '打印机已接收']]) {
+  test('single print preserves ' + (status === 'accepted' ? 'a fresh recheck' : 'selection after ' + status), async t => {
+    const ready = view('single', 'print', {total: 1, status: 'ready', stage: 'preparing', items: [item(2)]});
+    const running = {...ready, status: 'running', stage: 'dispatching'};
+    const page = mountNotices(t, path => {
+      if (path === root + '/prepare') return ready;
+      if (path === root + '/single/dispatch') return running;
+      if (path === root + '/single') return {...running, status: 'complete',
+        items: [item(2, {delivery_status: status})]};
+      assert.fail(path);
+    });
+    page.paste([2]);
+    page.click('批量打印');
+    page.click('确认本批', page.dialog);
+    await until(() => text(page.dialog()).includes('投递打印机'));
+    if (status === 'accepted') {
+      page.click('关闭', page.dialog);
+      page.check(2, false);
+      page.check(2, true);
+      page.click('查看打印批次');
+    }
+    await until(() => text(page.dialog()).includes('PN-2：' + label));
+    assert.equal(page.count(), '已勾选 1 行');
+    assert.equal(page.checkbox(2).checked, true);
+    assert.deepEqual(page.visibleOrder(), [2, 1, 3]);
+  });
+}
+
+test('recovering the original single batch clears its checkbox after acceptance is confirmed', async t => {
+  const ready = view('single', 'print', {total: 1, status: 'ready', stage: 'preparing', items: [item(2)]});
+  const page = mountNotices(t, path => {
+    if (path === root + '/prepare') return ready;
+    if (path === root + '/single/dispatch') return Response.json({message: '暂时无法读取投递状态'}, {status: 503});
+    if (path === root + '/single') return {...ready, stage: 'done', status: 'complete',
+      dispatched_count: 1, items: [item(2, {delivery_status: 'accepted'})]};
+    assert.fail(path);
+  });
+  page.paste([2]);
+  page.click('批量打印');
+  page.click('确认本批', page.dialog);
+  await until(() => text(page.dialog()).includes('暂时无法读取投递状态'));
+  assert.equal(page.checkbox(2).checked, true);
+  page.click('关闭', page.dialog);
+  page.click('查看打印批次');
+  await until(() => text(page.dialog()).includes('PN-2：打印机已接收'));
+  assert.equal(page.checkbox(2).checked, false);
+  assert.deepEqual(page.visibleOrder(), [1, 2, 3]);
+});
+
+test('a multi-notice print narrowed to one preserves both original checkboxes', async t => {
+  const failed = view('original', 'print', {total: 2, status: 'failed', stage: 'preparing',
+    failed_notice_id: 1, items: [item(1, {status: 'failed'}), item(2, {status: 'skipped'})]});
+  const ready = view('remaining', 'print', {total: 1, status: 'ready', stage: 'preparing', items: [item(2)]});
+  const page = mountNotices(t, (path, request) => {
+    if (path === root + '/prepare') return JSON.parse(request.body).ids.length === 2 ? failed : ready;
+    if (path === root + '/remaining/dispatch') return {...ready, stage: 'dispatching', status: 'complete',
+      dispatched_count: 1, items: [item(2, {delivery_status: 'accepted'})]};
+    assert.fail(path);
+  });
+  page.paste([2, 1]);
+  page.click('批量打印');
+  page.click('确认本批', page.dialog);
+  await until(() => text(page.dialog()).includes('已投递 0 张'));
+  page.click('移出异常单并重新确认剩余批次', page.dialog);
+  page.click('确认本批', page.dialog);
+  await until(() => text(page.dialog()).includes('PN-2：打印机已接收'));
+  assert.equal(page.count(), '已勾选 2 行');
+  assert.equal(page.checkbox(2).checked, true);
+  assert.deepEqual(page.visibleOrder(), [2, 1, 3]);
+});
+
+test('canceling before confirmation and exporting a single PDF both preserve selection', async t => {
+  const page = mountNotices(t, path => {
+    if (path === root + '/prepare') return view('pdf', 'pdf', {total: 1, status: 'complete', stage: 'preparing',
+      result: {total: 1, success: 1, failed: 0, items: [{notice_id: 2, bill_no: 'PN-2',
+        ok: true, unverified: false, reason: '', download_url: '/api/m03/pdf/token'}]}});
+    if (path === '/api/m03/pdf/token') return new Response('pdf', {headers: {
+      'Content-Type': 'application/pdf', 'X-Export-Filename': 'PN-2.pdf',
+    }});
+    assert.fail(path);
+  });
+  page.paste([2]);
+  page.click('批量打印');
+  page.click('关闭', page.dialog);
+  assert.equal(page.count(), '已勾选 1 行');
+  page.click('导出 PDF');
+  page.click('确认本批', page.dialog);
+  await until(() => text(page.dialog()).includes('在新窗口预览 PDF'));
+  assert.equal(page.count(), '已勾选 1 行');
+  assert.deepEqual(page.visibleOrder(), [2, 1, 3]);
+});
 
 test('print cancellation reports failed revocation and blocks the stale confirm handler', async t => {
   const revocation = Promise.withResolvers();

@@ -47,7 +47,9 @@ const noticeRowId = (row: NoticeRow) => String(row.notice_id);
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }
 type NoticeDialogState = { kind: 'delete' | 'link'; row: NoticeRow } | { kind: 'ownership'; document: OwnershipDocument };
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
-interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
+type PickedNotices = Map<number, symbol>;
+type SinglePrintSelection = {noticeId: number; originalPick: symbol};
+interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: PickedNotices; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
 const noticeMoneyColumns = new Set<string>(moneyKeys);
 const defaultColumn: ColDef<NoticeRow> = { cellDataType: false, sortable: true, resizable: true, suppressMovable: true, wrapHeaderText: false };
@@ -101,11 +103,17 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
 }) {
   const { message } = App.useApp();
   const client = useQueryClient(), api = useRef<GridApi<NoticeRow> | null>(null), gridRoot = useRef<HTMLDivElement>(null), pageRoot = useRef<HTMLDivElement>(null), lock = useRef(false), mounted = useRef(true);
-  const [filters, setFilters] = useState(defaults), [picked, setPicked] = useState<Set<number>>(() => new Set());
-  const [busy, setBusy] = useState(false), [warning, setWarning] = useState(''), [error, setError] = useState(''), [fetchOpen, setFetchOpen] = useState(false), [exportOpen, setExportOpen] = useState(false), [pasteOpen,setPasteOpen] = useState(false), [pasteOrder,setPasteOrder] = useState<Set<number>>(() => new Set()), [pasteScope,setPasteScope] = useState<number[] | null>(null);
+  const [filters, setFilters] = useState(defaults);
+  const [{picked, pasteOrder}, setSelection] = useState(() => ({picked: new Map<number, symbol>(), pasteOrder: new Set<number>()}));
+  const [busy, setBusy] = useState(false), [warning, setWarning] = useState(''), [error, setError] = useState(''), [fetchOpen, setFetchOpen] = useState(false), [exportOpen, setExportOpen] = useState(false), [pasteOpen,setPasteOpen] = useState(false), [pasteScope,setPasteScope] = useState<number[] | null>(null);
   function clearSelection() {
-    setPicked(new Set());
-    setPasteOrder(order => order.size ? new Set() : order);
+    setSelection(old => ({picked: new Map(), pasteOrder: old.pasteOrder.size ? new Set() : old.pasteOrder}));
+  }
+  function setPicked(update: (picked: PickedNotices) => PickedNotices) {
+    setSelection(old => {
+      const next = update(old.picked);
+      return next === old.picked ? old : {...old, picked: next};
+    });
   }
   const { applied: search, pending: searchBusy, input: searchInput, reset: setSearch } = useGridSearch(active && !blocked);
   function announce(text: string, needsAttention = false) {
@@ -114,7 +122,26 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   }
   const printLock = useRef(false);
   const [flowNotice,setFlowNotice] = useState<NoticeRow|null>(null);
-  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[];resumed?:BatchView}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
+  const [print,setPrint] = useState<{mode:'pdf'|'print';rows:NoticeRow[];resumed?:BatchView; single?: SinglePrintSelection}|null>(null),[printerOpen,setPrinterOpen] = useState(false);
+  const pendingPrintSelections = useRef(new Map<string, SinglePrintSelection>());
+  function observePrintBatch(batch: BatchView) {
+    const selection = pendingPrintSelections.current.get(batch.batch_id);
+    if (!selection || batch.mode !== 'print') return;
+    const accepted = (batch.stage === 'dispatching' || batch.stage === 'done') && batch.total === 1
+      && batch.items.some(item => item.notice_id === selection.noticeId && item.delivery_status === 'accepted');
+    if (!accepted && batch.status === 'running') return;
+    pendingPrintSelections.current.delete(batch.batch_id);
+    if (!mounted.current || !accepted) return;
+    setSelection(old => {
+      if (old.picked.get(selection.noticeId) !== selection.originalPick) return old;
+      const nextPicked = new Map(old.picked);
+      nextPicked.delete(selection.noticeId);
+      if (!old.pasteOrder.has(selection.noticeId)) return {...old, picked: nextPicked};
+      const order = new Set(old.pasteOrder);
+      order.delete(selection.noticeId);
+      return {picked: nextPicked, pasteOrder: order};
+    });
+  }
   const printOwner = me?.account ?? '';
   const recoveredPrintOwner = useRef('');
   useEffect(() => {
@@ -211,8 +238,15 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   ].some(value => searchKey(value).includes(needle))), [scope]);
   const shown = useMemo(() => find(needle), [find, needle]);
   // Business scope changes trim selection; searching and virtual windows never do.
-  useEffect(() => { const valid = new Set(scope.filter(selectable).map(r => r.notice_id)); setPicked(old => { const next = new Set([...old].filter(id => valid.has(id))); return next.size === old.size ? old : next; }); }, [filters]);
-  useEffect(() => { const valid = new Set(rows.filter(selectable).map(r => r.notice_id)); setPicked(old => { const next = new Set([...old].filter(id => valid.has(id))); return next.size === old.size ? old : next; }); }, [rows]);
+  function trimPicked(validRows: NoticeRow[]) {
+    const valid = new Set(validRows.filter(selectable).map(r => r.notice_id));
+    setPicked(old => {
+      const next = new Map([...old].filter(([id]) => valid.has(id)));
+      return next.size === old.size ? old : next;
+    });
+  }
+  useEffect(() => trimPicked(scope), [filters]);
+  useEffect(() => trimPicked(rows), [rows]);
   const selected = useMemo(() => rows.filter(row => picked.has(row.notice_id)), [rows, picked]);
   const shownIds = useMemo(() => new Set(shown.map(row => row.notice_id)), [shown]);
   const hidden = useMemo(() => selected.filter(row => !shownIds.has(row.notice_id)).length, [selected, shownIds]);
@@ -261,7 +295,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     }
     for (const row of selectedPay) delete payDrafts.current[row.notice_id];
     if (Object.keys(updates).length) setPayOverrides(old => ({...old,...updates}));
-    setPayError('');setPayIds([...picked]);
+    setPayError('');setPayIds([...picked.keys()]);
   }
   async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
     void resetNoticeTodos(client);
@@ -317,14 +351,37 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     const grid = api.current;
     const orderedRows = noticePrintRows(selected, pasteOrder, grid?.isDestroyed() ? null : grid);
     printLock.current = true;
-    setPrint({mode, rows: orderedRows});
+    const row = orderedRows[0];
+    const originalPick = row && picked.get(row.notice_id);
+    const single = mode === 'print' && picked.size === 1 && orderedRows.length === 1 && row && originalPick
+      ? {noticeId: row.notice_id, originalPick} : undefined;
+    setPrint({mode, rows: orderedRows, ...(single ? {single} : {})});
   }
-  function pick(id: number, checked: boolean) { if (searchBusy) return; setPicked(old => { const next = new Set(old); if (checked) next.add(id); else next.delete(id); return next; }); }
-  function chooseAll(checked: boolean) { if (searchBusy) return; setPicked(old => { const next = new Set(old); for (const r of shown.filter(selectable)) { if (checked) next.add(r.notice_id); else next.delete(r.notice_id); } return next; }); }
+  function pick(id: number, checked: boolean) {
+    if (searchBusy) return;
+    setPicked(old => {
+      if (old.has(id) === checked) return old;
+      const next = new Map(old);
+      if (checked) next.set(id, Symbol());
+      else next.delete(id);
+      return next;
+    });
+  }
+  function chooseAll(checked: boolean) {
+    if (searchBusy) return;
+    setPicked(old => {
+      const next = new Map(old);
+      for (const {notice_id: id} of shown.filter(selectable)) {
+        if (checked && !next.has(id)) next.set(id, Symbol());
+        else if (!checked) next.delete(id);
+      }
+      return next.size === old.size ? old : next;
+    });
+  }
   const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind, row) => setMaintenance(kind === 'ownership'
     ? { kind, document: { source: 'notice', number: row.bill_no, name: row.bill_name, project: row.project_name, noticeId: row.notice_id } }
     : { kind, row }), payOverrides, payDrafts:payDrafts.current, editPay, setPay, draftCell };
-  const refreshed = useRef<{ grid: GridApi<NoticeRow>; rows: NoticeRow[]; draft: Draft | null; unavailable: boolean; picked: Set<number> } | null>(null);
+  const refreshed = useRef<{ grid: GridApi<NoticeRow>; rows: NoticeRow[]; draft: Draft | null; unavailable: boolean; picked: PickedNotices } | null>(null);
   useEffect(() => {
     const grid = api.current, root = gridRoot.current;
     if (!active || !grid || !root) { refreshed.current = null; return; }
@@ -435,13 +492,13 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{selectedAmounts.approved}</b> 元</span><span>本次应付 <b>{selectedAmounts.due}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="submit" onClick={clearSelection}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="submit" disabled={unavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)}
       onClick={() => void recoverPrint()}>查看打印批次</Button><Button htmlType="submit" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="submit" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
     {payError && <p className="notice" role="alert">{payError}</p>}
-    <section className="notice-card page-fill-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={actionsUnavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={actionsUnavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
+    <section className="notice-card page-fill-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="submit" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked.keys()], category: key }); }}>{label}</Button>)}<Button htmlType="submit" className="danger" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked.keys()] }, true); }}>批量剔除</Button><Button htmlType="submit" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked.keys()] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="submit" disabled={actionsUnavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="submit" disabled={actionsUnavailable || !shown.length} onClick={() => setExportOpen(true)}>导出 Excel</Button></div></div>
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>
       <label>分类<Select aria-label="通知书分类" disabled={false} value={filters.category} onChange={value=>setFilters(f=>({...f,category:value, link: ''}))} options={[{value:'',label:'全部'},...Object.entries(categories).map(([value,label])=>({value,label})),{value:'exclude',label:'剔除'}]}/></label><label>合同关联（集采）<Select aria-label="合同关联" disabled={!['','jc'].includes(filters.category)} value={filters.link} onChange={value=>setFilters(f=>({...f,link:value}))} options={[{value:'',label:'全部'},{value:'no',label:'未关联'},{value:'yes',label:'已关联'}]}/></label>
       <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="submit" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label><Button htmlType="submit" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
       <Button htmlType="submit" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button></div>
-      <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setPicked(new Set(ids)); setPasteOrder(new Set(ids)); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { clearSelection(); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
+      <NoticePaste open={pasteOpen} blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setSelection({picked: new Map(ids.map(id => [id, Symbol()])), pasteOrder: new Set(ids)}); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { clearSelection(); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
       {warning && <p className="notice" role="alert">{warning}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setWarning('')).catch(e => setError(e.message))}>重读核对</Button></p>}{error && <p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
       {cellError && <p className="notice" role="alert">{cellError}</p>}
@@ -464,7 +521,12 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         : maintenance?.kind === 'ownership' ? <OwnershipDialog document={maintenance.document} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh('ownership')} announce={announce} />
         : maintenance && <NoticeDeleteDialog row={maintenance.row} blocked={blocked || !active} close={() => setMaintenance(null)} refresh={() => refresh()} announce={announce} />}</DialogPresence>
     </section>
-    <DialogPresence>{print && <NoticePrint key={printOwner} rows={print.rows} mode={print.mode} owner={printOwner} resumed={print.resumed} blocked={blocked || !active} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
+    <DialogPresence>{print && <NoticePrint key={printOwner} rows={print.rows} mode={print.mode} owner={printOwner} resumed={print.resumed} blocked={blocked || !active}
+      printSelection={{
+        start: batchId => { if (print.single) pendingPrintSelections.current.set(batchId, print.single); },
+        observe: observePrintBatch,
+        pending: batchId => mounted.current && pendingPrintSelections.current.has(batchId),
+      }} close={()=>{printLock.current=false;setPrint(null);}} />}</DialogPresence>
     <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
     <DialogPresence>{printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}</DialogPresence>
     <DialogPresence>{payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
