@@ -19,7 +19,7 @@ python -X utf8 D:/dev/业务流程/tools/sync_business_skills.py machinery-fee-c
 
 项目目录是维护源；中央库是发布版本；Agent目录是Skills Manager管理的运行副本。**副本不自动跟随源码，源文件更新后必须执行上述更新。** 副本是正常分发方式，不应手工同步文件，或改成junction来绕开Skills Manager；链接/复制模式的调整也交给manage-skills，保留来源、ID及部署记录。
 
-SKILL.md保留完整业务正文和简短中文description，无需清空描述或把正文挪成空入口。disable-model-invocation保持true；Codex的allow_implicit_invocation保持false；OpenCode的opencode/autoinvoke保持false。只在支持对应策略的宿主采用其设置，不用一句通用承诺替代实际核验。
+`SKILL.md` 保留完整业务正文、简短的中文 `description` 和 `disable-model-invocation: true`。`agents/openai.yaml` 保留 `allow_implicit_invocation: false`。在支持技能手动调用配置的宿主，核对技能元数据中的调用设置和实际加载结果。
 
 本技能归入“材料业务·手动调用”preset、标签“材料业务”。本机现有部署保持，另一电脑不因维护而默认部署。不要把技能正文写入Agent记忆；已加载的会话内容与历史记忆无法靠技能更新撤回，需新会话核验。
 

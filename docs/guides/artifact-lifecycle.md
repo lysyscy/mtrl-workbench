@@ -92,7 +92,7 @@
 
 本机周期入口仍为Windows任务`PersonalSkillArtifactCleanup`，当前用户登录后每日09:00运行、错过后补跑；同名Codex自动化保持暂停。本次保留原六个AgentArtifacts根，增加材料工作台项目入口，仅扫描其已登记`.artifacts/runs`。2026-11-06 20:58–20:59（北京时间）通过原任务入口完成真实七区调度，七项退出码均为0、LastTaskResult=0；本轮无到期候选，未发生新增删除。当前结果以LastTaskResult及`C:/Users/Administrator/.codex/automations/automation/windows-task-result.json`为准。原六区运行与通知依据见[已保存回执](https://github.com/lysyscy/mtrl-workbench/blob/977193e9ce5166dd0e06e5b09a4dc3bc6e703226/.scratch/quality-wayfinding-20261106/workflow-close.md#每日计划任务)。运行组结项不代替[任务文件退出](../agents/workflow.md#任务文件退出)。
 
-### t3-pstack 临时产物
+### pstack 临时产物
 
 待办优先用宿主计划工具。需要落盘时，从仓根用 `backend/.venv/Scripts/python.exe -B -X utf8 tools/artifact_lifecycle.py` 执行 `register --group <run-id> --owner <负责人> --reason <用途> --kind work`，为本次运行分配独立标识。
 

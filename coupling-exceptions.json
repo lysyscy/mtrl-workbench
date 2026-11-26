@@ -1,0 +1,107 @@
+[
+  {
+    "path": "README.md",
+    "rule_id": "host-brand",
+    "line_sha256": "36c267aabd086707291625e443ff46f84916a2fbb591c0e337c43ff2a20bf7bf",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "既有本机用户附件目录。原路径用于识别需保护的附件。"
+  },
+  {
+    "path": "docs/agents/workflow.md",
+    "rule_id": "host-brand",
+    "line_sha256": "9b8c195e3dae463fc8b3b11eb8e119b77131103bfd012e982769b34bf6e9a448",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "2026-11-26 的采用记录保留实际宿主、加载方式和核实版本。"
+  },
+  {
+    "path": "docs/agents/workflow.md",
+    "rule_id": "host-brand",
+    "line_sha256": "b4694ed9d12511bc3865a42c233c6921782721353e0211e6b9706fc8ba2eacc7",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "产物退出规则保留既有用户附件目录的准确路径。"
+  },
+  {
+    "path": "docs/agents/workflow.md",
+    "rule_id": "t3-runtime",
+    "line_sha256": "9b8c195e3dae463fc8b3b11eb8e119b77131103bfd012e982769b34bf6e9a448",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "2026-11-26 的采用记录保留实际宿主、加载方式和核实版本。"
+  },
+  {
+    "path": "docs/guides/artifact-lifecycle.md",
+    "rule_id": "host-brand",
+    "line_sha256": "56711af271e7e08cb884863e9b14dce2a9a74bbe6150c74b3881527d738085aa",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "2026-11-06 的实测调度记录保留停用的自动化和原结果文件路径。"
+  },
+  {
+    "path": "skills/machinery-fee-consolidation/SKILL.md",
+    "rule_id": "host-brand",
+    "line_sha256": "ba3a12c7eb4554cf141fcdc6c320074a8fac0644cc499fbb5e30ff8e8123daa5",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "技能元数据中的手动调用入口，由支持此字段的宿主读取。"
+  },
+  {
+    "path": "skills/machinery-fee-consolidation/SKILL.md",
+    "rule_id": "host-brand",
+    "line_sha256": "e920e98c6c9f0dac3a06a693ed8090886068e99e7da8142cae181424435136d7",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "技能元数据中的禁用自动调用设置，用于保持仅手动调用。"
+  },
+  {
+    "path": "skills/payment-plan-audit/SKILL.md",
+    "rule_id": "host-brand",
+    "line_sha256": "ba3a12c7eb4554cf141fcdc6c320074a8fac0644cc499fbb5e30ff8e8123daa5",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "技能元数据中的手动调用入口，由支持此字段的宿主读取。"
+  },
+  {
+    "path": "skills/payment-plan-audit/SKILL.md",
+    "rule_id": "host-brand",
+    "line_sha256": "e920e98c6c9f0dac3a06a693ed8090886068e99e7da8142cae181424435136d7",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "技能元数据中的禁用自动调用设置，用于保持仅手动调用。"
+  },
+  {
+    "path": "tools/mut/_mut_amount.py",
+    "rule_id": "host-brand",
+    "line_sha256": "82c211a0f6bea50fa3be9399ff5611466daf1a6b015d63efaaa07dede8941e43",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "2026-10-01 的变异测试迁移记录保留原目录。"
+  },
+  {
+    "path": "tools/mut/_mut_tail297.py",
+    "rule_id": "host-brand",
+    "line_sha256": "f068b57399cff6070c6c842bfefa98002024a492ee2d062730f768098304986d",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "变异测试用旧目录字面值复现旧路径误通过。"
+  },
+  {
+    "path": "tools/oneoff/_b_diag_archive_pending.py",
+    "rule_id": "host-brand",
+    "line_sha256": "2f0d9917a0cf06bad2e5e6d15a74c86ba72fd4778a3325494f9c8193aa4dda71",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "一次性诊断的历史原始描述索引。"
+  },
+  {
+    "path": "tools/oneoff/_oneoff_measure.py",
+    "rule_id": "host-brand",
+    "line_sha256": "592388e4daf05e23a9ff0645f824759cd2daf7be366cb4383af057718bcd8831",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "历史核查语料需标明仓内未跟踪的旧记忆目录。"
+  },
+  {
+    "path": "tools/oneoff/_oneoff_measure.py",
+    "rule_id": "host-brand",
+    "line_sha256": "8cd9e00e4bfe673b35caddbf6e00f17d45c3bb76dd688d4282fc79d38437d532",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "历史核查语料需标明仓内未跟踪的旧备份目录。"
+  },
+  {
+    "path": "tools/oneoff/_struct_scan.py",
+    "rule_id": "host-brand",
+    "line_sha256": "18bacf0aca0097ecf86693b8f0e89ef49be89e8c818738377e7b8725c96f2c54",
+    "owner": "mtrl-workbench 维护者",
+    "reason": "一次性结构扫描保留参照脚本的历史路径。"
+  }
+]
