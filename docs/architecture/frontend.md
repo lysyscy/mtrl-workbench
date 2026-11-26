@@ -22,6 +22,8 @@ React 账号工作区由 `apps/frontend/src/main.tsx` 的 `pages` 注册表统�
 
 ## 表格与更新边界
 
+铺满主内容区的表格使用逐层传递可用高度且允许收缩的 flex 容器链，表格滚动区占据剩余空间，避免使用固定的 vh 高度。
+
 PageSurface的首次发布由页面显式`data-page-loading`和`data-page-chrome`所指字体决定，各表负责自身布局和局部重试。QueryCache只唤醒准备检查；身份核验、已有内容保活和保存锁继续由各自主人持有。PageActivity向新增业务网格传递当前页可见性，保活隐藏页暂停尺寸准备；路由使用BrowserRouter公开useTransitions=false，及时切换路由身份，首次数据/字体等待仍由现有PageSurface负责。
 
 保活页隐藏时保持主内容区的同一宽高，脱离文档流；切换立即以inert和aria-hidden隔离旧页，短退出完成后以visibility隐藏，避免零尺寸触发AG内部布局队列持续重试。定位包含块由主内容区持有，Motion只插值现有节点，不按路由重挂业务树。两种网格成功态均继承祖先可见性，不以显式visible穿透隐藏页。返回保留原滚动、筛选和草稿，PageActivity查询/尺寸准备门控保持；节奏、减少动效与浮层生命周期归[设计规范](../guides/frontend-design.md#动效与连续操作)。

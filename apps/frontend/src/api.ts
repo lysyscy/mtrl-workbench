@@ -84,7 +84,8 @@ export async function requestFile(path: string, signal?: AbortSignal, method: 'G
     await jsonResult(response);
     throw new ApiError('导出未生成文件，请核对范围后重试。');
   }
-  const encoded = response.headers.get('X-Export-Filename');
+  const encoded = response.headers.get('X-Export-Filename') ??
+    response.headers.get('Content-Disposition')?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   if (!encoded) throw new ApiError('导出文件名不完整，请联系维护人员。');
   let filename: string;
   try { filename = decodeURIComponent(encoded); }

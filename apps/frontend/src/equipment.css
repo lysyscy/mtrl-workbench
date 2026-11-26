@@ -1,0 +1,332 @@
+.equipment-page,
+.equipment-dialog {
+  min-inline-size: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx);
+}
+.page-view:has(> .equipment-page-bounded) {
+  padding-block-end: 0;
+}
+.equipment-page-bounded,
+.equipment-top-tabs,
+.equipment-tabs-body,
+.equipment-tab-panel,
+.equipment-sheet {
+  height: 100%;
+  min-height: 0;
+}
+.equipment-top-tabs,
+.equipment-sheet {
+  display: flex;
+  flex-direction: column;
+}
+.equipment-top-tabs > :has(> .equipment-tabs-body) {
+  flex: 1;
+  min-height: 0;
+}
+.equipment-sheet > :not(.equipment-grid-slot, .equipment-rental-scroll) {
+  flex-shrink: 0;
+}
+.equipment-workspace-bar > .ant-segmented {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+.equipment-top-tabs > .ant-tabs-nav {
+  margin-block-end: 0;
+}
+.equipment-grid-slot,
+.equipment-rental-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.equipment-grid-slot .business-grid {
+  height: 100%;
+}
+.equipment-rental-scroll {
+  overflow: auto;
+}
+.equipment-rental-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-block: 0 0.7em;
+  padding-inline: 5px;
+  max-block-size: 9em;
+  overflow: auto;
+}
+.equipment-rental-nav .equipment-project-zero {
+  color: var(--tx2);
+}
+.equipment-project-pill[draggable='true'] {
+  cursor: grab;
+}
+.equipment-project-pill[draggable='true']:active {
+  cursor: grabbing;
+}
+.equipment-project-pill[data-drop]::after {
+  position: absolute;
+  inset-block: 0.2em;
+  inline-size: 3px;
+  border-radius: 2px;
+  background: var(--pri);
+  pointer-events: none;
+  content: '';
+}
+.equipment-project-pill[data-drop='before']::after {
+  inset-inline-start: -4px;
+}
+.equipment-project-pill[data-drop='after']::after {
+  inset-inline-end: -4px;
+}
+.equipment-nav-pending {
+  padding-inline: 0.45em;
+  border-radius: 1em;
+  background: var(--pri-l);
+  color: var(--tx);
+}
+.equipment-rental-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-block-end: 16px;
+}
+@media (min-width: 1360px) {
+  .equipment-rental-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.equipment-flash-row {
+  animation: equipment-row-highlight 700ms ease-in-out 2;
+}
+@keyframes equipment-row-highlight {
+  30%, 65% { background-color: var(--pri-l); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .equipment-flash-row {
+    animation: none;
+    background-color: var(--pri-l);
+  }
+}
+.equipment-row-link {
+  display: inline-block;
+  max-inline-size: 100%;
+  padding: 0;
+  color: var(--pri);
+  font: inherit;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.equipment-row-link:hover {
+  text-decoration: underline;
+}
+.equipment-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  height: 100%;
+}
+.equipment-row-actions > * {
+  flex: none;
+}
+.equipment-row-actions .ant-btn {
+  padding-inline: 0.48em;
+}
+.equipment-toolbar,
+.equipment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55em;
+  align-items: center;
+}
+.equipment-toolbar {
+  margin-block: 0.6em;
+}
+.equipment-workspace-bar {
+  justify-content: space-between;
+}
+.equipment-toolbar-actions {
+  margin-inline-start: auto;
+  justify-content: flex-end;
+}
+.equipment-history-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+}
+.equipment-dialog {
+  width: min(calc(680px * var(--fscale)), calc(100vw - 24px));
+  padding: 1.4em;
+}
+.equipment-dialog-compact {
+  width: min(calc(480px * var(--fscale)), calc(100vw - 24px));
+}
+.equipment-location-dialog {
+  width: min(calc(820px * var(--fscale)), calc(100vw - 24px));
+}
+.equipment-project-form-item {
+  grid-column: 1 / -1;
+}
+.equipment-project-field {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(17em, 100%), 1fr));
+  gap: 0.5em;
+}
+.equipment-project-field .business-project-picker {
+  max-inline-size: 100%;
+}
+.equipment-location-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-block-end: 16px;
+}
+.equipment-location-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(12em, 100%), 1fr));
+  flex: 1 1 30em;
+  gap: 8px;
+}
+.equipment-location-add > button {
+  justify-self: start;
+}
+@media (min-width: 620px) {
+  .equipment-location-add {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  }
+}
+.equipment-location-dialog .business-project-picker {
+  min-inline-size: 100%;
+  max-inline-size: 100%;
+}
+.equipment-location-scroll {
+  max-block-size: 48dvh;
+  overflow: auto;
+  border: 0.5px solid var(--bd);
+  border-radius: 6px;
+}
+.equipment-location-table {
+  width: 100%;
+  min-inline-size: 36em;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.equipment-location-table :is(th, td) {
+  padding: 7px 10px;
+  border-block-end: 0.5px solid var(--bd);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.equipment-location-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background: var(--sf2);
+}
+.equipment-location-table thead th:nth-child(3) {
+  width: 6em;
+}
+.equipment-location-table thead th:nth-child(4) {
+  width: 10em;
+}
+.equipment-location-table tbody th {
+  font-weight: 400;
+}
+.equipment-location-table tbody tr:hover {
+  background: var(--sf2);
+}
+.equipment-location-table tbody tr:last-child > * {
+  border-block-end: 0;
+}
+.equipment-location-note {
+  margin-block: 12px 0;
+  color: var(--tx2);
+}
+.equipment-history-source {
+  margin-block: 0.85em;
+}
+.equipment-history-source dd {
+  margin-inline-start: 0;
+  margin-block-end: 0.5em;
+  overflow-wrap: anywhere;
+}
+.equipment-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15em, 100%), 1fr));
+  gap: 0 1em;
+}
+.equipment-fields :is(.ant-input-number, .ant-picker) {
+  width: 100%;
+}
+.equipment-preview,
+.equipment-selection {
+  max-block-size: 15em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  margin-block: 0.85em;
+}
+.equipment-preview strong {
+  display: block;
+}
+.equipment-receipt,
+.equipment-total {
+  padding: 0.8em 1em;
+  background: var(--sf2);
+  overflow-wrap: anywhere;
+}
+.equipment-total,
+.equipment-project h3 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1em;
+  font-weight: 600;
+}
+.equipment-total small {
+  font-size: 0.95em;
+  color: var(--tx2);
+  font-weight: 500;
+}
+.equipment-project {
+  min-inline-size: 0;
+}
+.equipment-project h3 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+.equipment-project .ag-row-pinned {
+  font-weight: 600;
+  background: var(--sf2);
+}
+.equipment-project-empty {
+  margin: 0;
+  padding: 0.65em 1em;
+  color: var(--tx2);
+}
+.equipment-billing {
+  display: grid;
+  justify-items: start;
+  gap: 0.3em;
+  line-height: 1.4;
+  padding-block: 0.3em;
+}
+.equipment-dialog pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.equipment-page [role='alert'],
+.equipment-dialog [role='alert'] {
+  color: var(--status-danger-fg);
+}

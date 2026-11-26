@@ -18,17 +18,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import ModuleType
+from typing import Any
 
-_REG: dict[str, ModuleType] = {}
+_REG: dict[str, ModuleType | Callable[..., bytes]] = {}
 
 
-def register(name: str, module: ModuleType) -> None:
+def register(name: str, module: ModuleType | Callable[..., bytes]) -> None:
     """填表（**只有装配层**该调 —— `app/export_bindings.py::register_all`）。⛔ 业务包不许调。"""
     _REG[name] = module
 
 
-def get(name: str) -> ModuleType:
+def get(name: str) -> Any:
     """按名取导出件。⚠️ 没注册 ⇒ **显式报错**（⛔ 不静默回落成 `None` —— 那会把"没接上"藏起来）。"""
     mod = _REG.get(name)
     if mod is None:

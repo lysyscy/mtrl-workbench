@@ -34,6 +34,24 @@
 
 直连 Cookie 按 i8 原点和 i8 账号复用。旧缓存须带匹配的原点才能使用。取消在线冲突确认时，页面立即作废本地确认，再提交当前令牌至 POST /api/m02/session/kick-cancel，由服务端按工作台账号撤销。撤回未确认时，页面提示短期令牌将自动失效。
 
+## 设备台账与流动资产调拨（协同办公自定义表单）
+
+2026-11-23 至 24 日在第四工程公司（组织主键 `3700000000000014`）核验了 `sbzx`（流动资产设备台账）和 `ldzcdb`（流动资产调拨）的列表、设备详情、一次设备改号与恢复、一次调拨保存。Edge 扩展新标签直接打开同源 `/ngweb/portal/index.html#/` 可沿用当前 Edge 会话，访问裸根路径 `/` 会跳到登录页。本次使用已有会话，未发起登录或下线操作。
+
+| 方法及路径 | 请求与结果 | 验证范围 |
+|---|---|---|
+| `POST /sup/customServer/getList` | 表单字段为 `customBusCode`、`containerId=p_form_<业务码>_m_list`、从 0 起的 `page`、行偏移 `start`、页长 `limit`，以及该组织列表的 `clientfilter`、`queryfilter`。返回 `total` 与行数组 `data`。 | 两表在同一组织筛选下实测。设备每页 100 条，3 页共 285 个唯一 `phid`。调拨主表行包含 `phid`、`bill_no`、`bill_dt`、`phid_org`、`phid_pc`、`app_status` 和 `wf_flag`。 |
+| `GET /sup/customServer/getInfo` | 查询参数为设备主键 `id`、`oType=edit`、`customBusCode=sbzx` 和页面由主键生成的 `encryptPrimaryKey`。详情主表在 `data.p_form_sbzx_m`。 | 设备详情及各次编辑前的 `ng_record_ver` 已实测。 |
+| `POST /sup/customServer/save` | 使用表单编码的 `customBusCode`、JSON 字符串 `data`、`billNoStatus=1`、JSON 字符串 `isContinue`。其中 `warn`、`validateWarn`、`checkProjOrgWarn` 初始值均为字符串 `0`。实测保存字段中无 `encryptPrimaryKey`。 | 两种表单成功均返回 HTTP 200，JSON 中 `status="success"`、`data` 为所存记录的主键字符串、`msg` 和 `total` 为 `null`。`bill_no` 由列表按主键回读。 |
+
+设备主表 `p_form_sbzx_m.form` 的 `key` 为 `phid`。修改提交整个 `modifiedRow` 对象，保留原 `phid` 和写前服务端的整数 `ng_record_ver`。`u_device_code` 为设备编码，最长 50 字符。`bill_name` 为设备名称，`phid_org` 为管理组织，`u_use_org` 为使用组织。编辑提交的 `u_indata` 和 `bill_dt` 为 `YYYY-MM-DD`，列表中 `u_indata` 带零点时间。实测改号后再用新版本改回，三个连续列表版本为 1、2、3，设备主键和项目一致。原为空的 `bill_no` 在首次保存时由 i8 生成，恢复设备编码后仍保留。新增形态沿用前端定义的 `newRow`，设备新增及历史调拨引用变化未实测。
+
+调拨主表 `p_form_ldzcdb_m.form.newRow` 带当前录入人 `phid_fill_psn`、组织 `phid_org`、调出项目 `phid_pc`、方案 `phid_schemeid=3700000000000363` 和 `YYYY-MM-DD` 的 `bill_dt`。本次页面使用默认单据日期，`bill_no`、`bill_name`、`wf_flag`、`app_status` 在提交时为 `null`。明细写入 `p_form_ldzcdb_d`，其 `isChanged` 为 `true`，`table.key` 为 `phid`，`table.newRow` 形如 `[{"row":{...}}]`。首行 `detail_row_no=0`，`key` 和 `rel_key1` 为 `null`。单据引用选择器带出设备主键 `u_sbmc`、设备编码 `u_sbbm`、规格 `u_spe`、单位 `u_msuint` 和调出项目 `phid_pc`，再选择必填的调入项目 `u_inproj`。显示名称以各字段的 `_EXName` 传递。明细的 `imp_info` 为独立 JSON 字符串，包含 `SchemePhId`、`SSign=p_form_sbzx_m`、`TSign=p_form_ldzcdb_d`、`SOrgPhId=3700000000000869`、`STable=p_form_sbzx_m`、`SPk=phid`、`SPkValue`（设备主键）和 `SName=流动资产台账`。
+
+调拨单 `20261124-0001` 保存后按回执主键回读到了单号，`app_status=0`、`wf_flag=0`。同期回读同一设备，`sbzx.phid_pc` 仍为调出项目。2026-11-24 用户在 i8 对该 `ldzcdb` 调拨单执行送审并确认，i8 自动将设备当前项目（`sbzx.phid_pc`）更新为调入项目。
+
+工作台封装见 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。API 默认保留本地待同步，启用须显式注入传输及已核单位映射，新增调拨还需同一 i8 会话的录入人主键和名称。已关联项目使用项目档案的 `phid` 提交和核对，未关联项目沿用已核的名称映射。同一档案下的自定义位置变动只生成本地调拨。适配器按完整组织列表精确匹配设备编码及调出项目。调拨保存后按单据主键核对单号，并回查同一设备的项目。单据已保存而设备仍在调出项目时保留单号及主键，显示项目待更新。回执未知和读回待确认的重试沿原执行记录回查，禁止重复建单。此流程只执行保存和回查两个业务动作。真实写入与会话选择按当次授权，现有浏览器只读通道的范围见下文。
+
 ## 抓取回执
 
 集采、付款通知书、收发结存和库存共用回执摘要。摘要显示本批次的状态、范围、时间、分组统计及待处理提示。各业务按自身口径提供数字。结存和库存的「刷新已有」统计更新过的源行，包含数值相同的行。付款通知书的归属未定行本次不写入，规则剔除行仍按通知书原规则处理。

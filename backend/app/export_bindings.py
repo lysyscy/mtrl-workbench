@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from app import export_registry as REG
 from app.report_export import (
+    equipment_export,
     fl_export,
     jc_export,
     jc_print_export,
@@ -27,6 +28,9 @@ from app.report_export import (
 #:   `EXP.get("pj")` / `EXP.get("nt")` / `EXP.get("fl")` /
 #:   `EXP.get("jc")` / `EXP.get("service")` / `EXP.get("save")`）
 BINDINGS = {
+    "equipment_distribution_xlsx": equipment_export.equipment_distribution_xlsx,
+    "equipment_rental_xlsx": equipment_export.equipment_rental_xlsx,
+    "equipment_inventory_xlsx": equipment_export.equipment_inventory_xlsx,
     "pj": pj_export,        # 项目档案导出（`mod01`）
     "nt": nt_export,        # 付款通知书导出（`mod03`）
     "fl": fl_export,        # 付款流水导出（`mod05`）

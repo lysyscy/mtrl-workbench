@@ -55,6 +55,7 @@ from app.mod14_config.router import router as mod14_router
 # ⚠️ 本模块还顺手把 `core/identity.py` 的「当前登录用户」对到了**真实账号**
 #    （§1.5.1 末行：留痕的改前人 / 录入人「统一取当前登录用户」＝ 账号体系与业务字段的**唯一接点**）。
 from app.mod15_user.api import router as mod15_api_router
+from app.mod16_equipment.api import router as equipment_router
 
 # ⭐ 导出件注册（`TAIL-195` 批 2b · 装配层的活，与 `models_registry` 同款）：
 #    业务包从此**只按名取**导出器（`EXP.get("pj")`），⛔ 不再 import 导出层 ⇒「导出层 ⇄ 业务包」的环断开。
@@ -328,6 +329,7 @@ def create_app() -> FastAPI:
     #  ⚠️ 本模块没有服务端渲染页；读 `/api/m11/list` · `/api/m11/detail`（写动作随 M5-4 进）
     app.include_router(mod11_router)
     app.include_router(oilcard_router)
+    app.include_router(equipment_router)
     # ⛔ 原 `mod12_router`（差异登记的 JSON API）已撤 —— 见上方 import 处的说明（2026-09-20 用户裁定）
     app.include_router(mod14_router)
     # MOD-15 用户管理（`MOD-15` · §1.5）：**从第一天起就是 JSON API ＋ 新壳**（⛔ 无服务端渲染页）
