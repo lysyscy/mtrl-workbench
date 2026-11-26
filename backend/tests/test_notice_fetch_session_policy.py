@@ -17,6 +17,7 @@ from app.core.session import set_current_name
 from app.main import _install_error_handlers
 from app.mod02_i8 import browser_broker, cookie_store, login, session_policy
 from app.mod02_i8.notice_source import NoticeDetailFetcher
+from app.mod03_notice import fetch_jobs
 from app.mod03_notice.router import router
 
 BASE = "https://i8.example.test"
@@ -91,6 +92,8 @@ def case(monkeypatch, rollback_db):
             return client.post("/api/m03/notices/fetch", json=PAYLOAD if payload is None else payload,
                                headers={"x-test-owner": owner})
         state.post = post
+        state.post_job = lambda payload=PAYLOAD: client.post("/api/m03/notices/fetch-jobs", json=payload)
+        state.active_job = lambda: client.get("/api/m03/notices/fetch-jobs/active").json()
         state.cancel = lambda token, owner=OWNER: client.post(
             "/api/m02/session/kick-cancel", json={"kick_token": token}, headers={"x-test-owner": owner},
         )
@@ -230,6 +233,36 @@ def test_http_can_log_in_without_a_confirmation_when_there_is_no_conflict(case):
     case.online = False
     assert case.post().status_code == 200
     assert paths(case) == [login.LOGIN_PATH, login.LOGIN_PATH, I8_PATH_PAYMENT_NOTICE]
+
+
+@pytest.mark.parametrize("cached_cookie", ["", "i8-test=cached"])
+def test_job_reports_direct_conflict_before_accepting_and_reuses_validated_client(case, monkeypatch, cached_cookie):
+    case.cached = cached_cookie
+    case.expires = bool(cached_cookie)
+    work = []
+
+    class DeferredThread:
+        def __init__(self, *, target, args, **kwargs):
+            self.run = lambda: target(*args)
+
+        def start(self):
+            work.append(self.run)
+
+    monkeypatch.setattr(fetch_jobs, "Thread", DeferredThread)
+    token = conflict_token(case.post_job())
+    assert case.active_job() is None and not work
+    assert login.KICK_PATH not in paths(case)
+    case.expires = False
+    case.cached = ""
+    reply = case.post_job({**PAYLOAD, "kick_token": token})
+    assert reply.status_code == 202 and reply.json()["stage"] == "fetching_notices"
+    notices = [request for request in case.requests if request.url.path == I8_PATH_PAYMENT_NOTICE]
+    assert parse_qs(notices[-1].content.decode())["limit"] == ["1"]
+    work.pop()()
+    assert case.active_job()["result"]["saved"] == 1
+    assert paths(case).count(login.KICK_PATH) == 1
+    assert parse_qs(case.requests[-1].content.decode())["limit"] == ["5000"]
+    assert case.requests[-1].headers["cookie"] == "i8-test=new"
 
 
 def test_only_one_concurrent_confirmation_can_kick(case):

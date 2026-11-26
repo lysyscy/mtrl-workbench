@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -154,6 +155,40 @@ class FetchResponse(BaseModel):
     upserted: int
     ignored: list[UnresolvedItemOut] = Field(default_factory=list)
     receipt: dict | None = None
+    notices_saved: bool = False
+    saved: int = 0
+    created: int = 0
+    updated: int = 0
+    ignored_count: int = 0
+    excluded: int = 0
+    unresolved: int = 0
+    auto_linked: int = 0
+    auto_linked_items: list[dict] = Field(default_factory=list)
+    manual_review: int = 0
+    manual_review_items: list[dict] = Field(default_factory=list)
+    payable_source_failed: bool = False
+    payable_source_error: str = ""
+    fetch_error: str = ""
+    matching_error: str = ""
+
+
+FetchJobStatus = Literal["running", "completed", "failed"]
+FetchJobStage = Literal["fetching_notices", "saving_notices", "matching_jc", "completed", "failed"]
+
+
+class FetchJobOut(BaseModel):
+    id: int
+    account: str
+    year_month: str
+    status: FetchJobStatus
+    stage: FetchJobStage
+    stage_label: str
+    result: FetchResponse | None
+    error_message: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    acknowledged_at: datetime | None
 
 
 class UnresolvedResponse(BaseModel):

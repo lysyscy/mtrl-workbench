@@ -29,7 +29,7 @@ import { NoticeFetch } from './notice-fetch';
 import { NoticePaste } from './notice-paste';
 import { AutoLinkDialog } from './notice-auto-link';
 import { DraftField, manualDraft, NoticeDeleteDialog, NoticeDraftDisabled } from './notice-maintenance';
-import { OwnershipDialog, OwnershipPending, refreshNoticeOwnershipPending } from './ownership';
+import { OwnershipDialog, OwnershipPending } from './ownership';
 import type { OwnershipDocument } from './ownership';
 import { NoticeCells, PaidAmountCell, PublishedNotices, StatCell, useNoticeCellSaves } from './notice-cell-save';
 import { ContractDialog } from './notice-contract';
@@ -297,13 +297,12 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     if (Object.keys(updates).length) setPayOverrides(old => ({...old,...updates}));
     setPayError('');setPayIds([...picked.keys()]);
   }
-  async function refresh(scope:'notice'|'ownership'|'fetch'='notice') {
+  async function refresh(scope:'notice'|'ownership'='notice') {
     void resetNoticeTodos(client);
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['notices'],exact:true});
     const data = await client.fetchQuery({...noticeListQuery,staleTime:0});
     if(scope==='ownership')await projects.refetch({throwOnError:true});
-    if(scope==='fetch')await refreshNoticeOwnershipPending(client);
     if(me){const queryKey=['history',`${me.id}:${me.account}`];await client.cancelQueries({queryKey,exact:true});await client.fetchQuery({queryKey,staleTime:0,queryFn:async({signal})=>readHistory(await requestJson('/api/history/status',{signal}))});}
     return data;
   }
@@ -530,7 +529,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     <DialogPresence>{flowNotice && <NoticeFlows notice={flowNotice} blocked={blocked || !active} close={()=>setFlowNotice(null)} />}</DialogPresence>
     <DialogPresence>{printerOpen && <PrinterSettings blocked={blocked || !active} close={()=>setPrinterOpen(false)} />}</DialogPresence>
     <DialogPresence>{payIds && <NoticePayment projects={projects.data ?? []} ids={payIds} overrides={payOverrides} blocked={blocked || !active} remove={id => { pick(id,false);setPayIds(ids => ids?.filter(x => x !== id) ?? null); }} close={() => setPayIds(null)} paid={paid} refresh={async()=>{await refresh();}} announce={announce} />}</DialogPresence>
-    <DialogPresence>{fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} refresh={async()=>{await refresh('fetch');}} />}</DialogPresence>
+    <DialogPresence>{fetchOpen && <NoticeFetch me={me} blocked={blocked || !active} close={() => setFetchOpen(false)} />}</DialogPresence>
     <BusinessModal open={exportOpen && active && !blocked} className="project-dialog" titleId="notice-export-title" requestClose={exportClosing.requestClose}><DialogContents titleId="notice-export-title" title="导出付款通知书台账" closing={exportClosing}><p>导出当前筛选的 {shown.length} 条通知书，按表格显示顺序排列。</p>{error && <p className="notice" role="alert">{error}</p>}<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={exportClosing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={actionsUnavailable || !shown.length} onClick={() => void exportExcel()}>保存到本地</Button></div></DialogContents></BusinessModal>
   </div></NoticeSelectionContext.Provider></NoticeCells.Provider>;
 }

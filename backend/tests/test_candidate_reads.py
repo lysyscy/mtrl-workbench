@@ -48,20 +48,18 @@ def test_批量预览查询次数不随通知书数量增长(rollback_db):
     with session_scope() as s:
         project = _project(s, '__候选批量__')
         contract = _contract(s, project_id=project.id, supplier='甲'); contract.contract_no = 'CGHT1'
-        prior = _notice(s, ph='__候选批量历史__', approved='0.02')
-        prior.ownership_id = project.id
-        S.act_link_notice(s, notice_id=prior.id, contract_id=contract.id)
         notices = [_notice(s, ph='__候选批量__'+str(i), approved='100.01') for i in range(24)]
         for notice in notices:
             notice.ownership_id = project.id; notice.jc_supplier = '甲'
             notice.project_name = '项目全名'; notice.approve_status = '已批'
         s.flush(); ids = [n.id for n in notices]
-    payables = [source(amount='100.03')]
+    payables = [source()]
     one, one_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids[:1], payables))
     many, many_queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, ids, payables))
-    assert one['ready'] == 1 and many['ready'] == 24
+    assert [row.outcome.bucket for row in one] == ['auto_ready']
+    assert [row.outcome.bucket for row in many] == ['auto_ready'] * 24
     assert len(many_queries) == len(one_queries)
-    assert [row['notice_id'] for row in many['rows']] == ids
+    assert [row.notice_id for row in many] == ids
 
 
 def test_保留跨项目当前关联及缺失重复空输入的原行为(rollback_db):
@@ -79,8 +77,8 @@ def test_保留跨项目当前关联及缺失重复空输入的原行为(rollbac
         assert data['current_contract_id'] == current.id
         assert next(row for row in data['rows'] if row['id'] == current.id)['recommendation']['reasons'] == []
         plan = S.auto_link_plan(s, [notice.id, -1, notice.id], [])
-        assert [row['notice_id'] for row in plan['rows']] == [notice.id, -1]
-        assert [row['reason'] for row in plan['rows']] == ['已有合同关联，保持不变', '非有效集采通知书']
+        assert [row.notice_id for row in plan] == [notice.id, -1]
+        assert [row.outcome.rule_code for row in plan] == ['already_linked', 'notice_missing']
         assert R.payment_of_notice(s, notice.id).contract_id == current.id
     empty, queries = measured_read(rollback_db, lambda s: S.auto_link_plan(s, [], []))
-    assert empty == {'ok': True, 'rows': [], 'ready': 0} and queries == []
+    assert empty == [] and queries == []

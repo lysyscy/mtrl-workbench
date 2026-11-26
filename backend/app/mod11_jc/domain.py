@@ -16,12 +16,14 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from itertools import combinations
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from app.mod05_flow.models import PAY_METHODS
 from app.core.money import amount_text            # ⭐ `TAIL-63`：金额洗净的唯一出口
@@ -359,7 +361,7 @@ __all__ = [
     "settle_amount", "debt_amount", "contract_amounts",
     "normalize_tag", "tag_after_fetch",
     "link_hint", "dedup_blocked", "pick_candidates", "recommend_link",
-    "auto_link_evidence",
+    "match_notice_contract",
     "MSG_REQUEST_BAD", "MSG_REQUEST_TAKEN",
     "request_key", "request_hash", "subtable_operation_of", "subtable_operation_missing",
     "subtable_result_conflict",
@@ -380,81 +382,147 @@ def project_sequences(rows: list[dict]) -> dict[int, int]:
 
 def _contract_mentions(text: str) -> set[str]:
     text = str(text or '').upper()
-    full = re.findall(r'(?<![A-Z0-9])CGHT(?:XX)?-?\d+(?:-\d+)*(?![A-Z0-9])', text)
+    full = re.findall(r'(?<![A-Z0-9/_-])CGHT(?:XX)?-?\d+(?:-\d+)*(?![A-Z0-9/_-])', text)
     tails = re.findall(r'合同[号编号：:\s]*(\d{8,})(?!\d)', text)
     return set(full) | {f'CGHT{digits}' for digits in tails}
 
 
-def _auto_link_evidence(contract, codes, reason):
-    return {'contract_id': contract['id'], 'contract_no': contract['contract_no'],
-            'payable_codes': codes, 'reason': reason}
+MatchBucket = Literal["auto_ready", "needs_review", "skipped"]
 
 
-def auto_link_evidence(*, amount, project_key, supplier, title, remark, contracts, payables, prior_approved):
-    """同项目先认明确合同号，再按供应商与应付金额确定唯一合同。"""
+@dataclass(frozen=True)
+class MatchCandidate:
+    contract_id: int
+    contract_no: str
+    supplier_name: str
+    material: str
+    selectable: bool
+    evidence: list[str]
+    payable_codes: list[str]
+    invoice_side: str
+    invoice_match: bool
+    invoice_ids: list[int]
+
+
+@dataclass(frozen=True)
+class MatchOutcome:
+    bucket: MatchBucket
+    rule_code: str
+    reason: str
+    candidates: list[MatchCandidate] = field(default_factory=list)
+    target: MatchCandidate | None = None
+
+    @property
+    def payable_codes(self) -> list[str]:
+        candidates = [self.target] if self.target else self.candidates
+        return list(dict.fromkeys(code for candidate in candidates for code in candidate.payable_codes))
+
+
+def _mentions_number(text: str, parsed: set[str], contract_no: str) -> bool:
+    number = contract_no.strip().upper()
+    if not number:
+        return False
+    if number in parsed:
+        return True
+    literal = re.escape(number)
+    if re.search(r"[A-Z]", number) and re.search(r"\d", number):
+        return bool(re.search(rf"(?<![A-Z0-9/_-]){literal}(?![A-Z0-9/_-])", text))
+    return bool(re.search(rf"合同[号编号：:\s]*{literal}(?![A-Z0-9/_-])", text))
+
+
+def match_notice_contract(
+    *, amount: Decimal, project_key: str, supplier: str, title: str, remark: str,
+    contracts: list[dict], invoices: dict[int, list[dict]], payables: list[dict] | None,
+    payable_source_failed: bool = False,
+) -> MatchOutcome:
+    """对同仓库合同分类。payables 为 None 表示还未读取采购应付。"""
     from app.mod03_notice.sup_match import match_of, pool_of
 
     supplier = supplier.strip()
-    mentions = _contract_mentions(f'{title}\n{remark}')
-    mentioned = [c for c in contracts if c['contract_no'].upper() in mentions]
-    included = [c for c in contracts if c['tag'] == TAG_IN]
+    text = f"{title}\n{remark}".upper()
+    mentions = _contract_mentions(text)
+    mentioned = {c["id"] for c in contracts if _mentions_number(text, mentions, c["contract_no"])}
+    included = [c for c in contracts if c["tag"] == TAG_IN]
+    matched_suppliers = [supplier] if supplier else match_of(title, pool_of(contracts, project_key=project_key))["cands"]
+    exact_payables: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for payable in payables or ():
+        if payable["amount"] == amount:
+            exact_payables[payable["supplier"].strip(), payable["contract_no"].strip().upper()].append(payable["code"])
+
+    candidates = []
+    for c in contracts:
+        explicit = c["id"] in mentioned
+        is_included = c["tag"] == TAG_IN
+        if not is_included and not explicit:
+            continue
+        name = c["supplier"].strip()
+        conflict = bool(supplier and supplier != name)
+        codes = exact_payables.get((name, c["contract_no"].strip().upper()), [])
+        side = _settlement_kind(c["trade_co"])
+        invoice_ids = [i["id"] for i in invoices.get(c["id"], [])
+                       if i["kind"] == side and i["amount"] == amount]
+        evidence = []
+        if explicit:
+            evidence.append("通知书明确提及本合同号")
+        if name in matched_suppliers:
+            evidence.append("与已填供应商一致" if supplier else "单据名称命中供应商")
+        if codes:
+            evidence.append("采购应付金额与审批金额一致")
+        if invoice_ids:
+            evidence.append("贸易公司单笔发票金额一致" if side == KIND_TRADE else "供应商单笔发票金额一致")
+        if not is_included:
+            evidence.append("合同未纳入台账")
+        if conflict:
+            evidence.append("与已填供应商不一致")
+        candidates.append(MatchCandidate(
+            c["id"], c["contract_no"], name, c["material"], is_included and not conflict,
+            evidence, codes, side, bool(invoice_ids), invoice_ids,
+        ))
+    candidates.sort(key=lambda c: (c.contract_id not in mentioned, not c.selectable, not c.payable_codes, not c.invoice_match))
+
+    def review(code: str, reason: str) -> MatchOutcome:
+        return MatchOutcome("needs_review", code, reason, candidates)
+
     if mentioned:
-        targets = [c for c in mentioned if c['tag'] == TAG_IN]
-        if not targets:
-            return {'reason': '通知书提及的合同未纳入台账，保留人工处理'}
-        if len(targets) != 1 or len({c['contract_no'].upper() for c in mentioned}) != 1:
-            return {'reason': '通知书提及的合同不唯一，保留人工处理'}
-        target = targets[0]
-        target_supplier = target['supplier'].strip()
-        if supplier and supplier != target_supplier:
-            return {'reason': '通知书提及的合同与已填供应商不一致，保留人工处理'}
-        number = target['contract_no']
-        codes = [p['code'] for p in payables if p['contract_no'] == number and p['supplier'].strip() == target_supplier]
-        return _auto_link_evidence(target, codes or [number], '通知书明确提及本合同号')
+        if any(c["id"] in mentioned and c["tag"] != TAG_IN for c in contracts):
+            return review("contract_excluded", "通知书提及的合同未纳入台账")
+        if len(mentioned) != 1:
+            return review("contract_ambiguous", "通知书提及多份合同")
+        target = candidates[0]
+        if not target.selectable:
+            return review("supplier_conflict", "通知书提及的合同与已填供应商不一致")
+        return MatchOutcome("auto_ready", "explicit_contract", "通知书明确提及本合同号", target=target)
 
-    suppliers = {supplier} if supplier else set(match_of(title, pool_of(contracts, project_key=project_key))['cands'])
-    if not suppliers:
-        suppliers = {c['supplier'].strip() for c in included} - {''}
-    candidates = [c for c in included if c['supplier'].strip() in suppliers and c['contract_no']]
-    eligible = [p for p in payables if p['supplier'].strip() in suppliers]
-    hits = [p for p in eligible if p['amount'] == amount]
-    numbers = {p['contract_no'] for p in hits}
-    if len(numbers) == 1 and '' not in numbers:
-        pairs = {(p['supplier'].strip(), p['contract_no']) for p in hits}
-        targets = [c for c in candidates if (c['supplier'].strip(), c['contract_no']) in pairs]
-        if len(targets) == 1:
-            target = targets[0]
-            codes = [p['code'] for p in hits if p['supplier'].strip() == target['supplier'].strip()]
-            return _auto_link_evidence(target, codes, '应付合同来源唯一')
+    if not included:
+        return review("no_contracts", "本项目没有纳入台账的合同")
+    if len(matched_suppliers) != 1:
+        return review("supplier_unresolved", "单据名称命中多家供应商" if matched_suppliers else "未能确定实际供应商")
+    selected_supplier = matched_suppliers[0]
+    supplier_contracts = [c for c in candidates if c.selectable and c.supplier_name == selected_supplier]
+    if not any(c.contract_no.strip() for c in supplier_contracts):
+        return review("no_supplier_contract", "本项目没有该供应商带合同号的纳入合同")
+    if payables is None:
+        return (review("payable_source_failed", "采购应付读取失败，需人工核对") if payable_source_failed
+                else review("payable_required", "需核对采购应付"))
 
-    installments = [c for c in candidates if prior_approved.get(c['id'])]
-    if installments:
-        by_amount: dict[tuple[str, str, Decimal], list[str]] = {}
-        for p in eligible:
-            key = (p['supplier'].strip(), p['contract_no'], p['amount'])
-            by_amount.setdefault(key, []).append(p['code'])
-        matches = []
-        for c in installments:
-            sup, cno = c['supplier'].strip(), c['contract_no']
-            priors = prior_approved.get(c['id'], ())
-            total_prior = sum(priors, ZERO)
-            remaining_prior = sum((a for a in priors if not by_amount.get((sup, cno, a))), ZERO)
-            codes = []
-            for base in dict.fromkeys((total_prior, remaining_prior)):
-                if base > 0:
-                    codes.extend(by_amount.get((sup, cno, base + amount), ()))
-            if codes:
-                matches.append((c, list(dict.fromkeys(codes))))
-        if len(matches) == 1:
-            target, codes = matches[0]
-            return _auto_link_evidence(target, codes, '与已关联通知书合计对应唯一应付合同')
-    return {'reason': '无唯一应付及本地合同对应，保留人工处理'}
+    numbers = {number for name, number in exact_payables if name == selected_supplier}
+    targets = [c for c in supplier_contracts if c.contract_no.strip() and c.payable_codes]
+    if len(numbers) != 1 or len(targets) != 1:
+        if not numbers:
+            return review("no_exact_payable", "未找到同项目、同供应商且金额一致的采购应付")
+        return review("payable_contract_unresolved", "同额采购应付无法唯一对应一份纳入台账的合同")
+    target = targets[0]
+    if len(supplier_contracts) == 1:
+        return MatchOutcome("auto_ready", "sole_supplier_contract", "同额采购应付对应本项目该供应商的唯一纳入合同", target=target)
+    if target.invoice_match and sum(c.invoice_match for c in candidates) == 1:
+        return MatchOutcome("auto_ready", "unique_payment_invoice", "同额采购应付与本项目唯一同额付款侧发票对应同一合同", target=target)
+    return review("insufficient_corroboration", "同额采购应付有对应合同，仍需核对付款侧发票或合同")
 
 
 def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_notices, remark: str = ''):
     """返回证据，不返回选择；供应商票与贸易公司票分别展示、按付款侧匹配。"""
     target = Decimal(str(amount or 0))
-    side = 'trade' if trade_co else 'supplier'
+    side = _settlement_kind(trade_co)
     rows = [r for r in invoices if r['kind'] == side]
     reasons = []
     if contract_no and contract_no.upper() in _contract_mentions(f'{title}\n{remark}'):
@@ -554,7 +622,7 @@ def payment_term_warning(*, payment_term, trade_co, invoices, debt, pay_date):
     base, margin = term.removesuffix("天").split("±")
     maximum = int(base) + int(margin)
     day = date.fromisoformat(pay_date)
-    side = KIND_TRADE if str(trade_co or "").strip() else KIND_SUPPLIER
+    side = _settlement_kind(trade_co)
     evidence = []
     for invoice in invoices:
         if invoice["kind"] != side:
