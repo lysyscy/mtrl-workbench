@@ -80,7 +80,7 @@
 
 ## 本项目实际接入
 
-基础规则采用源为lysyscy/My-Skills `2e0e153c0b434da03a2b1363b45945599a76b0c9`。2026-11-09固定运行时更新至 `8fa4fd17db298809bf4fbe1effe42aa769d50d31`，加入下述 Impeccable 适配器。setup负责部署、升级`tools/_vendor/setup_solo_workflow`，来源和字节清单在其deployment.json；共用修改回唯一维护源，项目不独立分叉。开发命令直接使用随仓固定版本，运行时不加载个人技能目录。
+基础规则采用源为 `lysyscy/My-Skills` `2e0e153c0b434da03a2b1363b45945599a76b0c9`。开发命令直接使用随仓固定运行时，由 `setup-solo-workflow` 部署和升级，共用修改归唯一维护源。本次核对的部署版本为 `adad0778e1fcd3f5d35e6ead30707d4563e85b9a`，版本和文件散列以[部署清单](../../tools/_vendor/setup_solo_workflow/deployment.json)为准。
 
 新接入或获准迁移的生产者按本页具名留证；现有 workspace_paths 自动入口继续原合同，直至随消费者一起完成迁移。
 
@@ -91,6 +91,14 @@
 旧AgentArtifacts/mtrl-workbench登记区及`.artifacts/active`、archive继续按原消费者与期限退出，不自动搬家或续期。续办旧全局登记运行时显式设置MTRL_LIFECYCLE_ROOT到原已登记根；新项目根的项目/工作树身份必须匹配。系统TEMP不承诺跨重启保存，不放唯一输入或待保留源码。业务原件、备份、正式与回退资源沿各自机制管理。
 
 本机周期入口仍为Windows任务`PersonalSkillArtifactCleanup`，当前用户登录后每日09:00运行、错过后补跑；同名Codex自动化保持暂停。本次保留原六个AgentArtifacts根，增加材料工作台项目入口，仅扫描其已登记`.artifacts/runs`。2026-11-06 20:58–20:59（北京时间）通过原任务入口完成真实七区调度，七项退出码均为0、LastTaskResult=0；本轮无到期候选，未发生新增删除。当前结果以LastTaskResult及`C:/Users/Administrator/.codex/automations/automation/windows-task-result.json`为准。原六区运行与通知依据见[已保存回执](https://github.com/lysyscy/mtrl-workbench/blob/977193e9ce5166dd0e06e5b09a4dc3bc6e703226/.scratch/quality-wayfinding-20261106/workflow-close.md#每日计划任务)。运行组结项不代替[任务文件退出](../agents/workflow.md#任务文件退出)。
+
+### t3-pstack 临时产物
+
+待办优先用宿主计划工具。需要落盘时，从仓根用 `backend/.venv/Scripts/python.exe -B -X utf8 tools/artifact_lifecycle.py` 执行 `register --group <run-id> --owner <负责人> --reason <用途> --kind work`，为本次运行分配独立标识。
+
+在登记返回的 `.artifacts/runs/<run-id>/` 内写 `decisions.tsv`。并行任务的日志用 `.audit/<task>.tsv`，需落盘的待办用 `.audit/<task>.todo.md`。调用 `log.sh` 时传入日志完整路径。实际读写通过 `lease --group <run-id> -- <实际命令>`，向命令传入登记目录内的完整路径。
+
+用途结束、必要依据归位且租约退出后，现有固定运行时用 `close --group <run-id>` 结项，由已接入的清理入口处理。部署并核实支持 `--discard-work` 的固定运行时后，使用 `close --group <run-id> --discard-work`。返回 `status=deleted` 即确认临时文件已释放。仍有活动消费者或未决用途时按本页保护规则处理。
 
 ## 已核实的原生产者
 

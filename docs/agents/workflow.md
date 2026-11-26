@@ -4,11 +4,13 @@
 
 ## 已采用的项目规则
 
-采用来源：lysyscy/My-Skills `9fda2b149097cac1d7b6ab20e8b520f69b37e445`（2026-10-31）。本项目普通实施与收尾直接按 [CONTRIBUTING](../../CONTRIBUTING.md)，资金、权限、写入/恢复等验证直接按[隔离验证](../guides/development-and-verification.md)，界面取舍按[前端设计](../guides/frontend-design.md)，预览按[预览指南](../guides/frontend-preview.md)。不再把 implement 的旧 execution、verification 或 human-collaboration 手册作为普通任务前置。
+采用来源：lysyscy/My-Skills `9fda2b149097cac1d7b6ab20e8b520f69b37e445`（2026-10-31）。本项目普通实施与收尾直接按 [CONTRIBUTING](../../CONTRIBUTING.md)，资金、权限、写入/恢复等验证直接按[隔离验证](../guides/development-and-verification.md)，界面取舍按[前端设计](../guides/frontend-design.md)，预览按[预览指南](../guides/frontend-preview.md)。
 
-跨票统筹明确采用时才读已安装 implement-solo-spec 的 coordination 参考；委派模型、强度、上下文与实参核对由宿主已采用规则持有。setup 仅在接入、获准更新或专项迁移时运行；写 Agent 消费资料仍用实际安装的 writing-for-agents。文档日常维护同步唯一正文、必要引用与消费者，新增/加强长期规则先展示内容与影响并获批；维护指南不再通过外部技能多级跳转。
+2026-11-26 按 `lysyscy/My-Skills` 的 `setup-solo-workflow` 工作树模板更新新工程任务入口（基于 `f11815e4` 的未发布修订）。新工程任务使用宿主实际加载的 `t3-pstack`。本次 T3 Code 的 Codex 会话按 hook 进入 `poteto-mode`，已核版本为 `2.7.1`。
 
-2026-11-04增量采用 My-Skills `af51f214dd06a3cc66c443f21f9481d2c120b1fa` 的 implement-solo-spec/coordination 第5步（发现证据、原始意图与处置条件）。本机Manager安装及Codex独立子Agent上下文的显式读取已核，未推定其他宿主自动加载。仅适用于此后新采用跨票统筹的任务；在途任务的切换仍按下段办理。
+跨票统筹按贡献指南的协作与审查规则执行。发现证据、原始意图与处置条件归相应规格或票，委派由实际宿主按当次授权处理。既有 TAIL 票的状态与依赖沿[票协议](issue-tracker.md)维护。
+
+`setup-solo-workflow` 用于接入、获准更新或专项迁移。维护或分发自有技能时，从宿主入口或已核实的 My-Skills 维护源定位 `skill-package-ops` 的 `references/package-operations.md`。文档维护使用实际安装的 `writing-for-agents`，同步唯一正文、必要引用与消费者。新增或加强长期规则先展示内容与影响并获批。
 
 2026-11-18增量采用 My-Skills [预览模板](https://github.com/lysyscy/My-Skills/blob/48efd9b6e99c7bfe43b469f459dd955ce168b454/skills/setup-solo-workflow/templates/preview.md)中的既有页面评审规则。项目执行见[界面评审规则](../guides/frontend-preview.md#界面改版何时需要评审)。
 
@@ -19,6 +21,8 @@ React 重写已签收，现行业务和界面约束归 requirements 与 frontend
 ## 目录与退出
 
 本项目沿用 `backend/app`、`backend/tests`、`backend/alembic`、`backend/app/resources` 的 Python 组件契约，React 组件沿 `apps/frontend/{src,tests}` 及组件根依赖/锁/构建契约；网页字体、模板按运行消费者保留。`.scratch/<effort>`只放活动Markdown/票；默认开发输出由`tools/audit/workspace_paths.py`自动登记到项目`.artifacts/runs`，短命计算文件用系统TEMP。现有自动生产者按原收尾约定运行，新增和迁移后的留存规则见产物生命周期；未知、在用与恢复资料继续保护。setup负责随仓固定版本部署，实际路径、显式任务和失败分支见[实际接入](../guides/artifact-lifecycle.md#本项目实际接入)。旧AgentArtifacts登记区和显式`.artifacts/active`运行沿原入口与期限；未迁移旧运行才执行旧workspace_check，不扩扫历史目录。无相关产物的简单任务不造effort/run；仍供验收的主预览按原用途保留，不能因回复结束停服。
+
+t3-pstack 需要落盘时，按项目产物指南登记、租用和结项。[t3-pstack 临时产物](../guides/artifact-lifecycle.md#t3-pstack-临时产物)
 
 历史有效独有知识先归现行正文；可达Git提交及原路径足够追溯且无活动用途时，旧正文退出。本项目仍保活动依赖、验收和范围裁决所需最小集合，终态不推定缺票已完成。恢复用可达提交及原路径，核后续修改后只取所需内容。
 
