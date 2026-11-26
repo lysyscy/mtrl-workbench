@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import parse_qs
 import json
 import hashlib
 import os
@@ -12,6 +13,7 @@ from unittest.mock import Mock
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
+import httpx
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 import pytest
@@ -20,6 +22,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
+from app.mod02_i8 import client as i8_http
+from app.mod15_user.models import UserAccount
 from app.mod16_equipment import rental
 from app.mod16_equipment.importer import import_equipment_baseline, parse_rental, transfer_date_note
 from app.mod16_equipment.models import (
@@ -27,7 +31,9 @@ from app.mod16_equipment.models import (
 )
 
 from app.core import session
+from app.core.config import Settings
 from app.main import create_app
+from app.mod16_equipment import api as equipment_api
 from app.mod16_equipment.api import i8_adapter
 from app.mod16_equipment.sync import I8CustomFormEquipmentAdapter
 
@@ -39,6 +45,8 @@ BASE = dict(name="试验焊机", purchase_date="2026-11-03", purchase_project="�
 @pytest.fixture
 def client(rollback_db, monkeypatch):
     monkeypatch.setattr(session, "secret", lambda: b"equipment-ledger-isolated-test")
+    settings = Settings(_env_file=None, m16_i8_sync_enabled=False)
+    monkeypatch.setattr(equipment_api, "get_settings", lambda: settings)
     app = create_app()
     with TestClient(app) as http:
         http.cookies.set(session.COOKIE_NAME, session.make("equipment-test"))
@@ -910,6 +918,109 @@ def save_receipt(phid):
 def transfer_bill():
     return {"phid": "B1", "bill_no": "20261124-0001", "phid_pc": "P1",
             "phid_org": "3700000000000014", "app_status": 0, "wf_flag": 0}
+
+
+@pytest.fixture
+def cached_i8(client, monkeypatch):
+    settings = Settings(
+        _env_file=None, i8_base_url="https://equipment-i8.invalid", i8_user="shared-fallback",
+        m16_i8_sync_enabled=True, m16_i8_sync_project_ids={"项目乙": "P2"},
+        m16_i8_sync_unit_ids={"台": "U1"},
+        m16_i8_sync_operators={"bound-i8": ("PERSON-1", "测试录入人")},
+    )
+    monkeypatch.setattr(equipment_api, "get_settings", lambda: settings)
+    monkeypatch.setattr(equipment_api, "i8_base_of", lambda settings: settings.i8_base_url)
+    cache = Mock(return_value="session=mock-equipment")
+    login = Mock(side_effect=AssertionError("device sync must never log in"))
+    transport = Mock(side_effect=AssertionError("unexpected i8 request"))
+    monkeypatch.setattr(i8_http.cookie_store, "load", cache)
+    monkeypatch.setattr(i8_http, "http_login", login)
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda _self, request: transport(request))
+    yield settings, cache, transport
+    login.assert_not_called()
+
+
+@pytest.mark.parametrize("enabled,bound,has_cookie,cache_reads", [
+    (False, True, True, 0),
+    (True, False, True, 0),
+    (True, True, False, 1),
+])
+def test_equipment_factory_keeps_local_save_pending_without_usable_session(
+    client, cached_i8, enabled, bound, has_cookie, cache_reads,
+):
+    settings, cache, transport = cached_i8
+    settings.m16_i8_sync_enabled = enabled
+    if not has_cookie:
+        cache.return_value = None
+    with session_scope() as db:
+        db.add(UserAccount(account="equipment-test", i8_user="bound-i8" if bound else ""))
+    item, = add(client, in_rental="no")["equipment"]
+    assert item["i8_sync_status"] == "pending"
+    assert cache.call_count == cache_reads
+    transport.assert_not_called()
+
+
+def test_equipment_factory_uses_own_cached_http_session_and_i8_mappings(client, cached_i8):
+    _, cache, transport = cached_i8
+    with session_scope() as db:
+        db.add(UserAccount(account="equipment-test", i8_user="bound-i8"))
+        origin = archive_project(db, "项目甲", phid="P1")
+
+    remote_row = equipment_row()
+    sent = {}
+
+    def send(request):
+        assert request.url.host == "equipment-i8.invalid"
+        assert request.headers["Cookie"] == "session=mock-equipment"
+        form = parse_qs(request.content.decode("utf-8"))
+        business = form["customBusCode"][0]
+        if request.url.path == SAVE_PATH:
+            assert business not in sent
+            sent[business] = json.loads(form["data"][0])
+            if business == "sbzx":
+                remote_row["u_device_code"] = sent[business]["p_form_sbzx_m"]["form"]["newRow"]["u_device_code"]
+                return httpx.Response(200, json=save_receipt("E1"))
+            return httpx.Response(200, json=save_receipt("B1"))
+        assert request.url.path == LIST_PATH
+        if business == "ldzcdb":
+            return httpx.Response(200, json=page(transfer_bill()))
+        return httpx.Response(200, json=page(remote_row) if "sbzx" in sent else page())
+
+    transport.side_effect = send
+    item, = add(client, name="样机", purchase_price=0, purchase_project=None,
+                purchase_project_id=origin, unit="台", in_rental="no")["equipment"]
+    assert item["i8_sync_status"] == "synced"
+    transfer, = request(client, "POST", "/transfers", dict(
+        equipment_ids=[item["id"]], to_project="项目乙", transfer_date="2026-11-24",
+    ))["transfers"]
+    assert transfer["i8_sync_status"] == "pending"
+    assert json.loads(transfer["i8_conflict_json"])["bill_no"] == "20261124-0001"
+    create = sent["sbzx"]["p_form_sbzx_m"]["form"]["newRow"]
+    assert (create["phid_pc"], create["u_msunit"]) == ("P1", "U1")
+    move = sent["ldzcdb"]
+    header = move["p_form_ldzcdb_m"]["form"]["newRow"]
+    assert (header["phid_fill_psn"], header["phid_fill_psn_EXName"]) == ("PERSON-1", "测试录入人")
+    assert move["p_form_ldzcdb_d"]["table"]["newRow"][0]["row"]["u_inproj"] == "P2"
+    assert [entry.args for entry in cache.call_args_list] == [
+        ("bound-i8", "https://equipment-i8.invalid"),
+        ("bound-i8", "https://equipment-i8.invalid"),
+    ]
+
+
+@pytest.mark.parametrize("response", [
+    httpx.Response(200, json={"Success": False, "Msg": "No SessionInfo found"}),
+    httpx.Response(307, headers={"Location": "https://other-i8.invalid"}),
+])
+def test_equipment_factory_leaves_expired_session_pending(client, cached_i8, response):
+    _, _, transport = cached_i8
+    with session_scope() as db:
+        db.add(UserAccount(account="equipment-test", i8_user="bound-i8"))
+    transport.side_effect = None
+    transport.return_value = response
+    item, = add(client, in_rental="no")["equipment"]
+    assert item["i8_sync_status"] == "pending"
+    assert "会话已失效" in item["i8_sync_message"]
+    assert [entry.args[0].url.path for entry in transport.call_args_list] == [LIST_PATH]
 
 
 def saved_form(calls, business):

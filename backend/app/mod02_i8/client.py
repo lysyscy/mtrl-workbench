@@ -91,11 +91,28 @@ class I8Client:
         self._policy = policy
         self._base = policy.base_url if policy else None
         self._cookie: str | None = None
+        self._cached_only = False
         self._session: httpx.Client | None = None
         self._lock = threading.Lock()
         # ⭐ i8 凭据**惰性取**（`_creds()`）—— ⛔ 不在 `__init__` 里取：
         #   9 个生产构造点因此**一行都不用改**，而"用哪份凭据"这件事只有一个出口。
         self._i8_creds: tuple[str, str] | None = policy.credentials if policy else None
+
+    @classmethod
+    def from_cached_session(cls, base_url: str, user: str) -> I8Client | None:
+        """Open an existing HTTP session for one site and account without authenticating."""
+        origin = _origin_of(base_url)
+        user = user.strip()
+        if not origin or not user:
+            return None
+        cookie = cookie_store.load(user, origin)
+        if not cookie or not cookie.strip():
+            return None
+        client = cls()
+        client._base = origin
+        client._cookie = cookie
+        client._cached_only = True
+        return client
 
     def _creds(self) -> tuple[str, str]:
         """本次操作用哪个 i8 账号 ＋ 密码 —— ⭐ **当前登录用户绑定的那一份**（§7.8「每人一份」）。
@@ -202,8 +219,13 @@ class I8Client:
                 self._ensure_cookie()
             self._apply_cookie()
 
+            if self._cached_only:
+                kwargs["follow_redirects"] = False
             resp = session.request(method, path, **kwargs)
-            if retry_expired and self._is_session_invalid(resp):
+            if self._cached_only:
+                if resp.is_redirect or self._is_session_invalid(resp):
+                    raise I8AuthFailedError(AUTH_FAILED)
+            elif retry_expired and self._is_session_invalid(resp):
                 # ⚠️ 仅重登一次（D9：不得自动重试登录循环）
                 logger.warning("i8 会话失效（401 或 body 报 No SessionInfo），尝试重登一次")
                 self._login()                       # 成功后已更新缓存

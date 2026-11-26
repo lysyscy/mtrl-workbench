@@ -1,5 +1,6 @@
 """设备台账（mod16）HTTP 接口：守卫 /api/m16 路由、事务边界与三套 Excel 导出出口。"""
 
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from urllib.parse import quote
@@ -8,18 +9,41 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi.encoders import jsonable_encoder
 
 from app import export_registry as EXP
+from app.core.config import get_settings, i8_base_of
 from app.core.db import session_scope
 from app.core.session import current_name
+from app.mod02_i8.client import I8Client
+from app.mod15_user.service import active_account
 from . import rental, schemas as S, service
 from .common import ledger_lock, record
-from .sync import ISSUES, sync_lock, sync_queue
+from .sync import ISSUES, I8CustomFormEquipmentAdapter, sync_lock, sync_queue
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer
 
 router = APIRouter(prefix="/api/m16", tags=["设备台账"])
 
 
-def i8_adapter():
-    return None
+def i8_adapter() -> Iterator[I8CustomFormEquipmentAdapter | None]:
+    settings = get_settings()
+    owner = current_name()
+    if not settings.m16_i8_sync_enabled or not owner:
+        yield None
+        return
+    with session_scope() as db:
+        account = active_account(db, owner)
+        user = (account.i8_user or "").strip() if account is not None else ""
+    transport = I8Client.from_cached_session(i8_base_of(settings), user) if user else None
+    if transport is None:
+        yield None
+        return
+    try:
+        yield I8CustomFormEquipmentAdapter(
+            transport,
+            project_ids=settings.m16_i8_sync_project_ids,
+            unit_ids=settings.m16_i8_sync_unit_ids,
+            transfer_operator=settings.m16_i8_sync_operators.get(user),
+        )
+    finally:
+        transport.close()
 
 
 def call(fn, *args, write=False, **kwargs):

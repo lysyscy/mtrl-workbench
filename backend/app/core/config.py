@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     # i8 登录页前端 JS 里的 SM2 私钥（**公开资产**，非本系统凭据）；留空则用内置默认值
     i8_sm2_private_key: str = ""
 
+    m16_i8_sync_enabled: bool = False
+    m16_i8_sync_project_ids: dict[str, str] = {}
+    m16_i8_sync_unit_ids: dict[str, str] = {}
+    m16_i8_sync_operators: dict[str, tuple[str, str]] = {}
+
     # --- i8 打印版式 ---
     # 两类分流（机械类 / 辅材·集采类）的 printId（**取值待确认**，从配置读、不写死）
     i8_print_id_mechanical: str = ""

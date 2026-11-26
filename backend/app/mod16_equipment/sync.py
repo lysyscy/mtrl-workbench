@@ -10,6 +10,7 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.core.db import session_scope
+from app.mod02_i8.login import I8AuthFailedError
 from .common import encoded, ledger_lock, record, require
 from .models import EquipmentItem, EquipmentTransfer
 from .projects import ProjectRef, project_index
@@ -163,10 +164,10 @@ class I8CustomFormEquipmentAdapter:
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
         linked_phid = data.get("current_project_phid")
-        project_id = self.project_ids[project] if linked_phid is None else linked_phid
+        project_id = self.project_ids.get(project) if linked_phid is None else linked_phid
         project_name = self.project_names.get(project, project)
         if not project_id:
-            raise ValueError("缺少 i8 项目标识")
+            return SyncResult("pending", "缺少 i8 项目映射，设备待同步", before)
         if before and (str(before["phid_pc"]) != project_id or
                        (linked_phid is None and before["current_project"] != project_name)):
             return equipment_conflict(before)
@@ -176,9 +177,10 @@ class I8CustomFormEquipmentAdapter:
                "u_yz": data.get("purchase_price"), "u_bz": data.get("remark"),
                "u_indata": f"{date.fromisoformat(str(purchase_date))} 00:00:00" if purchase_date else None}
         if data.get("unit"):
-            row["u_msunit"] = self.unit_ids[data["unit"]]
-            if not row["u_msunit"]:
-                raise ValueError("缺少 i8 单位标识")
+            unit_id = self.unit_ids.get(data["unit"])
+            if not unit_id:
+                return SyncResult("pending", "缺少 i8 单位映射，设备待同步", before)
+            row["u_msunit"] = unit_id
         version = None
         if original is not None:
             changes = {key: value for key, value in row.items()
@@ -218,16 +220,16 @@ class I8CustomFormEquipmentAdapter:
                                      project_id=from_project_phid)
         if stop:
             return stop
-        origin = self.project_ids[from_project] if from_project_phid is None else from_project_phid
-        destination = self.project_ids[to_project] if to_project_phid is None else to_project_phid
+        origin = self.project_ids.get(from_project) if from_project_phid is None else from_project_phid
+        destination = self.project_ids.get(to_project) if to_project_phid is None else to_project_phid
         if not origin or not destination:
-            raise ValueError("缺少 i8 调拨项目标识")
+            return SyncResult("pending", "缺少 i8 项目映射，调拨待同步", before)
         if str(before["phid_pc"]) != origin or str(before["phid_org"]) != self.ORG:
             local = {"code": code, "from_project": from_project, "phid_pc": origin, "to_project": to_project}
             return SyncResult("conflict", "i8 调出项目主键或管理组织不一致，请核对", before,
                               {"snapshot": before, "local": local, "from_project": from_project})
         if not self.transfer_operator or not all(self.transfer_operator):
-            raise ValueError("缺少当前 i8 会话的录入人标识")
+            return SyncResult("pending", "未配置当前 i8 账号的录入人，调拨待同步", before)
         if transfer_date is None:
             raise ValueError("缺少 i8 调拨日期")
         operator_id, operator_name = self.transfer_operator
@@ -371,6 +373,8 @@ def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEq
             item.i8_snapshot_json = encoded(result.snapshot) if result.snapshot is not None else None
             if transfer is not None:
                 transfer.i8_conflict_json = encoded(result.conflict) if result.conflict else None
+        except I8AuthFailedError:
+            result = SyncResult("pending", "i8 会话已失效，已保存本地待同步")
         except SaveRejected:
             if transfer is not None:
                 transfer.i8_conflict_json = None
