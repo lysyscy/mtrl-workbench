@@ -294,49 +294,65 @@ def test_transfer_scrap_pending_queue_and_exports(client):
     request(c, "POST", "/scraps", dict(equipment_id=keys[0], scrap_date="2026-11-28", reason="损坏"))
     assert request(c, "GET", "/inventory")["items"][0]["book_qty"] == "1.0000"
     inventory = workbook(c, "inventory")
-    assert Decimal(str(workbook(c, "inventory", data_only=True)["封皮"]["H6"].value)) == Decimal("100.1234")
+    cached = workbook(c, "inventory", data_only=True)["封皮"]
+    assert [Decimal(str(cached[cell].value)) for cell in ("E6", "I6", "H7", "H8")] == [
+        Decimal("100.1234"), Decimal("100.1234"), Decimal("100.1234"), Decimal("0"),
+    ]
     assert inventory.sheetnames == ["封皮", "流动资产盘点表", "周转材料"]
     ws = inventory.worksheets[1]
     assert ws["F5"].value == 1 and "F5*E5" in ws["G5"].value
     cover = inventory["封皮"]
     assert {str(area) for area in cover.merged_cells.ranges} == {
-        "A2:J2", "A3:J3", "A4:J4", "B6:D6", "E6:G6", "H6:I6", "B7:G7", "B8:G8", "H7:I7", "H8:I8",
-        "A12:C12", "D12:E12", "F12:H12", "I12:J12",
+        "C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6",
+        "C7:G7", "C8:G8", "C9:K9", "C10:K10", "A13:K14",
     }
-    assert cover.print_area == "'封皮'!$A$1:$J$13"
+    assert not cover.print_area and not cover.print_title_rows and not cover.HeaderFooter
     assert (cover.page_setup.paperSize, cover.page_setup.orientation) == (9, "landscape")
-    assert cover.print_options.horizontalCentered and cover.print_options.verticalCentered
-    assert cover.sheet_properties.pageSetUpPr.fitToPage
-    assert (cover.page_setup.fitToWidth, cover.page_setup.fitToHeight) == (1, 1)
+    assert cover.print_options.horizontalCentered is cover.print_options.verticalCentered is None
+    assert cover.sheet_properties.pageSetUpPr.fitToPage is None
+    assert cover.page_setup.fitToWidth is cover.page_setup.fitToHeight is cover.page_setup.scale is None
     margins = cover.page_margins
     assert (margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer) == (
-        .6, .6, .6, .6, .3, .3)
-    widths = [cover.column_dimensions[col].width for col in "ABCDEFGHIJ"]
-    assert widths == widths[::-1] and sum(widths) == 124
-    assert [cover.row_dimensions[n].height for n in range(1, 14)] == [
-        24, 48, 36, 44, 38, 40, 36, 36, 42, 42, 42, 36, 20,
+        .75, .75, 1, 1, .5, .5)
+    view = cover.sheet_view
+    assert view.tabSelected and view.zoomScale == view.zoomScaleNormal == 145
+    assert view.selection[0].activeCell == view.selection[0].sqref == "M8"
+    assert (cover.sheet_format.defaultColWidth, cover.sheet_format.defaultRowHeight) == (9, 14.25)
+    assert [(col.min, col.max, col.width) for col in cover.column_dimensions.values()] == [
+        (1, 3, 9), (4, 4, 12.6416666666667), (5, 6, 9), (7, 7, 9.35833333333333),
+        (8, 8, 18.75), (9, 9, 9), (10, 10, 7.425), (11, 16384, 9),
     ]
-    for row, title, size, bold in (
-        (2, "河南省安装集团有限责任公司", 26, True),
-        (3, "第四工程公司", 20, False),
-        (4, "流动资产盘点表", 22, True),
+    assert {row: dim.height for row, dim in cover.row_dimensions.items() if dim.height is not None} == {
+        3: 62.15, 4: 36, 5: 36, 6: 36, 7: 36, 8: 27, 9: 27, 10: 27,
+    }
+    for address, value, size, bold, align in (
+        ("C3", "河南省安装集团有限责任公司", 24, True, "center"),
+        ("C4", "第四工程公司", 20, False, "center"),
+        ("C5", "2026年年中流动资产盘点表", 20, False, "center"),
+        ("B6", "流动资产金额总计（原值）：", 14, False, "center"),
+        ("E6", "=I6", 14, False, "center"),
+        ("I6", "=H7+H8", 14, False, "center"),
+        ("K6", "元", 14, False, None),
+        ("C7", "其     中：大型工机具：", 14, False, "right"),
+        ("H7", "='流动资产盘点表'!I6", 14, False, "center"),
+        ("I7", "元", 14, False, None),
+        ("C8", "周转材料：", 14, False, "right"),
+        ("H8", "='周转材料'!I5", 14, False, "center"),
+        ("I8", "元", 14, False, None),
+        ("A13", "单位主管：             财务主管：               资产主管：              制表人：   ",
+         16, False, None),
     ):
-        cell = cover[f"A{row}"]
-        assert (cell.value, cell.font.name, cell.font.sz, cell.font.bold) == (title, "宋体", size, bold)
-        assert cell.alignment.horizontal == cell.alignment.vertical == "center"
-    assert cover["B6"].value == "流动资产金额总计（原值）："
-    assert cover["B7"].value == "其中：大型工机具：" and cover["B8"].value == "周转材料："
-    assert [cover[cell].value for cell in ("A12", "D12", "F12", "I12")] == [
-        "单位主管：", "财务主管：", "资产主管：", "制表人：",
-    ]
-    assert [cover[cell].value for cell in ("E6", "H6", "H7", "H8")] == [
-        "=H6", "=H7+H8", "='流动资产盘点表'!I6", "='周转材料'!I5",
-    ]
-    for span in ("E6:G6", "H6:I6", "H7:I7", "H8:I8"):
-        assert all(cell.border.bottom.style == "thin" for cell in cover[span][0])
-    assert cover["E6"].number_format == "[DBNum2][]General;[Red][DBNum2][]General"
-    assert cover["H6"].number_format == '"￥"#,##0.00;[Red]"￥"-#,##0.00'
-    assert cover["H7"].number_format == cover["H8"].number_format == '"￥"#,##0.00'
+        cell = cover[address]
+        assert (cell.value, cell.font.name, cell.font.charset, cell.font.sz, cell.font.bold) == (
+            value, "宋体", 134, size, bold)
+        assert (cell.alignment.horizontal, cell.alignment.vertical) == (align, "center")
+        assert not cell.alignment.wrap_text and not cell.alignment.shrink_to_fit
+        assert not cell.fill.patternType
+        assert all(side is None or side.style is None for side in (
+            cell.border.left, cell.border.right, cell.border.top, cell.border.bottom))
+    assert cover["E6"].number_format == "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"
+    assert cover["I6"].number_format == r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'
+    assert cover["H7"].number_format == cover["H8"].number_format == r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
     for sheet, last, category in ((ws, 6, "在用工具"), (inventory["周转材料"], 5, "周转材料")):
         assert (sheet.page_setup.paperSize, sheet.page_setup.orientation, sheet.page_setup.scale) == (9, "landscape", None)
         assert not sheet.sheet_properties.pageSetUpPr.fitToPage

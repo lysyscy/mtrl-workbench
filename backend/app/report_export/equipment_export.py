@@ -3,7 +3,7 @@ from datetime import date
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, quote_sheetname
 from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.pagebreak import Break
 
@@ -281,48 +281,63 @@ def equipment_rental_xlsx(snapshot):
 
 def inventory_cover(cover):
     cover.title = "封皮"
-    sheet_setup(cover, [10, 12, 12, 14, 14, 14, 14, 12, 12, 10], "landscape")
-    cover.page_margins.left = cover.page_margins.right = .6
-    cover.page_margins.top = cover.page_margins.bottom = .6
-    cover.page_margins.header = cover.page_margins.footer = .3
-    cover.print_options.horizontalCentered = cover.print_options.verticalCentered = True
-    cover.sheet_properties.pageSetUpPr.fitToPage = True
-    cover.page_setup.fitToWidth = cover.page_setup.fitToHeight = 1
-    cover.print_area = "A1:J13"
-    for row, height in enumerate((24, 48, 36, 44, 38, 40, 36, 36, 42, 42, 42, 36, 20), 1):
+    cover.sheet_format.defaultColWidth = 9
+    cover.sheet_format.defaultRowHeight = 14.25
+    cover.page_setup.paperSize = cover.PAPERSIZE_A4
+    cover.page_setup.orientation = "landscape"
+    cover.page_margins.left = cover.page_margins.right = .75
+    cover.page_margins.top = cover.page_margins.bottom = 1
+    cover.page_margins.header = cover.page_margins.footer = .5
+    cover.sheet_properties.codeName = "Sheet1"
+    cover.sheet_properties.outlinePr = cover.sheet_properties.pageSetUpPr = None
+    view = cover.sheet_view
+    view.tabSelected = True
+    view.zoomScale = view.zoomScaleNormal = 145
+    view.selection[0].activeCell = view.selection[0].sqref = "M8"
+    for first, last, width in (
+        (1, 3, 9), (4, 4, 12.6416666666667), (5, 6, 9), (7, 7, 9.35833333333333),
+        (8, 8, 18.75), (9, 9, 9), (10, 10, 7.425), (11, 16384, 9),
+    ):
+        column = cover.column_dimensions[get_column_letter(first)]
+        column.min, column.max, column.width = first, last, width
+        column.font = Font(name="宋体", charset=134, size=12)
+        column.alignment = Alignment(vertical="center")
+    for row, height in enumerate((62.15, 36, 36, 36, 36, 27, 27, 27), 3):
         cover.row_dimensions[row].height = height
 
-    for address, text, size, bold, align in (
-        ("A2:J2", "河南省安装集团有限责任公司", 26, True, "center"),
-        ("A3:J3", "第四工程公司", 20, False, "center"),
-        ("A4:J4", "流动资产盘点表", 22, True, "center"),
-        ("B6:D6", "流动资产金额总计（原值）：", 14, False, "right"),
-        ("B7:G7", "其中：大型工机具：", 14, False, "right"),
-        ("B8:G8", "周转材料：", 14, False, "right"),
-        ("A12:C12", "单位主管：", 15, False, "center"),
-        ("D12:E12", "财务主管：", 15, False, "center"),
-        ("F12:H12", "资产主管：", 15, False, "center"),
-        ("I12:J12", "制表人：", 15, False, "center"),
+    for address in (
+        "C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6",
+        "C7:G7", "C8:G8", "C9:K9", "C10:K10", "A13:K14",
     ):
         cover.merge_cells(address)
-        cell = cover[address.split(":")[0]]
-        cell.value = text
-        style_cell(cell, size, bold=bold, horizontal=align)
 
-    yuan = '"￥"#,##0.00'
-    for address, align, number_format in (
-        ("E6:G6", "center", "[DBNum2][]General;[Red][DBNum2][]General"),
-        ("H6:I6", "right", f'{yuan};[Red]"￥"-#,##0.00'),
-        ("H7:I7", "right", yuan),
-        ("H8:I8", "right", yuan),
+    subtotal_format = r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
+    for span, value, size, bold, align, number_format in (
+        ("C3:K3", "河南省安装集团有限责任公司", 24, True, "center", "General"),
+        ("C4:K4", "第四工程公司", 20, False, "center", "General"),
+        ("C5:K5", "2026年年中流动资产盘点表", 20, False, "center", "General"),
+        ("B6:D6", "流动资产金额总计（原值）：", 14, False, "center", "General"),
+        ("E6:H6", None, 14, False, "center", "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"),
+        ("I6:J6", None, 14, False, "center", r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'),
+        ("K6:K6", "元", 14, False, None, "General"),
+        ("C7:G7", "其     中：大型工机具：", 14, False, "right", "General"),
+        ("H7:H8", None, 14, False, "center", subtotal_format),
+        ("I7:K7", "元", 14, False, None, "General"),
+        ("C8:G8", "周转材料：", 14, False, "right", "General"),
+        ("I8:K8", "元", 14, False, None, "General"),
+        ("C9:K10", None, 14, False, None, "General"),
+        ("A13:K14", "单位主管：             财务主管：               资产主管：              制表人：   ",
+         16, False, None, "General"),
     ):
-        anchor = cover[address.split(":")[0]]
-        anchor.border = Border(bottom=BORDER)
-        cover.merge_cells(address)
-        style_cell(anchor, 14, horizontal=align, shrink=True)
-        anchor.number_format = number_format
-    for row in range(6, 9):
-        style_cell(cover.cell(row, 10, "元"), 14, horizontal="left")
+        cells = cover[span]
+        cells[0][0].value = value
+        font = Font(name="宋体", charset=134, size=size, bold=bold)
+        alignment = Alignment(horizontal=align, vertical="center")
+        for row in cells:
+            for cell in row:
+                cell.font = font
+                cell.alignment = alignment
+                cell.number_format = number_format
 
 
 def equipment_inventory_xlsx(items):
@@ -363,13 +378,13 @@ def equipment_inventory_xlsx(items):
         counted = sum(amounts["I"]) if amounts["I"] or n == 5 else None
         if counted is not None:
             counted_totals.append(counted)
-        ref = f"'{title}'!I{n}"
+        ref = f"{quote_sheetname(ws.title)}!I{n}"
         set_formula(cover[f"H{cover_row}"], Formula(f'={ref}', counted))
     overall = sum(counted_totals) if counted_totals else None
     # A populated detail sheet can have no known amounts, so its total formula returns empty text.
     total_formula = '=H7+H8' if len(counted_totals) == 2 else '=IF(COUNT(H7:H8),SUM(H7:H8),"")'
-    set_formula(cover["H6"], Formula(total_formula, overall))
-    set_formula(cover["E6"], Formula('=H6', overall))
+    set_formula(cover["I6"], Formula(total_formula, overall))
+    set_formula(cover["E6"], Formula('=I6', overall))
     return workbook_bytes(wb)
 
 
