@@ -1,28 +1,22 @@
-"""通知书抓取逐行忽略：真实写事务使用内存 SQLite，i8 取数隔离。"""
+"""通知书抓取逐行忽略，使用隔离 PostgreSQL 保存点和 i8 取数替身。"""
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.core import db
 from app.mod01_projects.models import Project
+from app.mod02_i8 import session_policy
 from app.mod02_i8.models import RunRecord
 from app.mod03_notice import notice_executors as ex, repository, router
-from app.mod03_notice.models import ExcludeRuleRow, NoticeStatLog, PaymentNotice
+from app.mod03_notice.models import PaymentNotice
 
 
 @pytest.fixture
-def case(monkeypatch):
-    engine = create_engine('sqlite://', poolclass=StaticPool,
-                           connect_args={'check_same_thread': False})
-    for model in (Project, PaymentNotice, NoticeStatLog, ExcludeRuleRow, RunRecord):
-        model.__table__.create(engine)
-    factory = sessionmaker(engine, expire_on_commit=False)
-    monkeypatch.setattr(db, '_session_factory', factory)
+def case(monkeypatch, rollback_db):
     state = SimpleNamespace(rows=[], error=None, client_closed=False)
 
     class Client:
@@ -38,6 +32,7 @@ def case(monkeypatch):
 
     monkeypatch.setattr(ex, 'open_i8_client', Client)
     monkeypatch.setattr(ex, 'NoticeFetcher', Fetcher)
+    monkeypatch.setattr(session_policy, 'unified_i8_session', lambda *a, **kw: nullcontext())
     with db.session_scope() as s:
         s.add_all([Project(id=1, name_full='正常项目', warehouse_name='正常仓库'),
                    Project(id=2, project_type='shell', name_full='测试小微壳'),
@@ -50,7 +45,6 @@ def case(monkeypatch):
     with TestClient(app) as client:
         state.client = client
         yield state
-    engine.dispose()
 
 
 def row(identity, *, bad=False, **changes):
@@ -149,6 +143,8 @@ def test_all_ignored_then_source_deleted_or_empty_month(case, bad_rows):
     assert fetch(case)['ignored'] == []
     with db.session_scope() as s:
         assert list(s.scalars(select(PaymentNotice))) == []
+        latest = s.scalar(select(RunRecord).order_by(RunRecord.id.desc()).limit(1))
+        assert latest.status == "success" and latest.detail["notice_fetch"] is True
         assert repository.latest_unresolved(s) == []
 
 
@@ -178,3 +174,39 @@ def test_fetch_error_is_not_turned_into_ignored_rows(case):
         run = s.scalar(select(RunRecord))
         assert run.status == 'failed' and run.detail['notice_fetch'] is True
         assert repository.latest_unresolved(s) == []
+
+
+def test_archive_loaders_reuse_the_notice_client_and_new_project_is_adopted(case, monkeypatch):
+    from app.mod01_projects import sync_service
+    from app.mod02_i8 import router as i8
+
+    client_ids = []
+    open_client = ex.open_i8_client
+
+    def open_notice_client(**kwargs):
+        client = open_client(**kwargs)
+        client_ids.append(client)
+        return client
+
+    used = []
+
+    def read(_allow_kick, client):
+        used.append(client)
+
+    def archive(session, *, load_common, load_warehouses):
+        load_common()
+        load_warehouses()
+        session.add(Project(name_full='新项目', warehouse_name='新仓库'))
+        return {'degraded': False}
+
+    monkeypatch.setattr(ex, 'open_i8_client', open_notice_client)
+    monkeypatch.setattr(i8, 'get_common_project_rows', lambda: read)
+    monkeypatch.setattr(i8, 'get_warehouse_rows', lambda: read)
+    monkeypatch.setattr(sync_service, 'sync_and_archive', archive)
+    case.rows = [{**row('NEW-PROJECT'), 'project_name': '新项目'}]
+    result = fetch(case)
+    assert len(client_ids) == 1 and used == client_ids * 2
+    assert result['upserted'] == 1 and result['ignored'] == []
+    with db.session_scope() as s:
+        stored = s.scalar(select(PaymentNotice).where(PaymentNotice.ph_id == 'NEW-PROJECT'))
+        assert s.get(Project, stored.ownership_id).warehouse_name == '新仓库'

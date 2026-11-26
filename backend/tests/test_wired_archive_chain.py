@@ -62,14 +62,6 @@ def test_顺序是判定到建档再到重判():
     assert i_rejudge > i_arch, "建档之后**没有重判** —— 新档案不会生效"
 
 
-def test_建档复用同一个i8会话不额外登录():
-    """⛔ 一次抓取只应登录一次 —— 否则会**多次强踢**（D9：反复顶号）。"""
-    i_arch = _idx("archive_out = sync_and_archive(")
-    seg = EXEC_SRC[i_arch:i_arch + 800]
-    assert "cp_loader(allow_kick, client)" in seg, "常用项目名单没复用会话"
-    assert "wh_loader(allow_kick, client)" in seg, "仓库名单没复用会话"
-
-
 def test_降级时不拿空档案重判():
     """取数失败（降级）⇒ `sync_and_archive` **一行都不写** ⇒ 此时不得重判。"""
     i_arch = _idx("archive_out = sync_and_archive(")

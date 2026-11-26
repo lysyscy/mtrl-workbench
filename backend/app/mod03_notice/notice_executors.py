@@ -17,12 +17,15 @@
 from __future__ import annotations
 
 from contextlib import ExitStack, closing, contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
+from sqlalchemy.orm import Session
+
 from app.core.config import PROJECT_ROOT, get_settings
 from app.core.db import session_scope
-from app.core.errors import MustReportError
+from app.core.errors import AppError, MustReportError, human_reason
 from app.core.logging import get_logger
 from app.core.session import current_name
 from app.mod01_projects.domain import (
@@ -34,7 +37,9 @@ from app.mod01_projects import service as P1S
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.client import I8Client, I8OnlineConflictError
 from app.mod02_i8.fetch_receipt import fetch_receipt
-from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02
+from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher
+from app.mod02_i8.payable_source import fetch_payables
+from app.mod03_notice.domain import APPROVE_STATUS_DONE
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
 from app.mod03_notice.merge import apply_placement_to_new, plan_merge
 from app.mod03_notice.models import PaymentNotice
@@ -42,7 +47,7 @@ from app.mod03_notice.repository import (
     create_run_record,
     fetch_detail,
     finish_run_record,
-    get_notice_by_ph_id,
+    lock_fetched_notices,
     # ⚠️⚠️ 2026-09-20 补：`_exec` 里用了它，但**拆件时漏了 import** ⇒
     #    `NameError: name 'get_notices_by_ids' is not defined` ⇒ 每次点「批量打印 / 只导出 PDF」
     #    都炸（表现为 HTTP 500；加兜底后才在界面上看到真因）。**这条链路从 09-19 拆件起就是坏的。**
@@ -55,7 +60,7 @@ from app.mod03_notice.repository import (
     upsert_notice,
 )
 from app.mod03_notice.rules_repository import effective_rules
-from app.mod03_notice.schemas import FetchResponse
+from app.mod03_notice.schemas import FetchJobStage, FetchResponse
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
 from app.mod03_notice.print.dispatch import lock_a4_channel
@@ -124,27 +129,32 @@ def persist_batch_run(result: BatchResult, started: datetime) -> None:
     )
 
 
-def apply_fetched_row(session, row: dict, *,
-                      ownership_id: int | None = None,
-                      rules=None) -> tuple[bool, bool]:
-    """把一条抓取记录落库 —— 返回 `(是否新行, 是否有改动)`。
+@dataclass(frozen=True)
+class FetchedNoticeWrite:
+    notice: PaymentNotice
+    created: bool
+    changed: bool
+    newly_approved: bool = False
 
-    - **新行**：跑剔除判定（§4.2.2）与分类（§4.2.3）后落库，**并带上归属**（§2.5.1 链路 C）；
-    - **已有行**：按**再次导入合并**（§4.2.7）—— 源字段跟随 i8、统计两金额按留痕、
-      **分类 / 剔除 / 撤单 / 归属一律不被覆盖**（见 `merge.PROTECTED`）。
 
-    ⚠️ `ownership_id` **只对新行生效**（已有行的归属由人指定过，不被再次导入冲掉）；
-       它由调用方在该行归属校验通过后传入 —— 见 `get_fetch_executor`。
-    ⚠️ `rules` = 本次抓取用的**生效规则集**（`rules_repository.effective_rules` 的唯一出口）；
-       由调用方**读一次传进来**（⛔ 不在这里每次现读 —— 同一批要保证判据一致）。
-    """
-    existing = get_notice_by_ph_id(session, row["ph_id"])
+@dataclass(frozen=True)
+class SavedNoticeBatch:
+    result: FetchResponse
+    match_ids: list[int]
+
+
+FetchProgress = Callable[[Session, FetchJobStage, FetchResponse], None]
+
+
+def apply_fetched_row(session, row: dict, *, existing: PaymentNotice | None,
+                      ownership_id: int | None, rules) -> FetchedNoticeWrite:
+    """落一条通知书，保留原归属和人工字段，记录审批状态是否转为已批。"""
     if existing is None:
         placement = decide_placement(row, rules=rules if rules is not None else DEFAULT_RULES)
-        upsert_notice(session, **apply_placement_to_new(placement, row,
-                                                        ownership_id=ownership_id))
-        return True, True
+        notice = upsert_notice(session, **apply_placement_to_new(placement, row, ownership_id=ownership_id))
+        return FetchedNoticeWrite(notice, created=True, changed=True)
 
+    was_approved = existing.approve_status == APPROVE_STATUS_DONE
     plan = plan_merge(
         notice_as_dict(existing), row, list_stat_traces(session, existing.id), notice_id=existing.id
     )
@@ -156,154 +166,228 @@ def apply_fetched_row(session, row: dict, *,
         logger.warning(
             "再次导入提醒（单 {}）：{}", existing.bill_no or existing.ph_id, "；".join(plan.alerts)
         )
-    return False, plan.changed
+    return FetchedNoticeWrite(
+        existing, created=False, changed=plan.changed,
+        newly_approved=not was_approved and existing.approve_status == APPROVE_STATUS_DONE,
+    )
 
 
 def get_fetch_executor() -> Callable[[str, bool], FetchResponse]:
-    """抓取执行器（D4 最小取数）。测试可覆盖。"""
-
-    def _exec(year_month: str, _legacy_allow_kick: bool) -> FetchResponse:
-        t0 = datetime.now()
-        # 路由绑定会话策略。主取数与补建档的两个读取共用同一客户端。
+    """Synchronous compatibility entry point. The route owns the unified session."""
+    def execute(year_month: str, _legacy_allow_kick: bool) -> FetchResponse:
         with closing(open_i8_client(owner=current_name())) as client:
-            return _fetch(year_month, client, t0)
+            return run_notice_fetch(year_month, client)
 
-    def _fetch(year_month: str, client: I8Client, t0: datetime) -> FetchResponse:
-        try:
-            rows = NoticeFetcher(client).fetch_month(year_month)
-        except I8OnlineConflictError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            with session_scope() as session:
-                rec = create_run_record(session, run_type="fetch", target=year_month, total=0,
-                                        started_at=t0)
-                # ⚠️ **取数失败也要写标记**（`TAIL-41`）：漏了这条，"最近一次付款通知书抓取"就指不住，
-                #    读侧会掉回更早的记录 ⇒ 又变成"抓取之后仍摆着旧清单"。
-                finish_run_record(
-                    session, rec, status="failed", success=0, fail=0,
-                    detail=fetch_detail(), error_message=str(exc),
-                )
-            raise
+    return execute
 
-        # ACC-PRJ-OWN-001：归属未确定的行本次不写，下次抓取重新判断。
-        # 规则剔除行照常保留，不要求归属确定；两处判定使用同一份规则。
-        # ⭐ **（`TAIL-40`）规则来源改为「库 → 出厂默认」**：本批**读一次**生效规则集，随后
-        #    **同时**喂给「挑需校验的行」与「落库时的剔除判定」—— 一处读取、两处同一份
-        #    （⛔ 不许在编排层另写一份剔除判定，也不许两处各读一次）。
+
+def _fetch_and_save(year_month: str, client: I8Client, progress: FetchProgress | None) -> SavedNoticeBatch:
+    t0 = datetime.now()
+    try:
+        rows = NoticeFetcher(client).fetch_month(year_month)
+    except I8OnlineConflictError:
+        raise
+    except Exception as exc:
         with session_scope() as session:
-            rules = effective_rules(session)
-        need_own = rows_needing_ownership(rows, rules)   # `[(原序号, 行)]` —— 剔除行已被排除
-        n_excluded = len(rows) - len(need_own)
-
-        def _judge() -> list[tuple[int, dict, OwnershipDecision]]:
-            """对 `need_own` 跑一遍归属判定（**每次都读最新档案** —— 建档后要重判）。"""
-            with session_scope() as session:
-                projects = P1S.all_projects(session)
-                return [
-                    (
-                        i,
-                        row,
-                        resolve_ownership(
-                            name_full=str(row.get("project_name") or ""),
-                            doc_name=str((row.get("fields") or {}).get("BillName") or ""),
-                            projects=projects,
-                        ),
-                    )
-                    for i, row in need_own
-                ]
-
-        judged = _judge()
-
-        # ⭐ **（`TAIL-29`-③）付款侧「自动建档」**（§2.5.1 链路 A）—— 有 `not_archived` 就**就地建档**：
-        #    用**同一个 i8 会话**取「常用项目列表（`API-06`，`phid` 权威）＋ 仓库名单（`API-05`）」，
-        #    再走 `sync_and_archive`（链路 A 的完整实现：`plan_archive` 计划 → **幂等落库**）。
-        #    ⇒ 建完**重新判定**一次（新档案立刻生效，免得"抓到了却建不了"）。
-        #    ⚠️ 代码落点早就写好且有判据（`ACC-PRJ-SYNC-001`）—— 之前从没被这条链路调用，
-        #       正是「**判据绿 ≠ 链路对**」的标本（`TAIL-29`-③）。
-        #    ⚠️ **只建「能自动定的」**：普通项目带真实仓库名；**壳下的具体小微仍需关键词**
-        #       ⇒ 那部分留给链路 C 弹窗（`TAIL-29`-②），本步**不猜**。
-        #    ⚠️ 失败**不改本地档案**（`sync_and_archive` 内部保证：取数抛错 ⇒ `plan=None` 一行不写）。
-        if needs_archive([d for _, _, d in judged]):
-            from app.mod01_projects.sync_service import sync_and_archive          # noqa: PLC0415
-            from app.mod02_i8.router import get_common_project_rows, get_warehouse_rows  # noqa: PLC0415
-
-            cp_loader = get_common_project_rows()
-            wh_loader = get_warehouse_rows()
-            online_conflict = None
-
-            def load_for_archive(loader):
-                nonlocal online_conflict
-                try:
-                    return loader(False, client)
-                except I8OnlineConflictError as exc:
-                    online_conflict = exc
-                    raise
-
-            with session_scope() as session:
-                archive_out = sync_and_archive(
-                    session,
-                    load_common=lambda: load_for_archive(cp_loader),
-                    load_warehouses=lambda: load_for_archive(wh_loader),
-                )
-                if online_conflict is not None:
-                    raise online_conflict
-            if not archive_out.get("degraded"):
-                judged = _judge()
-
-        ignored_indices = {i for i, _, d in judged if not d.settled}
-        ignored = [
-            {
-                "project_name": str(r.get("project_name") or ""),
-                "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
-                "bill_no": str(r.get("bill_no") or ""),
-                "kind": d.kind,
-                "shell_id": d.shell_id,
-                "reason": d.reason,
-            }
-            for _, r, d in judged if not d.settled
-        ]
-        accepted = [(i, row) for i, row in enumerate(rows) if i not in ignored_indices]
-
-        # 行序号 → 有效行归属；剔除行写入后尝试非阻断回填，不参与整批校验。
-        ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
-
-        with session_scope() as session:
-            rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows),
-                                    started_at=t0)
-            created = updated = 0
-            for i, row in accepted:
-                is_new, changed = apply_fetched_row(session, row,
-                                                    ownership_id=ownership_of.get(i),
-                                                    rules=rules)
-                if is_new:
-                    created += 1
-                elif changed:
-                    updated += 1
-            upserted = created + updated
-            # 剔除不要求归属确定，但能唯一匹配现有档案的也应支持项目筛选。
-            # 已有归属保留；缺档案/小微待定留空，不触发建档或阻断导入。
-            from sqlalchemy import select
-            from app.mod03_notice.notice_actions import refill_ownership
-            excluded_ids = list(session.scalars(select(PaymentNotice.id).where(
-                PaymentNotice.ph_id.in_([row["ph_id"] for _, row in accepted]),
-                PaymentNotice.excluded.is_(True), PaymentNotice.ownership_id.is_(None),
-            )))
-            refill = refill_ownership(session, excluded_ids)
+            rec = create_run_record(session, run_type="fetch", target=year_month, total=0, started_at=t0)
             finish_run_record(
-                session, rec, status="partial" if ignored else "success",
-                success=len(accepted), fail=len(ignored),
-                detail=fetch_detail(created=created, updated=updated, total=len(rows),
-                                    excluded=n_excluded, ownership_filled=len(refill.filled),
-                                    reason="ownership_unsettled" if ignored else "",
-                                    unresolved=ignored),
-                error_message=f"已忽略 {len(ignored)} 条归属未确定的单据，本月数据尚未导齐" if ignored else "",
+                session, rec, status="failed", success=0, fail=0, detail=fetch_detail(),
+                error_message=exc.message if isinstance(exc, AppError) else human_reason("付款通知书抓取失败", exc),
             )
-            return FetchResponse(
-                year_month=year_month, fetched=len(rows), upserted=upserted, ignored=ignored,
-                receipt=fetch_receipt(rec),
-            )
+        raise
 
-    return _exec
+    if progress is not None:
+        with session_scope() as session:
+            progress(session, "saving_notices", FetchResponse(year_month=year_month, fetched=len(rows), upserted=0))
+
+    # 同一份规则用于归属筛选和写入。规则剔除行无需先确定归属。
+    with session_scope() as session:
+        rules = effective_rules(session)
+    need_own = rows_needing_ownership(rows, rules)   # `[(原序号, 行)]` —— 剔除行已被排除
+
+    def _judge() -> list[tuple[int, dict, OwnershipDecision]]:
+        """对 `need_own` 跑一遍归属判定（**每次都读最新档案** —— 建档后要重判）。"""
+        with session_scope() as session:
+            projects = P1S.all_projects(session)
+            return [
+                (
+                    i,
+                    row,
+                    resolve_ownership(
+                        name_full=str(row.get("project_name") or ""),
+                        doc_name=str((row.get("fields") or {}).get("BillName") or ""),
+                        projects=projects,
+                    ),
+                )
+                for i, row in need_own
+            ]
+
+    judged = _judge()
+
+    # 补建档沿用本次会话，建档成功后再按最新档案判断归属。
+    if needs_archive([d for _, _, d in judged]):
+        from app.mod01_projects.sync_service import sync_and_archive          # noqa: PLC0415
+        from app.mod02_i8.router import get_common_project_rows, get_warehouse_rows  # noqa: PLC0415
+
+        cp_loader = get_common_project_rows()
+        wh_loader = get_warehouse_rows()
+        online_conflict = None
+
+        def load_for_archive(loader):
+            nonlocal online_conflict
+            try:
+                return loader(False, client)
+            except I8OnlineConflictError as exc:
+                online_conflict = exc
+                raise
+
+        with session_scope() as session:
+            archive_out = sync_and_archive(
+                session,
+                load_common=lambda: load_for_archive(cp_loader),
+                load_warehouses=lambda: load_for_archive(wh_loader),
+            )
+            if online_conflict is not None:
+                raise online_conflict
+        if not archive_out.get("degraded"):
+            judged = _judge()
+
+    ignored_indices = {i for i, _, d in judged if not d.settled}
+    ignored = [
+        {
+            "project_name": str(r.get("project_name") or ""),
+            "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+            "bill_no": str(r.get("bill_no") or ""),
+            "kind": d.kind,
+            "shell_id": d.shell_id,
+            "reason": d.reason,
+        }
+        for _, r, d in judged if not d.settled
+    ]
+    accepted = [(i, row) for i, row in enumerate(rows) if i not in ignored_indices]
+
+    # 行序号 → 有效行归属；剔除行写入后尝试非阻断回填，不参与整批校验。
+    ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
+
+    with session_scope() as session:
+        saved_rows = _save_fetched_rows(session, accepted, ownership_of, rules)
+        rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows), started_at=t0)
+        finish_run_record(
+            session, rec, status="partial" if ignored else "success",
+            success=saved_rows.saved, fail=len(ignored),
+            detail=fetch_detail(created=saved_rows.created, updated=saved_rows.updated, total=len(rows),
+                                excluded=saved_rows.excluded, ownership_filled=saved_rows.ownership_filled,
+                                reason="ownership_unsettled" if ignored else "", unresolved=ignored),
+            error_message=f"已忽略 {len(ignored)} 条归属未确定的单据，本月数据尚未导齐" if ignored else "",
+        )
+        result = FetchResponse(
+            year_month=year_month, fetched=len(rows), upserted=saved_rows.created + saved_rows.updated,
+            notices_saved=True, saved=saved_rows.saved, created=saved_rows.created, updated=saved_rows.updated,
+            ignored=ignored, ignored_count=len(ignored), unresolved=len(ignored), excluded=saved_rows.excluded,
+            receipt=fetch_receipt(rec),
+        )
+        if progress is not None:
+            progress(session, "matching_jc", result)
+    return SavedNoticeBatch(result, saved_rows.match_ids)
+
+
+@dataclass(frozen=True)
+class NoticesWritten:
+    saved: int
+    created: int
+    updated: int
+    excluded: int
+    ownership_filled: int
+    match_ids: list[int]
+
+
+def _save_fetched_rows(session: Session, rows: list[tuple[int, dict]], ownership_of: dict[int, int | None],
+                       rules) -> NoticesWritten:
+    from app.mod03_notice.notice_actions import refill_ownership
+
+    existing = lock_fetched_notices(session, list({row["ph_id"] for _, row in rows}))
+    created_ids, updated_ids, newly_approved_ids = set(), set(), set()
+    touched = {}
+    for index, row in rows:
+        ph_id = row["ph_id"]
+        write = apply_fetched_row(
+            session, row, existing=existing.get(ph_id), ownership_id=ownership_of.get(index), rules=rules,
+        )
+        nid = write.notice.id
+        existing[ph_id] = touched[nid] = write.notice
+        if write.created:
+            created_ids.add(nid)
+        elif write.changed:
+            updated_ids.add(nid)
+        if write.newly_approved:
+            newly_approved_ids.add(nid)
+
+    excluded = [n for n in touched.values() if n.excluded]
+    refill = refill_ownership(session, [n.id for n in excluded if n.ownership_id is None])
+    match_ids = sorted(nid for nid in created_ids | newly_approved_ids if touched[nid].category == "jc")
+    return NoticesWritten(len(touched), len(created_ids), len(updated_ids - created_ids),
+                          len(excluded), len(refill.filled), match_ids)
+
+
+def run_notice_fetch(year_month: str, client: I8Client, *, progress: FetchProgress | None = None) -> FetchResponse:
+    from app.mod11_jc import service as jc
+
+    saved = _fetch_and_save(year_month, client, progress)
+    result = saved.result
+    payables = None
+    try:
+        if saved.match_ids:
+            with session_scope() as session:
+                initial = jc.auto_link_plan(session, saved.match_ids)
+            if any(row.outcome.rule_code == "payable_required" for row in initial):
+                try:
+                    payables = fetch_payables(client)
+                except Exception as exc:
+                    message = exc.message if isinstance(exc, AppError) else human_reason("读取采购应付失败", exc)
+                    result = result.model_copy(update={"payable_source_failed": True, "payable_source_error": message})
+        return _match_saved_notices(saved.match_ids, result, payables, progress)
+    except Exception as exc:
+        message = exc.message if isinstance(exc, AppError) else human_reason("自动关联集采合同失败", exc)
+        result = result.model_copy(update={"matching_error": message})
+        if progress is not None:
+            with session_scope() as session:
+                progress(session, "failed", result)
+        return result
+
+
+def _match_saved_notices(
+    ids: list[int], result: FetchResponse, payables: list[dict] | None, progress: FetchProgress | None,
+) -> FetchResponse:
+    from app.mod11_jc import service as jc
+
+    with session_scope() as session:
+        matches = jc.auto_link_plan(session, ids, payables,
+                                    payable_source_failed=result.payable_source_failed, for_update=True)
+        review = [row.as_row() for row in matches if row.outcome.bucket == "needs_review"]
+        ready = [row for row in matches if row.outcome.target is not None]
+        selections = [
+            jc.LinkSelection(row.notice_id, row.outcome.target.contract_id, row.expected_amount,
+                             row.expected_jc_supplier, row.expected_warehouse_key, row.outcome.target.supplier_name)
+            for row in ready
+        ]
+        linked = []
+        applied = jc.act_auto_link(session, selections)
+        for row, write in zip(ready, applied["rows"], strict=True):
+            detail = row.as_row()
+            if write["contract_id"] is not None:
+                linked.append(detail)
+            else:
+                review.append(detail | {
+                    "bucket": "needs_review", "rule_code": "local_facts_changed", "reason": write["reason"],
+                    "candidates": [detail["target"] | {"selectable": False}], "target": None,
+                })
+        completed = result.model_copy(update={
+            "auto_linked_items": linked, "auto_linked": len(linked),
+            "manual_review_items": review, "manual_review": len(review),
+        })
+        if progress is not None:
+            progress(session, "completed", completed)
+    return completed
 
 
 def get_notice_lister() -> Callable[..., list[PaymentNotice]]:

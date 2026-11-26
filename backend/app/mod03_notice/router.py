@@ -43,7 +43,7 @@ from app.mod01_projects.domain import (
 )
 from app.mod01_projects.models import TYPE_SMALL
 from app.mod02_i8 import wh_cache
-from app.mod03_notice import pdf_cache, print_batch_store
+from app.mod03_notice import fetch_jobs, pdf_cache, print_batch_store
 from app.mod03_notice.domain import still_unsettled
 from app.mod03_notice.print.dispatch import list_printers
 from app.mod03_notice.repository import latest_unresolved
@@ -52,6 +52,7 @@ from app.mod03_notice.schemas import (
     AssignResponse,
     BatchRequest,
     BatchResponse,
+    FetchJobOut,
     FetchRequest,
     FetchResponse,
     PrintBatchExportOut,
@@ -107,6 +108,33 @@ def fetch_notices(
         return result
     fetched, upserted, ignored = result
     return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted, ignored=ignored)
+
+
+@router.post("/notices/fetch-jobs", response_model=FetchJobOut, status_code=202)
+def start_notice_fetch_job(req: FetchRequest) -> FetchJobOut:
+    require_expected_account(req.expected_account)
+    return fetch_jobs.start_job(current_name(), req)
+
+
+@router.get("/notices/fetch-jobs/active", response_model=FetchJobOut | None)
+def active_notice_fetch_job() -> FetchJobOut | None:
+    return fetch_jobs.read_active_job(current_name())
+
+
+@router.get("/notices/fetch-jobs/{job_id}", response_model=FetchJobOut)
+def get_notice_fetch_job(job_id: int) -> FetchJobOut:
+    result = fetch_jobs.read_job(current_name(), job_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="找不到本账号的抓取任务")
+    return result
+
+
+@router.post("/notices/fetch-jobs/{job_id}/ack", response_model=FetchJobOut)
+def acknowledge_notice_fetch_job(job_id: int) -> FetchJobOut:
+    result = fetch_jobs.read_job(current_name(), job_id, acknowledge=True)
+    if result is None:
+        raise HTTPException(status_code=404, detail="找不到本账号的抓取任务")
+    return result
 
 
 @router.get("/notices/unresolved", response_model=UnresolvedResponse)

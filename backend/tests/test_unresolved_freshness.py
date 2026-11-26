@@ -103,23 +103,8 @@ def test_最近一次要按id判不许信传入顺序():
     assert R.latest_unresolved(sess([new_ok, old_bad])) == []
 
 
-def test_三条结局都要写标记():
-    """⭐ **写侧**（`repository.fetch_detail` = 唯一出口）：付款通知书抓取的**三种结局**
-    —— i8 取数失败 / 归属未走完 / 抓取成功 —— **都必须带 `notice_fetch` 标记**。
-
-    漏掉任何一条，"最近一次"就指不住（读侧掉回**更早**的记录）⇒ `TAIL-41` 原地复发。
-
-    ⚠️ 这三条在**闭包**里（`get_fetch_executor` 直接 `new I8Client()`、不可注入）⇒ 行为跑不到，
-       只能**静态钉住"唯一出口用了几次 ＋ 不许有裸 `detail={`"**；运行时由真机脚本覆盖。
-    """
-    import inspect
-
-    from app.mod03_notice import router as RO
-
-    src = inspect.getsource(RO.get_fetch_executor)
-    # 忽略清单与正常行同事务写入；三种结果的运行行为见 test_notice_fetch_skip.py。
-    assert src.count("detail=fetch_detail(") == 2, "取数失败与处理结果都须走写侧唯一出口"
-    assert "detail={" not in src, "⛔ 不许有绕过出口的裸 detail 字面量"
+def test_写侧明细格式保留抓取标记():
+    """抓取三种结局的落库与标记由 test_notice_fetch_skip.py 覆盖。"""
     assert R.fetch_detail(reason="x") == {R.FETCH_MARK: True, "reason": "x"}
     assert R.fetch_detail() == {R.FETCH_MARK: True}
 
