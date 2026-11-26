@@ -45,7 +45,6 @@ html{font-variant-numeric:tabular-nums}
 .contract-dialog .contract-notice{margin:0 24px 16px;padding:12px 16px;border-radius:var(--radius-inner)}
 .contract-dialog .contract-current{margin:12px 24px;flex:none}
 .contract-dialog .contract-candidate-note{margin:0 24px 8px;flex:none}
-.contract-dialog .contract-candidates{padding:16px 24px;overflow:auto;min-height:0;flex:1;gap:16px;align-content:start;overscroll-behavior:contain}
 .contract-dialog .contract-candidate{padding:16px;border-radius:var(--radius-inner);box-shadow:none;transition:border-color var(--motion-fast),background-color var(--motion-fast)}
 .contract-dialog .contract-candidate:hover{border-color:var(--bd3)}
 .contract-dialog .contract-candidate.is-selected{outline:none;border-color:var(--pri);background:var(--pri-l)}
@@ -58,7 +57,7 @@ html{font-variant-numeric:tabular-nums}
 .business-period-popover .ant-popover-container{border-radius:var(--radius-inner);box-shadow:var(--shadow-pop)}
 .business-period-panel .business-period-month.ant-btn{border-radius:var(--radius-input);box-shadow:none;transform:none}
 .business-modal .payment-terms,.business-modal .payment-confirmation{border-radius:var(--radius-inner)}
-@media(max-width:740px){.notices-page .notice-tools .notice-toolbar{margin-left:0}.notices-page .notice-filters>.notice-project{width:100%;max-width:300px}.notices-page .notice-filters>.notice-search-field{flex-basis:100%;max-width:300px}.contract-dialog .contract-candidates,.contract-dialog .contract-dialog-heading,.contract-dialog .contract-footer{padding-inline:16px}.contract-dialog .contract-notice,.contract-dialog .contract-current,.contract-dialog .contract-candidate-note,.contract-dialog .contract-selection{margin-inline:16px}.contract-dialog .contract-candidate{padding:12px}}
+@media(max-width:740px){.notices-page .notice-tools .notice-toolbar{margin-left:0}.notices-page .notice-filters>.notice-project{width:100%;max-width:300px}.notices-page .notice-filters>.notice-search-field{flex-basis:100%;max-width:300px}.contract-dialog .contract-dialog-heading,.contract-dialog .contract-footer{padding-inline:16px}.contract-dialog .contract-notice,.contract-dialog .contract-current,.contract-dialog .contract-candidate-note,.contract-dialog .contract-selection{margin-inline:16px}.contract-dialog .contract-candidate{padding:12px}}
 /* Native editors and appearance cards use the same short color feedback as AntD.
    Never animate geometry, values or table rows. */
 :where(.workspace,.business-modal) :is(input:not([class*="ant-"]):not([type=checkbox]):not([type=radio]):not(.ant-picker input),select:not([class*="ant-"]),textarea:not([class*="ant-"])),.appearance-choice,.appearance-close{transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}
