@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { money } from './api';
+import type { FinishedNoticeFetchJob } from './notice-fetch-job-data';
 import type { MatchCandidate, ReadyMatch, ReviewMatch } from './notice-link-matches';
 
 export function MatchItems<T>({ items, itemKey, render }: {
@@ -59,4 +60,22 @@ export function ReviewMatchItem({ row, selected, choose, disabled = false }: {
         } />}
     </>}
   </details>;
+}
+
+export function FetchMatchDetails({ result }: { result: FinishedNoticeFetchJob['result'] }) {
+  return <>
+    <section className="notice-match-section">
+      <h3>已自动关联 {result.auto_linked} 条</h3>
+      <MatchItems items={result.auto_linked_items} itemKey={row => row.notice_id} render={row => <ReadyMatchItem row={row} />} />
+    </section>
+    <section className="notice-match-section">
+      <h3>待人工核对 {result.manual_review} 条</h3>
+      <MatchItems items={result.manual_review_items} itemKey={row => row.notice_id} render={row => <ReviewMatchItem row={row} />} />
+    </section>
+    {result.ignored.length > 0 && <details className="notice-match-section">
+      <summary>待归属明细</summary>
+      <MatchItems items={result.ignored} itemKey={row => row.bill_no} render={row =>
+        <div className="notice-match-item"><strong>{row.bill_no}</strong><p>{row.project_name}　{row.doc_name}</p><p>{row.reason}</p></div>} />
+    </details>}
+  </>;
 }

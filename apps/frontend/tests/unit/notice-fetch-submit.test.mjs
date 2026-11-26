@@ -5,7 +5,7 @@
  * 曾经的就是这样：正则被写成 `/^\\d{4}-/`，**按钮看着可点、点了什么也不发**，
  * 而"源码里有个像模像样的正则"这条检查照样通过。这里改成**真的跑一遍提交**：
  *   渲染 `NoticeFetch` 及其共用确认按钮，点击按钮并检查
- *   `fetch` 中的 `POST /api/m03/notices/fetch` 参数。
+ *   `fetch` 中的 `POST /api/m03/notices/fetch-jobs` 参数。
  *
  * 运行环境没有 DOM，所以这里用 `registerHooks` 把 `react`/`jsx-runtime` 之外的东西
  * 换成最小的替身：组件照常按 JSX 调用、hook 照常按顺序取格子，**业务代码一行不改**。
@@ -68,6 +68,9 @@ registerHooks({
         export function useQueryClient() { return { invalidateQueries() {} }; }
       `);
     }
+    if (specifier === './notice-fetch-jobs') {
+      return stub("export function useNoticeFetchJobs() { return globalThis.__noticeJobs; }");
+    }
     if (specifier === './notice-match-list') {
       return stub("export const MatchItems = 'match-list'; export const ReadyMatchItem = 'ready-match'; export const ReviewMatchItem = 'review-match';");
     }
@@ -124,6 +127,11 @@ class MemoryStorage {
 }
 
 const me = { id: 1, account: 'tester001', name: '测试员' };
+const jobSnapshot = month => ({
+  id: 7, account: me.account, year_month: month, status: 'running', stage: 'fetching_notices',
+  stage_label: '正在抓取付款通知书…', result: null, error_message: '', created_at: '2026-11-26T10:00:00',
+  updated_at: '2026-11-26T10:00:00', completed_at: null, acknowledged_at: null,
+});
 const config = { ready: true, account: 'tester001', i8_user: 'tester001', message: '' };
 
 function action(refresh = async () => {}) {
@@ -141,6 +149,8 @@ beforeEach(() => {
   globalThis.sessionStorage = new MemoryStorage();
   globalThis.__relayCells = cells;
   globalThis.__relayQuery = { isFetching: false, isError: false, error: null, data: config, refetch: async () => {} };
+  globalThis.__noticeJobs = { currentId: undefined, accepted: [], closed: 0,
+    accept(job) { this.accepted.push(job); }, recover: async () => null };
   globalThis.__relaySession = { mode: 'http', connected: false, state: null, busy: false, notice: '', extensionReady: true };
   cells.list = [];
   cells.index = 0;
@@ -153,6 +163,7 @@ afterEach(() => {
   delete globalThis.__relayQuery;
   delete globalThis.__relaySession;
   delete globalThis.__contractPending;
+  delete globalThis.__noticeJobs;
 });
 
 test('共用抓取动作防双击，收发结存走专属端点并可靠重读', async () => {
@@ -231,7 +242,7 @@ function render({ mode = 'http', connected = false, owner = 'tester001', waitFor
   cells.index = 0;
   globalThis.__relaySession = { mode, connected, state: null, busy: false, notice: '',
     actionKey: JSON.stringify([owner, mode]), extensionReady: true, waitForBrowser };
-  return NoticeFetch({ me, blocked: false, close() {}, refresh: async () => {} });
+  return NoticeFetch({ me, blocked: false, close() { globalThis.__noticeJobs.closed++; } });
 }
 
 function confirmButton(tree) {
@@ -256,26 +267,28 @@ function recorder() {
       status: 200,
       ok: true,
       headers: { get: () => 'application/json' },
-      json: async () => ({ year_month: '2026-11', fetched: 3, upserted: 3, ignored: [] }),
+      json: async () => jobSnapshot('2026-11'),
     };
   };
   return calls;
 }
 
-test('月份是正常值、直连方式：点「确认抓取」会真的发出 POST /api/m03/notices/fetch', async () => {
+test('月份是正常值、直连方式：点「确认抓取」会真的发出 POST /api/m03/notices/fetch-jobs', async () => {
   const calls = recorder();
   const tree = render({ mode: 'http' });
   const submitButton = confirmButton(tree);
   assert.equal(submitButton.props.disabled, false, '月份合法时按钮不能是禁用状态');
   await submit(tree);
   assert.equal(calls.length, 1, '点一次必须只发一次请求');
-  assert.equal(calls[0].path, '/api/m03/notices/fetch');
+  assert.equal(calls[0].path, '/api/m03/notices/fetch-jobs');
   assert.equal(calls[0].method, 'POST');
   assert.equal(calls[0].body.year_month, '2026-11', '发出去的月份必须就是界面上那个月');
   assert.equal(calls[0].body.session_mode, 'http');
   assert.equal('allow_kick' in calls[0].body, false);
   assert.equal('kick_token' in calls[0].body, false);
   assert.equal(calls[0].body.expected_account, 'tester001');
+  assert.equal(globalThis.__noticeJobs.accepted[0].id, 7);
+  assert.equal(globalThis.__noticeJobs.closed, 1);
 });
 
 test('选浏览器方式且已连接：同一按钮改走浏览器通道，且不带强踢授权', async () => {
@@ -283,7 +296,7 @@ test('选浏览器方式且已连接：同一按钮改走浏览器通道，且�
   const tree = render({ mode: 'browser', connected: true });
   await submit(tree);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].path, '/api/m03/notices/fetch');
+  assert.equal(calls[0].path, '/api/m03/notices/fetch-jobs');
   assert.equal(calls[0].body.session_mode, 'browser');
   assert.ok(calls[0].body.device_id, '浏览器方式必须带本页连接标识');
   assert.equal('allow_kick' in calls[0].body, false, '浏览器方式不得请求强踢');
@@ -344,6 +357,20 @@ test('已发出的通知书请求失联，重开及连接就绪后仍只允许�
   assert.equal(posts, 1);
 });
 
+test('抓取受理回包丢失时读回原任务并关闭窗口', async () => {
+  let posts = 0;
+  globalThis.fetch = async () => { posts++; throw new TypeError('lost reply'); };
+  confirmButton(render()).props.onClick();
+  await settle();
+  globalThis.__noticeJobs.recover = async () => jobSnapshot('2026-11');
+  const [read] = walk(render(), node => node.props.children === '读取抓取任务');
+  read.props.onClick();
+  await settle();
+  assert.equal(posts, 1);
+  assert.equal(globalThis.__noticeJobs.accepted[0].id, 7);
+  assert.equal(globalThis.__noticeJobs.closed, 1);
+});
+
 test('月份不合法时不发请求（原来的正则回归守卫）', async () => {
   const calls = recorder();
   cells.month = '2026-11-05';
@@ -365,7 +392,7 @@ function conflictRecorder({ repeat = false, topLevel = false } = {}) {
         code: 'i8_online_conflict', message, ...(topLevel ? token : {detail: token}),
       })};
     }
-    return response({year_month: calls.at(-1).body.year_month, fetched: 3, upserted: 3, ignored: []});
+    return response(jobSnapshot(calls.at(-1).body.year_month));
   };
   return calls;
 }
@@ -494,7 +521,7 @@ const actionsOf = tree => walk(tree, node => node.type === I8FetchActions)[0].pr
 const kickButton = (tree, label = '让现有会话下线并继续') =>
   walk(I8FetchActions(actionsOf(tree)), node => node.props?.children === label)[0];
 
-test('在线冲突暂停，确认仅重发原请求一次并显示回执', async () => {
+test('在线冲突留在窗口，确认后只提交一次并把任务交给账号工作区', async () => {
   const calls = conflictRecorder();
   confirmButton(render()).props.onClick();
   await settle();
@@ -511,7 +538,8 @@ test('在线冲突暂停，确认仅重发原请求一次并显示回执', async
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1], {path: calls[0].path, body: {...calls[0].body, kick_token: 'one-time-confirmation'}});
   assert.equal(actionsOf(completed).action.sent, true);
-  assert.ok(walk(completed, node => node.props?.data?.summary?.written === 3).length);
+  assert.equal(globalThis.__noticeJobs.accepted[0].id, 7);
+  assert.equal(globalThis.__noticeJobs.closed, 1);
   assert.equal(actionsOf(completed).action.kickMessage, '');
 });
 
@@ -525,7 +553,7 @@ test('已确认请求再次冲突时显示错误，原确认不能重复提交',
   assert.equal(action.kickMessage, '');
   assert.equal(action.pending, false);
   assert.match(action.error, /在线会话/);
-  assert.equal(calls.filter(call => call.path === '/api/m03/notices/fetch').length, 2);
+  assert.equal(calls.filter(call => call.path === '/api/m03/notices/fetch-jobs').length, 2);
   assert.equal(calls.at(-1).path, '/api/m02/session/kick-cancel');
 });
 
@@ -577,7 +605,7 @@ test('cancelled fetch confirmation cannot submit while revocation is pending or 
   assert.ok(walk(I8FetchStatus(status.props), node => node.props?.role === 'status'
     && /令牌撤回未确认/.test(node.props.children)).length);
   assert.equal(confirmButton(render()).props.disabled, false);
-  assert.deepEqual(calls.map(([path]) => path), ['/api/m03/notices/fetch', '/api/m02/session/kick-cancel']);
+  assert.deepEqual(calls.map(([path]) => path), ['/api/m03/notices/fetch-jobs', '/api/m02/session/kick-cancel']);
 });
 
 test('shared confirmation clears its token before a rejected revocation completes', async () => {

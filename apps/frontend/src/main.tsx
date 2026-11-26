@@ -18,6 +18,7 @@ import type { ComponentType } from 'react';
 import { GridWidthOwner } from './grid-width-owner';
 import { resetBrowserRelay } from './i8-browser-relay';
 import { I8SessionProvider } from './i8-session';
+import { NoticeFetchJobs } from './notice-fetch-jobs';
 import { DialogPresence, MotionAccess, WorkspaceMarker } from './workspace-motion';
 
 type WorkspacePageProps = {
@@ -117,7 +118,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
       window.location.assign(loginUrl());
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <MotionAccess.Provider value={!blocked && !obscured}><QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={historyGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}>
+  return <MotionAccess.Provider value={!blocked && !obscured}><QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={historyGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}><NoticeFetchJobs account={me?.account ?? ''} paused={blocked}>
     {fontError && !obscured && <div className={preparing ? 'page-loading' : 'session-notice'} role="alert"><span>{fontError}</span><WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton></div>}
     <div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
@@ -134,7 +135,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
         })}</HistoryGate></main>
     </div>
     <DialogPresence>{appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}</DialogPresence>
-  </div></I8SessionProvider></HistoryScope></GridWidthOwner></QueryClientProvider></MotionAccess.Provider>;
+  </div></NoticeFetchJobs></I8SessionProvider></HistoryScope></GridWidthOwner></QueryClientProvider></MotionAccess.Provider>;
 }
 
 function preserveIdentity(current: Identity | null, incoming: Identity | null) {
