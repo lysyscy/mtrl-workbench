@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request
@@ -315,17 +316,22 @@ class LinkIn(BaseModel):
 class AutoLinkSelection(BaseModel):
     notice_id: int = Field(gt=0)
     contract_id: int = Field(gt=0)
-    amount: str
-    payable_codes: list[str]
+    expected_amount: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
+    expected_jc_supplier: str = Field(max_length=128)
+    expected_warehouse_key: str = Field(min_length=1, max_length=255)
+    expected_contract_supplier: str | None = Field(default=None, max_length=255)
 
 
-class AutoLinkIn(BaseModel):
+class AutoLinkPreviewIn(BaseModel):
     notice_ids: list[int] = Field(min_length=1, max_length=5000)
-    selections: list[AutoLinkSelection] = Field(default_factory=list, max_length=5000)
     session_mode: str = ''
     #: 浏览器方式必传：本页面的连接标识（不是账号、不是凭据）。
     device_id: str = ''
     kick_token: str = ''
+
+
+class AutoLinkIn(BaseModel):
+    selections: list[AutoLinkSelection] = Field(min_length=1, max_length=5000)
 
 
 def _read_payables():
@@ -339,24 +345,27 @@ def _read_payables():
 
 
 @router.post('/api/m11/auto-link-preview')
-def api_auto_link_preview(payload: AutoLinkIn) -> dict:
-    with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link-preview",
-                            scope={"notice_ids": payload.notice_ids}):
-        payables = _read_payables()
+def api_auto_link_preview(payload: AutoLinkPreviewIn) -> dict:
     with session_scope() as s:
-        return SV.auto_link_plan(s, payload.notice_ids, payables)
+        rows = SV.auto_link_plan(s, payload.notice_ids)
+    if any(row.outcome.rule_code == "payable_required" for row in rows):
+        if not payload.session_mode:
+            return {"ok": True, "needs_payables": True}
+        with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link-preview",
+                                scope={"notice_ids": payload.notice_ids}):
+            payables = _read_payables()
+        with session_scope() as s:
+            rows = SV.auto_link_plan(s, payload.notice_ids, payables)
+    return {"ok": True, "rows": [row.as_row() for row in rows]}
 
 
 @router.post('/api/m11/auto-link')
 def api_auto_link(payload: AutoLinkIn) -> dict:
-    if not payload.selections or {r.notice_id for r in payload.selections} - set(payload.notice_ids):
-        return {'ok': False, 'message': '请先预览本次可关联通知书'}
-    selections = [row.model_dump() for row in payload.selections]
-    with unified_i8_session(payload, owner=current_name(), operation="m11.auto-link",
-                            scope={"notice_ids": payload.notice_ids, "selections": selections}):
-        payables = _read_payables()
+    selections = [SV.LinkSelection(**row.model_dump()) for row in payload.selections]
+    if len({row.notice_id for row in selections}) != len(selections):
+        return {"ok": False, "message": "同一条通知书只能选择一份合同"}
     with session_scope() as s:
-        return SV.act_auto_link(s, selections, payables)
+        return SV.act_auto_link(s, selections)
 
 
 class UnlinkIn(BaseModel):

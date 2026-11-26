@@ -122,6 +122,14 @@ def contract_of(s: Session, contract_id: int) -> JcContract | None:
     return s.get(JcContract, int(contract_id))
 
 
+def contracts_for_link(s: Session, ids: list[int]) -> dict[int, JcContract]:
+    if not ids:
+        return {}
+    stmt = (select(JcContract).where(JcContract.id == any_ids(ids))
+            .order_by(JcContract.id).with_for_update(read=True).execution_options(populate_existing=True))
+    return {contract.id: contract for contract in s.scalars(stmt)}
+
+
 def invoices_of(s: Session, contract_id: int) -> list[dict]:
     """该合同的**全部**发票子表行（两张同款子表都在这一张表里，靠 `kind` 区分 · §6.4.2）。"""
     stmt = select(JcInvoice).where(JcInvoice.contract_id == int(contract_id)).order_by(JcInvoice.id)

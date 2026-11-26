@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -490,6 +492,9 @@ def act_add_payment(s: Session, *, contract_id: int, date, amount,
         hit = _replay(s, key=key, action=SUBOP_PAYMENT_ADD, **fields)
         if hit is not None:
             return hit
+    if notice_id not in (None, ""):
+        from app.mod03_notice import service as notices
+        notices.get_notice(s, int(notice_id), with_for_update=True)
     if str(source) == SRC_NOTICE and D.dedup_blocked(
             notice_id=notice_id, existing_notice_ids=R.notice_ids_used(s)):
         return {"ok": False, "kind": "err",
@@ -561,87 +566,174 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
     moved_from = None
     if old is not None:
         if int(old.contract_id) == int(contract_id):
+            notice.jc_auto_link_blocked = False
             return {"ok": True, "kind": "ok", "contract_id": int(contract_id), "changed": False,
                     "message": f"这行通知书已经关联在集采合同 #{contract_id} 上（未重复关联）"}
         moved_from = int(old.contract_id)
         R.delete_payment(s, old.id)
 
-    # 2) 兜底再判一次**全库去重**（域内核出口；正常在上面已摘干净 ⇒ 这里只在边界上护一道）
-    if D.dedup_blocked(notice_id=notice_id, existing_notice_ids=R.notice_ids_used(s)):
-        return {"ok": False, "kind": "err",
-                "message": "该付款通知书已被引用过（全库去重，不分合同）—— 请刷新后重试"}
-
-    notice.jc_supplier = contract.supplier
-    row = R.insert_payment(s, contract_id=int(contract_id), pay_date="",
-                           amount=0, source=SRC_NOTICE, notice_id=int(notice_id))
+    notice.jc_auto_link_blocked = False
+    row = _insert_notice_link(s, notice, contract)
     return {"ok": True, "kind": "ok", "changed": True, "payment_id": int(row.id),
             "contract_id": int(contract_id), "moved_from": moved_from,
             "message": (f"已从集采合同 #{moved_from} 改关联到 #{contract_id}"
                         if moved_from else f"已关联到集采合同 #{contract_id}")}
 
 
-def auto_link_plan(s: Session, notice_ids: list[int], payables: list[dict]) -> dict:
-    """批量读取历史关联和审批额，只为未关联通知书预览唯一合同。"""
+def _insert_notice_link(s: Session, notice, contract) -> JcPayment:
+    notice.jc_supplier = contract.supplier
+    return R.insert_payment(s, contract_id=contract.id, pay_date="",
+                            amount=0, source=SRC_NOTICE, notice_id=notice.id)
+
+
+@dataclass(frozen=True)
+class LinkSelection:
+    notice_id: int
+    contract_id: int
+    expected_amount: Decimal
+    expected_jc_supplier: str
+    expected_warehouse_key: str
+    expected_contract_supplier: str | None = None
+
+
+@dataclass(frozen=True)
+class NoticeLinkMatch:
+    notice_id: int
+    code: str
+    title: str
+    project_name: str
+    expected_amount: Decimal | None
+    expected_jc_supplier: str
+    expected_warehouse_key: str
+    outcome: D.MatchOutcome
+
+    def as_row(self) -> dict:
+        target = self.outcome.target
+        return {
+            "notice_id": self.notice_id, "code": self.code, "title": self.title,
+            "project_name": self.project_name,
+            "expected_amount": str(self.expected_amount) if self.expected_amount is not None else None,
+            "expected_jc_supplier": self.expected_jc_supplier, "expected_warehouse_key": self.expected_warehouse_key,
+            "bucket": self.outcome.bucket, "rule_code": self.outcome.rule_code, "reason": self.outcome.reason,
+            "payable_codes": self.outcome.payable_codes,
+            "candidates": [asdict(c) for c in self.outcome.candidates],
+            "target": asdict(target) if target else None,
+        }
+
+
+def _link_blocker(notice, warehouse_key: str, links: dict) -> D.MatchOutcome | None:
     from app.mod03_notice.domain import APPROVE_STATUS_DONE
 
-    if not notice_ids:
-        return {'ok': True, 'rows': [], 'ready': 0}
-    links = R.links_by_notice(s)
-    prior_approved: dict[int, list[Decimal]] = {}
-    for nid, notice in _valid_linked_notices(s, sorted(links)).items():
-        for cid in set(links[nid]):
-            prior_approved.setdefault(cid, []).append(notice.amount_approved)
-    by_project: dict[str, list[dict]] = {}
-    for payable in payables:
-        by_project.setdefault(payable['project'], []).append(payable)
+    if notice is None:
+        return D.MatchOutcome("skipped", "notice_missing", "通知书已不存在")
+    if notice.category != "jc" or notice.excluded or notice.i8_revoked or notice.approve_status != APPROVE_STATUS_DONE:
+        return D.MatchOutcome("skipped", "notice_ineligible", "仅有效且已批的集采通知书可批量关联")
+    if notice.id in links:
+        return D.MatchOutcome("skipped", "already_linked", "已有合同关联")
+    if notice.jc_auto_link_blocked:
+        return D.MatchOutcome("skipped", "manually_unlinked", "这条通知书已手工解绑，可从单条关联入口重新选择")
+    if not warehouse_key or notice.amount_approved <= 0:
+        return D.MatchOutcome("skipped", "notice_incomplete", "项目归属未确定或审批金额不大于零")
+    return None
+
+
+def _warehouse_keys(s: Session) -> dict[int, str]:
+    from app.mod01_projects import service as projects
+    return {p.id: p.warehouse_name for p in projects.warehouse_index(s).values()}
+
+
+def auto_link_plan(
+    s: Session, notice_ids: list[int], payables: list[dict] | None = None, *,
+    payable_source_failed: bool = False, for_update: bool = False,
+) -> list[NoticeLinkMatch]:
+    """批量读本地事实，按仓库和 i8 项目名分别匹配。"""
+    from app.mod03_notice import service as notices
+
+    ids = list(dict.fromkeys(notice_ids))
+    if not ids:
+        return []
+    found = {n.id: n for n in notices.get_notices_by_ids(s, ids, for_update=for_update, lock_keys=for_update)}
+    links = R.links_by_notice(s, ids)
+    keys = _warehouse_keys(s)
+    blockers = {nid: _link_blocker(found.get(nid), keys.get(found[nid].ownership_id, "") if nid in found else "", links)
+                for nid in ids}
+    eligible_keys = {keys[found[nid].ownership_id] for nid in ids if blockers[nid] is None}
+    contracts: dict[str, list[dict]] = defaultdict(list)
+    included_ids = []
+    for contract in list_contracts(s) if eligible_keys else ():
+        if contract["project_key"] in eligible_keys:
+            contracts[contract["project_key"]].append(contract)
+            if contract["tag"] == TAG_IN:
+                included_ids.append(contract["id"])
+    invoices = R.invoices_of_many(s, included_ids)
+    source_rows: dict[tuple[str, Decimal], list[dict]] = defaultdict(list)
+    for payable in payables or ():
+        source_rows[payable["project"], payable["amount"]].append(payable)
 
     rows = []
-    for context in _link_candidates(s, notice_ids, supplier='', links=links):
-        nid, n = context['notice_id'], context['notice']
-        row = {'notice_id': nid, 'code': n.bill_no if n else str(nid), 'contract_id': None}
-        if n is None or n.category != 'jc' or n.excluded or n.i8_revoked or n.approve_status != APPROVE_STATUS_DONE:
-            row['reason'] = '非有效集采通知书'
-        elif context['current_contract_id'] is not None:
-            row['reason'] = '已有合同关联，保持不变'
-        elif not context['project_key'] or n.amount_approved <= 0:
-            row['reason'] = '项目、供应商或审批金额未确定'
-        else:
-            fields = n.fields or {}
-            row.update(D.auto_link_evidence(
-                amount=n.amount_approved, project_key=context['project_key'], supplier=n.jc_supplier,
-                title=fields.get('BillName', ''), remark=fields.get('Remark', ''),
-                contracts=context['rows'], payables=by_project.get(n.project_name, ()),
-                prior_approved=prior_approved,
-            ))
-            if row['contract_id'] is not None:
-                row['amount'] = str(n.amount_approved)
-        rows.append(row)
-    return {'ok': True, 'rows': rows, 'ready': sum(r['contract_id'] is not None for r in rows)}
-
-
-def act_auto_link(s: Session, expected: list[dict], payables: list[dict]) -> dict:
-    """确认时重新取数核对；不允许预览后发生变化的行被批量改关联。"""
-    from app.mod03_notice import service as notices
-    ids = sorted({r['notice_id'] for r in expected})
     for nid in ids:
-        notices.get_notice(s, nid, with_for_update=True, populate_existing=True)
-    plan = auto_link_plan(s, ids, payables)
-    wanted = {r['notice_id']: r for r in expected}
-    linked = 0
-    for row in plan['rows']:
-        prior = wanted[row['notice_id']]
-        if row['contract_id'] is None:
-            continue
-        if any(row.get(k) != prior.get(k) for k in ('contract_id', 'amount', 'payable_codes')):
-            row['contract_id'] = None
-            row['reason'] = '来源或金额已变化，请重新预览'
-            continue
-        result = act_link_notice(s, notice_id=row['notice_id'], contract_id=row['contract_id'])
-        if not result['ok']:
-            from app.core.errors import MustReportError
-            raise MustReportError(result['message'])
-        linked += int(result.get('changed', False))
-    return {'ok': True, 'linked': linked, 'rows': plan['rows']}
+        notice = found.get(nid)
+        fields = (notice.fields or {}) if notice else {}
+        title = str(fields.get("BillName") or "")
+        warehouse_key = keys.get(notice.ownership_id, "") if notice else ""
+        outcome = blockers[nid]
+        if outcome is None:
+            outcome = D.match_notice_contract(
+                amount=notice.amount_approved, project_key=warehouse_key, supplier=notice.jc_supplier,
+                title=title, remark=str(fields.get("Remark") or ""), contracts=contracts[warehouse_key],
+                invoices=invoices,
+                payables=None if payables is None else source_rows[notice.project_name, notice.amount_approved],
+                payable_source_failed=payable_source_failed,
+            )
+        rows.append(NoticeLinkMatch(
+            nid, (notice.bill_no or str(nid)) if notice else str(nid), title,
+            notice.project_name if notice else "", notice.amount_approved if notice else None,
+            notice.jc_supplier if notice else "", warehouse_key, outcome,
+        ))
+    return rows
+
+
+def act_auto_link(s: Session, selections: list[LinkSelection]) -> dict:
+    """只重核本地事实，跳过已变更记录。"""
+    from app.mod03_notice import service as notices
+
+    ids = [row.notice_id for row in selections]
+    if not ids:
+        return {"ok": True, "linked": 0, "rows": []}
+    s.flush()
+    found = {n.id: n for n in notices.get_notices_by_ids(s, ids, for_update=True, lock_keys=True)}
+    links = R.links_by_notice(s, ids)
+    keys = _warehouse_keys(s)
+    contracts = R.contracts_for_link(s, sorted({r.contract_id for r in selections}))
+    rows = []
+    for selection in selections:
+        notice = found.get(selection.notice_id)
+        key = keys.get(notice.ownership_id, "") if notice else ""
+        blocker = _link_blocker(notice, key, links)
+        contract = contracts.get(selection.contract_id)
+        reason = ""
+        if blocker:
+            reason = blocker.reason
+        elif (notice.amount_approved, notice.jc_supplier, key) != (
+            selection.expected_amount, selection.expected_jc_supplier, selection.expected_warehouse_key,
+        ):
+            reason = "通知书金额、供应商或项目已变化，请重新预览"
+        elif contract is None or contract.tag != TAG_IN or contract.project_id != notice.ownership_id:
+            reason = "合同已不存在、不再纳入台账或已更换项目，请重新预览"
+        elif ((notice.jc_supplier.strip() and notice.jc_supplier.strip() != contract.supplier.strip())
+              or (selection.expected_contract_supplier is not None
+                  and selection.expected_contract_supplier != contract.supplier.strip())):
+            reason = "合同供应商与预览或已填供应商不一致，请重新预览"
+        else:
+            _insert_notice_link(s, notice, contract)
+            links[notice.id] = [contract.id]
+        rows.append({
+            "notice_id": selection.notice_id, "code": (notice.bill_no or str(notice.id)) if notice else str(selection.notice_id),
+            "contract_id": None if reason else contract.id,
+            "contract_no": "" if reason else contract.contract_no,
+            "reason": reason or "已关联",
+        })
+    return {"ok": True, "linked": sum(row["contract_id"] is not None for row in rows), "rows": rows}
 
 
 def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
@@ -657,8 +749,10 @@ def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
         return {"ok": False, "kind": "err", "message": "这行通知书当前没有关联集采合同"}
     cid = int(old.contract_id)
     contract = R.contract_of(s, cid)
-    if notice is not None and contract is not None:
-        notice.jc_supplier = contract.supplier
+    if notice is not None:
+        notice.jc_auto_link_blocked = True
+        if contract is not None:
+            notice.jc_supplier = contract.supplier
     R.delete_payment(s, old.id)
     return {"ok": True, "kind": "ok", "contract_id": cid,
             "message": f"已取消与集采合同 #{cid} 的关联（两侧同时解除）"}

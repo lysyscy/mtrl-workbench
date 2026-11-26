@@ -69,3 +69,22 @@
 /* The list keeps its table placeholder. Only a failure adds a line above it. */
 .notice-read-status{--read-status-pad:calc(13px * var(--fscale))}
 .notice-read-reserve{padding:calc(8px * var(--fscale)) calc(13px * var(--fscale))}
+
+.notice-match-section { margin-block: 12px; }
+.notice-match-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.notice-match-section h3 { margin: 4px 0; font-size: 1em; }
+.notice-match-list--scroll { block-size: min(28dvh, 280px); }
+.notice-match-item, .notice-match-candidate {
+  padding: 8px;
+  border-block-end: .5px solid var(--bd);
+  overflow-wrap: anywhere;
+}
+.notice-match-item p, .notice-match-candidate p { margin: 4px 0; }
+.notice-match-candidate { margin-inline-start: 12px; background: var(--sf2); }
+.notice-match-item summary, .notice-match-section summary { cursor: pointer; }

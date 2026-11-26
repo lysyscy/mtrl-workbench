@@ -186,7 +186,8 @@ def adjust_notice_stat(
     return trace
 
 
-def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False) -> list[PaymentNotice]:
+def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False,
+                       lock_keys: bool = False) -> list[PaymentNotice]:
     if not ids:
         return []
     # Read-only batches can span a whole export; bind their IDs as one array.
@@ -194,7 +195,7 @@ def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = F
     stmt = select(PaymentNotice).where(match)
     if for_update:
         # 整批按稳定主键先锁后读；NO KEY UPDATE与统计重算一致，兼容流水外键的KEY SHARE。
-        stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=True).execution_options(populate_existing=True)
+        stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=not lock_keys).execution_options(populate_existing=True)
     return list(session.execute(stmt).scalars().all())
 
 

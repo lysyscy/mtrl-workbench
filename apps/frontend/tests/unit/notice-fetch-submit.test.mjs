@@ -68,6 +68,9 @@ registerHooks({
         export function useQueryClient() { return { invalidateQueries() {} }; }
       `);
     }
+    if (specifier === './notice-match-list') {
+      return stub("export const MatchItems = 'match-list'; export const ReadyMatchItem = 'ready-match'; export const ReviewMatchItem = 'review-match';");
+    }
     if (specifier === './business-modal') {
       return stub("export const BusinessModalTitle = {}; export function BusinessModal(p) { return { type: 'wrapper', props: p }; }");
     }
@@ -369,18 +372,35 @@ function conflictRecorder({ repeat = false, topLevel = false } = {}) {
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-const linkCandidate = {notice_id: 3, code: 'N3', contract_id: 30, contract_no: 'C30', reason: '合同号唯一', amount: '15', payable_codes: ['P3']};
-const unmatched = {notice_id: 2, code: 'N2', contract_id: null, reason: '没有唯一合同'};
+const contract = {contract_id: 30, contract_no: 'C30', supplier_name: '供应商',
+  material: '钢材', selectable: true, evidence: ['合同号唯一'], payable_codes: ['P3'],
+  invoice_side: 'supplier', invoice_match: false, invoice_ids: []};
+const linkCandidate = {notice_id: 3, code: 'N3', title: '钢材款', project_name: '项目甲',
+  expected_amount: '15.00', expected_jc_supplier: '', expected_warehouse_key: '仓库甲',
+  bucket: 'auto_ready', rule_code: 'explicit_contract', reason: '合同号唯一', target: contract,
+  candidates: [], payable_codes: []};
+const unmatched = {...linkCandidate, notice_id: 2, code: 'N2', bucket: 'needs_review',
+  target: null, candidates: [contract], reason: '没有唯一合同'};
 const otherCandidate = {...linkCandidate, notice_id: 1, code: 'N1'};
-const changed = {...otherCandidate, contract_id: null, reason: '来源或金额已变化，请重新预览'};
+const linkedRow = {notice_id: 3, code: 'N3', contract_id: 30, contract_no: 'C30', reason: '已关联'};
+const changed = {notice_id: 1, code: 'N1', contract_id: null, contract_no: '', reason: '金额已变化，请重新预览'};
+const textOf = node => [node.props.children].flat(Infinity).join('');
+function button(tree, label) {
+  return walk(tree, node => textOf(node) === label)[0];
+}
 
 async function confirmAutoLink(write, refresh = async () => {}) {
   const announcements = [];
-  const preview = [linkCandidate, unmatched, otherCandidate];
   globalThis.fetch = async (url, init) => {
-    if (url === '/api/m11/auto-link-preview') return response({ok: true, ready: 2, rows: preview});
+    const payload = JSON.parse(init.body);
+    if (url === '/api/m11/auto-link-preview') {
+      assert.deepEqual(payload, {notice_ids: [3, 2, 1]});
+      return response({ok: true, rows: [linkCandidate, unmatched, otherCandidate]});
+    }
     assert.equal(url, '/api/m11/auto-link');
-    assert.deepEqual(JSON.parse(init.body).selections.map(row => row.notice_id), [3, 1]);
+    assert.deepEqual(Object.keys(payload), ['selections']);
+    assert.deepEqual(payload.selections.map(row => row.notice_id), [3, 1]);
+    assert.ok(payload.selections.every(row => row.expected_amount === '15.00' && row.expected_warehouse_key === '仓库甲'));
     return write();
   };
   function renderDialog() {
@@ -390,45 +410,44 @@ async function confirmAutoLink(write, refresh = async () => {}) {
       announce(message, needsAttention = false) { announcements.push({message, needsAttention}); }});
   }
   for (const label of ['确认读取并预览', '关联这 2 条']) {
-    const [button] = walk(renderDialog(), node => node.props.children === label);
-    assert.ok(button && !button.props.disabled, label);
-    button.props.onClick();
+    const target = button(renderDialog(), label);
+    assert.ok(target && !target.props.disabled, label);
+    target.props.onClick();
     await settle();
   }
   return {dialog: renderDialog(), announcements};
 }
 
-test('一键关联完成后显示实际关联数、两类跳过原因，列表重读成功只报普通消息', async () => {
+test('批量确认后保留需核对行并显示本地并发变化的跳过原因', async () => {
   let reads = 0;
   const {dialog, announcements} = await confirmAutoLink(
-    () => response({ok: true, linked: 1, rows: [changed, linkCandidate]}),
+    () => response({ok: true, linked: 1, rows: [changed, linkedRow]}),
     async () => { reads++; },
   );
   assert.equal(reads, 1);
-  assert.deepEqual(announcements.map(a => a.needsAttention), [false]);
-  const [grid] = walk(dialog, node => node.type === 'grid');
-  assert.deepEqual(grid.props.rows, [linkCandidate, unmatched, changed]);
-  assert.ok(walk(dialog, node => node.type === 'p' && /已关联 1 条.*跳过 2 条/.test([node.props.children].flat().join(''))).length);
+  assert.deepEqual(announcements, [{message: '已关联 1 条，跳过 1 条。', needsAttention: false}]);
+  const lists = walk(dialog, node => node.type === 'match-list').map(node => node.props.items);
+  assert.deepEqual(lists, [[], [unmatched], [linkedRow], [changed]]);
 });
 
-test('一键关联列表重读失败仍显示已知回执并提示核对', async () => {
+test('批量关联列表重读失败仍显示已知回执并提示核对', async () => {
   const {dialog, announcements} = await confirmAutoLink(
-    () => response({ok: true, linked: 0, rows: [changed, linkCandidate]}),
+    () => response({ok: true, linked: 1, rows: [changed, linkedRow]}),
     async () => { throw new Error('列表读取失败'); },
   );
-  assert.ok(walk(dialog, node => node.type === 'p' && /已关联 0 条.*跳过 3 条/.test([node.props.children].flat().join(''))).length);
-  assert.ok(walk(dialog, node => node.props.role === 'alert' && node.props.children.includes('列表读取失败')).length);
+  assert.ok(walk(dialog, node => node.props.role === 'alert' && /已关联 1 条.*列表读取失败/.test(textOf(node))).length);
   assert.deepEqual(announcements.map(a => a.needsAttention), [true]);
+  assert.equal(button(dialog, '确认已选 0 条').props.disabled, true);
 });
 
-test('一键关联缺少已提交行的回执时保留核对提示，不能再次确认', async () => {
-  const {dialog, announcements} = await confirmAutoLink(() => response({ok: true, linked: 1, rows: [linkCandidate]}));
+test('批量关联缺少已提交行的回执时保留核对提示，锁住重复确认', async () => {
+  const {dialog, announcements} = await confirmAutoLink(() => response({ok: true, linked: 1, rows: [linkedRow]}));
   assert.deepEqual(announcements.map(a => a.needsAttention), [true]);
   assert.ok(walk(dialog, node => node.props.role === 'alert').length);
-  assert.equal(walk(dialog, node => node.props.htmlType === 'submit').length, 0);
+  assert.equal(button(dialog, '关联这 2 条').props.disabled, true);
 });
 
-test('一键关联确认时断网提示核对，明确拒绝时显示后端原因', async t => {
+test('批量关联确认时断网提示核对，明确拒绝时显示后端原因', async t => {
   const denied = {ok: false, status: 409, json: async () => ({message: '单据已撤销'})};
   for (const [label, write, needsReread, reason] of [
     ['断网', () => { throw new Error('offline'); }, true, '连接失败'],
@@ -436,12 +455,41 @@ test('一键关联确认时断网提示核对，明确拒绝时显示后端原�
   ]) {
     await t.test(label, async () => {
       const {dialog, announcements} = await confirmAutoLink(write);
-      assert.ok(walk(dialog, node => node.props.role === 'alert' && node.props.children.includes(reason)).length);
+      assert.ok(walk(dialog, node => node.props.role === 'alert' && textOf(node).includes(reason)).length);
       assert.equal(announcements.some(a => a.needsAttention), needsReread);
-      assert.equal(walk(dialog, node => node.props.htmlType === 'submit').length, needsReread ? 0 : 1);
+      assert.equal(button(dialog, '关联这 2 条').props.disabled, needsReread);
     });
   }
 });
+
+test('浏览器断开时仍能预览本地候选并确认人工选择', async () => {
+  const requests = [];
+  globalThis.__relaySession = { mode: 'browser', actionKey: 'browser-disconnected',
+    waitForBrowser() { assert.fail('未使用采购应付时无需连接 i8'); } };
+  globalThis.fetch = async (path, init) => {
+    requests.push([path, JSON.parse(init.body)]);
+    if (path.endsWith('-preview')) return response({ok: true, rows: [unmatched]});
+    return response({ok: true, linked: 1, rows: [{...linkedRow, notice_id: 2, code: 'N2'}]});
+  };
+  function renderDialog() {
+    cells.index = 0;
+    cells.month = null;
+    return AutoLinkDialog({ids: [2], blocked: false, refresh: async () => {}, close() {}, announce() {}});
+  }
+  button(renderDialog(), '确认读取并预览').props.onClick();
+  await settle();
+  const draft = renderDialog();
+  const list = walk(draft, node => node.type === 'match-list' && node.props.items[0]?.notice_id === 2)[0];
+  list.props.render(unmatched).props.choose(30);
+  button(renderDialog(), '确认已选 1 条').props.onClick();
+  await settle();
+  assert.deepEqual(requests, [
+    ['/api/m11/auto-link-preview', {notice_ids: [2]}],
+    ['/api/m11/auto-link', {selections: [{notice_id: 2, contract_id: 30, expected_amount: '15.00',
+      expected_jc_supplier: '', expected_warehouse_key: '仓库甲', expected_contract_supplier: '供应商'}]}],
+  ]);
+});
+
 const actionsOf = tree => walk(tree, node => node.type === I8FetchActions)[0].props;
 const kickButton = (tree, label = '让现有会话下线并继续') =>
   walk(I8FetchActions(actionsOf(tree)), node => node.props?.children === label)[0];
