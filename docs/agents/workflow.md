@@ -6,7 +6,7 @@
 
 采用来源：lysyscy/My-Skills `9fda2b149097cac1d7b6ab20e8b520f69b37e445`（2026-10-31）。本项目普通实施与收尾直接按 [CONTRIBUTING](../../CONTRIBUTING.md)，资金、权限、写入/恢复等验证直接按[隔离验证](../guides/development-and-verification.md)，界面取舍按[前端设计](../guides/frontend-design.md)，预览按[预览指南](../guides/frontend-preview.md)。
 
-2026-11-26 按 `lysyscy/My-Skills` 的 `setup-solo-workflow` 工作树模板更新新工程任务入口（基于 `f11815e4` 的未发布修订）。当时在 T3 Code 的 Codex 会话中通过钩子进入 `poteto-mode`，实测版本为 `2.7.1`。
+2026-11-26 按 `lysyscy/My-Skills` 的 `setup-solo-workflow` 工作树模板更新新工程任务入口（基于 `f11815e4` 的未发布修订）。当时在 T3 Code 的 Codex 会话中通过钩子进入 `poteto-mode`，实测版本为 `2.7.1`。 <!-- coupling-ignore: t3-runtime 记录采用时实测的宿主。 -->
 
 新工程任务使用宿主实际加载的 `pstack`。
 
