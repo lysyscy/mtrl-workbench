@@ -8,7 +8,7 @@ import { equipmentApi as api, exportEquipment } from './equipment-api';
 import type { InventoryCategory, InventoryItem } from './equipment-api';
 import { contentWidth, numberColumnWidth } from './grid';
 import {
-  formatNum,
+  formatMoney,
   ledgerColumn,
   LoadState,
   rowId,
@@ -21,12 +21,11 @@ const categoryOptions: { value: InventoryCategory; label: string }[] = [
   { value: 'tool', label: categories.tool },
   { value: 'turnover', label: categories.turnover },
 ];
-// Keep the same four decimal places used by the Excel amount columns.
 function differenceTotal(rows: InventoryItem[]) {
   const values = rows.flatMap((r) => (r.diff_amount === null ? [] : [r.diff_amount]));
   if (!values.length) return null;
   const Amount = Decimal.clone({ precision: 40 });
-  return values.reduce((sum, value) => sum.plus(value), new Amount(0)).toFixed(4);
+  return values.reduce((sum, value) => sum.plus(value), new Amount(0)).toFixed(2);
 }
 type Row = Partial<InventoryItem> & { id: number; name: string };
 export function Inventory({ scale, goToDistribution }: {
@@ -46,11 +45,11 @@ export function Inventory({ scale, goToDistribution }: {
   }] : [], [data]);
   const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => {
     function amount(field: 'unit_price' | 'book_amount' | 'count_amount' | 'diff_amount', headerName: string) {
-      const values = (data?.items ?? []).map(row => formatNum(row[field]));
-      values.push(...totals.map(row => formatNum(row[field])));
+      const values = (data?.items ?? []).map(row => formatMoney(row[field]));
+      values.push(...totals.map(row => formatMoney(row[field])));
       return ledgerColumn<Row>({
         field, headerName, cellClass: 'ag-right-aligned-cell', ...numberColumnWidth(values, scale),
-      }, row => row[field], 'number');
+      }, row => row[field], 'number', formatMoney);
     }
     return [
       { colId: 'sequence', headerName: '序号', ...contentWidth(48, 60, scale),

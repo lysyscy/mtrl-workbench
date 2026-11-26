@@ -17,6 +17,7 @@ import {
   DateField,
   decimalInput,
   formatNum,
+  formatMoney,
   LoadState,
   options,
   rowId,
@@ -73,6 +74,8 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
     current = numeric ? decimalInput(row[field] ?? '') : row[field] ?? '',
     shown = field === 'custom_unit_price' ? row.unit_price : current;
   const label = { quantity: '数量', custom_unit_price: '租赁单价', distribution_note: '分布' }[field];
+  const price = field === 'custom_unit_price';
+  const format = price ? formatMoney : formatNum;
   async function save() {
     if (busy || draft === null || context.locked) return;
     const value = draft.trim();
@@ -82,9 +85,10 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
     }
     if (
       field !== 'distribution_note' &&
-      ((field === 'quantity' && Number(value) <= 0) || (value !== '' && !/^\d+(\.\d{1,4})?$/.test(value)))
+      ((field === 'quantity' && Number(value) <= 0) ||
+        (value !== '' && !(price ? /^\d+(\.\d{1,2})?$/ : /^\d+(\.\d{1,4})?$/).test(value)))
     ) {
-      setError('请输入有效数值（最多四位小数）');
+      setError(price ? '请输入有效单价（最多两位小数）' : '请输入有效数量（最多四位小数）');
       return;
     }
     setError('');
@@ -100,13 +104,14 @@ function EditCell({ data, context, field }: { field: Editable } & Cell) {
       <Input
         size="small"
         aria-label={row.name + ' ' + label}
-        value={draft ?? (numeric && shown ? formatNum(shown) : shown ?? '')}
+        value={draft ?? (numeric && shown ? format(shown) : shown ?? '')}
+        inputMode={numeric ? 'decimal' : undefined}
         title={field === 'custom_unit_price' ? '清空自定单价后按原值的 5% 计价' : label}
         disabled={context.locked || busy}
         onFocus={() => {
           if (draft === null) setDraft(current);
         }}
-        placeholder={field === 'custom_unit_price' ? (row.unit_price === null ? '原值 × 5%' : formatNum(row.unit_price)) : ''}
+        placeholder={price ? (row.unit_price === null ? '原值 × 5%' : formatMoney(row.unit_price)) : ''}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void save()}
         onPressEnter={(e) => e.currentTarget.blur()}
@@ -195,7 +200,7 @@ function rentalColumns(scale: number): ColDef<RentalLine>[] {
     { field: 'quantity', headerName: '数量', ...contentWidth(55, 72, scale), cellRenderer: Quantity },
     { field: 'unit_price', headerName: '租赁单价(元)', ...contentWidth(81, 94, scale), cellRenderer: Price },
     { field: 'amount', headerName: '金额(元)', ...contentWidth(78, 106, scale),
-      cellClass: 'ag-right-aligned-cell', valueFormatter: ({ value }) => formatNum(value) },
+      cellClass: 'ag-right-aligned-cell', valueFormatter: ({ value }) => formatMoney(value) },
     { field: 'category_label', headerName: '类别', ...contentWidth(48, 66, scale) },
     { field: 'distribution_note', headerName: '分布', ...contentWidth(62, 102, scale, 0.7), cellRenderer: Note },
     { colId: 'billing', headerName: '本月计租', ...contentWidth(155, 178, scale), autoHeight: true, cellRenderer: Decision },
@@ -438,7 +443,7 @@ export function Rental({ target, scale, goToDistribution }: {
                 }}>
                 {group.project_name}
                 <span className={zeroTotal ? 'equipment-project-zero' : undefined}>
-                  · {group.subtotal === null ? '—' : '¥' + formatNum(group.subtotal)}
+                  · {group.subtotal === null ? '—' : '¥' + formatMoney(group.subtotal)}
                 </span>
                 {!!pending && <span className="equipment-nav-pending" aria-label={pending + ' 项待定'}>{pending}</span>}
               </Button>
@@ -465,7 +470,7 @@ export function Rental({ target, scale, goToDistribution }: {
       )}
       {data && (
         <div className="equipment-total">
-          本月总计　{formatNum(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
+          本月总计　{formatMoney(data.grand_total)} 元 <small>零合计项目保留在列表，打印导出时跳过。</small>
         </div>
       )}
     </div>

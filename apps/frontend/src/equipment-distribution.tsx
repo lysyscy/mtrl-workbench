@@ -14,7 +14,7 @@ import type { RentalTarget } from './equipment-navigation';
 import { contentWidth, numberColumnWidth } from './grid';
 import {
   flagLabels,
-  formatNum,
+  formatMoney,
   issue,
   ledgerColumn,
   LoadState,
@@ -235,8 +235,8 @@ export function Distribution({ goToRental, targetIds, scale }: {
     }, r => r.purchase_project),
     ledgerColumn({
       field: 'purchase_price', headerName: '购买价格', cellClass: 'ag-right-aligned-cell',
-      ...numberColumnWidth(items.map(item => formatNum(item.purchase_price)), scale, false, 0),
-    }, r => r.purchase_price, 'number'),
+      ...numberColumnWidth(items.map(item => formatMoney(item.purchase_price)), scale, false, 0),
+    }, r => r.purchase_price, 'number', formatMoney),
     ledgerColumn({
       field: 'current_project', headerName: '当前所在项目', ...contentWidth(108, 155, scale),
       tooltipValueGetter: ({ data }) => data && projectTitle(data.current_project_disp, data.current_project_custom, data.current_project),

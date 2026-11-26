@@ -17,6 +17,7 @@ import {
   DateField,
   decimalField,
   formatNum,
+  moneyField,
   flagLabels,
   issue,
   LedgerModal,
@@ -349,7 +350,7 @@ function EquipmentForm({ state, close, done }: Props) {
             <ProjectDualField label="购买项目" busy={!writable || action.busy} />
           </Form.Item>
           <Form.Item name="purchase_price" label="购买价格">
-            <InputNumber stringMode {...decimalField} min="0" precision={4} />
+            <InputNumber stringMode {...moneyField} min="0" />
           </Form.Item>
           <Form.Item name="asset_scope" label="资产归属">
             <Select options={options(scopeLabels)} />

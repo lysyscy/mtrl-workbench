@@ -2,7 +2,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 import json
 from threading import Lock
 from typing import Protocol
@@ -10,6 +9,7 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.core.db import session_scope
+from app.core.money import to_money
 from app.mod02_i8.login import I8AuthFailedError
 from .common import encoded, ledger_lock, record, require
 from .models import EquipmentItem, EquipmentTransfer
@@ -172,9 +172,10 @@ class I8CustomFormEquipmentAdapter:
                        (linked_phid is None and before["current_project"] != project_name)):
             return equipment_conflict(before)
         purchase_date = data.get("purchase_date")
+        price = data.get("purchase_price")
         row = {"u_device_code": code, "bill_name": data["name"], "phid_pc": project_id,
                "u_spec": data.get("spec"),
-               "u_yz": data.get("purchase_price"), "u_bz": data.get("remark"),
+               "u_yz": to_money(price) if price is not None else None, "u_bz": data.get("remark"),
                "u_indata": f"{date.fromisoformat(str(purchase_date))} 00:00:00" if purchase_date else None}
         if data.get("unit"):
             unit_id = self.unit_ids.get(data["unit"])
@@ -191,7 +192,7 @@ class I8CustomFormEquipmentAdapter:
             if type(version) is not int or version < 0:
                 raise ValueError("i8 设备缺少有效记录版本")
             # The edit form sends the full current row, including the server version.
-            form_row = original | changes
+            form_row = original | changes | {"u_yz": row["u_yz"]}
             for key in ("u_indata", "bill_dt", "app_dt"):
                 if form_row.get(key):
                     form_row[key] = form_row[key].split(" ")[0]
@@ -216,11 +217,11 @@ class I8CustomFormEquipmentAdapter:
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
         source_name = self.project_names.get(from_project, from_project)
+        origin = self.project_ids.get(from_project) if from_project_phid is None else from_project_phid
         stop = transfer_precondition(before, code, from_project, to_project, project_name=source_name,
-                                     project_id=from_project_phid)
+                                     project_id=origin)
         if stop:
             return stop
-        origin = self.project_ids.get(from_project) if from_project_phid is None else from_project_phid
         destination = self.project_ids.get(to_project) if to_project_phid is None else to_project_phid
         if not origin or not destination:
             return SyncResult("pending", "缺少 i8 项目映射，调拨待同步", before)
@@ -233,7 +234,7 @@ class I8CustomFormEquipmentAdapter:
         if transfer_date is None:
             raise ValueError("缺少 i8 调拨日期")
         operator_id, operator_name = self.transfer_operator
-        if from_project_phid is not None and before["current_project"]:
+        if before["current_project"]:
             source_name = before["current_project"]
         destination_name = self.project_names.get(to_project, to_project)
         header = {
@@ -310,7 +311,7 @@ def _field_matches(key, actual, wanted):
     if actual in (None, "") or wanted in (None, ""):
         return actual in (None, "") and wanted in (None, "")
     if key == "u_yz":
-        return Decimal(str(actual)) == Decimal(str(wanted))
+        return to_money(str(actual)) == to_money(wanted)
     return str(actual) == str(wanted)
 
 

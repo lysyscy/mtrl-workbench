@@ -33,14 +33,14 @@ BORDER = Side(style="thin", color="000000")
 GRID_BORDER = Border(left=BORDER, right=BORDER, top=BORDER, bottom=BORDER)
 HEADER_FILL = PatternFill("solid", fgColor="E9EFF5")
 NUMBER_FORMAT = "General"
-INVENTORY_MONEY = "#,##0.00##"
+MONEY_FORMAT = "#,##0.00"
 
 
 def formula_matches(amount, quantity, price):
     if amount is None or quantity is None or price is None:
         return False
     try:
-        return abs(amount - ledger_product(quantity, price)) <= Decimal("0.005")
+        return amount == ledger_product(quantity, price)
     except MoneyError:
         return False
 
@@ -76,17 +76,17 @@ def grid(ws, first, end, width, *, size=12, bold=False, fill=None, money=(), rig
             if fill:
                 c.fill = fill
             if c.column in money:
-                c.number_format = INVENTORY_MONEY
+                c.number_format = MONEY_FORMAT
 
 
-def distribution_layout(ws, widths, header, count):
+def distribution_layout(ws, widths, header, count, *, money):
     sheet_setup(ws, widths, "portrait")
     ws.sheet_format.defaultRowHeight = 22.5
     ws.freeze_panes = f"A{header + 1}"
     ws.print_title_rows = f"1:{header}"
     ws.print_area = f"A1:{get_column_letter(count)}{ws.max_row}"
     grid(ws, header, header, count, size=11, bold=True, fill=HEADER_FILL)
-    grid(ws, header + 1, ws.max_row, count, size=10)
+    grid(ws, header + 1, ws.max_row, count, size=10, money=money)
 
 
 def main_sheet(ws, items, turnover, transfer_sheet, scrap_sheet):
@@ -117,7 +117,7 @@ def main_sheet(ws, items, turnover, transfer_sheet, scrap_sheet):
         set_formula(ws[f"I{n}"], TextFormula(f'=IF(COUNTIF(\'{scrap_sheet}\'!A:A,A{n})>=1,"报废","{status}")', status))
         lookup = f"=_xlfn.XLOOKUP(A{n},'{transfer_sheet}'!A:A,'{transfer_sheet}'!I:I,S{n},0,-1)"
         set_formula(ws[f"J{n}"], TextFormula(lookup, r["current_project"]))
-    distribution_layout(ws, widths, 2, 21)
+    distribution_layout(ws, widths, 2, 21, money=(8,))
 
 
 def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
@@ -154,7 +154,7 @@ def history_sheet(ws, rows, main, equipment, *, scrap, turnover):
         if not scrap and not turnover:
             expr = f'=IFERROR(VLOOKUP(A{n},\'{main}\'!A:L,12,FALSE),"")'
             set_formula(ws[f"L{n}"], TextFormula(expr, SCOPE[item["asset_scope"]]))
-    distribution_layout(ws, widths, 1, len(headers))
+    distribution_layout(ws, widths, 1, len(headers), money=(7,))
 
 
 def equipment_distribution_xlsx(snapshot):
@@ -217,8 +217,8 @@ def rental_table(ws, first, period, project):
         ws.cell(info, col).border = Border(bottom=BORDER)
     put(ws, first + 2, RENT_HEADER)
     grid(ws, first + 2, first + 2, 9, bold=True)
-    grid(ws, data_row, subtotal - 1, 9, size=10.5 if count > 28 else 12, right=(6, 7))
-    grid(ws, subtotal, subtotal, 9, bold=True, right=(7,))
+    grid(ws, data_row, subtotal - 1, 9, size=10.5 if count > 28 else 12, right=(6, 7), money=(6, 7))
+    grid(ws, subtotal, subtotal, 9, bold=True, right=(7,), money=(7,))
     for row, height in ((first, 21), (info, 21), (first + 2, 34.5), (subtotal, 30), (footer, 43)):
         ws.row_dimensions[row].height = height
     for n in range(data_row, subtotal):
@@ -229,7 +229,7 @@ def rental_table(ws, first, period, project):
                     line["amount"], line["category_label"], line["distribution_note"]])
         if formula_matches(line["amount"], line["quantity"], line["unit_price"]):
             set_formula(ws[f"G{n}"], Formula(
-                f'=IF(COUNT(E{n}:F{n})=2,ROUND(E{n}*F{n},4),"")', line["amount"]))
+                f'=IF(COUNT(E{n}:F{n})=2,ROUND(E{n}*F{n},2),"")', line["amount"]))
     put(ws, subtotal, [None, "合计："])
     span = f"G{data_row}:G{subtotal-1}"
     set_formula(ws[f"G{subtotal}"], Formula(f'=IF(COUNT({span}),SUM({span}),"")', project["subtotal"]))
@@ -359,7 +359,7 @@ def equipment_inventory_xlsx(items):
                 if r[key] is not None:
                     amounts[col].append(r[key])
                     if formula_matches(r[key], r[quantity], r["unit_price"]):
-                        expr = f'=IF(COUNT({qty}{n},E{n})=2,ROUND({qty}{n}*E{n},4),"")'
+                        expr = f'=IF(COUNT({qty}{n},E{n})=2,ROUND({qty}{n}*E{n},2),"")'
                         set_formula(ws[f"{col}{n}"], Formula(expr, r[key]))
             n += 1
         ws.cell(n, 2, "合计：")

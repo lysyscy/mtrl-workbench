@@ -2,14 +2,14 @@
 from collections import Counter, defaultdict
 from contextlib import closing
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 import re
 
 from openpyxl import load_workbook
 from openpyxl.utils.datetime import from_excel
 from sqlalchemy import delete, select
 
-from app.core.money import ledger_product
+from app.core.money import ledger_product, to_money
 from .common import ledger_lock, total
 from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer, InventoryItem, Location, RentalLine, RentalMonth
 from .projects import ProjectRef, project_index
@@ -37,8 +37,28 @@ def text(value):
     return None if value is None else str(value).strip() or None
 
 
+def source_decimal(value):
+    return Decimal(str(value)) if value is not None else None
+
+
+def source_scale(value):
+    return value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if value is not None else None
+
+
 def number(value):
-    return ledger_product(Decimal(str(value)), Decimal(1)) if value is not None else None
+    return source_scale(source_decimal(value))
+
+
+def money(value):
+    return to_money(value) if value is not None else None
+
+
+def imported_amount(amount, quantity, source_price, price):
+    if amount is None:
+        return None
+    if quantity is not None and source_price is not None and abs(amount - quantity * source_price) <= Decimal("0.005"):
+        return ledger_product(quantity, price)
+    return money(amount)
 
 
 def rows(sheet, header_row, headers, width):
@@ -104,7 +124,7 @@ def parse_distribution(path):
                 scope = {"是": "current_asset", "否": "off_book", "固定资产": "fixed_asset"}[r[11]]
                 items[code] = dict(code=code, item_category=category, name=text(r[1]), spec=text(r[2]),
                     unit=text(r[3]), purchase_date=source_date(r[4], book.epoch), purchase_date_text=text(r[5]),
-                    purchase_project=text(r[6]) or "", purchase_price=number(r[7]), current_project=text(r[9]),
+                    purchase_project=text(r[6]) or "", purchase_price=source_decimal(r[7]), current_project=text(r[9]),
                     status={"在用": "in_use", "损坏": "damaged", "待报废": "pending_scrap", "报废": "scrapped"}[r[8]],
                     asset_scope=scope, source_lists_inventory={"是": True, "否": False}[r[14]],
                     in_rental={"是": "yes", "否": "no", "待核": "pending"}[r[13]], quantity=number(r[19]),
@@ -132,7 +152,7 @@ def parse_distribution(path):
                         if not dt:
                             raise ValueError(f"{sheet.title} 第 {n} 行缺完整报废日期")
                         item.update(status="scrapped", scrap_date=dt, scrap_reason=text(r[9]))
-                        scraps.append(dict(record, scrap_date=dt, original_project=text(r[7]), purchase_price=number(r[6]),
+                        scraps.append(dict(record, scrap_date=dt, original_project=text(r[7]), purchase_price=source_decimal(r[6]),
                                            reason=text(r[9]), rental_stop_status="not_applicable"))
     return items, transfers, scraps
 
@@ -147,9 +167,9 @@ def parse_inventory(path):
                 if not str(r[0]).isdigit() or r[5] is None:
                     raise ValueError(f"{title} 第 {n} 行序号或数量异常")
                 result[category, str(n)] = dict(category=category, sort_order=n, source_row=str(n),
-                    name=text(r[1]), spec=text(r[2]), unit=text(r[3]), unit_price=number(r[4]), book_qty=number(r[5]),
-                    book_amount=number(r[6]), count_qty=number(r[7]), count_amount=number(r[8]), diff_qty=number(r[9]),
-                    diff_amount=number(r[10]), diff_reason=text(r[11]))
+                    name=text(r[1]), spec=text(r[2]), unit=text(r[3]), unit_price=source_decimal(r[4]), book_qty=number(r[5]),
+                    book_amount=source_decimal(r[6]), count_qty=number(r[7]), count_amount=source_decimal(r[8]), diff_qty=number(r[9]),
+                    diff_amount=source_decimal(r[10]), diff_reason=text(r[11]))
     return result
 
 
@@ -170,9 +190,9 @@ def parse_rental(path):
                 if billing == "normal" and r[5] is not None and r[7] is None:
                     raise ValueError(f"本月租赁第 {n} 行缺少已计费金额，请核对公式缓存")
                 lines.append(dict(project_name=text(r[0]), name=text(r[1]), spec=text(r[2]), unit=text(r[3]),
-                    quantity=number(r[4]), unit_price=number(r[5]), billing_status=billing, amount=number(r[7]),
+                    quantity=number(r[4]), unit_price=source_decimal(r[5]), billing_status=billing, amount=source_decimal(r[7]),
                     category_label=imported_category_label(text(r[9])),
-                    original_value=number(r[10]), custom_unit_price=number(r[11]),
+                    original_value=source_decimal(r[10]), custom_unit_price=source_decimal(r[11]),
                     source_row=text(r[12]), code=text(r[15])))
         else:
             sheet = book["分公司9月份 (2)"]
@@ -184,10 +204,10 @@ def parse_rental(path):
                     continue
                 if not project or r[4] is None:
                     raise ValueError(f"{sheet.title} 第 {n} 行缺项目或数量")
-                price, original = number(r[5]), number(r[11])
+                price, original = source_decimal(r[5]), source_decimal(r[11])
                 lines.append(dict(project_name=project, name=text(r[1]), spec=text(r[2]), unit=text(r[3]),
-                    quantity=number(r[4]), unit_price=price, amount=number(r[6]), original_value=original,
-                    custom_unit_price=price if price != ledger_product(original, Decimal(".05")) else None,
+                    quantity=number(r[4]), unit_price=price, amount=source_decimal(r[6]), original_value=original,
+                    custom_unit_price=price if original is None or source_scale(price) != source_scale(original * Decimal(".05")) else None,
                     billing_status="blank" if r[6] is None else "normal", category_label=imported_category_label(text(r[7])),
                     distribution_note=text(r[8]), source_row=str(n)))
     return lines
@@ -200,12 +220,13 @@ def link_jiaozuo_tricycles(items, inventory, links):
         item = items.get(code)
         if item is None or code in links or item["status"] == "scrapped":
             return
-        identity = item["name"], item["purchase_price"], item["quantity"], item["asset_scope"], item["item_category"]
+        identity = item["name"], source_scale(item["purchase_price"]), item["quantity"], item["asset_scope"], item["item_category"]
         if not item["source_lists_inventory"] or identity != ("电动三轮车", 5300, 1, "current_asset", "equipment"):
             return
     linked = set(links.values())
     matches = [key for key, row in inventory.items() if key not in linked and
-               (row["category"], row["name"], row["unit_price"], row["book_qty"]) == ("tool", "电动三轮车", 5300, 1)]
+               (row["category"], row["name"], source_scale(row["unit_price"]), row["book_qty"]) ==
+               ("tool", "电动三轮车", 5300, 1)]
     if len(matches) == len(codes):
         matches.sort(key=lambda key: inventory[key]["sort_order"])
         links.update(zip(codes, matches))
@@ -233,7 +254,7 @@ def align_baseline(items, inventory, transfers, scraps, lines):
     old_welders = [f"二保焊机-20230711-{unit:02d}" for unit in range(1, 5)]
     if any(code in items for code in old_welders):
         welder = inventory.get(("tool", "75"))
-        if ((welder and (welder["name"], welder["book_qty"], welder["unit_price"])) !=
+        if ((welder and (welder["name"], welder["book_qty"], source_scale(welder["unit_price"]))) !=
                 ("逆变焊机", 15, Decimal("1132.7430")) or not all(
                     code in items and items[code]["inventory_source_row"] == "75" for code in old_welders)):
             raise ValueError("南靖焊机基线与已确认的盘点对应关系不符")
@@ -255,8 +276,8 @@ def align_baseline(items, inventory, transfers, scraps, lines):
         item, valve = items[old], inventory.get(("turnover", source_row))
         silencer = inventory.get(("turnover", "8")) if number_ == 1 else None
         if (not valve or valve["name"] != "电动闸阀" or (number_ == 1 and
-                (not silencer or silencer["name"] != "消音器")) or item["purchase_price"] != Decimal(price)
-                or total(row["unit_price"] for row in (valve, silencer) if row) != Decimal(price)):
+                (not silencer or silencer["name"] != "消音器")) or source_scale(item["purchase_price"]) != Decimal(price)
+                or total(source_scale(row["unit_price"]) for row in (valve, silencer) if row) != Decimal(price)):
             raise ValueError(f"{old}基线与已确认的盘点对应关系不符")
         code = f"电动闸阀-未知{number_}"
         row = dict(item, **inventory_fields(valve))
@@ -292,7 +313,7 @@ def align_baseline(items, inventory, transfers, scraps, lines):
         row["code"] = renamed.get(row["code"], row["code"])
     for line in lines:
         valve = rental_names.get(line["source_row"])
-        if valve and line["original_value"] == valve["purchase_price"]:
+        if valve and source_scale(line["original_value"]) == source_scale(valve["purchase_price"]):
             line.update(code=valve["code"], name=valve["name"], category_label="周转材料")
     return aligned
 
@@ -330,6 +351,28 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
             line["code"] = matches[0] if len(matches) == 1 else None
     uses = Counter(line["code"] for line in lines)
     rental_links = {i: line["code"] for i, line in enumerate(lines) if line["code"] in items and uses[line["code"]] == 1}
+    # Match the source rows before converting their monetary values for storage.
+    for row in (*items.values(), *scraps):
+        row["purchase_price"] = money(row["purchase_price"])
+    for row in inventory.values():
+        source_price = row["unit_price"]
+        row["unit_price"] = price = money(source_price)
+        for prefix in ("book", "count", "diff"):
+            key = f"{prefix}_amount"
+            row[key] = imported_amount(row[key], row[f"{prefix}_qty"], source_price, price)
+    for line in lines:
+        source_price = line["unit_price"]
+        original, custom = line["original_value"], line["custom_unit_price"]
+        default_price = source_scale(original * Decimal(".05")) if original is not None else None
+        line["original_value"], line["custom_unit_price"] = money(original), money(custom)
+        price = money(source_price)
+        if source_price is not None and source_scale(source_price) == (source_scale(custom) if custom is not None else default_price):
+            price = line["custom_unit_price"] if custom is not None else ledger_product(line["original_value"], Decimal(".05"))
+        line["unit_price"] = price
+        if line["billing_status"] == "normal":
+            line["amount"] = imported_amount(line["amount"], line["quantity"], source_price, price)
+        else:
+            line["amount"] = money(line["amount"])
     tool_rows = [r for r in inventory.values() if r["category"] == "tool"]
     equipment = sum(r["item_category"] == "equipment" for r in items.values())
     summary = dict(equipment_count=equipment, turnover_count=len(items)-equipment, transfer_count=len(transfers),

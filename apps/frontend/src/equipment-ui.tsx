@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from 'antd/es/button';
 import DatePicker from 'antd/es/date-picker';
 import dayjs from 'dayjs';
+import Decimal from 'decimal.js';
 import type { ColDef } from 'ag-grid-community';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
@@ -41,8 +42,18 @@ export function decimalInput(value: string) {
 export function formatNum(value: FilterValue) {
   if (value == null || value === '') return '—';
   const [whole, fraction] = decimalInput(String(value)).split('.');
-  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const grouped = groupDigits(whole!);
   return fraction ? grouped + '.' + fraction : grouped;
+}
+
+function groupDigits(whole: string) {
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+export function formatMoney(value: FilterValue) {
+  if (value == null || value === '') return '—';
+  const fixed = new Decimal(String(value)).toFixed(2, Decimal.ROUND_HALF_UP);
+  return groupDigits(fixed);
 }
 
 export const decimalField = {
@@ -51,17 +62,26 @@ export const decimalField = {
   parser: (value?: string) => value?.replaceAll(',', '') ?? '',
 };
 
+export const moneyField = {
+  ...decimalField,
+  formatter: (value: string | undefined, info: { userTyping: boolean; input: string }) =>
+    info.userTyping ? info.input : value == null || value === '' ? '' : formatMoney(value),
+  inputMode: 'decimal' as const,
+  precision: 2,
+};
+
 export function ledgerColumn<T>(
   column: ColDef<T>,
   value: (row: T) => FilterValue,
-  kind: ValueFilterKind = 'text'
+  kind: ValueFilterKind = 'text',
+  format = formatNum,
 ) {
   return valueFilterColumn<T>({
     ...column,
     sortable: true,
     valueGetter: ({ data }) => data ? value(data) : null,
-    ...(kind === 'number' ? { valueFormatter: ({ value }) => formatNum(value) } : {}),
-  }, { kind, value, ...(kind === 'number' ? { format: formatNum } : {}) });
+    ...(kind === 'number' ? { valueFormatter: ({ value }) => format(value) } : {}),
+  }, { kind, value, ...(kind === 'number' ? { format } : {}) });
 }
 
 export function projectTitle(disp: string | null, custom: string | null, display: string) {
