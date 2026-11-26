@@ -4,13 +4,24 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+from app.core.money import to_money
 
 Name = Annotated[str, Field(min_length=1)]
 Month = Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")]
 Number = Annotated[Decimal, Field(max_digits=18, decimal_places=4)]
 Positive = Annotated[Number, Field(gt=0)]
-Price = Annotated[Number, Field(ge=0)]
+
+
+def normalize_price(value: Decimal) -> Decimal:
+    price = to_money(value)
+    if price >= Decimal("1e16"):
+        raise ValueError("单价超过台账金额范围")
+    return price
+
+
+Price = Annotated[Decimal, Field(ge=0, lt=Decimal("1e16"), allow_inf_nan=False), AfterValidator(normalize_price)]
 ItemCategory = Literal["equipment", "turnover"]
 Category = Literal["tool", "turnover"]
 Status = Literal["in_use", "damaged", "pending_scrap"]

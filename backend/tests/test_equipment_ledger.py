@@ -39,7 +39,7 @@ from app.mod16_equipment.sync import I8CustomFormEquipmentAdapter
 
 ROOT = "/api/m16"
 MONTH = "2026-11"
-BASE = dict(name="试验焊机", purchase_date="2026-11-03", purchase_project="项目甲", purchase_price="100.1234")
+BASE = dict(name="试验焊机", purchase_date="2026-11-03", purchase_project="项目甲", purchase_price="100.125")
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ def test_numbering_receipt_precision_filters_and_inventory_edits(client):
     two = add(c, quantity=2, in_rental="no")
     assert codes == two["codes"] == ["试验焊机-20261103-02", "试验焊机-20261103-03"]
     inv = two["inventory_item"]
-    assert Decimal(inv["book_amount"]) == Decimal("200.2468")
+    assert inv["unit_price"] == "100.13" and inv["book_amount"] == "200.26"
     assert all(i["inventory_item_id"] == inv["id"] and Decimal(i["quantity"]) == 1 for i in two["equipment"])
     request(c, "POST", "/equipment", BASE | {"quantity": "1.5"}, 422)
     assert not two["rental_line_ids"]
@@ -108,10 +108,10 @@ def test_numbering_receipt_precision_filters_and_inventory_edits(client):
     assert detail["equipment"]["code"] == two["codes"][0]
     manual = request(c, "POST", "/inventory", dict(category="turnover", name="电缆", unit_price=None, book_qty=2, count_qty=1))
     assert manual["book_amount"] is None
-    patched = request(c, "PATCH", f"/inventory/{manual['id']}", dict(unit_price="1.4321", diff_qty=-1, diff_reason="待核"))
-    assert Decimal(patched["diff_amount"]) == Decimal("-1.4321")
+    patched = request(c, "PATCH", f"/inventory/{manual['id']}", dict(unit_price="1.435", diff_qty=-1, diff_reason="待核"))
+    assert Decimal(patched["diff_amount"]) == Decimal("-1.44")
     inventory = request(c, "GET", "/inventory?category=turnover")
-    assert Decimal(inventory["count_amount"]) == Decimal("1.4321")
+    assert Decimal(inventory["count_amount"]) == Decimal("1.44")
     assert inventory["items"][0]["linked_equipment_ids"] == inventory["items"][0]["linked_equipment_codes"] == []
     linked = {row["id"]: row for row in request(c, "GET", "/inventory?category=tool")["items"]}
     assert linked[inv["id"]]["linked_equipment_ids"] == [two["equipment"][1]["id"]]
@@ -304,11 +304,12 @@ def test_transfer_scrap_pending_queue_and_exports(client):
     inventory = workbook(c, "inventory")
     cached = workbook(c, "inventory", data_only=True)["封皮"]
     assert [Decimal(str(cached[cell].value)) for cell in ("E6", "I6", "H7", "H8")] == [
-        Decimal("100.1234"), Decimal("100.1234"), Decimal("100.1234"), Decimal("0"),
+        Decimal("100.13"), Decimal("100.13"), Decimal("100.13"), Decimal("0"),
     ]
     assert inventory.sheetnames == ["封皮", "流动资产盘点表", "周转材料"]
     ws = inventory.worksheets[1]
-    assert ws["F5"].value == 1 and "F5*E5" in ws["G5"].value
+    assert ws["F5"].value == 1 and "ROUND(F5*E5,2)" in ws["G5"].value
+    assert {ws[cell].number_format for cell in ("E5", "G5", "I5", "K5")} == {"#,##0.00"}
     assert inventory.calculation.calcMode == "auto" and inventory.calculation.fullCalcOnLoad
     cover = inventory["封皮"]
     assert {str(area) for area in cover.merged_cells.ranges} == {
@@ -395,7 +396,8 @@ def test_transfer_scrap_pending_queue_and_exports(client):
         assert sheet.column_dimensions["A"].width == pytest.approx(23.675)
         if main:
             assert "A1:K1" in sheet.merged_cells and sheet["A1"].font.sz == 22
-    assert distribution.worksheets[0]["H3"].number_format == "General"
+    assert distribution.worksheets[0]["H3"].number_format == "#,##0.00"
+    assert distribution["调拨记录"]["G2"].number_format == distribution["报废记录"]["G2"].number_format == "#,##0.00"
     assert distribution.worksheets[0]["A3"].value == added["codes"][0]
     assert "COUNTIF" in distribution.worksheets[0]["I3"].value
     assert distribution["调拨记录"]["I2"].value == "项目乙" and distribution["报废记录"]["J2"].value == "损坏"
@@ -414,22 +416,24 @@ def test_rental_carry_reorder_custom_price_blank_and_print(client):
     request(c, "PATCH", f"/rental/lines/{zero}", dict(billing_status="blank", distribution_note="保留"))
     request(c, "PATCH", f"/rental/lines/{b}", dict(custom_unit_price=0))
     cleared = request(c, "PATCH", f"/rental/lines/{b}", dict(custom_unit_price=None))
-    assert Decimal(cleared["amount"]) == Decimal("5.0062")
-    request(c, "PATCH", f"/rental/lines/{b}", dict(custom_unit_price="8.1234", quantity=2))
+    assert Decimal(cleared["amount"]) == Decimal("5.01")
+    request(c, "PATCH", f"/rental/lines/{b}", dict(custom_unit_price="8.125", quantity=2))
     request(c, "PUT", "/rental/reorder", dict(month=MONTH, project_name="项目甲", ordered_line_ids=[b]), 409)
     request(c, "PUT", "/rental/reorder", dict(month=MONTH, project_name="项目甲", ordered_line_ids=[b, a]))
     current = request(c, "GET", "/rental?month=2026-11")
-    assert current["printable_project_count"] == 1 and Decimal(current["grand_total"]) == Decimal("16.2468")
+    assert current["printable_project_count"] == 1 and Decimal(current["grand_total"]) == Decimal("16.26")
     ws = workbook(c, "rental?month=2026-11").active
     assert ws.max_column == 9 and ws["F3"].value == "租赁单价（元）"
+    assert "ROUND(E4*F4,2)" in ws["G4"].value
+    assert ws["F4"].number_format == ws["G4"].number_format == "#,##0.00"
     assert "G4:G7" in ws["G8"].value and "A1:I1" in ws.merged_cells
-    assert Decimal(str(workbook(c, "rental?month=2026-11", data_only=True).active["G8"].value)) == Decimal("16.2468")
+    assert Decimal(str(workbook(c, "rental?month=2026-11", data_only=True).active["G8"].value)) == Decimal("16.26")
     assert "$A$1:$I$9" in ws.print_area and "单位：零项目" in [cell.value for cell in ws["A"]]
     following = request(c, "GET", "/rental?month=2026-12")
-    assert Decimal(following["grand_total"]) == Decimal("21.2530")
+    assert Decimal(following["grand_total"]) == Decimal("21.27")
     groups = {g["project_name"]: g["lines"] for g in following["projects"]}
     assert [r["billing_status"] for r in groups["项目甲"]] == ["normal", "normal"]
-    assert groups["项目甲"][0]["custom_unit_price"] == "8.1234"
+    assert groups["项目甲"][0]["custom_unit_price"] == "8.13"
     assert groups["零项目"][0]["distribution_note"] == "保留" and groups["零项目"][0]["amount"] is None
     assert request(c, "GET", "/rental?month=2026-12&project=项目甲")["projects"][0]["lines"] == groups["项目甲"]
 
@@ -483,7 +487,7 @@ def test_rental_print_blocks_and_dynamic_row_heights(client):
     assert ws["A2"].alignment.shrink_to_fit and ws["E2"].alignment.shrink_to_fit
     assert {"A1:I1", "A2:D2", "E2:F2", "G2:I2"} <= {str(cell) for cell in ws.merged_cells.ranges}
     assert ws["F3"].font.bold and ws["F3"].alignment.wrap_text and ws["F3"].border.right.style == "thin"
-    assert ws["F4"].alignment.horizontal == "right" and ws["F4"].number_format == "General"
+    assert ws["F4"].alignment.horizontal == "right" and ws["F4"].number_format == "#,##0.00"
     assert ws["B6"].value is None and ws["B6"].border.bottom.style == "thin"
     first, footers = 1, []
     for count, row_height in ((2, 36), (4, 30), (15, 29), (20, 25), (25, 20), (29, 510 / 29)):
@@ -574,7 +578,7 @@ def test_delete_transfer_removes_only_its_pending_rental_action(client):
     request(client, "DELETE", f"/transfers/{older}")
     draft = request(client, "GET", f"/equipment/{key}?month={MONTH}")["rental_lines"][0]
     assert draft["pending_action_type"] == "none" and draft["pending_meta_json"] is None
-    assert (draft["project_name"], draft["billing_status"], draft["amount"]) == ("项目甲", "normal", "5.0062")
+    assert (draft["project_name"], draft["billing_status"], draft["amount"]) == ("项目甲", "normal", "5.01")
 
 
 def test_latest_transfer_orders_undated_history_last(client):
@@ -670,7 +674,7 @@ def test_early_month_view_and_transfer_across_months(client):
     resolve(c, line, "from_project")
     carried = request(c, "GET", "/rental?month=2026-12")["projects"]
     assert len(carried) == 1 and carried[0]["project_name"] == "项目乙"
-    assert Decimal(carried[0]["subtotal"]) == Decimal("5.0062")
+    assert Decimal(carried[0]["subtotal"]) == Decimal("5.01")
 
 
 def test_migration_round_trip_in_isolated_schema(rollback_db):
@@ -680,6 +684,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     project_links = runpy.run_path(str(filename.with_name("equipproj261124_project_links.py")))
     locations = runpy.run_path(str(filename.with_name("equiploc261125_locations.py")))
     counts = runpy.run_path(str(filename.with_name("equipcount261126_nullable_count.py")))
+    money = runpy.run_path(str(filename.with_name("equipmoney261126_cents.py")))
     schema = rollback_db.exec_driver_sql("select current_schema()").scalar_one()
     assert schema.startswith("backend_verify_")
 
@@ -689,6 +694,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     initial = tables()
     with Operations.context(MigrationContext.configure(rollback_db)):
         assert "m16_locations" in initial
+        money["downgrade"]()
         counts["downgrade"]()
         locations["downgrade"]()
         assert "m16_locations" not in tables()
@@ -703,7 +709,48 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
         project_links["upgrade"]()
         locations["upgrade"]()
         counts["upgrade"]()
+        money["upgrade"]()
     assert tables() == initial
+
+
+def test_equipment_money_migration_recalculates_formulas_and_preserves_source_values(rollback_db):
+    revision = Path(__file__).resolve().parents[1] / "alembic/versions/equipmoney261126_cents.py"
+    money = runpy.run_path(str(revision))
+    db = rollback_db
+    with Operations.context(MigrationContext.configure(db)):
+        money["downgrade"]()
+        db.exec_driver_sql("""
+            INSERT INTO m16_inventory_items
+                (category, name, unit_price, book_qty, book_amount, count_qty, count_amount, diff_qty,
+                 diff_amount, created_by, updated_by)
+            VALUES ('tool', 'formula', 1.235, 3.5000, 4.3225, 2.5, 3.0875, -1, -1.235, 'test', 'test'),
+                   ('tool', 'source', 1.235, 2, 1.775, NULL, NULL, NULL, NULL, 'test', 'test')
+        """)
+        db.exec_driver_sql("INSERT INTO m16_rental_months (month) VALUES ('2026-11')")
+        db.exec_driver_sql("""
+            INSERT INTO m16_rental_lines
+                (month, name, project_name, original_value, custom_unit_price, unit_price, quantity, amount, billing_status)
+            VALUES ('2026-11', 'default', 'test', 100.095, NULL, 5.0048, 2, 10.0096, 'normal'),
+                   ('2026-11', 'custom', 'test', NULL, 1.235, 1.235, 3, 3.705, 'normal'),
+                   ('2026-11', 'blank', 'test', NULL, 0, 0, 1, NULL, 'blank')
+        """)
+        money["upgrade"]()
+    inventory = db.exec_driver_sql("""
+        SELECT name, unit_price, book_qty, book_amount, count_amount, diff_amount
+        FROM m16_inventory_items ORDER BY name
+    """).all()
+    assert inventory == [
+        ("formula", Decimal("1.24"), Decimal("3.5000"), Decimal("4.34"), Decimal("3.10"), Decimal("-1.24")),
+        ("source", Decimal("1.24"), Decimal("2.0000"), Decimal("1.78"), None, None),
+    ]
+    rental_values = db.exec_driver_sql("""
+        SELECT name, original_value, custom_unit_price, unit_price, amount FROM m16_rental_lines ORDER BY name
+    """).all()
+    assert rental_values == [
+        ("blank", None, Decimal("0.00"), Decimal("0.00"), None),
+        ("custom", None, Decimal("1.24"), Decimal("1.24"), Decimal("3.72")),
+        ("default", Decimal("100.10"), None, Decimal("5.01"), Decimal("10.02")),
+    ]
 
 class RecordingAdapter:
     def __init__(self):
@@ -1058,10 +1105,10 @@ def test_equipment_custom_form_create_or_modify(existing):
                                        "purchase_date": date(2026, 11, 3), "purchase_price": Decimal("0")})
     assert result.status == "synced"
     expected = {"bill_name": "样机", "u_device_code": TEST_CODE, "phid_pc": "P1",
-                "u_spec": None, "u_indata": "2026-11-03 00:00:00", "u_yz": "0",
+                "u_spec": None, "u_indata": "2026-11-03 00:00:00", "u_yz": "0.00",
                 "phid_org": "3700000000000014", "u_use_org": "3700000000000014", "u_bz": None}
     if existing:
-        expected = original | {"bill_name": "样机", "u_indata": "2026-11-03",
+        expected = original | {"bill_name": "样机", "u_indata": "2026-11-03", "u_yz": "0.00",
                                "bill_dt": "2026-11-03", "app_dt": ""}
     assert saved_form(calls, "sbzx") == {"p_form_sbzx_m": {
         "form": {"key": "phid", "modifiedRow" if existing else "newRow": expected}}}
@@ -1096,6 +1143,17 @@ def test_custom_transfer_conflict_blocks_save(project, project_id):
     assert result.conflict["local"]["to_project"] == "项目乙"
     assert result.conflict["snapshot"]["phid_pc"] == project_id
     assert calls.call_count == 1 and calls.call_args.args == (LIST_PATH,)
+
+
+def test_custom_transfer_uses_mapped_source_phid_and_i8_display_name():
+    origin = equipment_row("集团公司第四分公司机关工程")
+    adapter, calls = custom_adapter(page(origin), save_receipt("B1"), page(transfer_bill()), page(origin))
+    adapter.project_ids = {"宜阳仓库": "P1", "项目乙": "P2"}
+    result = adapter.create_transfer(TEST_CODE, "宜阳仓库", "项目乙", transfer_date=date(2026, 11, 23))
+    assert result.status == "pending" and result.conflict["bill_no"] == "20261124-0001"
+    payload = saved_form(calls, "ldzcdb")
+    row = payload["p_form_ldzcdb_d"]["table"]["newRow"][0]["row"]
+    assert (row["phid_pc"], row["phid_pc_EXName"]) == ("P1", "集团公司第四分公司机关工程")
 
 
 @pytest.mark.parametrize("bill_rows,after,status", [
@@ -1146,6 +1204,7 @@ def test_custom_adapter_injected_at_normal_sync_entry(client):
     saved = add(client, in_rental="no")["equipment"][0]
     assert saved["i8_sync_status"] == "failed"
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, SAVE_PATH]
+    assert saved_form(calls, "sbzx")["p_form_sbzx_m"]["form"]["newRow"]["u_yz"] == "100.13"
 
 
 def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client):
@@ -1252,7 +1311,7 @@ def baseline_paths(tmp_path):
     item_header = "工机具编号 名称 规格型号 单位 信息化用购买日期 购买日期 购买项目 购买价格 当前状态 当前所在项目 备注 在账 - 列租赁表 列资产账 租赁底稿行 盘点来源行 来源 接续所在项目 数量 核对说明".split()
     transfer = "工机具编号 名称 规格型号 单位 购买日期 购买项目 购买价格 调出项目 调入项目 调拨日期 备注".split()
     scrap = transfer[:7] + ["所在项目", "报废日期", "报废原因", "备注"]
-    item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "晋江污泥处理项目", 2, "在用", "鄂旗项目",
+    item = ["甲-01", "样机", None, "台", date(2025, 1, 2), 202501, "晋江污泥处理项目", 2.00499, "在用", "鄂旗项目",
             None, "是", None, "是", "是", "4", "5", "分布原第 3 行", None, 3]
     tricycle = ["电动三轮车", None, "辆", date(2023, 5, 1), 202305, "焦作佰利项目", 5300,
                 "在用", "焦作佰利项目", None, "是", None, "否", "是", None, "6、7", None, None, 1]
@@ -1293,6 +1352,7 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
         with pytest.raises(ValueError, match="台账非空"):
             import_equipment_baseline(db, **baseline_paths)
         item = db.scalar(select(EquipmentItem).where(EquipmentItem.code == "甲-01"))
+        assert item.purchase_price == Decimal("2.00")
         assert db.get(InventoryItem, item.inventory_item_id).source_row == "5"
         assert item.quantity == 3 and item.source_info == "分布原第 3 行"
         assert (item.purchase_project_id, item.purchase_project_custom) == (jinjiang, None)
@@ -1425,7 +1485,7 @@ def test_rental_edits_propagate_per_field_and_scrap_keeps_future_rows(client):
     for earlier in (second, third):
         current = row(earlier["month"])
         assert (current["id"], current["custom_unit_price"], current["billing_status"], current["amount"]) == (
-            earlier["id"], "5.0000", "stopped", None,
+            earlier["id"], "5.00", "stopped", None,
         )
 
 
@@ -1549,8 +1609,8 @@ def test_optional_tail501_baseline(rollback_db):
                 linked_inventory_count=count(EquipmentItem, EquipmentItem.inventory_item_id.is_not(None)),
                 linked_rental_count=count(RentalLine, RentalLine.equipment_id.is_not(None)))
             assert observed == preview == dict(equipment_count=421, turnover_count=6, transfer_count=295, scrap_count=0,
-                inventory_tool_count=146, inventory_turnover_count=6, inventory_tool_book_total=Decimal("758371.4324"),
-                rental_line_count=128, rental_grand_total=Decimal("19781.0367"), linked_inventory_count=306, linked_rental_count=88)
+                inventory_tool_count=146, inventory_turnover_count=6, inventory_tool_book_total=Decimal("758371.57"),
+                rental_line_count=128, rental_grand_total=Decimal("19780.97"), linked_inventory_count=306, linked_rental_count=88)
             assert count(InventoryItem, ~select(EquipmentItem.id).where(
                 EquipmentItem.inventory_item_id == InventoryItem.id, EquipmentItem.status != "scrapped",
                 EquipmentItem.asset_scope == "current_asset").exists()) == 0
@@ -1561,7 +1621,7 @@ def test_optional_tail501_baseline(rollback_db):
             nanping = db.scalar(select(Project.id).where(Project.disp == "南平项目"))
             assert {(r.name, r.unit, r.purchase_price, r.purchase_date, r.purchase_project, r.current_project,
                      r.current_project_id, r.asset_scope, r.in_rental, r.remark) for r in welders} == {
-                ("逆变焊机", "台", Decimal("1132.7430"), date(2023, 7, 11), "南靖项目", "南平项目",
+                ("逆变焊机", "台", Decimal("1132.74"), date(2023, 7, 11), "南靖项目", "南平项目",
                  nanping, "current_asset", "yes", "实物为4台二保焊机")}
             inventory_ids = {row.inventory_item_id for row in welders}
             assert len(inventory_ids) == 1 and db.get(InventoryItem, welders[0].inventory_item_id).source_row == "75"
@@ -1593,6 +1653,6 @@ def test_optional_tail501_baseline(rollback_db):
             assert count(RentalMonth, RentalMonth.month == MONTH) == 1
             assert count(RentalLine, RentalLine.billing_status == "blank", RentalLine.amount.is_(None)) == 97
             assert count(RentalLine, RentalLine.custom_unit_price.is_not(None)) == 17
-            assert rental.view(db, MONTH)["grand_total"] == Decimal("19781.0367")
+            assert rental.view(db, MONTH)["grand_total"] == Decimal("19780.97")
     finally:
         assert hashes() == original

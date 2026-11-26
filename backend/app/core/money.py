@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import logging
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
@@ -31,14 +31,13 @@ class MoneyError(ValueError):
 
 
 def ledger_product(quantity: Decimal | None, price: Decimal | None) -> Decimal | None:
-    """设备三账保留原底稿的四位小数；缺少数量或单价时金额留空。"""
+    """设备三账按分计算；缺少数量或单价时金额留空。"""
     if quantity is None or price is None:
         return None
-    unrounded = quantity * price
-    if abs(unrounded) >= Decimal("1e14"):
-        raise MoneyError("计算结果超过台账金额范围")
-    value = unrounded.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-    if abs(value) >= Decimal("1e14"):
+    with localcontext() as ctx:
+        ctx.prec = 40
+        value = to_money(quantity * price)
+    if abs(value) >= Decimal("1e16"):
         raise MoneyError("计算结果超过台账金额范围")
     return value
 
