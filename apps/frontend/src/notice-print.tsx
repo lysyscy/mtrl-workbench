@@ -139,8 +139,9 @@ export async function recoverNoticePrint(owner: string, signal?: AbortSignal): P
   return value === null ? null : readBatch(value, 'print');
 }
 
-export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
+export function NoticePrint({rows, mode, owner, resumed, blocked, close, printSelection}: {
   rows: NoticeRow[]; mode: BatchMode; owner: string; resumed?: BatchView | undefined; blocked: boolean; close: () => void;
+  printSelection?: {start: (batchId: string) => void; observe: (batch: BatchView) => void; pending: (batchId: string) => boolean};
 }) {
   const session = useI8Session();
   const lock = useRef(false);
@@ -161,6 +162,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   const [file, setFile] = useState<{ url: string; filename: string; pdf: boolean } | null>(null);
   const blobUrl = useRef('');
   const alive = useRef(true);
+  const closed = useRef(false);
   const blockedRef = useRef(blocked);
   const confirmationGeneration = useRef(0);
   blockedRef.current = blocked;
@@ -168,7 +170,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   const closeLocked = busy && batch?.stage !== 'dispatching';
   const closing = useDialogClose({
     busy: closeLocked, dirty: false, beforeRequestClose: cancelWaiting,
-    close: () => { void cancelKick(); close(); },
+    close: () => { closed.current = true; void cancelKick(); close(); },
   });
   const result = batch?.result;
   const deliveryStage = batch?.stage === 'dispatching' || batch?.stage === 'done';
@@ -240,7 +242,9 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     if (!resumed) return;
     const recovery = new AbortController();
     void follow(resumed, {signal: recovery.signal});
-    return () => recovery.abort();
+    return () => {
+      if (!closed.current || !printSelection?.pending(resumed.batch_id)) recovery.abort();
+    };
   }, [resumed, owner]);
 
   async function loadFile(url?: string) {
@@ -272,18 +276,27 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
     onKick?: (token: string, message: string) => void;
   } = {}) {
     const path = pathOf(handle.batch_id);
+    let dispatching = handle.stage === 'dispatching';
+    const dialogOpen = () => alive.current && !closed.current;
+    const canFollow = () => !options.signal?.aborted && (dialogOpen()
+      || (closed.current && dispatching && printSelection?.pending(handle.batch_id)));
     try {
       let current = options.reread ? readBatch(await requestJson(path), mode) : handle;
-      while (alive.current && !options.signal?.aborted) {
+      while (canFollow()) {
         if (current.batch_id !== handle.batch_id) throw new ApiError('批次编号已变化，请重查原批次。');
-        if (mode === 'print') rememberBatch(owner, current.batch_id);
-        setBatch(current);
+        dispatching = current.stage === 'dispatching';
+        printSelection?.observe(current);
+        if (dialogOpen()) {
+          if (mode === 'print') rememberBatch(owner, current.batch_id);
+          setBatch(current);
+        }
+        if (!dialogOpen() && current.status !== 'running') return;
         if (current.status === 'ready') {
           if (!options.dispatchOnReady || blockedRef.current || current.a4_blocked) return;
           current = await requestDispatch(current);
         } else if (current.status === 'running') {
           await new Promise(resolve => setTimeout(resolve, 500));
-          if (!alive.current || options.signal?.aborted) return;
+          if (!canFollow()) return;
           current = readBatch(await requestJson(path, {signal: options.signal ?? null}), mode);
         } else {
           if (current.kick_token) options.onKick?.(current.kick_token, current.reason);
@@ -295,7 +308,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
         }
       }
     } catch (failure) {
-      if (!alive.current || options.signal?.aborted) return;
+      if (!dialogOpen() || options.signal?.aborted) return;
       setReadFailed(true);
       setError(messageOf(failure, '批次状态暂时无法核对，请重查原批次。'));
     }
@@ -304,6 +317,7 @@ export function NoticePrint({rows, mode, owner, resumed, blocked, close}: {
   async function requestDispatch(current: BatchView, choice?: 'ipp') {
     const target = printerUri.trim();
     const override = choice ? {mode: choice, ...(target ? {printer_uri: target} : {})} : null;
+    printSelection?.start(current.batch_id);
     const next = readBatch(await requestJson(pathOf(current.batch_id) + '/dispatch', {
       method: 'POST', ...(override ? body(override) : {}),
     }), 'print');
