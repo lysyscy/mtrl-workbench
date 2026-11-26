@@ -101,6 +101,7 @@ registerHooks({
 });
 
 const { NoticeFetch } = await import('../../src/notice-fetch.tsx');
+const { AutoLinkDialog } = await import('../../src/notice-auto-link.tsx');
 const { I8ReportFetch } = await import('../../src/i8-report-fetch.tsx');
 const { ContractFetch } = await import('../../src/contract-tools.tsx');
 const { MechanicalWork } = await import('../../src/mechanical-work.tsx');
@@ -367,6 +368,80 @@ function conflictRecorder({ repeat = false, topLevel = false } = {}) {
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+const linkCandidate = {notice_id: 3, code: 'N3', contract_id: 30, contract_no: 'C30', reason: '合同号唯一', amount: '15', payable_codes: ['P3']};
+const unmatched = {notice_id: 2, code: 'N2', contract_id: null, reason: '没有唯一合同'};
+const otherCandidate = {...linkCandidate, notice_id: 1, code: 'N1'};
+const changed = {...otherCandidate, contract_id: null, reason: '来源或金额已变化，请重新预览'};
+
+async function confirmAutoLink(write, refresh = async () => {}) {
+  const announcements = [];
+  const preview = [linkCandidate, unmatched, otherCandidate];
+  globalThis.fetch = async (url, init) => {
+    if (url === '/api/m11/auto-link-preview') return response({ok: true, ready: 2, rows: preview});
+    assert.equal(url, '/api/m11/auto-link');
+    assert.deepEqual(JSON.parse(init.body).selections.map(row => row.notice_id), [3, 1]);
+    return write();
+  };
+  function renderDialog() {
+    cells.month = null;
+    cells.index = 0;
+    return AutoLinkDialog({ids: [3, 2, 1], blocked: false, refresh, close() {},
+      announce(message, needsAttention = false) { announcements.push({message, needsAttention}); }});
+  }
+  for (const label of ['确认读取并预览', '关联这 2 条']) {
+    const [button] = walk(renderDialog(), node => node.props.children === label);
+    assert.ok(button && !button.props.disabled, label);
+    button.props.onClick();
+    await settle();
+  }
+  return {dialog: renderDialog(), announcements};
+}
+
+test('一键关联完成后显示实际关联数、两类跳过原因，列表重读成功只报普通消息', async () => {
+  let reads = 0;
+  const {dialog, announcements} = await confirmAutoLink(
+    () => response({ok: true, linked: 1, rows: [changed, linkCandidate]}),
+    async () => { reads++; },
+  );
+  assert.equal(reads, 1);
+  assert.deepEqual(announcements.map(a => a.needsAttention), [false]);
+  const [grid] = walk(dialog, node => node.type === 'grid');
+  assert.deepEqual(grid.props.rows, [linkCandidate, unmatched, changed]);
+  assert.ok(walk(dialog, node => node.type === 'p' && /已关联 1 条.*跳过 2 条/.test([node.props.children].flat().join(''))).length);
+});
+
+test('一键关联列表重读失败仍显示已知回执并提示核对', async () => {
+  const {dialog, announcements} = await confirmAutoLink(
+    () => response({ok: true, linked: 0, rows: [changed, linkCandidate]}),
+    async () => { throw new Error('列表读取失败'); },
+  );
+  assert.ok(walk(dialog, node => node.type === 'p' && /已关联 0 条.*跳过 3 条/.test([node.props.children].flat().join(''))).length);
+  assert.ok(walk(dialog, node => node.props.role === 'alert' && node.props.children.includes('列表读取失败')).length);
+  assert.deepEqual(announcements.map(a => a.needsAttention), [true]);
+});
+
+test('一键关联缺少已提交行的回执时保留核对提示，不能再次确认', async () => {
+  const {dialog, announcements} = await confirmAutoLink(() => response({ok: true, linked: 1, rows: [linkCandidate]}));
+  assert.deepEqual(announcements.map(a => a.needsAttention), [true]);
+  assert.ok(walk(dialog, node => node.props.role === 'alert').length);
+  assert.equal(walk(dialog, node => node.props.htmlType === 'submit').length, 0);
+});
+
+test('一键关联确认时断网提示核对，明确拒绝时显示后端原因', async t => {
+  const denied = {ok: false, status: 409, json: async () => ({message: '单据已撤销'})};
+  for (const [label, write, needsReread, reason] of [
+    ['断网', () => { throw new Error('offline'); }, true, '连接失败'],
+    ['明确拒绝', () => denied, false, '单据已撤销'],
+  ]) {
+    await t.test(label, async () => {
+      const {dialog, announcements} = await confirmAutoLink(write);
+      assert.ok(walk(dialog, node => node.props.role === 'alert' && node.props.children.includes(reason)).length);
+      assert.equal(announcements.some(a => a.needsAttention), needsReread);
+      assert.equal(walk(dialog, node => node.props.htmlType === 'submit').length, needsReread ? 0 : 1);
+    });
+  }
+});
 const actionsOf = tree => walk(tree, node => node.type === I8FetchActions)[0].props;
 const kickButton = (tree, label = '让现有会话下线并继续') =>
   walk(I8FetchActions(actionsOf(tree)), node => node.props?.children === label)[0];
