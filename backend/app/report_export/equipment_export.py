@@ -292,67 +292,53 @@ def equipment_rental_xlsx(snapshot):
 
 def inventory_cover(cover):
     cover.title = "封皮"
-    cover.sheet_format.defaultColWidth = 9
-    cover.sheet_format.defaultRowHeight = 14.25
-    cover.page_setup.paperSize = cover.PAPERSIZE_A4
-    cover.page_setup.orientation = "landscape"
-    cover.page_margins.left = cover.page_margins.right = .75
-    cover.page_margins.top = cover.page_margins.bottom = 1
-    cover.page_margins.header = cover.page_margins.footer = .5
+    # A:G and H:K are each 68 units wide. The four signature fields each get 34.
+    sheet_setup(cover, [11, 11, 12, 10, 8, 8, 8, 34, 13, 13, 8], "landscape")
+    cover.print_area = "A3:K14"
+    cover.print_options.horizontalCentered = cover.print_options.verticalCentered = True
+    cover.sheet_properties.pageSetUpPr.fitToPage = True
+    cover.page_setup.fitToWidth = cover.page_setup.fitToHeight = 1
+    cover.page_margins.left = cover.page_margins.right = .6
+    cover.page_margins.top = cover.page_margins.bottom = .6
+    cover.page_margins.header = cover.page_margins.footer = .3
     cover.sheet_properties.codeName = "Sheet1"
-    cover.sheet_properties.outlinePr = cover.sheet_properties.pageSetUpPr = None
     view = cover.sheet_view
     view.tabSelected = True
-    view.zoomScale = view.zoomScaleNormal = 145
-    view.selection[0].activeCell = view.selection[0].sqref = "M8"
-    for first, last, width in (
-        (1, 3, 9), (4, 4, 12.6416666666667), (5, 6, 9), (7, 7, 9.35833333333333),
-        (8, 8, 18.75), (9, 9, 9), (10, 10, 7.425), (11, 16384, 9),
-    ):
-        column = cover.column_dimensions[get_column_letter(first)]
-        column.min, column.max, column.width = first, last, width
-        column.font = Font(name="宋体", charset=134, size=12)
-        column.alignment = Alignment(vertical="center")
+    view.showGridLines = False
+    view.selection[0].activeCell = view.selection[0].sqref = "A3"
     for row, height in enumerate((62.15, 36, 36, 36, 36, 27, 27, 27), 3):
         cover.row_dimensions[row].height = height
 
-    for address in (
-        "C3:K3", "C4:K4", "C5:K5", "B6:D6", "E6:H6", "I6:J6",
-        "C7:G7", "C8:G8", "C9:K9", "C10:K10", "A13:K14",
+    for span, value, size, bold, align in (
+        ("A3:K3", "河南省安装集团有限责任公司", 24, True, "center"),
+        ("A4:K4", "第四工程公司", 20, False, "center"),
+        ("A5:K5", "2026年年中流动资产盘点表", 20, False, "center"),
+        ("A6:D6", "流动资产金额总计（原值）：", 14, False, "center"),
+        ("E6:H6", None, 14, False, "center"),
+        ("I6:K6", None, 14, False, "center"),
+        ("A7:G7", "其     中：大型工机具：", 14, False, "right"),
+        ("H7:K7", None, 14, False, "left"),
+        ("A8:G8", "周转材料：", 14, False, "right"),
+        ("H8:K8", None, 14, False, "left"),
+        ("A13:C14", "单位主管：", 16, False, "center"),
+        ("D13:G14", "财务主管：", 16, False, "center"),
+        ("H13:H14", "资产主管：", 16, False, "center"),
+        ("I13:K14", "制表人：", 16, False, "center"),
     ):
-        cover.merge_cells(address)
-
-    subtotal_format = r'"￥"#,##0.00_);[Red]\("￥"#,##0.00\)'
-    for span, value, size, bold, align, number_format in (
-        ("C3:K3", "河南省安装集团有限责任公司", 24, True, "center", "General"),
-        ("C4:K4", "第四工程公司", 20, False, "center", "General"),
-        ("C5:K5", "2026年年中流动资产盘点表", 20, False, "center", "General"),
-        ("B6:D6", "流动资产金额总计（原值）：", 14, False, "center", "General"),
-        ("E6:H6", None, 14, False, "center", "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"),
-        ("I6:J6", None, 14, False, "center", r'"￥"#,##0.00;[Red]"￥"\-#,##0.00'),
-        ("K6:K6", "元", 14, False, None, "General"),
-        ("C7:G7", "其     中：大型工机具：", 14, False, "right", "General"),
-        ("H7:H8", None, 14, False, "center", subtotal_format),
-        ("I7:K7", "元", 14, False, None, "General"),
-        ("C8:G8", "周转材料：", 14, False, "right", "General"),
-        ("I8:K8", "元", 14, False, None, "General"),
-        ("C9:K10", None, 14, False, None, "General"),
-        ("A13:K14", "单位主管：             财务主管：               资产主管：              制表人：   ",
-         16, False, None, "General"),
-    ):
-        cells = cover[span]
-        cells[0][0].value = value
-        font = Font(name="宋体", charset=134, size=size, bold=bold)
-        alignment = Alignment(horizontal=align, vertical="center")
-        for row in cells:
-            for cell in row:
-                cell.font = font
-                cell.alignment = alignment
-                cell.number_format = number_format
+        cover.merge_cells(span)
+        cell = cover[span.split(":")[0]]
+        cell.value = value
+        cell.font = Font(name="宋体", charset=134, size=size, bold=bold)
+        cell.alignment = Alignment(horizontal=align, vertical="center")
+    cover["E6"].number_format = "[DBNum2][$RMB]General;[Red][DBNum2][$RMB]General"
+    cover["I6"].number_format = r'"￥"#,##0.00" 元";[Red]"￥"\-#,##0.00" 元"'
+    cover["H7"].number_format = cover["H8"].number_format = r'"￥"#,##0.00" 元";[Red]\("￥"#,##0.00\)" 元"'
 
 
 def equipment_inventory_xlsx(items):
     wb = Workbook()
+    wb.calculation.calcMode = "auto"
+    wb.calculation.fullCalcOnLoad = True
     cover = wb.active
     inventory_cover(cover)
     counted_totals = []
@@ -393,13 +379,17 @@ def equipment_inventory_xlsx(items):
         if len(amounts["I"]) < n - 5:
             incomplete_counts.append(f"COUNT({quote_sheetname(ws.title)}!I5:I{n-1})={n-5}")
         ref = f"{quote_sheetname(ws.title)}!I{n}"
-        set_formula(cover[f"H{cover_row}"], Formula(f'={ref}', counted))
-    overall = None if incomplete_counts else sum(counted_totals)
-    total_formula = '=H7+H8'
+        subtotal = (TextFormula(f'=IF(ISNUMBER({ref}),{ref},"待核")', "待核") if counted is None
+                    else Formula(f'={ref}', counted))
+        set_formula(cover[f"H{cover_row}"], subtotal)
+    # A missing detail amount must not turn the sum of known amounts into a grand total.
     if incomplete_counts:
-        total_formula = f'=IF(AND({",".join(incomplete_counts)}),H7+H8,"")'
-    set_formula(cover["I6"], Formula(total_formula, overall))
-    set_formula(cover["E6"], Formula('=I6', overall))
+        set_formula(cover["I6"], TextFormula(f'=IF(AND({",".join(incomplete_counts)}),H7+H8,"待核")', "待核"))
+        set_formula(cover["E6"], TextFormula("=I6", "待核"))
+    else:
+        overall = sum(counted_totals)
+        set_formula(cover["I6"], Formula("=H7+H8", overall))
+        set_formula(cover["E6"], Formula("=I6", overall))
     return workbook_bytes(wb)
 
 
