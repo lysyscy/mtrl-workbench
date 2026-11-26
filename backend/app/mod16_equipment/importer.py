@@ -7,7 +7,7 @@ import re
 
 from openpyxl import load_workbook
 from openpyxl.utils.datetime import from_excel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.money import ledger_product
 from .common import ledger_lock, total
@@ -144,7 +144,7 @@ def parse_inventory(path):
             for n, r in rows(book[title], 3, {4: "单价", 5: "帐面数", 7: "盘点数", 11: "盈亏原因"}, 12):
                 if n == 4 or not r[1] or str(r[1]).startswith("合计"):
                     continue
-                if not str(r[0]).isdigit() or r[5] is None or r[7] is None:
+                if not str(r[0]).isdigit() or r[5] is None:
                     raise ValueError(f"{title} 第 {n} 行序号或数量异常")
                 result[category, str(n)] = dict(category=category, sort_order=n, source_row=str(n),
                     name=text(r[1]), spec=text(r[2]), unit=text(r[3]), unit_price=number(r[4]), book_qty=number(r[5]),
@@ -342,9 +342,10 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
 
     with session.begin_nested():
         ledger_lock(session)
-        for model in (InventoryItem, EquipmentItem, EquipmentTransfer, EquipmentScrap, RentalMonth, RentalLine):
+        for model in (InventoryItem, EquipmentItem, EquipmentTransfer, EquipmentScrap, RentalLine):
             if session.scalar(select(model.id).limit(1)) is not None:
                 raise ValueError(f"台账非空，拒绝重复导入 ({model.__tablename__})")
+        session.execute(delete(RentalMonth).where(RentalMonth.status == "draft"))
         by_name = defaultdict(list)
         for project in project_index(session).values():
             by_name[project.disp].append(project.id)
@@ -357,7 +358,9 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
                     record.update(ref.fields(prefix))
                     remember_location(locations, ref)
         assets = {k: InventoryItem(**r) for k, r in inventory.items()}
-        session.add_all(list(assets.values()) + [RentalMonth(month=rental_month)])
+        session.add_all(assets.values())
+        if session.scalar(select(RentalMonth.id).where(RentalMonth.month == rental_month)) is None:
+            session.add(RentalMonth(month=rental_month))
         session.flush()
         equipment_rows = {k: EquipmentItem(**r) for k, r in items.items()}
         for code, key in inventory_links.items():
@@ -371,10 +374,8 @@ def import_equipment_baseline(session, *, distribution_path, inventory_path, ren
         for i, line in enumerate(lines):
             line.pop("code")
             item = equipment_rows.get(rental_links.get(i))
-            source_project = match_project(line["project_name"], by_name)
-            remember_location(locations, source_project)
-            project = (ProjectRef.from_row(item, "current_project") if item and item.current_project_id is not None
-                       else source_project)
+            project = match_project(line["project_name"], by_name)
+            remember_location(locations, project)
             if item:
                 line["category_label"] = category_label(item.item_category)
             key = project.key()

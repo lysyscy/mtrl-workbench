@@ -344,7 +344,8 @@ function EquipmentForm({ state, close, done }: Props) {
           <Form.Item name="purchase_date" label="购买日期" rules={item ? [] : required}>
             <DateField label="购买日期" />
           </Form.Item>
-          <Form.Item className="equipment-project-form-item" name="purchase" label="购买项目" rules={[projectRequired]}>
+          <Form.Item className="equipment-project-form-item" name="purchase" label="购买项目"
+            rules={!item || hasProject(initial.purchase) ? [projectRequired] : []}>
             <ProjectDualField label="购买项目" busy={!writable || action.busy} />
           </Form.Item>
           <Form.Item name="purchase_price" label="购买价格">

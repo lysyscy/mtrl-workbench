@@ -37,7 +37,7 @@ def line_category(line, item):
 
 def carry_line(db, old, month, item=None):
     carry = meta(old)
-    if item and item.in_rental == "no" and month >= date.today().strftime("%Y-%m"):
+    if not can_charge(month, item):
         return None
     if old.billing_status == "stopped" or carry.get("stop_next"):
         return None
@@ -115,6 +115,12 @@ def move(db, line, project):
     if ProjectRef.from_row(line, "project").key() != project.key():
         line.project_sort_order, line.row_sort_order = position(db, line.month, project)
     line.project_name, line.project_id, line.project_custom = project.legacy, project.id, project.custom
+
+
+def correct_location(db, equipment_id, month, origin, project):
+    for line in equipment_lines(db, equipment_id, month, include_current=True):
+        if line.billing_status != "stopped" and same_position(line, origin):
+            move(db, line, project)
 
 
 TRANSFER_DETAILS = ("transfer_id", "from_project", "to_project", "transfer_date", "suggested_side")
@@ -216,26 +222,41 @@ def action(db, item, month, kind, details, custom_price=None, *, project=None):
                           pending_action_type="none", billing_status="skip_month" if kind == "new_purchase_start" else "normal")
         db.add(line)
     state = meta(line)
+    if kind == "new_purchase_start" and line.billing_status == "stopped":
+        line.billing_status = "skip_month"
+        state.pop("stop_next", None)
+        state.pop("suspended_billing", None)
     if line.pending_action_type == "none":
         line.pending_action_type = kind
         state.update(details)
-    else:
+    elif kind != "new_purchase_start" or (line.pending_action_type != kind and not any(
+            entry["kind"] == kind for entry in state.get("queue", []))):
         state.setdefault("queue", []).append({"kind": kind, "details": details})
     line.pending_meta_json = encoded(state)
     recalculate(line)
     db.flush()
     if kind == "new_purchase_start":
+        previous = line
         following = db.scalars(select(RentalMonth.month).where(RentalMonth.month > month).order_by(RentalMonth.month))
         for later in following:
-            existing = db.scalar(select(RentalLine.id).where(RentalLine.month == later, RentalLine.equipment_id == item.id))
-            if existing:
-                break
-            new = carry_line(db, line, later, item)
+            existing = db.scalar(select(RentalLine).where(RentalLine.month == later, RentalLine.equipment_id == item.id))
+            if existing is not None:
+                data = meta(existing)
+                old_status = data.pop("suspended_billing", None)
+                if old_status is None:
+                    break
+                existing.billing_status = old_status
+                existing.pending_meta_json = encoded(data) if data else None
+                recalculate(existing)
+                previous = existing
+                continue
+            new = carry_line(db, previous, later, item)
             if new is None:
                 break
             new.project_sort_order, new.row_sort_order = position(db, later, ProjectRef.from_row(new, "project"))
             db.add(new)
             db.flush()
+            previous = new
     return line
 
 
@@ -267,31 +288,92 @@ def view(db, month, project=None):
             "grand_total": total(amounts), "printable_project_count": sum((g["subtotal"] or 0) != 0 for g in projects)}
 
 
-def stop_lines(db, equipment_id, month, *, include_current=False):
-    if equipment_id is None:
-        return
+def equipment_lines(db, equipment_id, month, *, include_current=False):
     cutoff = RentalLine.month >= month if include_current else RentalLine.month > month
-    rows = db.scalars(select(RentalLine).where(RentalLine.equipment_id == equipment_id, cutoff))
+    return db.scalars(select(RentalLine).where(RentalLine.equipment_id == equipment_id, cutoff)
+                      .order_by(RentalLine.month, RentalLine.id))
+
+
+def later_lines(db, line):
+    if line.equipment_id is not None:
+        return equipment_lines(db, line.equipment_id, line.month)
+    # A carry-forward retains the source row and its workbook identity.
+    if line.source_row is None:
+        return ()
+    candidates = db.scalars(select(RentalLine).where(
+        RentalLine.equipment_id.is_(None), RentalLine.month > line.month, RentalLine.source_row == line.source_row,
+        RentalLine.name == line.name, RentalLine.spec == line.spec, RentalLine.unit == line.unit,
+    ).order_by(RentalLine.month, RentalLine.id))
+    project = ProjectRef.from_row(line, "project").key()
+    return (other for other in candidates if ProjectRef.from_row(other, "project").key() == project)
+
+
+def stop(rows, *, suspend=False):
     for line in rows:
+        data = meta(line)
+        if suspend and line.billing_status != "stopped":
+            data["suspended_billing"] = line.billing_status
+        elif not suspend:
+            data.pop("suspended_billing", None)
+        line.pending_meta_json = encoded(data) if data else None
         line.billing_status, line.amount = "stopped", None
+
+
+def stop_lines(db, equipment_id, month, *, include_current=False):
+    stop(equipment_lines(db, equipment_id, month, include_current=include_current), suspend=True)
+
+
+def has_active_line(db, equipment_id, month):
+    return any(line.billing_status != "stopped"
+               for line in equipment_lines(db, equipment_id, month, include_current=True))
+
+
+def propagate_edits(db, line, before, changes):
+    for other in later_lines(db, line):
+        overrides = meta(other).get("overrides", [])
+        # Older months have no override metadata. The first differing value starts its own continuation.
+        before = {field: value for field, value in before.items()
+                  if field not in overrides and getattr(other, field) == value}
+        if not before:
+            break
+        for field in before:
+            setattr(other, field, changes[field])
+        recalculate(other)
+
+
+def can_charge(month, item):
+    return item is None or item.in_rental == "yes" or month < date.today().strftime("%Y-%m")
 
 
 def patch(db, key, changes):
     line = require(db, RentalLine, key)
+    item = db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None
+    if changes.get("billing_status") == "normal" and not can_charge(line.month, item):
+        raise DataConflictError("该设备当前未列租赁表，不能恢复计租")
+    fields = {"quantity", "custom_unit_price"} & changes.keys()
+    if fields:
+        data = meta(line)
+        data["overrides"] = sorted(fields | set(data.get("overrides", [])))
+        line.pending_meta_json = encoded(data)
+        before = {field: getattr(line, field) for field in fields if getattr(line, field) != changes[field]}
+        if before:
+            propagate_edits(db, line, before, changes)
     if changes.get("billing_status") == "stopped":
-        stop_lines(db, line.equipment_id, line.month)
+        stop((line,))
+        stop(later_lines(db, line))
     for name, value in changes.items():
         setattr(line, name, value)
     recalculate(line)
     db.flush()
-    return line_record(line, project_index(db), db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None)
+    return line_record(line, project_index(db), item)
 
 
 def resolve(db, key, choice):
     line = require(db, RentalLine, key)
     data = meta(line)
     kind = line.pending_action_type
-    following = {k: data[k] for k in ("next_project", "next_transfer_id", "stop_next") if k in data}
+    following = {k: data[k] for k in ("next_project", "next_transfer_id", "stop_next", "overrides",
+                                     "suspended_billing") if k in data}
     if kind == "transfer_attribution" and choice in ("from_project", "to_project"):
         transfer = require(db, EquipmentTransfer, data["transfer_id"])
         move(db, line, ProjectRef.from_row(transfer, choice))
@@ -305,6 +387,7 @@ def resolve(db, key, choice):
         require(db, EquipmentScrap, data["scrap_id"]).rental_stop_status = (
             "stopped" if choice == "stop_this_month" else choice)
         following["stop_next"] = True
+        following.pop("suspended_billing", None)
     else:
         raise DataConflictError("选择与当前待确认事项不符，请刷新租赁明细")
     queue = data.get("queue", [])
@@ -315,18 +398,19 @@ def resolve(db, key, choice):
         following.update(upcoming["details"], queue=queue)
     line.pending_meta_json = encoded(following) if following else None
     # Later months may already have been opened before this event was settled.
-    later = db.scalars(select(RentalLine).where(RentalLine.equipment_id == line.equipment_id,
-                        RentalLine.month > line.month).order_by(RentalLine.month)).all()
-    for other in later:
-        if kind == "scrap_stop":
-            db.delete(other)
-        elif kind == "transfer_attribution":
+    if kind == "scrap_stop":
+        stop(later_lines(db, line))
+    elif kind == "transfer_attribution":
+        for other in later_lines(db, line):
             if other.pending_action_type != "none" or "next_project" in meta(other):
                 break
             move(db, other, ProjectRef.from_row(transfer, "to_project"))
+    item = db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None
+    if line.billing_status == "normal" and not can_charge(line.month, item):
+        line.billing_status = "stopped"
     recalculate(line)
     db.flush()
-    return line_record(line, project_index(db), db.get(EquipmentItem, line.equipment_id) if line.equipment_id else None)
+    return line_record(line, project_index(db), item)
 
 
 def reorder(db, request):

@@ -144,10 +144,11 @@ def inventory(db, category=None):
             "count_amount": total(r.count_amount for r in rows)}
 
 
-def asset_row(db, item, qty):
+def asset_row(db, item, qty, *, counted, diff_qty=None):
     return save_inventory(db, {"category": "tool" if item.item_category == "equipment" else "turnover",
                               "name": item.name, "spec": item.spec, "unit": item.unit,
-                              "unit_price": item.purchase_price, "book_qty": qty, "count_qty": qty})
+                              "unit_price": item.purchase_price, "book_qty": qty,
+                              "count_qty": counted, "diff_qty": diff_qty})
 
 
 def start_rental(db, item, month, custom=None):
@@ -163,7 +164,7 @@ def create(db, req):
     allocated = codes(db, req)
     if req.expected_codes is not None and req.expected_codes != allocated:
         raise DataConflictError("编号已被占用或录入内容已变化，请刷新编号预览", detail="expected_codes")
-    inv = asset_row(db, req, req.quantity) if req.asset_scope == "current_asset" else None
+    inv = asset_row(db, req, req.quantity, counted=req.quantity) if req.asset_scope == "current_asset" else None
     data = req.model_dump(exclude={"quantity", "custom_unit_price", "target_month", "expected_codes"})
     data.update(purchase.fields("purchase_project"))
     data.update(purchase.fields("current_project"))
@@ -186,10 +187,15 @@ def create(db, req):
 
 def deduct(row, qty):
     row.book_qty -= qty
-    row.count_qty = max(Decimal("0"), row.count_qty - qty)
-    row.diff_qty = row.count_qty - row.book_qty
-    row.is_active = row.book_qty > 0 or row.count_qty > 0 or row.diff_qty != 0
+    if row.count_qty is None:
+        moved_count = row.diff_qty = None
+    else:
+        moved_count = min(qty, max(Decimal(0), row.count_qty))
+        row.count_qty -= moved_count
+        row.diff_qty = row.count_qty - row.book_qty
+    row.is_active = row.book_qty > 0 or bool(row.count_qty) or bool(row.diff_qty)
     inventory_amounts(row)
+    return moved_count
 
 
 def update(db, key, changes):
@@ -198,6 +204,7 @@ def update(db, key, changes):
         raise DataConflictError("已报废设备不能直接修改")
     old_flag, old_scope = item.in_rental, item.asset_scope
     projects = project_index(db)
+    month = date.today().strftime("%Y-%m")
     dual_fields = {"purchase_project_id", "purchase_project_custom"} & changes.keys()
     previous = ProjectRef.from_row(item, "purchase_project")
     if dual_fields:
@@ -211,6 +218,13 @@ def update(db, key, changes):
         changes = changes | project.fields("purchase_project")
     for name, value in changes.items():
         setattr(item, name, value)
+    purchase = ProjectRef.from_row(item, "purchase_project")
+    if purchase != previous and db.scalar(select(EquipmentTransfer.id).where(
+            EquipmentTransfer.equipment_id == key).limit(1)) is None:
+        origin = ProjectRef.from_row(item, "current_project")
+        for field, value in purchase.fields("current_project").items():
+            setattr(item, field, value)
+        rental.correct_location(db, key, month, origin, purchase)
     item.updated_by = current_operator()
     if "purchase_date" in changes:
         item.purchase_date_text = None
@@ -226,17 +240,19 @@ def update(db, key, changes):
         others = db.scalar(select(func.count()).select_from(EquipmentItem).where(
             EquipmentItem.inventory_item_id == linked.id, EquipmentItem.id != key, EquipmentItem.status != "scrapped"))
         if others:
-            deduct(linked, item.quantity)
-            item.inventory_item_id = asset_row(db, item, item.quantity).id
+            counted = deduct(linked, item.quantity)
+            difference = counted - item.quantity if counted is not None else None
+            item.inventory_item_id = asset_row(db, item, item.quantity, counted=counted, diff_qty=difference).id
         else:
             save_inventory(db, edited, linked.id)
     # An imported on-book item may be excluded from inventory or have only a group match.
     elif not linked and item.asset_scope == "current_asset" and item.source_lists_inventory is None:
-        item.inventory_item_id = asset_row(db, item, item.quantity).id
-    if old_flag != "yes" and item.in_rental == "yes":
-        start_rental(db, item, date.today().strftime("%Y-%m"))
-    if old_flag == "yes" and item.in_rental == "no":
-        rental.stop_lines(db, item.id, date.today().strftime("%Y-%m"), include_current=True)
+        item.inventory_item_id = asset_row(db, item, item.quantity, counted=item.quantity).id
+    if old_flag != item.in_rental:
+        if item.in_rental != "yes":
+            rental.stop_lines(db, item.id, month, include_current=True)
+        elif not rental.has_active_line(db, item.id, month):
+            start_rental(db, item, month)
     if not i8_scope(item):
         item.i8_sync_status, item.i8_sync_message = "not_applicable", None
         if old_scope == "current_asset" and item.item_category == "equipment":
@@ -399,9 +415,9 @@ def transfer_equipment_id(db, key):
 def delete_transfer(db, key):
     transfer = require(db, EquipmentTransfer, key)
     item = require(db, EquipmentItem, transfer.equipment_id)
-    recent = db.scalars(select(EquipmentTransfer).where(EquipmentTransfer.equipment_id == item.id)
-                        .order_by(*LATEST_TRANSFER_ORDER).limit(2)).all()
-    if recent[0].id != key:
+    latest_id = db.scalar(select(EquipmentTransfer.id).where(EquipmentTransfer.equipment_id == item.id)
+                          .order_by(*LATEST_TRANSFER_ORDER).limit(1))
+    if latest_id != key:
         raise DataConflictError("仅可删除该设备的最新一条调拨记录")
     if item.status == "scrapped":
         raise DataConflictError("设备已报废，不能删除历史调拨记录")
@@ -409,8 +425,7 @@ def delete_transfer(db, key):
         raise DataConflictError("该调拨已同步 i8，暂不支持直接删除，请先核对 i8 单据")
     if transfer_awaiting_readback(transfer):
         raise DataConflictError("该调拨的 i8 保存结果待核对，暂不支持直接删除")
-    previous = recent[1] if len(recent) == 2 else None
-    reverted = ProjectRef.from_row(previous, "to_project") if previous else ProjectRef.from_row(item, "purchase_project")
+    reverted = ProjectRef.from_row(transfer, "from_project")
     rental.remove_transfer(db, transfer, reverted)
     for field, value in reverted.fields("current_project").items():
         setattr(item, field, value)

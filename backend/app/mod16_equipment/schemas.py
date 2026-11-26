@@ -141,7 +141,7 @@ class InventoryCreate(Input):
     unit: str | None = None
     unit_price: Price | None = None
     book_qty: Number
-    count_qty: Number
+    count_qty: Number | None
     diff_qty: Number | None = None
     diff_reason: str | None = None
     sort_order: int = 0
@@ -153,7 +153,7 @@ class InventoryPatch(Input):
     unit: str | None = None
     unit_price: Price | None = None
     book_qty: Number = Decimal(0)
-    count_qty: Number = Decimal(0)
+    count_qty: Number | None = None
     diff_qty: Number | None = None
     diff_reason: str | None = None
     sort_order: int = 0

@@ -143,10 +143,12 @@ class I8CustomFormEquipmentAdapter:
             "customBusCode": code, "data": encoded(data), "billNoStatus": "1",
             "isContinue": encoded({"warn": "0", "validateWarn": "0", "checkProjOrgWarn": "0"}),
         })
-        if response.get("status") in ("validateWarn", "validateForbid", "warn", "checkProjOrgWarn", "error"):
+        status = response.get("status")
+        if status in ("validateWarn", "validateForbid", "warn", "checkProjOrgWarn") or (
+                status == "error" and code != "ldzcdb"):
             raise SaveRejected("i8 未接受保存")
         phid = response.get("data")
-        if response.get("status") != "success" or not isinstance(phid, str) or not phid.strip():
+        if status != "success" or not isinstance(phid, str) or not phid.strip():
             raise ValueError("i8 保存回执未确认成功")
         return phid
 
@@ -208,7 +210,7 @@ class I8CustomFormEquipmentAdapter:
         return checked_project(after, project_name, matches, project_id=linked_phid)
 
     def create_transfer(self, code, from_project, to_project, *, transfer_date=None, remark=None,
-                        from_project_phid=None, to_project_phid=None):
+                        from_project_phid=None, to_project_phid=None, before_save=None):
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
         source_name = self.project_names.get(from_project, from_project)
@@ -263,6 +265,8 @@ class I8CustomFormEquipmentAdapter:
         evidence = {"awaiting_readback": True, "code": code, "phid": before["phid"],
                     "to_project": to_project, "destination_id": destination, "origin_id": origin,
                     "destination_name": destination_name, "destination_linked": to_project_phid is not None}
+        if before_save is not None:
+            before_save(evidence)
         try:
             evidence["bill_phid"] = self._save("ldzcdb", payload)
         except SaveRejected:
@@ -334,7 +338,7 @@ def i8_project(ref, projects):
 
 
 def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEquipmentAdapter | None = None,
-                *, initial_project=None):
+                *, initial_project=None, before_transfer_save=None):
     target = transfer if transfer is not None else item
     result = SyncResult("pending", UNAVAILABLE)
     if adapter is not None:
@@ -359,13 +363,18 @@ def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEq
                     if isinstance(adapter, I8CustomFormEquipmentAdapter):
                         result = adapter.create_transfer(item.code, origin, destination,
                                                          transfer_date=transfer.transfer_date, remark=transfer.remark,
-                                                         from_project_phid=origin_phid, to_project_phid=destination_phid)
+                                                         from_project_phid=origin_phid, to_project_phid=destination_phid,
+                                                         before_save=before_transfer_save)
                     else:
                         result = _sync_legacy(adapter, {"code": item.code, "current_project": destination},
                                               (origin, destination))
             item.i8_snapshot_json = encoded(result.snapshot) if result.snapshot is not None else None
             if transfer is not None:
                 transfer.i8_conflict_json = encoded(result.conflict) if result.conflict else None
+        except SaveRejected:
+            if transfer is not None:
+                transfer.i8_conflict_json = None
+            result = SyncResult("failed", "i8 未接受保存，可核对后重试")
         except Exception:
             result = SyncResult("failed", "i8 同步失败，已保存本地，可重新核对同步")
     target.i8_sync_status, target.i8_sync_message = result.status, result.message
@@ -424,15 +433,38 @@ def _drain(key, adapter):
         if item.i8_sync_status != "synced":
             return {"equipment": equipment, "transfers": [receipt(r) for r in pending]}
     for index, row in enumerate(pending):
-        result = synchronize(item, projects, row, adapter)
-        with session_scope() as db:
-            ledger_lock(db)
-            saved = require(db, EquipmentTransfer, row.id)
-            saved.i8_sync_status, saved.i8_sync_message = row.i8_sync_status, row.i8_sync_message
-            saved.i8_conflict_json = row.i8_conflict_json
-            require(db, EquipmentItem, key).i8_snapshot_json = item.i8_snapshot_json
+        result = _sync_transfer(item, projects, row, adapter)
         transfers.append(result)
-        if row.i8_sync_status != "synced":
+        if result["status"] != "synced":
             transfers.extend(receipt(r) for r in pending[index + 1:])
             break
     return {"equipment": equipment, "transfers": transfers}
+
+
+def _sync_transfer(item, projects, row, adapter):
+    expected = row.i8_conflict_json
+
+    def reserve(evidence):
+        nonlocal expected
+        # Commit the intent before posting. An interrupted submission can only be read back.
+        intent = encoded(evidence)
+        with session_scope() as db:
+            ledger_lock(db)
+            saved = require(db, EquipmentTransfer, row.id)
+            if (saved.i8_sync_status not in ISSUES or saved.i8_conflict_json != expected
+                    or transfer_awaiting_readback(saved)):
+                raise RuntimeError("i8 调拨同步状态已变化")
+            saved.i8_conflict_json = intent
+            saved.i8_sync_message = "i8 调拨保存结果待核对"
+        expected = row.i8_conflict_json = intent
+
+    result = synchronize(item, projects, row, adapter, before_transfer_save=reserve)
+    with session_scope() as db:
+        ledger_lock(db)
+        saved = require(db, EquipmentTransfer, row.id)
+        if saved.i8_sync_status not in ISSUES or saved.i8_conflict_json != expected:
+            return receipt(saved)
+        saved.i8_sync_status, saved.i8_sync_message = row.i8_sync_status, row.i8_sync_message
+        saved.i8_conflict_json = row.i8_conflict_json
+        require(db, EquipmentItem, item.id).i8_snapshot_json = item.i8_snapshot_json
+    return result

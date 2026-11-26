@@ -1,5 +1,6 @@
 """设备台账的三套打印表。输入是同一事务取出的普通数据快照。"""
 from datetime import date
+from decimal import Decimal
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -7,6 +8,7 @@ from openpyxl.utils import get_column_letter, quote_sheetname
 from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.pagebreak import Break
 
+from app.core.money import MoneyError, ledger_product
 from app.report_export.save import Formula, TextFormula, set_formula, workbook_bytes
 
 
@@ -32,6 +34,15 @@ GRID_BORDER = Border(left=BORDER, right=BORDER, top=BORDER, bottom=BORDER)
 HEADER_FILL = PatternFill("solid", fgColor="E9EFF5")
 NUMBER_FORMAT = "General"
 INVENTORY_MONEY = "#,##0.00##"
+
+
+def formula_matches(amount, quantity, price):
+    if amount is None or quantity is None or price is None:
+        return False
+    try:
+        return abs(amount - ledger_product(quantity, price)) <= Decimal("0.005")
+    except MoneyError:
+        return False
 
 
 def sheet_setup(ws, widths, orientation=None):
@@ -216,7 +227,7 @@ def rental_table(ws, first, period, project):
         n = data_row + index - 1
         put(ws, n, [index, line["name"], line["spec"], line["unit"], line["quantity"], line["unit_price"],
                     line["amount"], line["category_label"], line["distribution_note"]])
-        if line["amount"] is not None and line["quantity"] is not None and line["unit_price"] is not None:
+        if formula_matches(line["amount"], line["quantity"], line["unit_price"]):
             set_formula(ws[f"G{n}"], Formula(
                 f'=IF(COUNT(E{n}:F{n})=2,ROUND(E{n}*F{n},4),"")', line["amount"]))
     put(ws, subtotal, [None, "合计："])
@@ -345,6 +356,7 @@ def equipment_inventory_xlsx(items):
     cover = wb.active
     inventory_cover(cover)
     counted_totals = []
+    incomplete_counts = []
     for category, title, cover_row in (("tool", "流动资产盘点表", 7), ("turnover", "周转材料", 8)):
         ws = wb.create_sheet(title)
         inventory_page_setup(ws, category)
@@ -360,7 +372,7 @@ def equipment_inventory_xlsx(items):
                                            ("K", "J", "diff_qty", "diff_amount")):
                 if r[key] is not None:
                     amounts[col].append(r[key])
-                    if r["unit_price"] is not None and r[quantity] is not None:
+                    if formula_matches(r[key], r[quantity], r["unit_price"]):
                         expr = f'=IF(COUNT({qty}{n},E{n})=2,ROUND({qty}{n}*E{n},4),"")'
                         set_formula(ws[f"{col}{n}"], Formula(expr, r[key]))
             n += 1
@@ -378,11 +390,14 @@ def equipment_inventory_xlsx(items):
         counted = sum(amounts["I"]) if amounts["I"] or n == 5 else None
         if counted is not None:
             counted_totals.append(counted)
+        if len(amounts["I"]) < n - 5:
+            incomplete_counts.append(f"COUNT({quote_sheetname(ws.title)}!I5:I{n-1})={n-5}")
         ref = f"{quote_sheetname(ws.title)}!I{n}"
         set_formula(cover[f"H{cover_row}"], Formula(f'={ref}', counted))
-    overall = sum(counted_totals) if counted_totals else None
-    # A populated detail sheet can have no known amounts, so its total formula returns empty text.
-    total_formula = '=H7+H8' if len(counted_totals) == 2 else '=IF(COUNT(H7:H8),SUM(H7:H8),"")'
+    overall = None if incomplete_counts else sum(counted_totals)
+    total_formula = '=H7+H8'
+    if incomplete_counts:
+        total_formula = f'=IF(AND({",".join(incomplete_counts)}),H7+H8,"")'
     set_formula(cover["I6"], Formula(total_formula, overall))
     set_formula(cover["E6"], Formula('=I6', overall))
     return workbook_bytes(wb)

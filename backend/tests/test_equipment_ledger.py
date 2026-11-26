@@ -590,7 +590,7 @@ def test_latest_transfer_orders_undated_history_last(client):
     rows = request(client, "GET", "/transfers")["items"]
     assert [(r["id"], r["is_latest_for_equipment"]) for r in rows] == [
         (dated, True), (undated, False), (earlier, False)]
-    assert request(client, "DELETE", f"/transfers/{dated}")["reverted_project"] == "项目丙"
+    assert request(client, "DELETE", f"/transfers/{dated}")["reverted_project"] == "项目甲"
 
 
 @pytest.mark.parametrize(("guard", "message"), [
@@ -678,6 +678,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     baseline = runpy.run_path(str(filename.with_name("equipbase261123_historical_transfers.py")))
     project_links = runpy.run_path(str(filename.with_name("equipproj261124_project_links.py")))
     locations = runpy.run_path(str(filename.with_name("equiploc261125_locations.py")))
+    counts = runpy.run_path(str(filename.with_name("equipcount261126_nullable_count.py")))
     schema = rollback_db.exec_driver_sql("select current_schema()").scalar_one()
     assert schema.startswith("backend_verify_")
 
@@ -687,6 +688,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
     initial = tables()
     with Operations.context(MigrationContext.configure(rollback_db)):
         assert "m16_locations" in initial
+        counts["downgrade"]()
         locations["downgrade"]()
         assert "m16_locations" not in tables()
         project_links["downgrade"]()
@@ -699,6 +701,7 @@ def test_migration_round_trip_in_isolated_schema(rollback_db):
         baseline["upgrade"]()
         project_links["upgrade"]()
         locations["upgrade"]()
+        counts["upgrade"]()
     assert tables() == initial
 
 class RecordingAdapter:
@@ -1100,6 +1103,35 @@ def test_saved_transfer_waits_for_equipment_project_without_reposting(client):
     ]
 
 
+def test_transfer_receipt_commit_failure_does_not_repost(client):
+    item, = add(client, name="样机", in_rental="no")["equipment"]
+    key = item["id"]
+    with session_scope() as db:
+        db.get(EquipmentItem, key).i8_sync_status = "synced"
+    before = page(equipment_row())
+    adapter, calls = custom_adapter(before, save_receipt("B1"), page(transfer_bill()), before, before)
+    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+
+    def fail_receipt(db, *_):
+        if any(isinstance(row, EquipmentTransfer) and '"bill_phid"' in (row.i8_conflict_json or "")
+               for row in db.dirty):
+            raise RuntimeError("simulated receipt commit failure")
+
+    event.listen(Session, "before_flush", fail_receipt)
+    try:
+        with pytest.raises(RuntimeError, match="simulated receipt commit failure"):
+            transfer_to(client, key, "项目乙")
+    finally:
+        event.remove(Session, "before_flush", fail_receipt)
+    saved, = request(client, "GET", "/transfers")["items"]
+    intent = json.loads(saved["i8_conflict_json"])
+    assert intent["awaiting_readback"] and "bill_phid" not in intent
+    request(client, "DELETE", f"/transfers/{saved['id']}", status=409)
+    retried = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [saved["id"]]})
+    assert retried["transfers"][0]["status"] == "failed"
+    assert [call.args[0] for call in calls.call_args_list] == [LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH, LIST_PATH]
+
+
 def save_source(path, sheets):
     book = Workbook()
     book.remove(book.active)
@@ -1130,11 +1162,11 @@ def baseline_paths(tmp_path):
         "周转材料调拨记录": [transfer], "周转材料报废记录": [scrap]})
     header = [None]*4 + ["单价", "帐面数", None, "盘点数", None, None, None, "盈亏原因"]
     inventory = save_source(tmp_path / "i.xlsx", {"2025年年终盘点流动资产": [[], [], header, [],
-        [1, "样机", None, "台", 2, 3, 6, 3, 6], [2, "电动三轮车", None, "辆", 5300, 1, 5300, 1, 5300],
+        [1, "样机", None, "台", 2, 3, 6.01, 3, 6], [2, "电动三轮车", None, "辆", 5300, 1, 5300, 1, 5300],
         [3, "电动三轮车", None, "辆", 5300, 1, 5300, 1, 5300]], "周转材料": [[], [], header]})
     rental_header = "项目 设备名称 规格型号 单位 数量 租赁单价（元） 本月收费 金额（元） 变化／待核 类别 原值（元） 自定义单价（元） 底稿行 上期金额 早期草稿金额 对应设备编号".split()
     rental = save_source(tmp_path / "r.xlsx", {"本月租赁": [[], [], [], [], rental_header,
-        ["乌兰察布储能", "样机", None, "台", 3, 5, "计费", 15, None, "设备", None, 5, 4, None, None, "甲-01"],
+        ["晋江污泥处理项目", "样机", None, "台", 3, 5, "计费", 15.01, None, "设备", None, 5, 4, None, None, "甲-01"],
         ["宜阳仓库", "样机", None, "台", 1, 0, "金额留空", None, None, None, 0, None, 5, None, None, "甲-01、乙-01"]]})
     return dict(distribution_path=distribution, inventory_path=inventory, rental_path=rental)
 
@@ -1142,8 +1174,10 @@ def baseline_paths(tmp_path):
 def test_baseline_apply_and_excel_readback(client, baseline_paths):
     preview = import_equipment_baseline(None, **baseline_paths, dry_run=True)
     assert preview == dict(equipment_count=4, turnover_count=1, transfer_count=1, scrap_count=1,
-        inventory_tool_count=3, inventory_tool_book_total=10606, inventory_turnover_count=0,
-        rental_line_count=2, rental_grand_total=15, linked_inventory_count=3, linked_rental_count=1)
+        inventory_tool_count=3, inventory_tool_book_total=Decimal("10606.01"), inventory_turnover_count=0,
+        rental_line_count=2, rental_grand_total=Decimal("15.01"), linked_inventory_count=3, linked_rental_count=1)
+    assert request(client, "GET", f"/rental?month={MONTH}")["projects"] == []
+    assert request(client, "GET", "/rental?month=2026-12")["projects"] == []
     original_location = request(client, "POST", "/locations", dict(name="酒钢项目", is_active=False, sort_order=5))
     with session_scope() as db:
         jinjiang = archive_project(db, "晋江污泥项目")
@@ -1167,10 +1201,11 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
         assert (transfer.to_project_id, transfer.to_project_custom) == (wulanchabu, None)
         a, b = db.scalars(select(RentalLine).order_by(RentalLine.project_sort_order)).all()
         assert a.equipment_id == item.id and a.custom_unit_price == 5
-        assert (a.project_id, a.project_custom) == (wulanchabu, "鄂旗项目")
+        assert (a.project_id, a.project_custom) == (jinjiang, None)
         assert b.equipment_id is None and b.billing_status == "blank" and b.amount is None
         assert (b.project_id, b.project_custom) == (None, "宜阳仓库")
         assert a.category_label == b.category_label == "大型工机具"
+        unlinked = b.id
         assert [db.get(InventoryItem, db.scalar(select(EquipmentItem.inventory_item_id).where(
             EquipmentItem.code == f"电动三轮车-202305-{i}"))).source_row for i in (1, 2)] == ["6", "7"]
     locations = {r["name"]: r for r in request(client, "GET", "/locations?include_inactive=true")["items"]}
@@ -1188,10 +1223,172 @@ def test_baseline_apply_and_excel_readback(client, baseline_paths):
     assert (dist["E3"].value.date(), dist["F3"].value, dist["T3"].value) == (date(2025, 1, 2), "202501", 3)
     transfer_sheet = exported["调拨记录"]
     assert (transfer_sheet["J2"].value.date(), transfer_sheet["K2"].value) == (date(2026, 8, 11), "张永军；原备注")
-    inv = workbook(client, "inventory", data_only=True)["流动资产盘点表"]
-    assert inv["G5"].value == 6
-    rent = workbook(client, f"rental?month={MONTH}", data_only=True).active
-    assert rent["G4"].value == 15 and rent["G14"].value is None
+    inv = workbook(client, "inventory")["流动资产盘点表"]
+    assert inv["G5"].value == 6.01 and "H5*E5" in inv["I5"].value
+    rent = workbook(client, f"rental?month={MONTH}").active
+    assert rent["G4"].value == 15.01 and rent["G14"].value is None
+    later = "/rental?month=2026-12"
+    request(client, "GET", later)
+    request(client, "PATCH", f"/rental/lines/{unlinked}", {"billing_status": "stopped"})
+    lines = {group["project_name"]: group["lines"][0] for group in request(client, "GET", later)["projects"]}
+    assert lines["宜阳仓库"]["billing_status"] == "stopped"
+    assert lines["晋江污泥项目"]["billing_status"] == "normal"
+
+
+@pytest.mark.parametrize("original_count", [None, "0", "0.5", "1.5"])
+def test_spec_split_preserves_shared_inventory_count(client, original_count):
+    created = add(client, quantity=2, purchase_price="10", in_rental="no")
+    key = created["equipment"][0]["id"]
+    inv_id = created["inventory_item"]["id"]
+    request(client, "PATCH", f"/inventory/{inv_id}", {"count_qty": original_count})
+    request(client, "PATCH", f"/equipment/{key}", {"spec": "另一规格"})
+    old, new = request(client, "GET", "/inventory")["items"]
+    assert old["id"] == inv_id and new["linked_equipment_ids"] == [key]
+    count = Decimal(original_count) if original_count is not None else None
+    split_count = min(count, 1) if count is not None else None
+    for row, expected in ((old, count - split_count if count is not None else None), (new, split_count)):
+        assert Decimal(row["book_qty"]) == 1 and Decimal(row["book_amount"]) == 10
+        if expected is None:
+            assert all(row[field] is None for field in ("count_qty", "count_amount", "diff_qty", "diff_amount"))
+        else:
+            assert [Decimal(row[field]) for field in ("count_qty", "count_amount", "diff_qty", "diff_amount")] == [
+                expected, expected * 10, expected - 1, (expected - 1) * 10,
+            ]
+
+
+def test_purchase_project_correction_follows_unmoved_equipment_and_rental(client):
+    month = date.today().strftime("%Y-%m")
+    next_month = (date.today().replace(day=1) + timedelta(days=32)).strftime("%Y-%m")
+    with session_scope() as db:
+        project_id = archive_project(db, "更正后项目")
+    created = add(client, target_month=month)
+    key = created["equipment"][0]["id"]
+    resolve(client, created["rental_line_ids"][0], "this_month")
+    request(client, "GET", f"/rental?month={next_month}")
+    edited = request(client, "PATCH", f"/equipment/{key}",
+                     {"purchase_project_id": project_id, "purchase_project_custom": "现场"})
+    assert (edited["current_project_id"], edited["current_project_custom"], edited["i8_sync_status"]) == (
+        project_id, "现场", "pending",
+    )
+    for period in (month, next_month):
+        group, = request(client, "GET", f"/rental?month={period}")["projects"]
+        assert group["project_id"] == project_id and group["lines"][0]["project_custom"] == "现场"
+
+
+@pytest.mark.parametrize("unknown_purchase", [True, False])
+def test_undo_first_transfer_restores_recorded_origin(client, unknown_purchase):
+    with session_scope() as db:
+        original = archive_project(db, "原项目")
+        replacement = archive_project(db, "更正项目")
+    item, = add(client, item_category="turnover", in_rental="no", purchase_project_id=original)["equipment"]
+    key = item["id"]
+    if unknown_purchase:
+        with session_scope() as db:
+            row = db.get(EquipmentItem, key)
+            row.purchase_project, row.purchase_project_id = "", None
+            row.current_project = row.current_project_custom = "待核"
+            row.current_project_id = None
+        assert request(client, "PATCH", f"/equipment/{key}", {"remark": "已复核"})["purchase_project"] == ""
+    transfer = transfer_to(client, key, "另一个项目")
+    if not unknown_purchase:
+        edited = request(client, "PATCH", f"/equipment/{key}", {"purchase_project_id": replacement})
+        assert edited["current_project"] == "另一个项目"
+    reverted = request(client, "DELETE", f"/transfers/{transfer}")
+    assert (reverted["reverted_project_id"], reverted["reverted_project_custom"]) == (
+        (None, "待核") if unknown_purchase else (original, None)
+    )
+
+
+def test_rental_edits_propagate_per_field_and_scrap_keeps_future_rows(client):
+    created = add(client, custom_unit_price="5")
+    key = created["equipment"][0]["id"]
+    first = created["rental_line_ids"][0]
+    resolve(client, first, "this_month")
+
+    def row(month):
+        return request(client, "GET", f"/rental?month={month}")["projects"][0]["lines"][0]
+
+    second, third = row("2026-12"), row("2027-01")
+    # Even an explicit price equal to the inherited price starts its own continuation.
+    request(client, "PATCH", f"/rental/lines/{second['id']}", {"custom_unit_price": "5"})
+    request(client, "PATCH", f"/rental/lines/{first}", {"quantity": "3", "custom_unit_price": "7"})
+    for month in ("2026-12", "2027-01"):
+        current = row(month)
+        assert [Decimal(current[field]) for field in ("quantity", "unit_price", "amount")] == [3, 5, 15]
+
+    request(client, "POST", "/scraps", dict(equipment_id=key, scrap_date=f"{MONTH}-28"))
+    resolve(client, first, "charge_this_month")
+    for earlier in (second, third):
+        current = row(earlier["month"])
+        assert (current["id"], current["custom_unit_price"], current["billing_status"], current["amount"]) == (
+            earlier["id"], "5.0000", "stopped", None,
+        )
+
+
+def test_rental_pending_transition_and_existing_active_line(client):
+    month = date.today().strftime("%Y-%m")
+    next_month = (date.today().replace(day=1) + timedelta(days=32)).strftime("%Y-%m")
+    created = add(client, target_month=month)
+    key = created["equipment"][0]["id"]
+    first, = created["rental_line_ids"]
+    resolve(client, first, "this_month")
+    request(client, "GET", f"/rental?month={next_month}")
+    path = f"/equipment/{key}"
+
+    def states():
+        with session_scope() as db:
+            return [(line.billing_status, line.pending_action_type, line.amount)
+                    for line in rental.equipment_lines(db, key, month, include_current=True)]
+
+    # Reproduce pending equipment with active rows left by the previous implementation.
+    with session_scope() as db:
+        db.get(EquipmentItem, key).in_rental = "pending"
+    request(client, "PATCH", path, {"in_rental": "yes"})
+    assert [(status, action) for status, action, _ in states()] == [("normal", "none")] * 2
+    request(client, "PATCH", path, {"in_rental": "pending"})
+    assert states() == [("stopped", "none", None)] * 2
+    with session_scope() as db:
+        line = db.get(RentalLine, first)
+        line.billing_status = "normal"
+        rental.recalculate(line)
+    request(client, "PATCH", path, {"in_rental": "no"})
+    assert states() == [("stopped", "none", None)] * 2
+    request(client, "PATCH", path, {"in_rental": "yes"})
+    assert [(status, action) for status, action, _ in states()] == [
+        ("skip_month", "new_purchase_start"), ("normal", "none"),
+    ]
+
+
+def test_rental_materialized_month_receives_unoverridden_price(client):
+    created = add(client)
+    first, = created["rental_line_ids"]
+    resolve(client, first, "this_month")
+    month = "/rental?month=2026-12"
+    request(client, "GET", month)
+    request(client, "PATCH", f"/rental/lines/{first}", {"custom_unit_price": "8"})
+    later = request(client, "GET", month)["projects"][0]["lines"][0]
+    assert Decimal(later["unit_price"]) == Decimal(later["amount"]) == 8
+
+
+@pytest.mark.parametrize("known_turnover", [False, True])
+def test_inventory_cover_keeps_unknown_grand_total_blank(client, known_turnover):
+    request(client, "POST", "/inventory", dict(category="tool", name="待盘点", book_qty="1", count_qty=None,
+                                                unit_price="9"))
+    if known_turnover:
+        request(client, "POST", "/inventory", dict(category="turnover", name="已盘点", book_qty="1", count_qty="1",
+                                                    unit_price="8"))
+    cached = workbook(client, "inventory", data_only=True)["封皮"]
+    assert [cached[cell].value for cell in ("H7", "H8", "I6", "E6")] == [
+        None, 8 if known_turnover else 0, None, None,
+    ]
+    assert "COUNT('流动资产盘点表'!I5:I5)=1" in workbook(client, "inventory")["封皮"]["I6"].value
+
+
+def test_equipment_writes_follow_global_history_barrier(client):
+    preview = client.post(ROOT + "/equipment/preview", json={k: BASE[k] for k in ("name", "purchase_date")})
+    assert preview.status_code == 200 and "X-Operation-History" not in preview.headers
+    created = client.post(ROOT + "/equipment", json=BASE)
+    assert created.status_code == 200 and created.headers["X-Operation-History"] == "unsupported"
 
 
 @pytest.mark.parametrize(("source", "parsed", "note"), [

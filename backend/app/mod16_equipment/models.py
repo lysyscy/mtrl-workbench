@@ -37,7 +37,7 @@ class InventoryItem(Base):
     unit_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     book_qty: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4))
     book_amount: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
-    count_qty: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4))
+    count_qty: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     count_amount: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     diff_qty: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     diff_amount: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))

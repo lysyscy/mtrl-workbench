@@ -30,7 +30,7 @@ const inventoryItem = schema.object({
   unit_price: nullableText,
   book_qty: text,
   book_amount: nullableText,
-  count_qty: text,
+  count_qty: nullableText,
   count_amount: nullableText,
   diff_qty: nullableText,
   diff_amount: nullableText,
