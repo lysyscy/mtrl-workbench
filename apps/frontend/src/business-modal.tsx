@@ -9,8 +9,8 @@ export const BusinessModalTitle = createContext<string | null>(null);
 export type BusinessModalLayout = 'compact' | 'scroll-body' | 'pane';
 
 // Only the close protocol and shared shell layout belong here; drafts and request state stay with the caller.
-export function BusinessModal({ open, requestClose, className, titleId, children, centered = true, layout = 'compact' }: {
-  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode; centered?: boolean; layout?: BusinessModalLayout;
+export function BusinessModal({ open, requestClose, className, titleId, children, centered = true, layout = 'compact', zIndex }: {
+  open: boolean; requestClose: () => unknown; className: string; titleId: string; children: ReactNode; centered?: boolean; layout?: BusinessModalLayout; zIndex?: number;
 }) {
   const [present, safeToRemove] = usePresence();
   const allowed = useContext(MotionAccess), reduced = useWorkspaceReducedMotion();
@@ -33,7 +33,7 @@ export function BusinessModal({ open, requestClose, className, titleId, children
   // rc-dialog labels only its own header; our heading lives in the body.
   if (!present && (reduced || !allowed)) return null;
   return <Modal open={visible} afterClose={() => { if (!present) safeToRemove?.(); }} onCancel={() => { if (visible) requestClose(); }} footer={null} closable={false} keyboard={visible} centered={centered}
-    mask={{ closable: true }} width="max-content" focusable={{ focusTriggerAfterClose: false }}
+    mask={{ closable: true }} width="max-content" {...(zIndex === undefined ? {} : { zIndex })} focusable={{ focusTriggerAfterClose: false }}
     rootClassName={visible ? 'business-modal-root' : 'business-modal-root business-modal-leaving'} transitionName="business-dialog-motion"
     rootStyle={{ opacity: allowed ? undefined : 0, pointerEvents: allowed ? undefined : 'none' }}
     panelRef={panel => { if (panel) { panel.setAttribute('aria-labelledby', accessibleTitleId); panel.inert = !visible; panel.setAttribute('aria-hidden', String(!visible)); } }} className={`business-modal business-modal--${layout}`} destroyOnHidden={false}>

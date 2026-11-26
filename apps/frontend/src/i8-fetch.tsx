@@ -21,7 +21,7 @@ interface Options {
   source?: keyof typeof sourceNames | 'mechanical';
   me: Identity | null;
   paused: boolean;
-  refresh: () => Promise<unknown>;
+  refresh?: () => Promise<unknown>;
   enabled?: boolean;
   scopeKey: string;
   pending?: boolean;
@@ -115,7 +115,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
     setSent(false); setError(''); setRefreshError('');
   }
   async function reread() {
-    if (lock.current || paused || !me) return;
+    if (lock.current || paused || !me || !refresh) return;
     lock.current = true; setRefreshing(true);
     try {
       await refresh();
@@ -179,7 +179,7 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
         }
       } else if (alive.current) setError(failure instanceof Error ? failure.message : '抓取未完成。');
     } finally {
-      if (issued && !awaitingKick) {
+      if (issued && !awaitingKick && refresh) {
         try {await refresh();}
         catch (failure) {
           const reason = failure instanceof Error ? failure.message : '请重读核对。';
@@ -207,8 +207,8 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
 export type I8FetchAction = ReturnType<typeof useI8FetchAction>;
 
 /** Binding, session and execution feedback are identical across all fetch entry points. */
-export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = false}: {
-  action: I8FetchAction; me: Identity | null; showBinding?: boolean; alwaysShowMode?: boolean;
+export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = false, busyLabel = '正在抓取，请稍候…'}: {
+  action: I8FetchAction; me: Identity | null; showBinding?: boolean; alwaysShowMode?: boolean; busyLabel?: string;
 }) {
   const {config} = action;
   return <>
@@ -221,7 +221,7 @@ export function I8FetchStatus({action, me, showBinding = true, alwaysShowMode = 
       : '使用工作台直连。遇到在线冲突时，需要另行确认是否让现有会话下线。'}</p>}
     {action.waiting ? <I8ConnectionWaitStatus /> : action.browserBlocked &&
       <p role="status">{action.connectionNotice || '确认抓取后将自动连接 i8。'}</p>}
-    {action.busy && <p role="status">正在抓取，请稍候…</p>}
+    {action.busy && <p role="status">{busyLabel}</p>}
     {action.kickMessage && <p className="notice" role="status">{action.kickMessage}</p>}
     <div role="status" className={action.revocationNotice ? 'notice' : undefined}>{action.revocationNotice}</div>
     {action.error && <p className="notice" role="alert">{action.error}</p>}

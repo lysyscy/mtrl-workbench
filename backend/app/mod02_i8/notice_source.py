@@ -68,6 +68,10 @@ class NoticeFetcher:
     def __init__(self, client: I8Client) -> None:
         self._client = client
 
+    def validate_session(self, year_month: str) -> None:
+        """Probe the direct session with a one-row read before starting a background fetch."""
+        self._client.post_json(I8_PATH_PAYMENT_NOTICE, data=build_list_form(year_month, limit=1))
+
     def fetch_month(self, year_month: str) -> list[dict]:
         """按核算年月抓取付款通知书（`API-01`）。
 

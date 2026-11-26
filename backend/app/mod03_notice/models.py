@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, false, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -97,8 +97,33 @@ class PaymentNotice(Base):
     #:   ⚠️ **不受再次导入覆盖**（i8 源数据里没有它 ⇒ 被覆盖就等于抹掉人工劳动）⇒ 已并入 `merge.PROTECTED`。
     #: ⚠️ `server_default` 是**给存量行**的（迁移要带它，否则已有数据的库加 `NOT NULL` 列会 NotNullViolation）。
     jc_supplier: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    jc_auto_link_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # 拟付款方式由核对后确认写入；空值沿用付款计划，重抓不覆盖。
     planned_pay_method: Mapped[str] = mapped_column(String(32), default="", server_default="")
+
+
+class NoticeFetchJob(Base):
+    __tablename__ = "notice_fetch_job"
+    __table_args__ = (
+        Index("uq_notice_fetch_job_running", "account", "year_month", unique=True,
+              postgresql_where=text("status = 'running'")),
+        Index("ix_notice_fetch_job_unacknowledged", "account", "id",
+              postgresql_where=text("acknowledged_at IS NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account: Mapped[str] = mapped_column(String(64))
+    year_month: Mapped[str] = mapped_column(String(7))
+    status: Mapped[str] = mapped_column(String(16))
+    stage: Mapped[str] = mapped_column(String(24))
+    stage_label: Mapped[str] = mapped_column(String(64))
+    boot_id: Mapped[str] = mapped_column(String(32))
+    result_json: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    error_message: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class NoticeStatLog(Base):

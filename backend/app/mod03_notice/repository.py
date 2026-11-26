@@ -77,6 +77,17 @@ def get_notice_by_ph_id(session: Session, ph_id: str) -> PaymentNotice | None:
     ).scalar_one_or_none()
 
 
+def lock_fetched_notices(session: Session, ph_ids: list[str]) -> dict[str, PaymentNotice]:
+    if not ph_ids:
+        return {}
+    # The same source batch may be submitted by two accounts.
+    session.connection().exec_driver_sql("SELECT pg_advisory_xact_lock(%s, %s)", (403, 0))
+    session.flush()
+    stmt = (select(PaymentNotice).where(PaymentNotice.ph_id.in_(ph_ids))
+            .order_by(PaymentNotice.id).with_for_update(key_share=True).execution_options(populate_existing=True))
+    return {n.ph_id: n for n in session.scalars(stmt)}
+
+
 def notice_as_dict(notice: PaymentNotice) -> dict:
     """ORM 行 → 普通字典（供 `merge.plan_merge()` 这类**纯函数**使用）。"""
     return {c.name: getattr(notice, c.name) for c in notice.__table__.columns}
@@ -186,7 +197,8 @@ def adjust_notice_stat(
     return trace
 
 
-def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False) -> list[PaymentNotice]:
+def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = False,
+                       lock_keys: bool = False) -> list[PaymentNotice]:
     if not ids:
         return []
     # Read-only batches can span a whole export; bind their IDs as one array.
@@ -194,7 +206,7 @@ def get_notices_by_ids(session: Session, ids: list[int], *, for_update: bool = F
     stmt = select(PaymentNotice).where(match)
     if for_update:
         # 整批按稳定主键先锁后读；NO KEY UPDATE与统计重算一致，兼容流水外键的KEY SHARE。
-        stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=True).execution_options(populate_existing=True)
+        stmt = stmt.order_by(PaymentNotice.id).with_for_update(key_share=not lock_keys).execution_options(populate_existing=True)
     return list(session.execute(stmt).scalars().all())
 
 
@@ -337,9 +349,7 @@ def notice_rows(session: Session, *, limit: int = NOTICE_LIST_LIMIT) -> list[Pay
 
 def upsert_notice(session: Session, *, ph_id: str, **fields) -> PaymentNotice:
     """按 `ph_id` 幂等 upsert。再次导入只覆盖自动字段（切片 1 无手动行，整行可覆盖）。"""
-    existing = session.execute(
-        select(PaymentNotice).where(PaymentNotice.ph_id == ph_id)
-    ).scalar_one_or_none()
+    existing = get_notice_by_ph_id(session, ph_id)
     if existing is None:
         existing = PaymentNotice(ph_id=ph_id)
         session.add(existing)

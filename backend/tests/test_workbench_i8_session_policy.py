@@ -15,14 +15,15 @@ from app.main import _install_error_handlers
 from app.mod01_projects.models import Project
 from app.mod02_i8 import browser_broker, cookie_store, login, payable_source, router as m02, session_policy
 from app.mod03_notice import router as m03
+from app.mod03_notice.models import PaymentNotice
 from app.mod06_proc import workbench_api as m06, workbench_i8
 from app.mod07_setl import api as m07, fetch_service as settlement
 from app.mod08_inv import router as m08, fetch_service as inventory
 from app.mod11_jc import api as m11, fetch_service as contracts
+from app.mod11_jc.models import JcContract
 
 BASE = "https://i8.example.test"
 MONTH = "2026-10"
-SELECTION = {"notice_id": 1, "contract_id": 2, "amount": "1.00", "payable_codes": ["P1"]}
 ENDPOINTS = [
     ("/api/m02/sync/warehouses", {}),
     ("/api/m02/sync/common-projects", {}),
@@ -34,7 +35,6 @@ ENDPOINTS = [
     ("/api/m08/fetch", {"month": MONTH, "confirm": True}),
     ("/api/m11/fetch", {"since": "", "confirm": True}),
     ("/api/m11/auto-link-preview", {"notice_ids": [1]}),
-    ("/api/m11/auto-link", {"notice_ids": [1], "selections": [SELECTION]}),
 ]
 
 
@@ -56,7 +56,16 @@ def case(monkeypatch, rollback_db, tmp_path):
     monkeypatch.setattr(m02.wh_cache, "CACHE_DIR", tmp_path / "warehouse-cache")
     monkeypatch.setattr(inventory.source_cache, "DIR", tmp_path / "inventory-cache")
     with session_scope() as session:
-        session.add(Project(warehouse_name="隔离仓库", name_full="隔离项目", phid="i8-project"))
+        project = Project(warehouse_name="隔离仓库", name_full="隔离项目", phid="i8-project")
+        session.add(project)
+        session.flush()
+        target = JcContract(project_id=project.id, supplier="甲", contract_no="CGHT1")
+        session.add(target)
+        session.add_all(PaymentNotice(id=i, ph_id=f"session-test-{i}", ownership_id=project.id,
+                                      category="jc", approve_status="已批", amount_approved=1, jc_supplier="甲")
+                        for i in (1, 2))
+        session.flush()
+        state.contract_id = target.id
 
     def respond(request):
         assert request.url.host == httpx.URL(BASE).host
@@ -113,7 +122,10 @@ def case(monkeypatch, rollback_db, tmp_path):
 def test_session_mode_is_required_before_i8(case, route, mode):
     path, payload = route
     response = case.client.post(path, json={**payload, **mode, "allow_kick": True})
-    assert response.status_code == 400, response.text
+    if path == "/api/m11/auto-link-preview" and not mode:
+        assert response.status_code == 200 and response.json()["needs_payables"]
+    else:
+        assert response.status_code == 400, response.text
     assert case.requests == case.reads == []
 
 
@@ -167,12 +179,16 @@ def test_sync_still_accepts_session_fields_in_query(case, path):
     assert case.reads
 
 
-def test_confirmation_cannot_change_auto_link_operation_or_selection(case):
-    request = {"session_mode": "http", "notice_ids": [1], "selections": [SELECTION]}
-    token = conflict_token(case.client.post("/api/m11/auto-link", json=request))
-    changed = {**request, "kick_token": token, "selections": [{**SELECTION, "amount": "2.00"}]}
-    assert case.client.post("/api/m11/auto-link", json=changed).status_code == 400
-    assert case.client.post("/api/m11/auto-link-preview", json={**request, "kick_token": token}).status_code == 400
+def test_preview_confirmation_is_scope_bound_and_local_link_requires_no_i8(case):
+    request = {"session_mode": "http", "notice_ids": [1]}
+    token = conflict_token(case.client.post("/api/m11/auto-link-preview", json=request))
+    changed = {**request, "kick_token": token, "notice_ids": [1, 2]}
+    assert case.client.post("/api/m11/auto-link-preview", json=changed).status_code == 400
+    saved = case.client.post("/api/m11/auto-link", json={"selections": [{
+        "notice_id": 1, "contract_id": case.contract_id, "expected_amount": "1.00",
+        "expected_jc_supplier": "甲", "expected_warehouse_key": "隔离仓库",
+    }]})
+    assert saved.status_code == 200 and saved.json()["linked"] == 1
     assert case.requests == [login.LOGIN_PATH]
     assert case.reads == []
 

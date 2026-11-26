@@ -69,3 +69,53 @@
 /* The list keeps its table placeholder. Only a failure adds a line above it. */
 .notice-read-status{--read-status-pad:calc(13px * var(--fscale))}
 .notice-read-reserve{padding:calc(8px * var(--fscale)) calc(13px * var(--fscale))}
+
+.notice-fetch-progress {
+  position: fixed;
+  inset-inline-end: 16px;
+  inset-block-end: 16px;
+  z-index: 1500;
+  display: grid;
+  gap: 6px;
+  inline-size: min(22rem, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  background: var(--sf);
+  color: var(--tx);
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+}
+.notice-fetch-progress progress {
+  inline-size: 100%;
+  block-size: 6px;
+  accent-color: var(--pri);
+}
+.notice-fetch-month { margin-block: 0 12px; }
+.notice-fetch-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding-block: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.notice-fetch-counts > div { display: flex; gap: 8px; align-items: baseline; }
+.notice-fetch-counts dd { margin: 0; font-weight: 600; }
+.notice-match-section { margin-block: 12px; }
+.notice-match-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.notice-match-section h3 { margin: 4px 0; font-size: 1em; }
+.notice-match-list--scroll { block-size: min(28dvh, 280px); }
+.notice-match-item, .notice-match-candidate {
+  padding: 8px;
+  border-block-end: .5px solid var(--bd);
+  overflow-wrap: anywhere;
+}
+.notice-match-item p, .notice-match-candidate p { margin: 4px 0; }
+.notice-match-candidate { margin-inline-start: 12px; background: var(--sf2); }
+.notice-match-item summary, .notice-match-section summary { cursor: pointer; }

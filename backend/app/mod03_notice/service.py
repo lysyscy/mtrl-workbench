@@ -397,9 +397,9 @@ def get_notice(session, notice_id, **kw):
     return repository.get_notice(session, notice_id, **kw)
 
 
-def get_notices_by_ids(session, ids):
+def get_notices_by_ids(session, ids, **kw):
     from app.mod03_notice import repository
-    return repository.get_notices_by_ids(session, ids)
+    return repository.get_notices_by_ids(session, ids, **kw)
 
 
 def all_notice_rows(session):

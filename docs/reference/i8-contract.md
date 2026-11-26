@@ -24,9 +24,9 @@
 | 界面动作 | 工作台入口与业务条件 |
 |---|---|
 | 项目档案同步仓库及常用项目 | `POST /api/m02/sync/{warehouses,common-projects}`，会话字段可用 query 或 JSON body，保留 query 的 `expected_account` |
-| 通知书按月取数及新小微仓库查询 | `POST /api/m03/notices/{fetch,warehouse-check}`、`POST /api/m02/fetch/{preview,run}`，按原有范围查询或写入 |
+| 通知书按月取数及新小微仓库查询 | 通知书页用 `POST /api/m03/notices/fetch-jobs`，同步 `POST /api/m03/notices/fetch` 仍可用。仓库查询用 `POST /api/m03/notices/warehouse-check`，i8 接入层沿用 `POST /api/m02/fetch/{preview,run}` |
 | 通知书批量打印及只导出 PDF | `POST /api/m03/print-batches/prepare`、`POST /api/m03/batch`，用同一会话读取版式、单头、明细、流程和签名图 |
-| 一键关联集采合同 | `POST /api/m11/{auto-link-preview,auto-link}`，预览只读，确认时重新核对采购应付来源 |
+| 批量关联集采合同 | `POST /api/m11/auto-link-preview` 仅在金额匹配需要时读取一次采购应付。`POST /api/m11/auto-link` 只复核并写入本地关联 |
 | 机械费抓取及单项目更新 i8 | `POST /api/m06/workbench/i8-fetch`，取回预览后须选择采用 |
 | 收发结存、库存及采购合同抓取 | `POST /api/m07/fetch`、`POST /api/m08/fetch`、`POST /api/m11/fetch`，保留业务范围确认 |
 
@@ -72,6 +72,8 @@
 适配器按完整组织列表精确匹配设备编码。调出项目已配置主键时，以设备当前 `phid_pc` 核对，调拨明细带入 i8 返回的项目名称。设备原值 `u_yz` 按两位小数提交和核对。调拨单保存后先持久化单据主键，再送审。回读 `ldzcdb` 的 `app_status=1`、`wf_flag=2`，并确认同一设备的 `sbzx.phid_pc` 已变为调入项目后才标记已同步。送审发出后回执未知或结果待生效时，重试只回读。送审预检失败且尚未发送时，重试先核对原单，再续办送审。升级前已有的待回读记录沿用原回查流程。
 
 ## 抓取回执
+
+通知书后台任务在受理前验证选定的 i8 会话。直连用一条限量查询确认会话，在线冲突仍在受理前返回下线确认。任务复用已验证的客户端读取通知书和所需的采购应付，采购应付按整批读取一次。任务进度及关闭回执通过 `/api/m03/notices/fetch-jobs` 的本地接口读写。
 
 集采、付款通知书、收发结存和库存共用回执摘要。摘要显示本批次的状态、范围、时间、分组统计及待处理提示。各业务按自身口径提供数字。结存和库存的「刷新已有」统计更新过的源行，包含数值相同的行。付款通知书的归属未定行本次不写入，规则剔除行仍按通知书原规则处理。
 

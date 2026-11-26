@@ -5,10 +5,13 @@ import json
 import httpx
 import pytest
 
+from app.core.db import session_scope
 from app.core.errors import AppError
 from app.mod02_i8 import client as clients, session_policy
 from app.mod02_i8.login import LoginResult
-from app.mod11_jc import api
+from app.mod11_jc import api, repository
+from tests.test_acc_jc_pay_link import _project
+from tests.test_jc_auto_link import contract, notice
 
 
 @pytest.fixture
@@ -25,8 +28,7 @@ def login(monkeypatch):
     return calls
 
 
-@pytest.mark.parametrize('route', ['auto-link-preview', 'auto-link'])
-def test_failed_ui_login_stops_without_retry_or_business_write(monkeypatch, login, route):
+def test_failed_ui_login_stops_preview_without_retry_or_business_write(monkeypatch, login, rollback_db):
     from app.core import app_settings
     from app.mod02_i8 import payable_source
 
@@ -39,15 +41,17 @@ def test_failed_ui_login_stops_without_retry_or_business_write(monkeypatch, logi
         return LoginResult(ok=False, detail='isolated authentication failure')
     monkeypatch.setattr(clients, 'http_login', rejected)
     monkeypatch.setattr(payable_source, 'fetch_payables', lambda client: client._login())
-    def forbidden():
-        raise AssertionError('login failure reached business transaction')
-    monkeypatch.setattr(api, 'session_scope', forbidden)
-    payload = api.AutoLinkIn(notice_ids=[1], session_mode="http", allow_kick=True, selections=[
-        api.AutoLinkSelection(notice_id=1, contract_id=2, amount='1.00', payable_codes=['P1'])])
+    with session_scope() as session:
+        project = _project(session, "__认证预览__")
+        contract(session, project, "CGHT1")
+        nid = notice(session, project, "待预览", supplier="甲").id
+    payload = api.AutoLinkPreviewIn(notice_ids=[nid], session_mode="http", allow_kick=True)
     with pytest.raises(AppError, match="i8 登录未成功") as failure:
-        (api.api_auto_link_preview if route.endswith('preview') else api.api_auto_link)(payload)
+        api.api_auto_link_preview(payload)
     assert failure.value.code == "i8_auth_failed" and "isolated authentication failure" not in str(failure.value)
     assert calls == [False]
+    with session_scope() as session:
+        assert repository.payment_of_notice(session, nid) is None
 
 
 @pytest.mark.parametrize('allow_kick,authenticated', [(False, False), (True, True), (True, False)])
