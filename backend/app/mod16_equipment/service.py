@@ -90,14 +90,6 @@ def equipment_record(item, projects, inventory):
     }
 
 
-def saved_records(db, model, ids):
-    rows = [row for key in ids if (row := db.get(model, key)) is not None]
-    projects = project_index(db)
-    if model is EquipmentItem:
-        return equipment_records(db, rows, projects, include_transfer_status=False)
-    return [distribution_record(row, projects) for row in rows]
-
-
 def codes(db, request):
     prefix = f"{request.name}-{request.purchase_date:%Y%m%d}"
     existing = db.scalars(select(EquipmentItem.code).where(or_(EquipmentItem.code == prefix,

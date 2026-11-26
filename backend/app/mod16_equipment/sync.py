@@ -10,6 +10,8 @@ from sqlalchemy import select
 
 from app.core.db import session_scope
 from app.core.money import to_money
+from app.mod02_i8 import equipment_relay as contract
+from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionUnavailable
 from app.mod02_i8.login import I8AuthFailedError
 from .common import encoded, ledger_lock, record, require
 from .models import EquipmentItem, EquipmentTransfer
@@ -58,6 +60,7 @@ def equipment_conflict(snapshot):
 
 
 class FormTransport(Protocol):
+    def get_json(self, path: str, **kwargs) -> dict: ...
     def post_json(self, path: str, **kwargs) -> dict: ...
 
 
@@ -69,10 +72,10 @@ class I8CustomFormEquipmentAdapter:
     """Inject an authorized I8Client-compatible transport and verified reference IDs."""
 
     LIST = "/sup/customServer/getList"
-    SAVE = "/sup/customServer/save"
-    ORG = "3700000000000014"
+    SAVE = contract.SAVE
+    ORG = contract.ORG
     ORG_NAME = "第四工程公司"
-    TRANSFER_SCHEME = "3700000000000363"
+    TRANSFER_SCHEME = contract.SCHEME
     TRANSFER_REFERENCE_ORG = "3700000000000869"
     # Fixed organizational query filters observed on the sbzx list, not session data.
     CLIENT_FILTER = ("e48f570da0f71818a59e798cfa48fa57bc388a6b8519dc9d0f237f397f1fdf63"
@@ -213,7 +216,7 @@ class I8CustomFormEquipmentAdapter:
         return checked_project(after, project_name, matches, project_id=linked_phid)
 
     def create_transfer(self, code, from_project, to_project, *, transfer_date=None, remark=None,
-                        from_project_phid=None, to_project_phid=None, before_save=None):
+                        from_project_phid=None, to_project_phid=None, persist=None):
         original = self._equipment_row(code)
         before = self._snapshot(original) if original is not None else None
         source_name = self.project_names.get(from_project, from_project)
@@ -267,15 +270,90 @@ class I8CustomFormEquipmentAdapter:
         }
         evidence = {"awaiting_readback": True, "code": code, "phid": before["phid"],
                     "to_project": to_project, "destination_id": destination, "origin_id": origin,
-                    "destination_name": destination_name, "destination_linked": to_project_phid is not None}
-        if before_save is not None:
-            before_save(evidence)
+                    "destination_name": destination_name, "destination_linked": to_project_phid is not None,
+                    "workflow_phase": "saving"}
+        if persist is not None:
+            persist(evidence)
         try:
             evidence["bill_phid"] = self._save("ldzcdb", payload)
         except SaveRejected:
             raise
         except Exception:
-            return SyncResult("failed", "i8 调拨保存回执未知，重试时只核对所在项目", before, evidence)
+            return SyncResult("failed", "i8 调拨保存回执未知，重试时只回查", before, evidence)
+        evidence["workflow_phase"] = "saved"
+        if persist is not None:
+            persist(evidence)
+        return self.submit_transfer(evidence, persist)
+
+    def submit_transfer(self, evidence, persist=None, *, resume=False):
+        bill_phid = evidence["bill_phid"]
+        if not self.transfer_operator or not all(self.transfer_operator):
+            return SyncResult("pending", "未配置当前 i8 账号的录入人，调拨待送审", conflict=evidence)
+        headers = {"env": "java", "accept": "application/json",
+                   "gatewayauthparams": f"ldzcdb|{self.ORG}|{self.transfer_operator[0]}|ldzcdb|"}
+        try:
+            if resume:
+                bill, = (row for row in self._list_rows("ldzcdb") if str(row["phid"]) == bill_phid)
+                if str(bill.get("app_status")) != "0" or str(bill.get("wf_flag")) != "0":
+                    return self.verify_transfer(evidence | {"workflow_phase": "submitting"})
+                if str(bill.get("phid_pc")) != evidence["origin_id"] or str(bill.get("phid_org")) != self.ORG:
+                    raise ValueError("i8 调拨单归属不一致")
+            precheck = self.transport.post_json(
+                contract.START_FLOW, params={"customBusCode": "ldzcdb"}, headers=headers, retry_expired=False,
+                json=[{"id": bill_phid, "isContinue": "0", "impSchemeId": self.TRANSFER_SCHEME}],
+            )
+            if precheck.get("status") != "success" or not any(
+                str(row["id"]) == bill_phid and row["passFlag"] == "1" and row["isContinue"] == "0"
+                and str(row["impSchemeId"]) == self.TRANSFER_SCHEME for row in precheck["data"]
+            ):
+                raise ValueError("i8 调拨送审预检未通过")
+            flow_info = self.transport.get_json(
+                contract.FLOW_INFO, headers=headers, retry_expired=False,
+                params={"biztype": "ldzcdb", "bizphid": bill_phid, "flowType": "1"},
+            )
+            if flow_info.get("success") is not True:
+                raise ValueError("i8 未返回调拨流程")
+            info = flow_info["data"]
+            if info.get("hasRuningFlow") is True:
+                evidence = evidence | {"workflow_phase": "submitting"}
+                return self.verify_transfer(evidence)
+            definition, = [row for row in info["pdlist"] if row["id"] == contract.PROCESS]
+            if definition["mincommentlen"] != "0" or definition["mustsignature"] != "false":
+                raise ValueError("i8 调拨流程的送审条件已变化")
+            dynamic = self.transport.get_json(
+                contract.DYNAMIC_INFO, headers=headers, retry_expired=False,
+                params={"procDefId": contract.PROCESS, "formMetadataId": "ldzcdb",
+                        "formPk": bill_phid, "orgId": "", "flowType": "1"},
+            )
+            branch = contract.BRANCH
+            if dynamic.get("success") is not True or not any(
+                row["sourceId"] == branch["sourceId"] and row["destinationId"] == branch["destActId"]
+                and row["id"] == branch["transitionId"]
+                for row in dynamic["data"]["dynamicInfo"]["simplyData"]["nextTrans"]
+            ):
+                raise ValueError("i8 调拨流程缺少项目设备员节点")
+        except Exception:
+            return SyncResult("pending", "i8 调拨单已保存，送审预检未通过，可重试送审", conflict=evidence)
+
+        data = {
+            "minCommentLen": 0, "needsignature": False, "pdid": contract.PROCESS,
+            "hasDiagramPermission": True, "flowdesc": info.get("flowDesc") or None, "remark": "",
+            "biztype": "ldzcdb", "bizphid": bill_phid, "signature": "", "dynamicNode": [branch], "orgId": None,
+            "candidateUsersMap": {contract.APPROVER_NODE: [contract.APPROVER]},
+            "formApproveUserId": None, "assignedApproveUsers": None, "formUrlParam": None,
+        }
+        evidence = evidence | {"workflow_phase": "submitting"}
+        if persist is not None:
+            persist(evidence)
+        try:
+            response = self.transport.post_json(
+                contract.SUBMIT, headers=headers, retry_expired=False,
+                data={"data": encoded(data), "flowType": "1"},
+            )
+            if response.get("success") is not True or response.get("formPluginError") is True:
+                raise ValueError("i8 送审回执未确认成功")
+        except Exception:
+            return SyncResult("failed", "i8 调拨送审回执未知，重试时只回查", conflict=evidence)
         return self.verify_transfer(evidence)
 
     def verify_transfer(self, evidence):
@@ -295,6 +373,12 @@ class I8CustomFormEquipmentAdapter:
             or str(bill.get("phid_org")) != self.ORG
         ):
             return SyncResult("failed", "i8 调拨单未核对成功，重试时只回查", after, evidence)
+        if evidence.get("workflow_phase"):
+            if not bill:
+                return SyncResult("failed", "i8 调拨单主键未确认，重试时只回查", after, evidence)
+            evidence = evidence | {"bill_no": bill["bill_no"]}
+            if str(bill.get("app_status")) != "1" or str(bill.get("wf_flag")) != "2":
+                return SyncResult("pending", f"i8 调拨单 {bill['bill_no']} 待审核生效", after, evidence)
         same_device = after is not None and str(after["phid"]) == str(evidence["phid"])
         destination_name = evidence.get("destination_name", evidence["to_project"])
         destination_id = evidence["destination_id"]
@@ -341,7 +425,7 @@ def i8_project(ref, projects):
 
 
 def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEquipmentAdapter | None = None,
-                *, initial_project=None, before_transfer_save=None):
+                *, initial_project=None, record_transfer_progress=None):
     target = transfer if transfer is not None else item
     result = SyncResult("pending", UNAVAILABLE)
     if adapter is not None:
@@ -359,7 +443,10 @@ def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEq
             else:
                 prior = json.loads(transfer.i8_conflict_json or "{}")
                 if isinstance(adapter, I8CustomFormEquipmentAdapter) and prior.get("awaiting_readback"):
-                    result = adapter.verify_transfer(prior)
+                    if prior.get("workflow_phase") == "saved":
+                        result = adapter.submit_transfer(prior, record_transfer_progress, resume=True)
+                    else:
+                        result = adapter.verify_transfer(prior)
                 else:
                     origin, origin_phid = i8_project(ProjectRef.from_row(transfer, "from_project"), projects)
                     destination, destination_phid = i8_project(ProjectRef.from_row(transfer, "to_project"), projects)
@@ -367,14 +454,14 @@ def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEq
                         result = adapter.create_transfer(item.code, origin, destination,
                                                          transfer_date=transfer.transfer_date, remark=transfer.remark,
                                                          from_project_phid=origin_phid, to_project_phid=destination_phid,
-                                                         before_save=before_transfer_save)
+                                                         persist=record_transfer_progress)
                     else:
                         result = _sync_legacy(adapter, {"code": item.code, "current_project": destination},
                                               (origin, destination))
             item.i8_snapshot_json = encoded(result.snapshot) if result.snapshot is not None else None
             if transfer is not None:
                 transfer.i8_conflict_json = encoded(result.conflict) if result.conflict else None
-        except I8AuthFailedError:
+        except (I8AuthFailedError, StrictSessionEnded, StrictSessionUnavailable):
             result = SyncResult("pending", "i8 会话已失效，已保存本地待同步")
         except SaveRejected:
             if transfer is not None:
@@ -451,19 +538,22 @@ def _sync_transfer(item, projects, row, adapter):
 
     def reserve(evidence):
         nonlocal expected
-        # Commit the intent before posting. An interrupted submission can only be read back.
+        # Commit each phase before its remote write so recovery can tell what may have been sent.
         intent = encoded(evidence)
         with session_scope() as db:
             ledger_lock(db)
             saved = require(db, EquipmentTransfer, row.id)
+            prior = json.loads(expected or "{}")
+            allowed_from = {"saving": None, "saved": "saving", "submitting": "saved"}
             if (saved.i8_sync_status not in ISSUES or saved.i8_conflict_json != expected
-                    or transfer_awaiting_readback(saved)):
+                    or prior.get("workflow_phase") != allowed_from[evidence["workflow_phase"]]
+                    or (not prior.get("workflow_phase") and prior.get("awaiting_readback"))):
                 raise RuntimeError("i8 调拨同步状态已变化")
             saved.i8_conflict_json = intent
-            saved.i8_sync_message = "i8 调拨保存结果待核对"
+            saved.i8_sync_message = "i8 调拨结果待核对"
         expected = row.i8_conflict_json = intent
 
-    result = synchronize(item, projects, row, adapter, before_transfer_save=reserve)
+    result = synchronize(item, projects, row, adapter, record_transfer_progress=reserve)
     with session_scope() as db:
         ledger_lock(db)
         saved = require(db, EquipmentTransfer, row.id)

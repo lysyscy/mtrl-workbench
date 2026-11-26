@@ -9,7 +9,7 @@
  * ⛔ 不做的事（都是硬约束，改动前先读 `apps/browser-extension/README.md`）：
  *   - 不读、不存、不导出 Cookie / localStorage / 任何令牌（不申请 `cookies` 权限）；
  *   - 不开启远程调试端口、不用 `debugger`、不申请 `webRequest` / `tabs` / `<all_urls>`；
- *   - 不接受页面传来的任意地址：只执行后端票里的那一条，且必须命中**只读端点白名单**；
+ *   - 按连接和请求白名单执行。设备写入另外核对业务码、表单及送审节点；
  *   - 不自己做重试、不跟随跳转（`redirect: 'manual'`；真机上跳转拿到的是不透明响应
  *     ——`opaqueredirect`、status 0、读不到 Location——所以一律**停下**，不假装能判出跳转目标）；
  *   - 不登录、不顶号、不改页面 DOM、不猜 DOM 结构。
@@ -154,39 +154,6 @@ function isWorkbenchSender(sender) {
   return WORKBENCH_ORIGINS.includes(origin) && (sender.frameId ?? 0) === 0;
 }
 
-/**
- * 只读端点核对：**精确路径**匹配（带 query 的常量已在表里去掉了 query）。
- * 与后端 `assert_readonly` 同一套判据：`..`、`//`、尾斜杠、userinfo、非 http(s) 一律拒。
- */
-function checkEndpoint(method, rawUrl) {
-  let target;
-  try {
-    target = new URL(rawUrl);
-  } catch {
-    return '请求地址不成形，已拒绝执行（未触碰标签）。';
-  }
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-    return '请求地址的协议不在允许范围，已拒绝执行。';
-  }
-  if (target.username || target.password) return '请求地址里带了账号信息，已拒绝执行。';
-  const path = target.pathname;
-  if (!path.startsWith('/') || path.includes('..') || path.includes('//')) {
-    return '请求路径不成形，已拒绝执行。';
-  }
-  if (path.length > 1 && path.endsWith('/')) return '请求路径带了尾斜杠，已拒绝执行。';
-  const verb = String(method || '').toUpperCase();
-  const allowed = READONLY_ENDPOINTS[verb] || [];
-  const rawPath = rawUrl.match(/^https?:\/\/[^/?#]+(\/[^?#]*)/i)?.[1] || '';
-  const tokens = target.searchParams.getAll('s');
-  const signatureImage = verb === 'GET' && !target.username && !target.password && !target.hash
-    && rawPath === target.pathname && !rawPath.includes('..')
-    && new RegExp(SIGNATURE_IMAGE_PATH, 'i').test(rawPath) && tokens.length === 1 && !!tokens[0].trim();
-  if (!allowed.includes(path) && !signatureImage) {
-    return '这条请求不在只读取数白名单里，已拒绝执行（未触碰标签、未改任何数据）。';
-  }
-  return '';
-}
-
 let tabSelectionUpdate = Promise.resolve();
 const discoveries = new Map();
 const LOGIN_REQUIRED = {ok: false, code: 'login-required', message: '请在 i8 标签页登录。登录后，工作台会自动继续连接。'};
@@ -286,7 +253,6 @@ async function tabPaused(tabId) {
 async function probeTab(entry, checkSession) {
   let results, timer;
   const probePath = '/SUP/RichHelp/GetCommonUseList?helpid=project_table_pchelp&ORMMode=true&skipInfoAuth=1';
-  if (checkSession && checkEndpoint('GET', entry.origin + probePath)) return SITE_CHANGED;
   try {
     const tab = await chrome.tabs.get(entry.tabId);
     const status = tabStatus(tab);
@@ -377,13 +343,13 @@ async function readIdentity(message) {
  * 返回的 `declared_length` 是扩展自己数出来的字节数；后端会拿它核对解码长度，
  * 对不上即判「传输可能被截断」并停止。
  */
-async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEndpoints, signaturePath) {
+async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEndpoints, signaturePath, validateOnly = false) {
   const allowed = new Set(allowedHeaders);
   const headers = {};
   for (const [key, value] of Object.entries(payload.headers || {})) {
     if (typeof value !== 'string') continue;
     if (!allowed.has(key.toLowerCase())) continue;
-    headers[key] = value;
+    headers[key.toLowerCase()] = value;
   }
   const method = String(payload.method || '').toUpperCase();
   if (!allowedMethods.includes(method)) {
@@ -395,26 +361,138 @@ async function executeInPage(payload, allowedHeaders, allowedMethods, allowedEnd
   } catch {
     return { failed: '请求地址不成形' };
   }
-  if (`${target.protocol}//${target.host}` !== `${location.protocol}//${location.host}`) {
+  if (!['http:', 'https:'].includes(target.protocol)) return { failed: '请求协议不在允许范围' };
+  if (target.username || target.password) return { failed: '请求地址里带了账号信息' };
+  if (!validateOnly && target.origin !== location.origin) {
     return { failed: '请求目标不是当前标签的站点', code: 'target-mismatch' };
   }
-  // 端点白名单二次核对（service worker 侧已经拒过一次；这里是"到了页面再拒一次"）。
   const endpoints = (allowedEndpoints && allowedEndpoints[method]) || [];
   const rawPath = payload.url.match(/^https?:\/\/[^/?#]+(\/[^?#]*)/i)?.[1] || '';
+  if (rawPath !== target.pathname || rawPath.includes('..') || rawPath.includes('//')) return { failed: '请求路径不成形' };
+  if (rawPath.endsWith('/')) return { failed: '请求路径带了尾斜杠' };
   const tokens = target.searchParams.getAll('s');
-  const signatureImage = method === 'GET' && !target.username && !target.password && !target.hash
-    && rawPath === target.pathname && !rawPath.includes('..')
+  const signatureImage = method === 'GET' && !target.hash
     && new RegExp(signaturePath, 'i').test(rawPath) && tokens.length === 1 && !!tokens[0].trim();
-  if (!endpoints.includes(target.pathname) && !signatureImage) {
+  const equipmentOperation = {
+    '/sup/customServer/save': 'save',
+    '/sup/customServer/startFlow': 'precheck',
+    '/WorkFlow3/WorkFlow/GetStartFlowExecutionInfo': 'flow',
+    '/WorkFlow3/WorkFlow/GetProcessDynamicInfo': 'branch',
+    '/WorkFlow3/WorkFlow/CreateProcInst': 'submit',
+  }[rawPath];
+  if (!endpoints.includes(rawPath) && !signatureImage && !equipmentOperation) {
     return { failed: '这条请求不在只读取数白名单里' };
   }
   let body;
-  if (payload.body_b64) {
-    const binary = atob(payload.body_b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    body = bytes;
+  try {
+    if (payload.body_b64) {
+      body = Uint8Array.from(atob(payload.body_b64), value => value.charCodeAt(0));
+    }
+    if (equipmentOperation) {
+      for (const [key, value] of Object.entries(payload.headers || {})) {
+        const name = key.toLowerCase();
+        if ((name === 'env' || name === 'gatewayauthparams') && typeof value === 'string') headers[name] = value;
+      }
+      body = equipmentBody(equipmentOperation, body);
+    }
+  } catch {
+    return { failed: '请求超出设备同步接口允许范围', code: 'target-mismatch' };
   }
+  if (validateOnly) return {};
+
+  // Both the worker and the injected function validate the same wire contract.
+  function equipmentBody(operation, bytes) {
+    const org = '3700000000000014';
+    const scheme = '3700000000000363';
+    const process = 'xzd_102196:2:369735';
+    const node = 'ext-gen2225';
+    const valid = condition => { if (!condition) throw new Error('equipment request'); };
+    const object = value => value && typeof value === 'object' && !Array.isArray(value);
+    const keys = (value, ...names) => object(value) && Object.keys(value).length === names.length
+      && names.every(key => Object.hasOwn(value, key));
+    const phid = value => typeof value === 'string' && /^[0-9]{1,20}$/.test(value);
+    const fields = params => {
+      const pairs = [...params.entries()];
+      const values = Object.fromEntries(pairs);
+      valid(Object.keys(values).length === pairs.length);
+      return values;
+    };
+    const query = fields(target.searchParams);
+    const content = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+    const rawBody = bytes ? new TextDecoder('utf-8', { fatal: true }).decode(bytes) : '';
+    valid(!target.hash);
+    if (operation !== 'save') {
+      valid(headers.env === 'java'
+        && /^ldzcdb\|3700000000000014\|[0-9]{1,20}\|ldzcdb\|$/.test(headers.gatewayauthparams || ''));
+    }
+    if (operation === 'flow') {
+      valid(method === 'GET' && !rawBody && keys(query, 'biztype', 'bizphid', 'flowType')
+        && query.biztype === 'ldzcdb' && phid(query.bizphid) && query.flowType === '1');
+      return undefined;
+    }
+    if (operation === 'branch') {
+      valid(method === 'GET' && !rawBody && keys(query, 'procDefId', 'formMetadataId', 'formPk', 'orgId', 'flowType')
+        && query.procDefId === process && query.formMetadataId === 'ldzcdb' && phid(query.formPk)
+        && query.orgId === '' && query.flowType === '1');
+      return undefined;
+    }
+    if (operation === 'precheck') {
+      valid(method === 'POST' && keys(query, 'customBusCode') && query.customBusCode === 'ldzcdb'
+        && content === 'application/json');
+      const rows = JSON.parse(rawBody);
+      valid(Array.isArray(rows) && rows.length === 1 && keys(rows[0], 'id', 'isContinue', 'impSchemeId')
+        && phid(rows[0].id) && rows[0].isContinue === '0' && rows[0].impSchemeId === scheme);
+      return JSON.stringify(rows);
+    }
+    valid(method === 'POST' && keys(query) && content === 'application/x-www-form-urlencoded');
+    const form = fields(new URLSearchParams(rawBody));
+    const data = JSON.parse(form.data);
+    if (operation === 'submit') {
+      valid(keys(form, 'data', 'flowType') && form.flowType === '1'
+        && keys(data, 'minCommentLen', 'needsignature', 'pdid', 'hasDiagramPermission', 'flowdesc',
+          'remark', 'biztype', 'bizphid', 'signature', 'dynamicNode', 'orgId', 'candidateUsersMap',
+          'formApproveUserId', 'assignedApproveUsers', 'formUrlParam')
+        && data.minCommentLen === 0 && data.needsignature === false && data.pdid === process
+        && data.hasDiagramPermission === true && (data.flowdesc === null || data.flowdesc === '')
+        && data.remark === '' && data.biztype === 'ldzcdb' && phid(data.bizphid) && data.signature === ''
+        && [data.orgId, data.formApproveUserId, data.assignedApproveUsers, data.formUrlParam].every(value => value === null));
+      const nodes = data.dynamicNode;
+      const users = data.candidateUsersMap;
+      valid(Array.isArray(nodes) && nodes.length === 1 && keys(nodes[0], 'sourceId', 'transitionId', 'destActId')
+        && nodes[0].sourceId === 'ext-gen1795' && nodes[0].transitionId === 'ext-gen3164' && nodes[0].destActId === node
+        && keys(users, node) && Array.isArray(users[node]) && users[node].length === 1 && users[node][0] === '3700000000000715');
+    } else {
+      const flags = JSON.parse(form.isContinue);
+      valid(keys(form, 'customBusCode', 'data', 'billNoStatus', 'isContinue') && form.billNoStatus === '1'
+        && keys(flags, 'warn', 'validateWarn', 'checkProjOrgWarn') && Object.values(flags).every(value => value === '0'));
+      const master = data?.[`p_form_${form.customBusCode}_m`];
+      valid(keys(master, 'form'));
+      const row = master.form;
+      if (form.customBusCode === 'sbzx') {
+        const field = row && Object.hasOwn(row, 'modifiedRow') ? 'modifiedRow' : 'newRow';
+        valid(keys(data, 'p_form_sbzx_m') && keys(row, 'key', field) && row.key === 'phid' && object(row[field])
+          && !!row[field].u_device_code && row[field].phid_org === org
+          && (field === 'newRow' || phid(row[field].phid)));
+      } else {
+        valid(form.customBusCode === 'ldzcdb' && keys(data, 'p_form_ldzcdb_m', 'p_form_ldzcdb_d')
+          && keys(row, 'key', 'newRow') && row.key === 'phid' && object(row.newRow));
+        const header = row.newRow;
+        const detail = data.p_form_ldzcdb_d;
+        valid(!Object.hasOwn(header, 'phid') && header.phid_org === org && header.phid_schemeid === scheme && phid(header.phid_pc)
+          && phid(header.phid_fill_psn) && [header.bill_no, header.bill_name, header.app_status, header.wf_flag].every(value => value === null)
+          && keys(detail, 'isChanged', 'table') && detail.isChanged === true && keys(detail.table, 'key', 'newRow')
+          && detail.table.key === 'phid');
+        const rows = detail.table.newRow;
+        valid(Array.isArray(rows) && rows.length === 1 && keys(rows[0], 'row') && object(rows[0].row)
+          && !Object.hasOwn(rows[0].row, 'phid') && rows[0].row.key == null
+          && phid(rows[0].row.u_sbmc) && phid(rows[0].row.u_inproj) && rows[0].row.phid_pc === header.phid_pc);
+      }
+      form.isContinue = JSON.stringify(flags);
+    }
+    form.data = JSON.stringify(data);
+    return new URLSearchParams(form).toString();
+  }
+
   let response, signatureBytes;
   // 预算由后端按**这条请求自己的** read 超时给（合同列表 200s / 详情 60s / 默认 30s），
   // ⛔ 不要在这里另设固定值：拿 30s 去截 200s 的列表就是凭空判死一条正常请求。
@@ -548,12 +626,9 @@ async function execute(message, senderKey) {
   if (!request || typeof request.url !== 'string' || typeof request.ticket !== 'string') {
     return { ok: false, message: '请求不完整，已忽略。' };
   }
-  // 方法与端点都在**注入脚本之前**拒掉：不该为一条越界的请求去碰用户标签。
-  if (!ALLOWED_METHODS.includes(String(request.method || '').toUpperCase())) {
-    return { ok: false, message: '这个方法不在只读白名单里，已拒绝执行（未触碰标签）。' };
-  }
-  const endpointProblem = checkEndpoint(request.method, request.url);
-  if (endpointProblem) return { ok: false, message: endpointProblem };
+  const args = [request, ALLOWED_HEADERS, ALLOWED_METHODS, READONLY_ENDPOINTS, SIGNATURE_IMAGE_PATH];
+  const { failed } = await executeInPage(...args, true);
+  if (failed) return { ok: false, message: failed };
 
   // 先核连接归属与代号；页面中的执行函数再核实际站点。
   const entry = await identityStillBound(deviceId, generation, senderKey);
@@ -570,13 +645,7 @@ async function execute(message, senderKey) {
       world: 'ISOLATED',
       func: executeInPage,
       injectImmediately: true,
-      args: [{
-        url: request.url,
-        method: request.method,
-        headers: request.headers || {},
-        body_b64: request.body_b64 || '',
-        timeout_ms: request.timeout_ms,
-      }, ALLOWED_HEADERS, ALLOWED_METHODS, READONLY_ENDPOINTS, SIGNATURE_IMAGE_PATH],
+      args,
     });
   } catch {
     return { ok: false, code: 'binding-lost', message: '绑定的 i8 标签已不可用，工作台会自动重新连接。' };
@@ -610,6 +679,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   const type = message && message.type;
   const deviceId = deviceOf(message);
   const senderKey = senderKeyOf(sender);
+  if (type === 'i8-relay:equipment-capability') {
+    sendResponse({ ok: true, equipmentSync: 1 });
+    return false;
+  }
   if (type === 'i8-relay:identity') {
     if (!deviceId) {
       sendResponse({ ok: false, message: '读取身份时缺少连接标识，本次已停止。' });

@@ -12,7 +12,8 @@ import { ApiError, uncertainWrite } from './api';
 import type { Project } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { equipmentApi as api } from './equipment-api';
-import type { Create, EquipmentItem, EquipmentLocation, EquipmentPatch, ItemCategory, LocationValues, TransferRow } from './equipment-api';
+import type { Create, EquipmentItem, EquipmentLocation, EquipmentPatch, ItemCategory, LocationValues, SyncResults, TransferRow } from './equipment-api';
+import { I8ConnectionWaitStatus, useI8ActionWait } from './i8-session';
 import {
   DateField,
   decimalField,
@@ -230,6 +231,37 @@ type EquipmentFormValues = Omit<Create, 'expected_codes' | 'item_category'> & {
   purchase: ProjectValue;
 };
 
+function EquipmentSyncWait({ cancel, saved = false }: { cancel: () => void; saved?: boolean }) {
+  return <>
+    {saved && <p role="status">本地已保存，等待同步 i8。</p>}
+    <I8ConnectionWaitStatus />
+    <Button onClick={cancel}>取消等待</Button>
+  </>;
+}
+
+function useSavedEquipmentSync(kind: 'equipment' | 'transfers') {
+  const { waiting, cancelWaiting, runWhenReady } = useI8ActionWait(kind);
+  async function receipt(saved: { i8_sync: SyncResults; i8_sync_enabled: boolean }) {
+    const ids = saved.i8_sync.filter(row => issue(row.status)).map(row => row.id);
+    if (!saved.i8_sync_enabled || !ids.length) return syncReceipt(saved.i8_sync);
+    try {
+      const result = await runWhenReady(choice => api.retry({
+        equipment_ids: kind === 'equipment' ? ids : [],
+        transfer_ids: kind === 'transfers' ? ids : [],
+      }, choice));
+      if (result) {
+        const fresh = new Map(result[kind].map(row => [row.id, row]));
+        return syncReceipt(saved.i8_sync.map(row => fresh.get(row.id) ?? row));
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'extension-outdated') return error.message;
+      return '同步结果待核对，可在台账查看或补同步';
+    }
+    return syncReceipt(saved.i8_sync);
+  }
+  return { waiting, cancelWaiting, receipt };
+}
+
 function EquipmentForm({ state, close, done }: Props) {
   const item = state.kind === 'edit' ? state.item : null,
     category = state.kind === 'create' ? state.category : item!.item_category;
@@ -260,6 +292,7 @@ function EquipmentForm({ state, close, done }: Props) {
   const validPreview = !item && !!preview.name && !!date && Number(qty) > 0;
   const codes = useLedgerQuery(['codes', preview], () => api.preview(preview), validPreview);
   const [unknownCodes, setUnknownCodes] = useState<string[] | null>(null);
+  const sync = useSavedEquipmentSync('equipment');
   async function save({ purchase, ...values }: EquipmentFormValues) {
     if (!writable) return;
     if (item) {
@@ -291,7 +324,7 @@ function EquipmentForm({ state, close, done }: Props) {
             '；租赁带入待定 ' +
             result.rental_line_ids.length +
             ' 条；i8 ' +
-            syncReceipt(result.i8_sync) +
+            await sync.receipt(result) +
             '。'
         );
       } catch (e) {
@@ -314,6 +347,7 @@ function EquipmentForm({ state, close, done }: Props) {
       dirty={dirty}
       close={close}
     >
+      {sync.waiting && <EquipmentSyncWait cancel={sync.cancelWaiting} saved />}
       <Form
         layout="vertical"
         form={form}
@@ -398,6 +432,7 @@ function MovementForm({ state, close, done }: Props) {
   const [dirty, setDirty] = useState(false),
     action = useLedgerAction(),
     { writable } = useAccess();
+  const sync = useSavedEquipmentSync('transfers');
   async function save(values: { project: ProjectValue; date: string; note: string }) {
     if (!writable) return;
     const ids = items.map((x) => x.id);
@@ -418,7 +453,7 @@ function MovementForm({ state, close, done }: Props) {
           ' 条。租赁归属待定 ' +
           r.rental_line_ids.length +
           ' 条；i8 ' +
-          syncReceipt(r.i8_sync) +
+          await sync.receipt(r) +
           '。'
       );
     } else {
@@ -433,6 +468,7 @@ function MovementForm({ state, close, done }: Props) {
       dirty={dirty}
       close={close}
     >
+      {sync.waiting && <EquipmentSyncWait cancel={sync.cancelWaiting} saved />}
       <div className="equipment-selection" tabIndex={0} role="region" aria-label="已选设备">
         <ReadGrid<EquipmentItem>
           table="equipment-movement"
@@ -498,6 +534,7 @@ function SyncDetails({ id, close }: { id: number; close: () => void }) {
   const action = useLedgerAction();
   const { writable } = useAccess();
   const [receipt, setReceipt] = useState('');
+  const { waiting, cancelWaiting, runWhenReady } = useI8ActionWait(String(id));
   const detail = query.data;
   const transfers = detail?.transfers.filter(row => issue(row.i8_sync_status)) ?? [];
   return (
@@ -518,11 +555,11 @@ function SyncDetails({ id, close }: { id: number; close: () => void }) {
             </details>
           ))}
           <Button disabled={!writable || action.busy} onClick={() => void action.run(async () => {
-            const result = await api.retry({
+            const result = await runWhenReady(choice => api.retry({
               equipment_ids: transfers.length ? [] : [id],
               transfer_ids: transfers.map(row => row.id),
-            });
-            setReceipt(syncReceipt([...result.equipment, ...result.transfers]));
+            }, choice));
+            if (result) setReceipt(syncReceipt([...result.equipment, ...result.transfers]));
           })}>补同步 i8</Button>
         </>}
         <details className="equipment-history-source">
@@ -534,6 +571,7 @@ function SyncDetails({ id, close }: { id: number; close: () => void }) {
           </dl>
         </details>
       </>}
+      {waiting && <EquipmentSyncWait cancel={cancelWaiting} />}
       {receipt && <p role="status">{receipt}</p>}
       {action.error && <p role="alert">{action.error}</p>}
     </LedgerModal>

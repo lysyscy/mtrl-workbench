@@ -52,7 +52,7 @@ test('指定局域网工作台可以连接和取数，其他主机与端口不�
  * 最小 chrome 替身：只实现扩展真正用到的那几个口，别的一个不给。
  * ------------------------------------------------------------------ */
 
-function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = null, tabApi = {} } = {}) {
+function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = null, tabApi = {}, inPageRequest } = {}) {
   const listeners = { action: null, external: null };
   const session = new Map();
   if (tab) session.set('i8RelayTab', { ...tab, selectedAt: 1 });
@@ -135,6 +135,7 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
           document: { querySelectorAll: () => { throw new Error('连接和取数不得读取账号菜单'); } },
           fetch: fetchImpl,
           URL,
+          URLSearchParams,
           Uint8Array,
           TextDecoder,
           atob,
@@ -144,13 +145,15 @@ function boot({ tab = { tabId: 7, origin: I8 }, page: initial = {}, fetchImpl = 
           setTimeout,
           clearTimeout,
         };
-        const result = await vm.runInNewContext(`(${details.func.toString()})`, sandbox)(...(details.args || []));
+        const args = details.func.name === 'executeInPage' && inPageRequest
+          ? [inPageRequest(details.args[0]), ...details.args.slice(1)] : details.args || [];
+        const result = await vm.runInNewContext(`(${details.func.toString()})`, sandbox)(...args);
         return [{ result }];
       },
     },
   };
 
-  const context = vm.createContext({ chrome, URL, Uint8Array, atob, btoa, console, setTimeout, clearTimeout });
+  const context = vm.createContext({ chrome, URL, URLSearchParams, Uint8Array, TextDecoder, atob, btoa, console, setTimeout, clearTimeout });
   vm.runInContext(SOURCE, context, { filename: 'service_worker.js' });
 
   const call = (message, sender = workbenchSender) => new Promise(resolve => {
@@ -366,6 +369,88 @@ test('白名单内的只读接口正常执行（对照组，别把门关死）',
   const answer = await page.call(exec());
   assert.equal(answer.ok, true, JSON.stringify(answer));
   assert.equal(page.executed().length, 1);
+});
+
+const equipmentOrg = '3700000000000014';
+const equipmentScheme = '3700000000000363';
+const equipmentBill = '3700000000000067';
+const equipmentNode = 'ext-gen2225';
+const workflowHeaders = { env: 'java', gatewayauthparams: 'ldzcdb|3700000000000014|3700000000001823|ldzcdb|' };
+const formBody = values => Buffer.from(new URLSearchParams(values).toString()).toString('base64');
+const formHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+const equipmentSave = (customBusCode, data) => ({
+  url: `${I8}/sup/customServer/save`, headers: formHeaders,
+  body_b64: formBody({ customBusCode, data: JSON.stringify(data), billNoStatus: '1',
+    isContinue: '{"warn":"0","validateWarn":"0","checkProjOrgWarn":"0"}' }),
+});
+const submitTransfer = (changes = {}) => ({
+  url: `${I8}/WorkFlow3/WorkFlow/CreateProcInst`, headers: { ...formHeaders, ...workflowHeaders },
+  body_b64: formBody({ flowType: '1', data: JSON.stringify({
+    minCommentLen: 0, needsignature: false, pdid: 'xzd_102196:2:369735', hasDiagramPermission: true,
+    flowdesc: null, remark: '', biztype: 'ldzcdb', bizphid: equipmentBill, signature: '',
+    dynamicNode: [{ sourceId: 'ext-gen1795', transitionId: 'ext-gen3164', destActId: equipmentNode }],
+    orgId: null, candidateUsersMap: { [equipmentNode]: ['3700000000000715'] },
+    formApproveUserId: null, assignedApproveUsers: null, formUrlParam: null, ...changes,
+  }) }),
+});
+
+test('设备保存、调拨保存、送审预检和送审按窄范围同源执行', async () => {
+  const sent = [];
+  const page = boot({ fetchImpl: async (url, init) => { sent.push({ url, init }); return reply(); } });
+  await page.bind();
+  const equipment = equipmentSave('sbzx', { p_form_sbzx_m: { form: { key: 'phid',
+    newRow: { phid_org: equipmentOrg, u_device_code: '样机-20261103' },
+  } } });
+  const transfer = equipmentSave('ldzcdb', {
+    p_form_ldzcdb_m: { form: { key: 'phid', newRow: {
+      phid_org: equipmentOrg, phid_schemeid: equipmentScheme, phid_pc: '3700000000000133',
+      phid_fill_psn: '3700000000001823', bill_no: null, bill_name: null, app_status: null, wf_flag: null,
+    } } },
+    p_form_ldzcdb_d: { isChanged: true, table: { key: 'phid', newRow: [{
+      row: { u_sbmc: '3700000000000187', u_inproj: '3700000000000312', phid_pc: '3700000000000133' },
+    }] } },
+  });
+  const validate = {
+    url: `${I8}/sup/customServer/startFlow?customBusCode=ldzcdb`,
+    headers: { ...workflowHeaders, 'Content-Type': 'application/json' },
+    body_b64: Buffer.from(JSON.stringify([{ id: equipmentBill, isContinue: '0', impSchemeId: equipmentScheme }])).toString('base64'),
+  };
+  const submit = submitTransfer();
+  for (const [index, payload] of [equipment, transfer, validate, submit].entries()) {
+    const result = await page.call(exec({ ...payload, ticket: `equipment-${index}` }));
+    assert.equal(result.ok, true, JSON.stringify(result));
+  }
+  assert.deepEqual(sent.map(item => item.url), [equipment.url, transfer.url, validate.url, submit.url]);
+  assert.ok(sent.every(item => item.init.credentials === 'same-origin' && item.init.redirect === 'manual'));
+  assert.equal(sent[3].init.headers.gatewayauthparams, workflowHeaders.gatewayauthparams);
+  assert.equal(JSON.parse(new URLSearchParams(sent[3].init.body).get('data')).bizphid, equipmentBill);
+});
+
+test('设备写白名单拒绝其它表单、流程、节点和重复表单字段', async () => {
+  const page = boot({ fetchImpl: async () => reply() });
+  await page.bind();
+  const wrongUser = submitTransfer({ candidateUsersMap: { [equipmentNode]: ['3700000000000001'] } });
+  const duplicate = submitTransfer();
+  duplicate.body_b64 = Buffer.from(Buffer.from(duplicate.body_b64, 'base64').toString() + '&flowType=1').toString('base64');
+  for (const payload of [equipmentSave('sbzx', { p_form_other_m: {} }), equipmentSave('payment', {}),
+    submitTransfer({ biztype: 'payment' }), wrongUser, duplicate]) {
+    assert.equal((await page.call(exec(payload))).ok, false);
+  }
+  assert.equal(page.executed().length, 0);
+});
+
+test('注入后的标签独立拒绝被替换成其它流程的送审请求', async () => {
+  let calls = 0;
+  const page = boot({
+    fetchImpl: async () => { calls += 1; return reply(); },
+    inPageRequest: request => ({ ...request, ...submitTransfer({ biztype: 'payment' }) }),
+  });
+  await page.bind();
+  calls = 0;
+  const result = await page.call(exec(submitTransfer()));
+  assert.equal(result.ok, false);
+  assert.equal(page.executed().length, 1);
+  assert.equal(calls, 0);
 });
 
 test('请求目标与选中的标签不同源即拒', async () => {

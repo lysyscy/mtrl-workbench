@@ -50,7 +50,16 @@
 
 调拨单 `20261124-0001` 保存后按回执主键回读到了单号，`app_status=0`、`wf_flag=0`。同期回读同一设备，`sbzx.phid_pc` 仍为调出项目。2026-11-24 用户在 i8 对该 `ldzcdb` 调拨单执行送审并确认，i8 自动将设备当前项目（`sbzx.phid_pc`）更新为调入项目。
 
-设备新增、调拨和手动重试走 `backend/app/mod16_equipment/sync.py` 的 `I8CustomFormEquipmentAdapter`。默认只保存本地。设置 `M16_I8_SYNC_ENABLED=true` 并重启后，适用记录先提交本地，再使用当前在用工作台账号绑定的 i8 账号。直连传输只复用生效站点和该账号匹配的受保护 Cookie。缺少或失效的会话保留待同步状态。设备接口不会发起登录、下线或跟随重定向。普通取数接口仍按各自的会话选择执行。
+设备新增和调拨先提交本地。启用 `M16_I8_SYNC_ENABLED` 后，前端提交成功才调用 `POST /api/m16/i8-sync/retry`，手动补同步也用同一入口。查询参数 `session_mode=browser&device_id=...` 复用当前浏览器 i8 会话。显式选择 `session_mode=http` 时使用本人账号与当前站点匹配的已缓存 Cookie。连接缺失或取消等待时，本地记录保留待同步。设备接口不会登录、下线或跟随重定向。
+
+2026-11-26 实测 `ldzcdb` 送审使用如下顺序。工作流请求带 `env: java` 和 `gatewayauthparams: ldzcdb|<组织主键>|<当前录入人主键>|ldzcdb|`。会话身份由当前连接提供。
+
+| 方法及路径 | 请求和核对 |
+|---|---|
+| `POST /sup/customServer/startFlow?customBusCode=ldzcdb` | 预检，JSON 数组含一项 `id=<调拨单 phid>`、`isContinue="0"`、`impSchemeId="3700000000000363"`。必须回同一单据和方案且 `passFlag="1"`。 |
+| `GET /WorkFlow3/WorkFlow/GetStartFlowExecutionInfo` | `biztype=ldzcdb`、`bizphid=<调拨单 phid>`、`flowType=1`。核对无运行中的流程、定义 `xzd_102196:2:369735` 及签名和意见要求。已有流程时改为读回。 |
+| `GET /WorkFlow3/WorkFlow/GetProcessDynamicInfo` | `procDefId=xzd_102196:2:369735`、`formMetadataId=ldzcdb`、`formPk=<调拨单 phid>`、空 `orgId`、`flowType=1`。核对项目设备员分支。 |
+| `POST /WorkFlow3/WorkFlow/CreateProcInst` | 表单字段为 `flowType=1` 和 JSON 字符串 `data`。后者含上面的 `pdid`、`biztype`、`bizphid`，`dynamicNode=[{"sourceId":"ext-gen1795","transitionId":"ext-gen3164","destActId":"ext-gen2225"}]`，以及 `candidateUsersMap={"ext-gen2225":["3700000000000715"]}`（项目设备员史程远）。`minCommentLen=0`、`needsignature=false`、`hasDiagramPermission=true`，`flowdesc` 为空或 null，`remark`、`signature` 为空字符串，`orgId`、`formApproveUserId`、`assignedApproveUsers`、`formUrlParam` 为 null。 |
 
 已关联项目使用项目档案的 `phid` 提交和核对。同一档案下的自定义位置变动只生成本地调拨。以下环境变量使用 JSON，默认为空对象。映射缺失的记录保留待同步。
 
@@ -60,7 +69,7 @@
 | `M16_I8_SYNC_UNIT_IDS` | 已核单位名称到单位主键，例如 `{"台":"单位主键"}` |
 | `M16_I8_SYNC_OPERATORS` | 已核 i8 账号到录入人主键和姓名，例如 `{"i8账号":["人员主键","姓名"]}`。调拨建单使用当前会话 i8 账号的配置 |
 
-适配器按完整组织列表精确匹配设备编码。调出项目已配置主键时，以设备当前 `phid_pc` 核对，调拨明细带入 i8 返回的项目名称。设备原值 `u_yz` 按两位小数提交和核对。调拨保存后按单据主键核对单号，并回查同一设备的项目。单据已保存而设备仍在调出项目时保留单号及主键，显示项目待更新。回执未知和读回待确认的重试沿原执行记录回查，避免重复建单。适配器只执行保存和回查两个业务动作。
+适配器按完整组织列表精确匹配设备编码。调出项目已配置主键时，以设备当前 `phid_pc` 核对，调拨明细带入 i8 返回的项目名称。设备原值 `u_yz` 按两位小数提交和核对。调拨单保存后先持久化单据主键，再送审。回读 `ldzcdb` 的 `app_status=1`、`wf_flag=2`，并确认同一设备的 `sbzx.phid_pc` 已变为调入项目后才标记已同步。送审发出后回执未知或结果待生效时，重试只回读。送审预检失败且尚未发送时，重试先核对原单，再续办送审。升级前已有的待回读记录沿用原回查流程。
 
 ## 抓取回执
 
@@ -72,7 +81,7 @@
 
 ## 浏览器已有会话通道（`TAIL-476`）
 
-用途：日常抓取直接用用户在 Edge 里已经登录的 i8 会话取只读数据 —— 不登录、不顶号、不导出 Cookie。
+日常抓取及设备同步可复用用户在 Edge 中已登录的 i8 会话。浏览器管理会话材料。
 2026-11-05已用真实Edge与原工作台月度抓取按钮完成通知书代表，验证范围见文末；其它端点不由这一代表自动升级为现场已验。
 
 ### 通路
@@ -109,11 +118,15 @@
 | POST | `/PMS/PCM/Contract/ProjBal/GetCntProjBalList` | 采购合同应付 |
 | POST | `/PMS/PCM/Contract/GetCntMInfoFirst` | 合同详情（补材料名） |
 | POST | `/PMS/PCM/Contract/GetCntMList` | 采购合同列表 |
-| POST | `/sup/customServer/getList` | 机械费工作台小列表（小写 `sup`，原样） |
+| POST | `/sup/customServer/getList` | 机械费工作台小列表、设备台账及调拨单回读 |
 
-- 白名单**双重校验**（后端 `browser_relay.assert_readonly()` + 扩展 `checkEndpoint()`），每次请求都核，不只看初始化站点。
+- 后端及扩展均逐条校验方法和路径。扩展在 service worker 与 i8 标签内各校验一次。
 - 拒绝：非以上路径、方法不匹配、`..`、`//`、结尾斜杠、带 userinfo 的地址、非 http(s)。
 - 签名图片由两侧校验来源、路径、响应类型及栅格图片文件头。签名图须为 2xx 且具有支持的栅格文件头；接受 `image/*`、`application/octet-stream`、`binary/octet-stream` 或缺失的媒体类型，嵌入时按文件头确定图片格式。将会话失效内容标为图片的响应仍按会话失效停止本批。库存和结存的 `reportExport/export` 返回 xlsx 字节，后端校验长度与文件头。IPP 作业由工作台直接投给设备。
+
+### 设备同步端点范围
+
+设备补同步入口创建的客户端可排队发送两类写入。`POST /sup/customServer/save` 仅接受 `sbzx` 主表及 `ldzcdb` 新单主从表的约定字段。 `POST /WorkFlow3/WorkFlow/CreateProcInst` 仅接受上节定义的 `ldzcdb` 送审载荷。三个预检接口只接受该流程的查询及单据参数。后端入队、扩展 service worker、i8 标签页执行前均核对请求。 `env` 和 `gatewayauthparams` 只随设备流程请求转发。设备同步需要扩展 0.1.7。
 
 ### 身份与目标约束
 

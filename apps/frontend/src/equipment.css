@@ -7,7 +7,7 @@
 .page-view:has(> .equipment-page-bounded) {
   padding-block-end: 0;
 }
-.equipment-page-bounded,
+.workspace .page-view > .equipment-page-bounded,
 .equipment-top-tabs,
 .equipment-tabs-body,
 .equipment-tab-panel,

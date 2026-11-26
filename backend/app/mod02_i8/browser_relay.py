@@ -58,6 +58,7 @@ from app.mod02_i8.browser_session import (
 )
 from app.mod02_i8.client import I8Client, http_session_policy
 from app.mod02_i8.contract_source import DETAIL_PATH as CONTRACT_DETAIL_PATH, LIST_PATH as CONTRACT_LIST_PATH
+from app.mod02_i8.equipment_relay import EQUIPMENT_PATHS, WORKFLOW_HEADERS
 from app.mod02_i8.sources import WH_PARAMS
 
 logger = get_logger()
@@ -235,12 +236,14 @@ def expected_org_id() -> str:
     return match.group(1) if match else ""
 
 
-def _safe_headers(headers: httpx.Headers) -> dict[str, str]:
+def _safe_headers(headers: httpx.Headers, *, equipment_sync: bool = False) -> dict[str, str]:
     """只保留白名单里的请求头（去敏：会话材料永远不出后端）。"""
     out: dict[str, str] = {}
     for key, value in headers.items():
         lowered = key.lower()
-        if lowered in _BLOCKED_HEADERS or lowered not in _ALLOWED_HEADERS:
+        if lowered in _BLOCKED_HEADERS or (
+            lowered not in _ALLOWED_HEADERS and not (equipment_sync and lowered in WORKFLOW_HEADERS)
+        ):
             continue
         out[key] = value
     return out
@@ -302,12 +305,14 @@ class BrowserRelayTransport(httpx.BaseTransport):
     """一条请求 ↔ 一次浏览器往返。`httpx.Client(transport=...)` 注入后，`I8Client` 完全无感。"""
 
     def __init__(self, *, owner: str, device: str, origin: str,
-                 broker: BrowserBroker | None = None, expected_generation: int | None = None) -> None:
+                 broker: BrowserBroker | None = None, expected_generation: int | None = None,
+                 equipment_sync: bool = False) -> None:
         self._owner = owner
         self._device = device
         #: 只允许同一个站点原点（规范化后比较，含端口）。
         self._origin = _origin_of(origin) or origin
         self._broker = broker
+        self._equipment_sync = equipment_sync
         connection = self.broker.connection_of(owner, device) if expected_generation is None else None
         self._generation = connection.generation if connection else expected_generation
 
@@ -322,19 +327,21 @@ class BrowserRelayTransport(httpx.BaseTransport):
             raise StrictTargetMismatch(
                 "这次请求要去的地址不属于当前连接的 i8 站点，本次已停止（未发出去、未登录）。"
             )
-        # ⛔ **只读端点白名单**：站点对了不代表能发 —— 登录/踢人/保存端点绝不能从这条通道走。
-        assert_readonly(request.method, target)
+        equipment_request = self._equipment_sync and request.url.path in EQUIPMENT_PATHS
+        if not equipment_request:
+            assert_readonly(request.method, target)
         body = request.read() if request.method not in ("GET", "HEAD") else b""
         if self._generation is None:
             raise BrowserRelayUnavailable("浏览器连接不在，本次操作已停止，请重新确认后发起。")
         pending = self.broker.enqueue(
             self._owner, self._device,
             method=request.method, url=target,
-            headers=_safe_headers(request.headers), body=body,
+            headers=_safe_headers(request.headers, equipment_sync=equipment_request), body=body,
             # ⚠️ 预算逐条透传（合同列表 200s / 详情 60s / 其余 30s）——
             #    ⛔ 别在这里统一成默认值，那就是拿 30s 截断 200s 的请求。
             timeout_seconds=_request_read_timeout(request) or RELAY_WAIT_SECONDS,
             expected_generation=self._generation,
+            equipment_sync=equipment_request,
         )
         self.broker.wait(pending)
         status, headers, content = _decode_reply(
@@ -405,7 +412,7 @@ def _browser_connection(owner: str, device: str) -> ConnectionInfo:
     return connection
 
 
-def open_i8_client(*, owner: str) -> I8Client:
+def open_i8_client(*, owner: str, equipment_sync: bool = False) -> I8Client:
     """为当前会话策略创建客户端。owner 取自服务端认证身份。"""
     mode, device, connection = _relay_scope.get()
     if resolve_mode(mode) == MODE_HTTP:
@@ -423,6 +430,7 @@ def open_i8_client(*, owner: str) -> I8Client:
         base_url=connection.origin,
         transport=BrowserRelayTransport(
             owner=owner, device=device, origin=connection.origin, expected_generation=connection.generation,
+            equipment_sync=equipment_sync,
         ),
         declared_target=connection.origin,
     )

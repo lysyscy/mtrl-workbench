@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "工作台 i8 会话桥",
-  "version": "0.1.6",
-  "description": "把工作台的 i8 取数请求交给本机浏览器里已登录的 i8 标签执行；不读 Cookie、不登录、不顶号。",
+  "version": "0.1.7",
+  "description": "通过已登录的 i8 标签执行工作台取数及设备同步。不读 Cookie，不登录，不顶号。",
   "permissions": [
     "activeTab",
     "scripting",

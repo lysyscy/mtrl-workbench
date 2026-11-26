@@ -66,7 +66,7 @@ export interface BrowserRelayState {
 export interface RelayRequest {
   ticket: string;
   generation: number;
-  method: string;
+  method: 'GET' | 'POST';
   url: string;
   headers: Record<string, string>;
   body_b64: string;
@@ -246,12 +246,14 @@ export async function disconnectBrowser(signal?: AbortSignal): Promise<BrowserRe
 export function readRelayRequest(value: unknown): RelayRequest | null {
   if (!record(value) || typeof value.ticket !== 'string' || !value.ticket) return null;
   if (typeof value.method !== 'string' || typeof value.url !== 'string') return null;
+  const method = value.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return null;
   if (typeof value.generation !== 'number' || !Number.isInteger(value.generation)) return null;
   if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0) return null;
   return {
     ticket: value.ticket,
     generation: value.generation,
-    method: value.method.toUpperCase(),
+    method,
     url: value.url,
     headers: flatHeaders(value.headers),
     body_b64: readString(value, 'body_b64'),
@@ -354,6 +356,13 @@ export async function requestBrowserPermission(origin: string): Promise<void> {
   const result = await sendToExtension({type: 'i8-relay:permission', device_id: deviceId(), origin});
   if (!record(result) || result.ok !== true) {
     throw new ApiError('请在 i8 标签页点一下扩展图标，工作台会自动继续连接。', 0, 'need-action-click');
+  }
+}
+
+export async function requireEquipmentSyncExtension(): Promise<void> {
+  const response = await sendToExtension({ type: 'i8-relay:equipment-capability' });
+  if (!record(response) || response.equipmentSync !== 1) {
+    throw new ApiError('设备同步需要重新加载「工作台 i8 会话桥」0.1.7，再刷新工作台。', 0, 'extension-outdated');
   }
 }
 

@@ -43,6 +43,7 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.core.logging import get_logger
 from app.mod02_i8.browser_session import (
@@ -51,6 +52,7 @@ from app.mod02_i8.browser_session import (
     StrictTargetMismatch,
     _origin_of,
 )
+from app.mod02_i8.equipment_relay import EQUIPMENT_PATHS, require_equipment_request
 
 logger = get_logger()
 
@@ -273,7 +275,7 @@ class BrowserBroker:
     def enqueue(self, owner: str, device: str, *, method: str, url: str,
                 headers: dict[str, str], body: bytes,
                 timeout_seconds: float = RELAY_WAIT_SECONDS,
-                expected_generation: int | None = None) -> PendingRequest:
+                expected_generation: int | None = None, equipment_sync: bool = False) -> PendingRequest:
         """挂起一条请求（调用线程随后 `wait()` 阻塞，直到回帖或判停）。
 
         `timeout_seconds` 是**这条请求自己的**预算（调用方从 httpx 请求的 read 超时取），
@@ -288,6 +290,10 @@ class BrowserBroker:
                 )
             if expected_generation is not None and connection.generation != expected_generation:
                 raise BrowserRelayUnavailable("浏览器已重新连接，本次操作已停止，请重新确认后发起。")
+            if equipment_sync or urlsplit(url).path in EQUIPMENT_PATHS:
+                if not equipment_sync or expected_generation is None or _origin_of(url) != connection.origin:
+                    raise StrictTargetMismatch("设备同步请求缺少匹配的连接范围，已停止发送。")
+                require_equipment_request(method, url, headers, body)
             # 不透明唯一票：随机、不含时间戳/序号/对象地址（那些既会泄漏状态、又能被猜）。
             ticket = secrets.token_urlsafe(16)
             request = PendingRequest(

@@ -1,9 +1,10 @@
 """三账从 HTTP 写入到 Excel 交付的隔离回归。"""
+from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode, urlsplit
 import json
 import hashlib
 import os
@@ -23,6 +24,8 @@ from sqlalchemy.orm import Session
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
 from app.mod02_i8 import client as i8_http
+from app.mod02_i8 import browser_broker, browser_relay, browser_session, equipment_relay
+from app.mod02_i8.browser_session import StrictTargetMismatch
 from app.mod15_user.models import UserAccount
 from app.mod16_equipment import rental
 from app.mod16_equipment.importer import import_equipment_baseline, parse_rental, transfer_date_note
@@ -34,7 +37,6 @@ from app.core import session
 from app.core.config import Settings
 from app.main import create_app
 from app.mod16_equipment import api as equipment_api
-from app.mod16_equipment.api import i8_adapter
 from app.mod16_equipment.sync import I8CustomFormEquipmentAdapter
 
 ROOT = "/api/m16"
@@ -61,6 +63,22 @@ def request(c, method, path, data=None, status=200):
 
 def add(c, **kw):
     return request(c, "POST", "/equipment", BASE | kw)
+
+
+@pytest.fixture
+def use_adapter(monkeypatch):
+    def install(adapter):
+        @contextmanager
+        def opened(_mode, _device):
+            yield adapter
+
+        monkeypatch.setattr(equipment_api, "i8_adapter", opened)
+    return install
+
+
+def sync(c, *, equipment=None, transfer=None, query=""):
+    return request(c, "POST", "/i8-sync/retry" + query,
+                   {"equipment_ids": [equipment] if equipment else [], "transfer_ids": [transfer] if transfer else []})
 
 
 def archive_project(db, disp, **fields):
@@ -142,9 +160,9 @@ def test_creation_uses_purchase_project_for_initial_location(client):
     ("equipment", "off_book"), ("equipment", "fixed_asset"),
     ("turnover", "current_asset"), ("turnover", "off_book"), ("turnover", "fixed_asset"),
 ])
-def test_non_i8_scope_never_calls_adapter_or_queues_retry(client, category, scope):
+def test_non_i8_scope_never_calls_adapter_or_queues_retry(client, category, scope, use_adapter):
     adapter = RecordingAdapter()
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     created = add(client, item_category=category, asset_scope=scope, in_rental="no")
     item, = created["equipment"]
     assert item["i8_sync_status"] == created["i8_sync"][0]["status"] == "not_applicable"
@@ -625,7 +643,7 @@ def test_delete_transfer_conflicts_leave_ledger_intact(client, guard, message):
     assert request(client, "GET", f"/equipment/{key}?month={MONTH}") == before
 
 
-def test_adapter_conflict_retry_and_batch_rollback(client):
+def test_adapter_conflict_retry_and_batch_rollback(client, use_adapter):
     c = client
 
     class Fake:
@@ -642,15 +660,17 @@ def test_adapter_conflict_retry_and_batch_rollback(client):
             self.project = to_project
 
     adapter = Fake()
-    c.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     key = add(c, in_rental="no")["equipment"][0]["id"]
+    sync(c, equipment=key)
     assert adapter.writes == ["2026-11-03"]
     adapter.project = "其他"
     req = dict(equipment_ids=[key, 999999], to_project="项目乙", transfer_date="2026-11-24")
     request(c, "POST", "/transfers", req, 404)
     assert request(c, "GET", f"/equipment/{key}")["equipment"]["current_project"] == "项目甲"
     result = request(c, "POST", "/transfers", req | {"equipment_ids": [key]})
-    tr = result["transfers"][0]
+    sync(c, transfer=result["transfers"][0]["id"])
+    tr, = request(c, "GET", "/transfers")["items"]
     assert tr["i8_sync_status"] == "conflict" and adapter.writes == ["2026-11-03"]
     assert request(c, "GET", "/equipment?sync_issue_only=true")["summary"]["conflict_count"] == 1
     assert json.loads(tr["i8_conflict_json"])["snapshot"]["current_project"] == "其他"
@@ -778,9 +798,9 @@ class RecordingAdapter:
 
 
 @pytest.mark.parametrize("operation", ["create", "transfer"])
-def test_local_commit_failure_never_writes_i8(client, operation):
+def test_local_commit_failure_never_writes_i8(client, operation, use_adapter):
     adapter = RecordingAdapter()
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     ids = [row["id"] for row in add(client, quantity=2, in_rental="no")["equipment"]]
     adapter.events.clear()
 
@@ -802,7 +822,7 @@ def test_local_commit_failure_never_writes_i8(client, operation):
 
 
 @pytest.mark.parametrize("retry_by", ["equipment_ids", "transfer_ids"])
-def test_offline_creation_replayed_before_transfers(client, retry_by):
+def test_offline_creation_replayed_before_transfers(client, retry_by, use_adapter):
     key = add(client, in_rental="no")["equipment"][0]["id"]
     transfer_ids = []
     for target in ["项目乙", "项目丙"]:
@@ -810,7 +830,7 @@ def test_offline_creation_replayed_before_transfers(client, retry_by):
                                                         to_project=target))["transfers"][0]
         transfer_ids.append(row["id"])
     adapter = RecordingAdapter()
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     result = request(client, "POST", "/i8-sync/retry", {retry_by: [key if retry_by == "equipment_ids" else transfer_ids[-1]]})
     assert adapter.events == [("create", "项目甲"), ("transfer", "项目甲", "项目乙"), ("transfer", "项目乙", "项目丙")]
     assert [r["id"] for r in result["transfers"]] == transfer_ids
@@ -901,7 +921,7 @@ def test_remove_rental_flag_stops_from_current_month(client):
         assert row["billing_status"] == "stopped" and row["amount"] is None
     assert request(client, "GET", f"/rental?month={prior}")["projects"][0]["lines"][0]["billing_status"] == "normal"
 
-def test_adapter_runs_after_session_closes(client):
+def test_adapter_runs_after_session_closes(client, use_adapter):
     active_sessions = set()
     observed = []
 
@@ -919,12 +939,13 @@ def test_adapter_runs_after_session_closes(client):
             return super().snapshot(code)
 
     adapter = Probe()
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     event.listen(Session, "after_transaction_create", opened)
     event.listen(Session, "after_transaction_end", closed)
     try:
         key = add(client, in_rental="no")["equipment"][0]["id"]
         request(client, "POST", "/transfers", dict(equipment_ids=[key], transfer_date="2026-11-05", to_project="乙"))
+        sync(client, equipment=key)
     finally:
         event.remove(Session, "after_transaction_create", opened)
         event.remove(Session, "after_transaction_end", closed)
@@ -949,22 +970,43 @@ def page(*rows):
 
 
 def custom_adapter(*responses, project_names=None):
-    transport = Mock(spec=["post_json"])
-    transport.post_json.side_effect = responses
+    transport = Mock(spec=["post_json", "get_json"])
+    forms = Mock(side_effect=responses)
+    transport.post_json.side_effect = lambda path, **kw: (
+        workflow_reply(path, "B1") if path in (equipment_relay.START_FLOW, equipment_relay.SUBMIT) else forms(path, **kw)
+    )
+    transport.get_json.side_effect = lambda path, **kw: workflow_reply(path, "B1")
     adapter = I8CustomFormEquipmentAdapter(
         transport, project_ids={"项目甲": "P1", "项目乙": "P2"},
         project_names=project_names, transfer_operator=("I8-P1", "测试录入人"),
     )
-    return adapter, transport.post_json
+    return adapter, forms
 
 
 def save_receipt(phid):
     return {"status": "success", "msg": None, "data": phid, "total": None}
 
 
-def transfer_bill():
+def transfer_bill(approved=False):
     return {"phid": "B1", "bill_no": "20261124-0001", "phid_pc": "P1",
-            "phid_org": "3700000000000014", "app_status": 0, "wf_flag": 0}
+            "phid_org": "3700000000000014", "app_status": 1 if approved else 0, "wf_flag": 2 if approved else 0}
+
+
+def workflow_reply(path, phid):
+    if path == equipment_relay.START_FLOW:
+        return {"status": "success", "data": [
+            {"id": phid, "passFlag": "1", "isContinue": "0", "impSchemeId": equipment_relay.SCHEME},
+        ]}
+    if path == equipment_relay.FLOW_INFO:
+        return {"success": True, "data": {"hasRuningFlow": False, "pdlist": [
+            {"id": equipment_relay.PROCESS, "mincommentlen": "0", "mustsignature": "false"},
+        ]}}
+    if path == equipment_relay.DYNAMIC_INFO:
+        return {"success": True, "data": {"dynamicInfo": {"simplyData": {"nextTrans": [
+            {"id": "ext-gen3164", "sourceId": "ext-gen1795", "destinationId": "ext-gen2225"},
+        ]}}}}
+    assert path == equipment_relay.SUBMIT
+    return {"success": True, "data": {"procInstFinished": True}}
 
 
 @pytest.fixture
@@ -973,10 +1015,14 @@ def cached_i8(client, monkeypatch):
         _env_file=None, i8_base_url="https://equipment-i8.invalid", i8_user="shared-fallback",
         m16_i8_sync_enabled=True, m16_i8_sync_project_ids={"项目乙": "P2"},
         m16_i8_sync_unit_ids={"台": "U1"},
-        m16_i8_sync_operators={"bound-i8": ("PERSON-1", "测试录入人")},
+        m16_i8_sync_operators={"bound-i8": ("3700000000001823", "测试录入人")},
     )
     monkeypatch.setattr(equipment_api, "get_settings", lambda: settings)
     monkeypatch.setattr(equipment_api, "i8_base_of", lambda settings: settings.i8_base_url)
+    monkeypatch.setattr(browser_relay, "get_settings", lambda: settings)
+    monkeypatch.setattr(browser_relay, "i8_base_of", lambda settings: settings.i8_base_url)
+    monkeypatch.setattr(browser_session, "get_settings", lambda: settings)
+    monkeypatch.setattr(browser_session, "i8_base_of", lambda settings: settings.i8_base_url)
     cache = Mock(return_value="session=mock-equipment")
     login = Mock(side_effect=AssertionError("device sync must never log in"))
     transport = Mock(side_effect=AssertionError("unexpected i8 request"))
@@ -1003,6 +1049,8 @@ def test_equipment_factory_keeps_local_save_pending_without_usable_session(
         db.add(UserAccount(account="equipment-test", i8_user="bound-i8" if bound else ""))
     item, = add(client, in_rental="no")["equipment"]
     assert item["i8_sync_status"] == "pending"
+    cache.assert_not_called()
+    assert sync(client, equipment=item["id"], query="?session_mode=http")["equipment"][0]["status"] == "pending"
     assert cache.call_count == cache_reads
     transport.assert_not_called()
 
@@ -1019,6 +1067,8 @@ def test_equipment_factory_uses_own_cached_http_session_and_i8_mappings(client, 
     def send(request):
         assert request.url.host == "equipment-i8.invalid"
         assert request.headers["Cookie"] == "session=mock-equipment"
+        if request.url.path in equipment_relay.EQUIPMENT_PATHS - {SAVE_PATH}:
+            return httpx.Response(200, json=workflow_reply(request.url.path, "B1"))
         form = parse_qs(request.content.decode("utf-8"))
         business = form["customBusCode"][0]
         if request.url.path == SAVE_PATH:
@@ -1036,17 +1086,19 @@ def test_equipment_factory_uses_own_cached_http_session_and_i8_mappings(client, 
     transport.side_effect = send
     item, = add(client, name="样机", purchase_price=0, purchase_project=None,
                 purchase_project_id=origin, unit="台", in_rental="no")["equipment"]
-    assert item["i8_sync_status"] == "synced"
+    assert item["i8_sync_status"] == "pending"
+    assert sync(client, equipment=item["id"], query="?session_mode=http")["equipment"][0]["status"] == "synced"
     transfer, = request(client, "POST", "/transfers", dict(
         equipment_ids=[item["id"]], to_project="项目乙", transfer_date="2026-11-24",
     ))["transfers"]
-    assert transfer["i8_sync_status"] == "pending"
+    assert sync(client, transfer=transfer["id"], query="?session_mode=http")["transfers"][0]["status"] == "pending"
+    transfer, = request(client, "GET", "/transfers")["items"]
     assert json.loads(transfer["i8_conflict_json"])["bill_no"] == "20261124-0001"
     create = sent["sbzx"]["p_form_sbzx_m"]["form"]["newRow"]
     assert (create["phid_pc"], create["u_msunit"]) == ("P1", "U1")
     move = sent["ldzcdb"]
     header = move["p_form_ldzcdb_m"]["form"]["newRow"]
-    assert (header["phid_fill_psn"], header["phid_fill_psn_EXName"]) == ("PERSON-1", "测试录入人")
+    assert (header["phid_fill_psn"], header["phid_fill_psn_EXName"]) == ("3700000000001823", "测试录入人")
     assert move["p_form_ldzcdb_d"]["table"]["newRow"][0]["row"]["u_inproj"] == "P2"
     assert [entry.args for entry in cache.call_args_list] == [
         ("bound-i8", "https://equipment-i8.invalid"),
@@ -1065,9 +1117,115 @@ def test_equipment_factory_leaves_expired_session_pending(client, cached_i8, res
     transport.side_effect = None
     transport.return_value = response
     item, = add(client, in_rental="no")["equipment"]
-    assert item["i8_sync_status"] == "pending"
-    assert "会话已失效" in item["i8_sync_message"]
+    receipt, = sync(client, equipment=item["id"], query="?session_mode=http")["equipment"]
+    assert receipt["status"] == "pending"
+    assert "会话已失效" in receipt["message"]
     assert [entry.args[0].url.path for entry in transport.call_args_list] == [LIST_PATH]
+
+
+def test_equipment_browser_disconnected_keeps_local_save(client, cached_i8):
+    _, cache, direct = cached_i8
+    with session_scope() as db:
+        db.add(UserAccount(account="equipment-test", i8_user="bound-i8"))
+    item, = add(client, in_rental="no")["equipment"]
+    error = request(client, "POST", "/i8-sync/retry?device_id=disconnected", {"equipment_ids": [item["id"]]}, 400)
+    assert error["code"] == "i8_browser_relay_unavailable"
+    assert request(client, "GET", f"/equipment/{item['id']}")["i8_sync"]["status"] == "pending"
+    cache.assert_not_called()
+    direct.assert_not_called()
+
+
+@pytest.mark.parametrize("lost_receipt", [False, True])
+def test_equipment_browser_sync_saves_submits_and_verifies(client, cached_i8, monkeypatch, lost_receipt):
+    settings, cache, direct = cached_i8
+    cache.return_value = None
+    store = browser_broker.BrowserBroker()
+    monkeypatch.setattr(browser_broker, "broker", lambda: store)
+    owner, device = "equipment-test", "equipment-browser"
+    connection = store.connect(owner, device, settings.i8_base_url)
+    source, target, asset, bill = ("370000000000000" + str(i) for i in range(1, 5))
+    settings.m16_i8_sync_project_ids = {"项目甲": source, "项目乙": target}
+    with session_scope() as db:
+        db.add(UserAccount(account=owner, i8_user="bound-i8"))
+    item, = add(client, name="样机", purchase_price=0, unit="台", in_rental="no")["equipment"]
+    transfer_id = transfer_to(client, item["id"], "项目乙")
+    remote_asset = None
+    approved = False
+    paths = []
+
+    def browser_reply(pending):
+        nonlocal remote_asset, approved
+        assert store.take_pending(owner, device, timeout=0) is pending
+        assert pending.generation == connection.generation
+        assert "cookie" not in pending.headers and "authorization" not in pending.headers
+        path = urlsplit(pending.url).path
+        paths.append(path)
+        form = parse_qs(pending.body.decode()) if path in (LIST_PATH, SAVE_PATH, equipment_relay.SUBMIT) else {}
+        failure = None
+        if path == LIST_PATH and form["customBusCode"] == ["sbzx"]:
+            reply = page(remote_asset) if remote_asset else page()
+        elif path == LIST_PATH:
+            assert form["customBusCode"] == ["ldzcdb"] and approved
+            reply = page(transfer_bill(approved=True) | {"phid": bill, "phid_pc": source})
+        elif path == SAVE_PATH and form["customBusCode"] == ["sbzx"]:
+            saved = json.loads(form["data"][0])["p_form_sbzx_m"]["form"]["newRow"]
+            remote_asset = saved | {"phid": asset, "phid_pc_EXName": "项目甲"}
+            reply = save_receipt(asset)
+        elif path == SAVE_PATH:
+            assert form["customBusCode"] == ["ldzcdb"]
+            reply = save_receipt(bill)
+        elif path == equipment_relay.SUBMIT:
+            with session_scope() as db:
+                intent = json.loads(db.get(EquipmentTransfer, transfer_id).i8_conflict_json)
+            assert intent["bill_phid"] == bill and intent["workflow_phase"] == "submitting"
+            payload = json.loads(form["data"][0])
+            assert payload["bizphid"] == bill
+            assert payload["dynamicNode"] == [{"sourceId": "ext-gen1795", "transitionId": "ext-gen3164",
+                                               "destActId": "ext-gen2225"}]
+            assert payload["candidateUsersMap"] == {"ext-gen2225": ["3700000000000715"]}
+            approved = True
+            remote_asset.update(phid_pc=target, phid_pc_EXName="项目乙")
+            failure = "network" if lost_receipt else None
+            reply = workflow_reply(path, bill)
+        else:
+            reply = workflow_reply(path, bill)
+        body = json.dumps(reply).encode() if not failure else b""
+        assert store.complete(owner, device, pending.ticket, status=599 if failure else 200,
+                              headers={"content-type": "application/json"}, body=body,
+                              declared_length=len(body), relay_failure=failure, generation=pending.generation)
+        return pending
+
+    monkeypatch.setattr(store, "wait", browser_reply)
+    assert paths == []
+    query = "?device_id=" + device
+    receipt = sync(client, transfer=transfer_id, query=query)
+    if lost_receipt:
+        assert receipt["transfers"][0]["status"] == "failed", (receipt, paths)
+        assert paths[-1] == equipment_relay.SUBMIT
+        receipt = sync(client, transfer=transfer_id, query=query)
+    assert receipt["transfers"][0]["status"] == "synced", (receipt, paths)
+    assert paths == [LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH, SAVE_PATH,
+                     equipment_relay.START_FLOW, equipment_relay.FLOW_INFO, equipment_relay.DYNAMIC_INFO,
+                     equipment_relay.SUBMIT, LIST_PATH, LIST_PATH]
+    cache.assert_not_called()
+    direct.assert_not_called()
+
+
+@pytest.mark.parametrize("path,form", [
+    (SAVE_PATH, {"customBusCode": "payment"}),
+    (SAVE_PATH, {"customBusCode": "sbzx", "data": '{"p_form_fkb_m":{}}', "billNoStatus": "1"}),
+    (equipment_relay.SUBMIT, {"data": '{"biztype":"payment"}', "flowType": "1"}),
+    ("/WorkFlow3/WorkFlow/Approve", {}),
+])
+def test_equipment_broker_rejects_other_writes(path, form):
+    store = browser_broker.BrowserBroker()
+    base = "https://equipment-i8.invalid"
+    connection = store.connect("owner", "device", base)
+    with pytest.raises(StrictTargetMismatch):
+        store.enqueue("owner", "device", method="POST", url=base + path,
+                      headers={"content-type": "application/x-www-form-urlencoded"}, body=urlencode(form).encode(),
+                      expected_generation=connection.generation, equipment_sync=True)
+    assert store.take_pending("owner", "device", timeout=0) is None
 
 
 def saved_form(calls, business):
@@ -1157,10 +1315,11 @@ def test_custom_transfer_uses_mapped_source_phid_and_i8_display_name():
 
 
 @pytest.mark.parametrize("bill_rows,after,status", [
-    (page(transfer_bill()), page(equipment_row("项目乙全称", "P2")), "synced"),
+    (page(transfer_bill(approved=True)), page(equipment_row("项目乙全称", "P2")), "synced"),
+    (page(transfer_bill()), page(equipment_row("项目乙全称", "P2")), "pending"),
     (page(transfer_bill()), page(equipment_row("项目甲全称")), "pending"),
-    (page(transfer_bill()), page(), "failed"),
-    (page(transfer_bill()), page(equipment_row("项目乙全称", "P9")), "failed"),
+    (page(transfer_bill(approved=True)), page(), "failed"),
+    (page(transfer_bill(approved=True)), page(equipment_row("项目乙全称", "P9")), "failed"),
     (page(), page(equipment_row("项目乙全称", "P2")), "failed"),
 ])
 def test_custom_transfer_save_and_readback(bill_rows, after, status):
@@ -1198,16 +1357,18 @@ def test_custom_transfer_save_and_readback(bill_rows, after, status):
         assert result.conflict["bill_no"] == "20261124-0001"
 
 
-def test_custom_adapter_injected_at_normal_sync_entry(client):
+def test_custom_adapter_injected_at_normal_sync_entry(client, use_adapter):
     adapter, calls = custom_adapter(page(), {"status": "validateWarn"})
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     saved = add(client, in_rental="no")["equipment"][0]
-    assert saved["i8_sync_status"] == "failed"
+    assert saved["i8_sync_status"] == "pending"
+    calls.assert_not_called()
+    assert sync(client, equipment=saved["id"])["equipment"][0]["status"] == "failed"
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, SAVE_PATH]
     assert saved_form(calls, "sbzx")["p_form_sbzx_m"]["form"]["newRow"]["u_yz"] == "100.13"
 
 
-def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client):
+def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client, use_adapter):
     with session_scope() as db:
         origin_id = archive_project(db, "乌兰察布项目", phid="ARCHIVE-1")
         destination_id = archive_project(db, "南平项目", phid="ARCHIVE-2")
@@ -1216,11 +1377,12 @@ def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client):
     before = equipment_row("i8 乌兰察布全名", "ARCHIVE-1")
     after = equipment_row("i8 南平全名", "ARCHIVE-2")
     adapter, calls = custom_adapter(page(), save_receipt("E1"), page(before), page(before),
-                                    save_receipt("B1"), page(transfer_bill() | {"phid_pc": "ARCHIVE-1"}), page(after))
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+                                    save_receipt("B1"), page(transfer_bill(approved=True) | {"phid_pc": "ARCHIVE-1"}), page(after))
+    use_adapter(adapter)
     transfer, = request(client, "POST", "/transfers", dict(equipment_ids=[item["id"]], to_project_id=destination_id,
         to_project_custom="南平现场", transfer_date="2026-11-25"))["transfers"]
-    assert transfer["i8_sync_status"] == "synced" and transfer["to_project"] == "南平现场"
+    assert sync(client, transfer=transfer["id"])["transfers"][0]["status"] == "synced"
+    assert transfer["to_project"] == "南平现场"
     saves = [json.loads(call.kwargs["data"]["data"]) for call in calls.call_args_list if call.args[0] == SAVE_PATH]
     equipment_save, transfer_save = saves
     assert equipment_save["p_form_sbzx_m"]["form"]["newRow"]["phid_pc"] == "ARCHIVE-1"
@@ -1228,36 +1390,37 @@ def test_i8_queue_uses_archive_phids_for_creation_and_transfer(client):
     assert transfer_save["p_form_ldzcdb_d"]["table"]["newRow"][0]["row"]["u_inproj"] == "ARCHIVE-2"
 
 
-def test_transfer_retry_reconciles_unknown_save_without_reposting(client):
+def test_transfer_retry_reconciles_unknown_save_without_reposting(client, use_adapter):
     key = add(client, in_rental="no")["equipment"][0]["id"]
     code = request(client, "GET", f"/equipment/{key}")["equipment"]["code"]
     row = equipment_row() | {"u_device_code": code, "bill_name": BASE["name"], "u_yz": BASE["purchase_price"]}
     adapter, calls = custom_adapter(page(row), page(row), TimeoutError(), page(row),
                                     page(row | {"phid_pc": "P2", "phid_pc_EXName": "项目乙"}))
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     transfer = request(client, "POST", "/transfers", dict(equipment_ids=[key], to_project="项目乙",
                                                           transfer_date="2026-11-23"))["transfers"][0]
-    assert transfer["i8_sync_status"] == "failed"
-    for expected in ["failed", "synced"]:
-        result = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [transfer["id"]]})
-        assert result["transfers"][0]["status"] == expected
+    assert transfer["i8_sync_status"] == "pending"
+    for _ in range(3):
+        assert sync(client, transfer=transfer["id"])["transfers"][0]["status"] == "failed"
     assert [c.args[0] for c in calls.call_args_list] == [LIST_PATH, LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH]
 
 
-def test_saved_transfer_waits_for_equipment_project_without_reposting(client):
+def test_saved_transfer_waits_for_equipment_project_without_reposting(client, use_adapter):
     key = add(client, in_rental="no")["equipment"][0]["id"]
     code = request(client, "GET", f"/equipment/{key}")["equipment"]["code"]
     row = equipment_row() | {
         "u_device_code": code, "bill_name": BASE["name"], "u_yz": BASE["purchase_price"],
         "u_indata": f"{BASE['purchase_date']} 00:00:00", "u_spec": BASE.get("spec"),
     }
-    bill = page(transfer_bill())
+    bill = page(transfer_bill(approved=True))
     moved = page(row | {"phid_pc": "P2", "phid_pc_EXName": "项目乙"})
     adapter, calls = custom_adapter(page(row), page(row), save_receipt("B1"), bill, page(row), bill, moved)
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    use_adapter(adapter)
     saved = request(client, "POST", "/transfers", dict(equipment_ids=[key], to_project="项目乙",
                                                        transfer_date="2026-11-24"))["transfers"][0]
     assert saved["i8_sync_status"] == "pending"
+    assert sync(client, transfer=saved["id"])["transfers"][0]["status"] == "pending"
+    saved, = request(client, "GET", "/transfers")["items"]
     assert json.loads(saved["i8_conflict_json"])["bill_no"] == "20261124-0001"
     retried = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [saved["id"]]})
     assert retried["transfers"][0]["status"] == "synced"
@@ -1266,14 +1429,32 @@ def test_saved_transfer_waits_for_equipment_project_without_reposting(client):
     ]
 
 
-def test_transfer_receipt_commit_failure_does_not_repost(client):
+def test_pre_upgrade_transfer_waiting_for_readback_does_not_submit(client, use_adapter):
+    item, = add(client, name="样机", in_rental="no")["equipment"]
+    transfer_id = transfer_to(client, item["id"], "项目乙")
+    with session_scope() as db:
+        db.get(EquipmentItem, item["id"]).i8_sync_status = "synced"
+        db.get(EquipmentTransfer, transfer_id).i8_conflict_json = json.dumps({
+            "awaiting_readback": True, "code": TEST_CODE, "phid": "E1", "bill_phid": "B1",
+            "origin_id": "P1", "destination_id": "P2", "to_project": "项目乙",
+        })
+    adapter, calls = custom_adapter(page(transfer_bill(approved=True)), page(equipment_row("项目乙", "P2")))
+    use_adapter(adapter)
+    assert sync(client, transfer=transfer_id)["transfers"][0]["status"] == "synced"
+    assert [call.args[0] for call in calls.call_args_list] == [LIST_PATH, LIST_PATH]
+    assert adapter.transport.get_json.call_count == 0
+    assert adapter.transport.post_json.call_count == 2
+
+
+def test_transfer_receipt_commit_failure_does_not_repost(client, use_adapter):
     item, = add(client, name="样机", in_rental="no")["equipment"]
     key = item["id"]
     with session_scope() as db:
         db.get(EquipmentItem, key).i8_sync_status = "synced"
     before = page(equipment_row())
-    adapter, calls = custom_adapter(before, save_receipt("B1"), page(transfer_bill()), before, before)
-    client.app.dependency_overrides[i8_adapter] = lambda: adapter
+    adapter, calls = custom_adapter(before, save_receipt("B1"), before)
+    use_adapter(adapter)
+    transfer = transfer_to(client, key, "项目乙")
 
     def fail_receipt(db, *_):
         if any(isinstance(row, EquipmentTransfer) and '"bill_phid"' in (row.i8_conflict_json or "")
@@ -1282,8 +1463,7 @@ def test_transfer_receipt_commit_failure_does_not_repost(client):
 
     event.listen(Session, "before_flush", fail_receipt)
     try:
-        with pytest.raises(RuntimeError, match="simulated receipt commit failure"):
-            transfer_to(client, key, "项目乙")
+        assert sync(client, transfer=transfer)["transfers"][0]["status"] == "failed"
     finally:
         event.remove(Session, "before_flush", fail_receipt)
     saved, = request(client, "GET", "/transfers")["items"]
@@ -1292,7 +1472,7 @@ def test_transfer_receipt_commit_failure_does_not_repost(client):
     request(client, "DELETE", f"/transfers/{saved['id']}", status=409)
     retried = request(client, "POST", "/i8-sync/retry", {"transfer_ids": [saved["id"]]})
     assert retried["transfers"][0]["status"] == "failed"
-    assert [call.args[0] for call in calls.call_args_list] == [LIST_PATH, SAVE_PATH, LIST_PATH, LIST_PATH, LIST_PATH]
+    assert [call.args[0] for call in calls.call_args_list] == [LIST_PATH, SAVE_PATH, LIST_PATH]
 
 
 def save_source(path, sheets):

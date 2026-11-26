@@ -1,28 +1,32 @@
 """设备台账（mod16）HTTP 接口：守卫 /api/m16 路由、事务边界与三套 Excel 导出出口。"""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Query, Response
 from fastapi.encoders import jsonable_encoder
 
 from app import export_registry as EXP
 from app.core.config import get_settings, i8_base_of
 from app.core.db import session_scope
 from app.core.session import current_name
+from app.mod02_i8.browser_relay import MODE_BROWSER, MODE_HTTP, open_i8_client
 from app.mod02_i8.client import I8Client
+from app.mod02_i8.session_policy import unified_i8_session
 from app.mod15_user.service import active_account
 from . import rental, schemas as S, service
 from .common import ledger_lock, record
-from .sync import ISSUES, I8CustomFormEquipmentAdapter, sync_lock, sync_queue
-from .models import EquipmentItem, EquipmentScrap, EquipmentTransfer
+from .sync import I8CustomFormEquipmentAdapter, sync_lock, sync_queue
+from .models import EquipmentScrap, EquipmentTransfer
 
 router = APIRouter(prefix="/api/m16", tags=["设备台账"])
 
 
-def i8_adapter() -> Iterator[I8CustomFormEquipmentAdapter | None]:
+@contextmanager
+def i8_adapter(session_mode: str, device_id: str) -> Iterator[I8CustomFormEquipmentAdapter | None]:
     settings = get_settings()
     owner = current_name()
     if not settings.m16_i8_sync_enabled or not owner:
@@ -31,19 +35,35 @@ def i8_adapter() -> Iterator[I8CustomFormEquipmentAdapter | None]:
     with session_scope() as db:
         account = active_account(db, owner)
         user = (account.i8_user or "").strip() if account is not None else ""
-    transport = I8Client.from_cached_session(i8_base_of(settings), user) if user else None
-    if transport is None:
+    if not user:
         yield None
         return
-    try:
-        yield I8CustomFormEquipmentAdapter(
-            transport,
-            project_ids=settings.m16_i8_sync_project_ids,
+
+    def adapter(transport):
+        return I8CustomFormEquipmentAdapter(
+            transport, project_ids=settings.m16_i8_sync_project_ids,
             unit_ids=settings.m16_i8_sync_unit_ids,
             transfer_operator=settings.m16_i8_sync_operators.get(user),
         )
-    finally:
-        transport.close()
+
+    if session_mode == MODE_HTTP:
+        transport = I8Client.from_cached_session(i8_base_of(settings), user)
+        if transport is None:
+            yield None
+        else:
+            try:
+                yield adapter(transport)
+            finally:
+                transport.close()
+        return
+
+    with unified_i8_session({"session_mode": session_mode, "device_id": device_id}, owner=owner,
+                            operation="m16.equipment.sync", scope={}):
+        transport = open_i8_client(owner=owner, equipment_sync=True)
+        try:
+            yield adapter(transport)
+        finally:
+            transport.close()
 
 
 def call(fn, *args, write=False, **kwargs):
@@ -54,19 +74,12 @@ def call(fn, *args, write=False, **kwargs):
         return jsonable_encoder(result, custom_encoder={Decimal: str})
 
 
-def save_and_sync(fn, request, adapter, model, field):
+def save_local(fn, request, field):
     result = call(fn, request, write=True)
-    rows = result[field]
-    if adapter is not None:
-        queued = [row for row in rows if row["i8_sync_status"] in ISSUES]
-        for row in queued:
-            sync_queue(row["equipment_id"] if model is EquipmentTransfer else row["id"], adapter)
-        if queued:
-            refreshed = {row["id"]: row for row in call(service.saved_records, model, [row["id"] for row in queued])}
-            rows = result[field] = [refreshed.get(row["id"], row) for row in rows]
     result["i8_sync"] = [{"id": r["id"], "status": r["i8_sync_status"], "message": r["i8_sync_message"]}
-                         for r in rows]
-    return jsonable_encoder(result, custom_encoder={Decimal: str})
+                         for r in result[field]]
+    result["i8_sync_enabled"] = get_settings().m16_i8_sync_enabled
+    return result
 
 
 @router.get("/equipment/preview")
@@ -100,8 +113,8 @@ def preview_post(request: S.Preview):
 
 
 @router.post("/equipment")
-def create(request: S.EquipmentCreate, adapter=Depends(i8_adapter)):
-    return save_and_sync(service.create, request, adapter, EquipmentItem, "equipment")
+def create(request: S.EquipmentCreate):
+    return save_local(service.create, request, "equipment")
 
 
 @router.get("/equipment")
@@ -124,8 +137,8 @@ def update(id: int, request: S.EquipmentPatch):
 
 
 @router.post("/transfers")
-def transfer(request: S.Transfer, adapter=Depends(i8_adapter)):
-    return save_and_sync(service.transfer, request, adapter, EquipmentTransfer, "transfers")
+def transfer(request: S.Transfer):
+    return save_local(service.transfer, request, "transfers")
 
 
 @router.get("/transfers")
@@ -157,12 +170,14 @@ def sync_issues():
 
 
 @router.post("/i8-sync/retry")
-def retry(request: S.Retry, adapter=Depends(i8_adapter)):
+def retry(request: S.Retry, session_mode: str = MODE_BROWSER, device_id: str = ""):
+    keys = call(service.retry_ids, request)
     result = {"equipment": [], "transfers": []}
-    for key in call(service.retry_ids, request):
-        queue = sync_queue(key, adapter)
-        for field in result:
-            result[field].extend(queue[field])
+    with i8_adapter(session_mode, device_id) as adapter:
+        for key in keys:
+            queue = sync_queue(key, adapter)
+            for field in result:
+                result[field].extend(queue[field])
     return result
 
 

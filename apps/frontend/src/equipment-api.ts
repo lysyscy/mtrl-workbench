@@ -2,6 +2,8 @@ import * as schema from 'valibot';
 import type { Project } from './api';
 import { ApiError, body, record, requestFile, requestJson } from './api';
 import { saveBlob } from './flow-api';
+import { requireEquipmentSyncExtension, sessionParams } from './i8-browser-relay';
+import type { SessionChoice } from './i8-browser-relay';
 
 export type ItemCategory = 'equipment' | 'turnover';
 export type InventoryCategory = 'tool' | 'turnover';
@@ -209,6 +211,7 @@ const ids = schema.array(id);
 const codes = schema.array(schema.pipe(text, schema.nonEmpty()));
 const preview = schema.object({ codes: schema.pipe(codes, schema.nonEmpty()) });
 const syncResults = schema.array(schema.object({ id, status: syncStatus, message: nullableText }));
+export type SyncResults = schema.InferOutput<typeof syncResults>;
 const rentalProject = schema.object({ project_id: schema.nullable(id), project_name: text });
 type RentalProject = schema.InferOutput<typeof rentalProject>;
 const rentGroup = schema.object({
@@ -294,6 +297,7 @@ export const equipmentApi = {
         inventory_item: schema.nullable(inventoryItem),
         rental_line_ids: ids,
         i8_sync: syncResults,
+        i8_sync_enabled: schema.boolean(),
       }),
       '/equipment',
       'POST',
@@ -353,6 +357,7 @@ export const equipmentApi = {
         transfers: schema.array(equipmentTransfer),
         rental_line_ids: ids,
         i8_sync: syncResults,
+        i8_sync_enabled: schema.boolean(),
       }),
       '/transfers',
       'POST',
@@ -376,8 +381,14 @@ export const equipmentApi = {
       schema.object({ equipment: schema.array(equipmentItem), transfers: schema.array(equipmentTransfer) }),
       '/i8-sync/issues'
     ),
-  retry: (v: Retry) =>
-    write(schema.object({ equipment: syncResults, transfers: syncResults }), '/i8-sync/retry', 'POST', v),
+  retry: async (v: Retry, choice: SessionChoice) => {
+    if (choice.mode === 'browser') await requireEquipmentSyncExtension();
+    return checked(
+      schema.object({ equipment: syncResults, transfers: syncResults }),
+      url('/i8-sync/retry') + '?' + sessionParams(choice),
+      { method: 'POST', ...body(v) }
+    );
+  },
   rental: (month: string, project?: string) => get(monthly, '/rental', { month, project }),
   patchLine: (id: number, v: RentPatch) => write(rentalLine, '/rental/lines/' + id, 'PATCH', v),
   resolve: (id: number, choice: Choice) =>

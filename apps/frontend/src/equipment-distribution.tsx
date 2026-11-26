@@ -12,6 +12,7 @@ import type { DialogState } from './equipment-dialogs';
 import { equipmentFlashDuration, whenEquipmentTargetReady } from './equipment-navigation';
 import type { RentalTarget } from './equipment-navigation';
 import { contentWidth, numberColumnWidth } from './grid';
+import { I8ConnectionWaitStatus, useI8ActionWait } from './i8-session';
 import {
   flagLabels,
   formatMoney,
@@ -137,6 +138,7 @@ export function Distribution({ goToRental, targetIds, scale }: {
   const flashIds = useRef<ReadonlySet<number>>(new Set());
   const { enabled, writable } = useAccess();
   const action = useLedgerAction();
+  const { waiting, cancelWaiting, runWhenReady } = useI8ActionWait(tab);
   const listTab = tab === 'equipment' || tab === 'turnover';
   const category: ItemCategory = tab === 'turnover' ? 'turnover' : 'equipment';
   const list = useLedgerQuery(['list'], () => api.list({ include_scrapped: true }), listTab || !!targetIds);
@@ -295,11 +297,11 @@ export function Distribution({ goToRental, targetIds, scale }: {
           {retryable && (
             <Button disabled={!writable || action.busy} onClick={() => void action.run(async () => {
               const linked = new Set(pending.transfers.map(t => t.equipment_id));
-              const r = await api.retry({
+              const r = await runWhenReady(choice => api.retry({
                 equipment_ids: pending.equipment.filter(i => !linked.has(i.id)).map(i => i.id),
                 transfer_ids: pending.transfers.map(t => t.id),
-              });
-              setReceipt('i8 补同步结果：' + syncReceipt([...r.equipment, ...r.transfers]));
+              }, choice));
+              if (r) setReceipt('i8 补同步结果：' + syncReceipt([...r.equipment, ...r.transfers]));
             })}>
               一键补同步 i8
             </Button>
@@ -324,6 +326,10 @@ export function Distribution({ goToRental, targetIds, scale }: {
           <Button size="small" type="text" onClick={() => setHistoryItem(null)}>查看全部调拨</Button>
         </div>
       )}
+      {waiting && <div>
+        <I8ConnectionWaitStatus />
+        <Button onClick={cancelWaiting}>取消等待</Button>
+      </div>}
       {receipt && (
         <div className="equipment-receipt" role="status">
           {receipt}{' '}<Button type="text" onClick={() => setReceipt('')}>收起</Button>
