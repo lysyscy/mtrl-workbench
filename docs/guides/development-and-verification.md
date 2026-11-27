@@ -41,6 +41,14 @@ React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/
 
 发布恢复与布局判定的纯工具回归分别用上述unittest入口的`-p test_frontend_operations.py`、`-p test_frontend_layout.py`。前者以临时私有配置/资源和隔离服务边界验证失败码、恢复及资源核验；后者用独立静态DOM和真实Chromium几何验证就绪、空结果及溢出。它们不启停正式服务、不装配业务库；实际布局采集另按预览指南，在已核可丢弃副本执行。临时目录可由本轮`MTRL_TEST_WORK`指定，均由测试退出时清理。
 
+## 前端工作树依赖
+
+每棵工作树独立安装 `apps/frontend/node_modules`，pnpm 在同一磁盘上可从共用的内容存储（store）复用相同包文件。将整个安装目录联接到主检出，会让分支的依赖校验、安装或构建写入主检出，锁文件不同时还会加载另一棵树的版本。
+
+新建工作树后，进入**该树**的 `apps/frontend`，运行 `corepack pnpm install --frozen-lockfile`。本机缓存齐全时可用 `corepack pnpm install --offline --frozen-lockfile`。按任务运行 `corepack pnpm typecheck`、`corepack pnpm test:unit` 或 `corepack pnpm build`，保留默认的依赖校验和构建配置加载器。
+
+接手已有工作树时，先从该树的 `apps/frontend` 用 PowerShell 的 `Get-Item -LiteralPath node_modules -Force` 核对安装目录及链接目标。如果整个目录仍指向其他检出，等使用它的任务退出后只解除该链接，再按本树的锁文件安装。包目录内部由 pnpm 创建的链接属于正常安装布局。
+
 ## React 浏览器与预览工具验证
 
 构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；React browser_page在失败或捕获运行错误时、关闭页面前保存截图，按需验看使用preview_screenshot(label)；两者经tools/dev/frontend_capture.py写入本轮screenshots及同名JSON，记录实际预览身份、页面、视口和图像散列，身份核验失败明确标记，不冒称最新页面已验。共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`；上述React自动浏览器回归不运行浏览器业务seed或自造业务回包。
@@ -51,4 +59,4 @@ React 实现与交互约束回 [frontend-design](frontend-design.md)。旧 HTML/
 
 `backend/tests/test_frontend_preview_runtime.py`验证跨进程排他、陈旧身份、实例切换授权、HTML构建输入、旧factory退役及待用构建不阻止正常停止；不监听端口。`apps/frontend/tests/test_preview_copy.py`仅作数据库/进程内合同，显式`MTRL_PREVIEW_SOURCE_ENV`用于确认测试目标，临时数据库样例不开放HTTP。它覆盖凭据投影、内容/序列、旧结构复制后只升目标及所有既有外部动作阻断。
 
-`backend/tests/test_frontend_measure.py`保纯计算、输出与预览身份保护，不依赖运行中的真实预览。采集器的现场验证由`tools/dev/frontend_measure.py run`在获准的真实副本上显式执行，默认后端回归不承担该验证，也不证明完整84组或本次用户实看。纯算法保护在apps/frontend运行`corepack pnpm test:unit`，由Node原生test runner配合锁定tsx直接导入真实TS模块；保存快照/未知回执、身份门、单据号匹配、合同与付款流水结构边界与浏览器pytest分开。仍运行`corepack pnpm typecheck`承担TS严格检查；单元测试不启动Vite/HTTP或数据库。附加工作树经目录联接复用主检出`apps/frontend/node_modules`时，运行pnpm命令须设`PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false`（构建另加`--configLoader runner`），避免pnpm自动校验或Vite临时配置改写共享依赖目录。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。
+`backend/tests/test_frontend_measure.py`保纯计算、输出与预览身份保护，不依赖运行中的真实预览。采集器的现场验证由`tools/dev/frontend_measure.py run`在获准的真实副本上显式执行，默认后端回归不承担该验证，也不证明完整84组或本次用户实看。纯算法保护在apps/frontend运行`corepack pnpm test:unit`，由Node原生test runner配合锁定tsx直接导入真实TS模块；保存快照/未知回执、身份门、单据号匹配、合同与付款流水结构边界与浏览器pytest分开。仍运行`corepack pnpm typecheck`承担TS严格检查；单元测试不启动Vite/HTTP或数据库。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。

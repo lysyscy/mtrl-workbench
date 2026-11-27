@@ -4,7 +4,7 @@
 
 ## 普通开发顺序
 
-1. 首次进入或切换执行基线时，核[项目绑定](docs/agents/workflow.md)；相同基线已读则复用。明确本次范围和原有未提交内容，业务预期从[需求入口](docs/requirements.md)选择受影响主题。
+1. 首次进入或切换执行基线时，核[项目绑定](docs/agents/workflow.md)；相同基线已读则复用。附加工作树首次做前端工作时，按[前端工作树依赖](docs/guides/development-and-verification.md#前端工作树依赖)从本树锁文件安装。明确本次范围和原有未提交内容，业务预期从[需求入口](docs/requirements.md)选择受影响主题。
 2. 改代码先读[编码规范](CODING_STANDARDS.md)；结构变化才读对应[架构专题](docs/architecture.md)，界面变化读[前端设计](docs/guides/frontend-design.md)。按本次动作到正文，不递归遍历所有链接。
 3. 实施时同步受影响的唯一正文；退役功能连同专属工具、测试、过期说明和派生物一起核退出。历史引用或只验证旧工具自身的测试，不单独构成保留理由；共享后端行为、业务原件和其他任务未提交内容保留。
 4. 按下节风险选择验证。命令从仓根运行；Python版本、依赖和pytest配置以backend/pyproject.toml、uv.lock及pytest.ini为准，复用现有backend/.venv。需要数据库、浏览器或专项工具时，直接读[验证参考](docs/guides/development-and-verification.md)的对应分支。
