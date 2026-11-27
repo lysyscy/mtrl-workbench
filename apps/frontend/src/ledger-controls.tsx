@@ -19,27 +19,64 @@ export function ProjectPicker({ projects: allProjects, selected, pick, multiple 
   const { token } = theme.useToken();
   const projects = projectPickerProjects(allProjects, multiple);
   const [open, setOpen] = useState(initiallyOpen);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const picker = useRef<HTMLSpanElement>(null);
+  const actions = useRef<HTMLDivElement>(null);
   const chosen = selected.map(id => projects.find(item => item.id === id));
   const summary = chosen.length ? chosen.map(item => item ? projectLabel(item) : '项目已失效').join('、') : emptyLabel;
-  const options = (['active', 'archived'] as const).map(status => ({ label: status === 'active' ? '在用项目' : '归档项目',
-    options: projects.filter(item => item.status === status).map(item => ({ value: item.id, label: projectLabel(item), title: projectLabel(item) })) }));
+  const archived = projects.filter(item => item.status === 'archived');
+  const selectedArchived = chosen.filter(item => item?.status === 'archived').length;
+  const showArchived = archiveOpen || search.length > 0;
+  const options = [
+    { groupLabel: '在用项目', items: projects.filter(item => item.status === 'active') },
+    { groupLabel: '归档项目', items: showArchived ? archived : [] },
+  ].filter(group => group.items.length).map(({ groupLabel, items }) => ({
+    groupLabel, options: items.map(item => ({ value: item.id, label: projectLabel(item), title: projectLabel(item) })),
+  }));
   const invalid = selected.filter(id => !projects.some(item => item.id === id));
-  if (invalid.length) options.push({ label: '已失效', options: invalid.map(value => ({ value, label: '项目已失效', title: '请重新选择项目' })) });
-  const listHeight = Math.min((12 + options.filter(group => group.options.length).length) * token.controlHeight, Math.max(token.controlHeight, window.innerHeight - 160));
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
-  return <span className="business-project-picker" title={summary} style={{ width: `${Math.min(36, Math.max(10, summary.length + 5))}em` }}
-    onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); } }}>
+  if (invalid.length) options.push({ groupLabel: '已失效', options: invalid.map(value => ({ value, label: '项目已失效', title: '请重新选择项目' })) });
+  const listHeight = Math.min((12 + options.length) * token.controlHeight, Math.max(token.controlHeight, window.innerHeight - 160));
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    if (!next) { setArchiveOpen(false); setSearch(''); }
+  }
+  useEffect(() => { if (disabled) changeOpen(false); }, [disabled]);
+  function focusInput() { picker.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus(); }
+  return <span ref={picker} className="business-project-picker" title={summary} style={{ width: `${Math.min(36, Math.max(10, summary.length + 5))}em` }}
+    onBlurCapture={event => {
+      // Keyboard focus inside the popup toolbar still belongs to this picker.
+      if (event.relatedTarget instanceof Node && actions.current?.contains(event.relatedTarget)) event.stopPropagation();
+    }}
+    onKeyDownCapture={event => {
+      if (!open || event.key !== 'Tab' || event.shiftKey || !(event.target instanceof HTMLInputElement)) return;
+      const first = actions.current?.querySelector<HTMLButtonElement>('button:enabled');
+      if (first) { event.preventDefault(); event.stopPropagation(); first.focus(); }
+    }}
+    onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); changeOpen(false); focusInput(); } }}>
     <Select aria-label={label} value={multiple ? selected : selected[0] ?? null} {...(multiple ? { mode: 'multiple' as const } : {})}
-      placeholder={emptyLabel} disabled={disabled} allowClear={allowClear} open={open && !disabled} onOpenChange={setOpen}
-      showSearch={{ optionFilterProp: 'label' }} options={options} maxTagCount={0} maxTagPlaceholder={() => summary}
+      placeholder={emptyLabel} disabled={disabled} allowClear={allowClear} open={open && !disabled} onOpenChange={changeOpen}
+      showSearch={{ optionFilterProp: 'label', searchValue: search, onSearch: setSearch }}
+      options={options} fieldNames={{ groupLabel: 'groupLabel' }} maxTagCount={0} maxTagPlaceholder={() => summary}
+      {...(!multiple && { labelRender: () => summary })}
       listHeight={listHeight}
       classNames={{ popup: { root: 'business-project-popup ag-custom-component-popup' } }}
       popupMatchSelectWidth={Math.min(560, Math.max(280, summary.length * 14 + 70))}
       getPopupContainer={trigger => (trigger as HTMLElement).closest<HTMLElement>('.ant-modal-container') ?? document.body}
-      onChange={(value: number | number[] | undefined) => pick(Array.isArray(value) ? value : value === undefined ? [] : [value])}
+      onChange={(value: number | number[] | undefined) => { setSearch(''); pick(Array.isArray(value) ? value : value === undefined ? [] : [value]); }}
       optionRender={option => <span className="business-project-option">{multiple ? <Checkbox checked={selected.includes(Number(option.value))} tabIndex={-1} aria-hidden /> : <Radio checked={selected.includes(Number(option.value))} tabIndex={-1} aria-hidden />}<span title={String(option.label)}>{option.label}</span></span>}
-      popupRender={menu => <>{multiple && <div className="business-project-actions" onMouseDown={event => event.preventDefault()}><Button onClick={() => pick(projects.map(item => item.id))}>全选</Button><Button onClick={() => pick([])}>清空</Button></div>}{menu}</>}
-      notFoundContent={projects.length ? '没有匹配的项目' : '暂无可选项目'} />
+      popupRender={menu => <>{(multiple || archived.length > 0) && <div ref={actions} className="business-project-actions"
+        onMouseDown={event => event.preventDefault()} onKeyDown={event => {
+          if (event.key !== 'Tab') return;
+          const buttons = event.currentTarget.querySelectorAll('button:enabled');
+          if (event.shiftKey && event.target === buttons[0]) { event.preventDefault(); focusInput(); }
+          else if (!event.shiftKey && event.target === buttons[buttons.length - 1]) { focusInput(); changeOpen(false); }
+        }}>
+        {multiple && <><Button onClick={() => pick(projects.map(item => item.id))}>全选</Button><Button onClick={() => pick([])}>清空</Button></>}
+        {archived.length > 0 && <Button type="text" aria-expanded={showArchived} disabled={Boolean(search)}
+          onClick={() => setArchiveOpen(value => !value)}><span aria-hidden>{showArchived ? '▾' : '▸'}</span>归档项目（{archived.length} · 已选 {selectedArchived}）</Button>}
+      </div>}{menu}</>}
+      notFoundContent={!projects.length ? '暂无可选项目' : search ? '没有匹配的项目' : '暂无在用项目'} />
   </span>;
 }
 

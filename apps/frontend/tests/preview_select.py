@@ -14,10 +14,12 @@ def reset_virtual_scroll(dropdown):
     }""")
 
 
-def open_popup(page, label):
+def open_popup(page, label, text=None):
     page.get_by_label(label, exact=True).click()
     # Only the open popup: closed antd dropdowns stay mounted in the DOM.
     dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    if isinstance(text, str) and dropdown.first.evaluate("el => el.classList.contains('business-project-popup')"):
+        page.get_by_role('combobox', name=label, exact=True).fill(text)
     reset_virtual_scroll(dropdown)
     return dropdown.locator('.ant-select-item-option-content')
 
@@ -38,14 +40,14 @@ def pick_popup_option(page, text):
 
 
 def pick_option(page, label, text):
-    open_popup(page, label)
+    open_popup(page, label, text)
     try:
         pick_popup_option(page, text)
     except TimeoutError:
         # Candidate refetches can close the popup while its options are changing.
         if page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').count():
             raise
-        open_popup(page, label)
+        open_popup(page, label, text)
         pick_popup_option(page, text)
 
     control = page.get_by_label(label, exact=True)

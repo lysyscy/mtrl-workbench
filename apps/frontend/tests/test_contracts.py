@@ -1,8 +1,11 @@
 """Existing contract real field write, corrupted receipt and unified search."""
 from copy import deepcopy
+import re
 from uuid import uuid4
 
+import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server,browser_page
 from live_data import get,open_page,contract_sample,grid_row
 
@@ -151,6 +154,35 @@ def test_real_unified_search_and_no_supplier_or_amount_control(server,browser_pa
     page.locator('.contract-search-field .ant-input-clear-icon').click();expect(search).to_have_value('')
 
 
+def test_project_picker_archive_disclosure_keeps_filtered_select_all(server, browser_page, projects):
+    archived = [p for p in projects if p['status'] == 'archived' and p['project_type'] != 'shell']
+    if not archived:
+        pytest.skip('此副本无归档候选，无法验证搜索后的归档全选')
+    page, _ = browser_page
+    open_page(page, server, 'contracts', '集采台账')
+    picker = page.get_by_role('combobox', name='合同筛选项目')
+    picker.click()
+    popup = page.locator('.business-project-popup:visible')
+    disclosure = popup.get_by_role('button', name=re.compile('归档项目'))
+    expect(disclosure).to_have_attribute('aria-expanded', 'false')
+    expect(disclosure).to_contain_text('已选 0')
+    for _ in range(3):
+        page.keyboard.press('Tab')
+    expect(disclosure).to_be_focused()
+    page.keyboard.press('Space')
+    expect(disclosure).to_have_attribute('aria-expanded', 'true')
+    page.keyboard.press('Escape')
+    expect(picker).to_be_focused()
+    picker.click()
+    name = archived[0]['disp'].strip() or '未设置展示名'
+    picker.fill(name)
+    expect(popup.locator('.business-project-option').get_by_text(name, exact=True).first).to_be_visible()
+    popup.get_by_role('button', name=re.compile(r'全\s*选')).click()
+    picker.fill('')
+    expect(disclosure).to_have_attribute('aria-expanded', 'false')
+    expect(disclosure).to_contain_text(f'已选 {len(archived)}')
+
+
 def test_project_filter_advance_empty_archive_after_number_edit(server, browser_page, api, projects):
     page, _ = browser_page
     project_by_key = {project['warehouse_name']: project for project in projects if project['warehouse_name'] and project['project_type'] != 'shell'}
@@ -178,8 +210,7 @@ def test_project_filter_advance_empty_archive_after_number_edit(server, browser_
     page.route('**/api/m11/list', read_list)
     page.route('**/api/m11/fields', save_field)
     open_page(page, server, 'contracts', '集采台账')
-    page.get_by_label('合同筛选项目').click()
-    page.locator('.business-project-option').filter(has=page.get_by_text(project['disp'], exact=True)).first.click()
+    pick_option(page, '合同筛选项目', project['disp'])
     page.keyboard.press('Escape')
     page.get_by_label('合同存档筛选').click()
     page.get_by_title('未存档', exact=True).last.click()

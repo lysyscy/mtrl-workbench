@@ -6,7 +6,7 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .business-project-option{display:flex;gap:.5em;align-items:center;min-width:0}
 .business-project-option>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .business-project-option .ant-checkbox-wrapper,.business-project-option .ant-radio-wrapper{pointer-events:none;flex:none;margin:0}
-.business-project-actions{display:flex;gap:.4rem;padding:.3rem;border-bottom:1px solid var(--bd)}
+.business-project-actions{display:flex;flex-wrap:wrap;gap:.4rem;padding:.3rem;border-bottom:1px solid var(--bd)}
 .business-time-picker{display:inline-flex;gap:.3rem;align-items:center;min-width:0;max-width:100%}
 .business-time-picker .ant-picker{min-width:0;max-width:100%}
 .business-time-picker .ant-select{min-width:5em}
