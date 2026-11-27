@@ -13,4 +13,4 @@ overrides:
   '@rc-component/cascader': 1.26.0
   '@rc-component/menu': 1.6.2
   # csstype 3.2.4's pathLength collides with MotionStyle in motion 14.14.0.
-  '@types/react@19.3.0>csstype': 3.2.3
+  '@types/react@19.3.3>csstype': 3.2.3
