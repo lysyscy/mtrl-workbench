@@ -69,15 +69,6 @@
             "state": "unsettled"
           }
         ]
-      },
-      {
-        "id": "前端打磨-d5c483635c4ec129",
-        "label": "前端打磨工作树",
-        "state": "in-use",
-        "branch": "前端打磨",
-        "task": "mtrl-site-polish-plan-20261127",
-        "reason": "多波计划等待样板方向，主检出受管证据仍在用。",
-        "runs": [{"id": "mtrl-site-polish-plan-20261127", "location": "primary"}]
       }
     ],
     "handoffs": [],
