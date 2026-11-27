@@ -42,9 +42,9 @@ backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manag
 
 ### 文档运维与阶段收尾试点
 
-从[当前活动工作](../status.md)进入试点任务。设备三账、前端打磨及通知书抓取的状态和验收写在 `docs/tasks/`。frontmatter 采用 YAML 顶层字段，列表用 JSON 形式（如 `["任务标识"]`）或缩进的 `-` 条目。工作树已退场时，将 `worktree` 和 `branch` 置空，`worktree_state` 记为 `retired`。
+从[当前活动工作](../status.md)进入试点任务。试点任务的状态和验收写在 `docs/tasks/`。frontmatter 采用 YAML 顶层字段，列表用 JSON 形式（如 `["任务标识"]`）或缩进的 `-` 条目。工作树已退场时，将 `worktree` 和 `branch` 置空，`worktree_state` 记为 `retired`。
 
-现有 TAIL 命令仍读取 `.scratch/tails/issues/`。设备三账在途票及其前置票仍由该入口消费。旧票退出前按上节核对实际依赖、引用和 Git 恢复位置。
+现有 TAIL 命令仍读取 `.scratch/tails/issues/`。旧票退出前按上节核对实际依赖、引用和 Git 恢复位置。
 
 更新任务或取得正式发布回执后，在主检出运行：
 

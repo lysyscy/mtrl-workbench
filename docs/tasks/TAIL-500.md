@@ -2,7 +2,7 @@
 id: "TAIL-500"
 kind: "ticket"
 status: "done"
-parent: "TAIL-497"
+parent: null
 children: []
 blocked_by: ["TAIL-498", "TAIL-499"]
 worktree: null
