@@ -80,7 +80,7 @@
 
 ## 本项目实际接入
 
-基础规则采用源为 `lysyscy/My-Skills` `2e0e153c0b434da03a2b1363b45945599a76b0c9`。开发命令直接使用随仓固定运行时，由 `setup-solo-workflow` 部署和升级，共用修改归唯一维护源。本次核对的部署版本为 `adad0778e1fcd3f5d35e6ead30707d4563e85b9a`，版本和文件散列以[部署清单](../../tools/_vendor/setup_solo_workflow/deployment.json)为准。
+基础规则采用源为 `lysyscy/My-Skills` `2e0e153c0b434da03a2b1363b45945599a76b0c9`。开发命令直接使用随仓固定运行时，由 `setup-solo-workflow` 部署和升级，共用修改归唯一维护源。本次核对的部署版本为 `c8ac307750dc0a1f18028f63d986ac3b4ae0c811`，版本和文件散列以[部署清单](../../tools/_vendor/setup_solo_workflow/deployment.json)为准。
 
 新接入或获准迁移的生产者按本页具名留证；现有 workspace_paths 自动入口继续原合同，直至随消费者一起完成迁移。
 
@@ -98,7 +98,7 @@
 
 在登记返回的 `.artifacts/runs/<run-id>/` 内写 `decisions.tsv`。并行任务的日志用 `.audit/<task>.tsv`，需落盘的待办用 `.audit/<task>.todo.md`。调用 `log.sh` 时传入日志完整路径。实际读写通过 `lease --group <run-id> -- <实际命令>`，向命令传入登记目录内的完整路径。
 
-用途结束、必要依据归位且租约退出后，现有固定运行时用 `close --group <run-id>` 结项，由已接入的清理入口处理。部署并核实支持 `--discard-work` 的固定运行时后，使用 `close --group <run-id> --discard-work`。返回 `status=deleted` 即确认临时文件已释放。仍有活动消费者或未决用途时按本页保护规则处理。
+用途结束、必要依据归位且租约退出后，用 `close --group <run-id> --discard-work` 清理本次登记的 work 组。返回 `status=deleted` 时工作文件已释放，组内保留 `run.json`。仍有活动消费者或未决用途时按本页保护规则处理。
 
 ## 已核实的原生产者
 

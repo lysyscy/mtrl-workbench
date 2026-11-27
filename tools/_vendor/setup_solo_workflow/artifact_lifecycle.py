@@ -286,7 +286,7 @@ def seal(record, files, value, now, days=30, deadline=None, result=None):
         value['operation_result'] = result
     atomic(record, value)
 
-def close(root, name, days=30, now=None, deadline=None, *, result=None):
+def close(root, name, days=30, now=None, deadline=None, *, result=None, discard_work=False):
     now = stamp(now)
     if days not in (30, 60):
         raise ValueError('supported retention is 30 or 60 days')
@@ -294,7 +294,18 @@ def close(root, name, days=30, now=None, deadline=None, *, result=None):
         record, files, value = load(root, name)
         if consumption_state(value) != 'ended':
             raise ValueError('active or unknown consumer prevents closure')
-        seal(record, files, value, now, days, deadline, result)
+        if not discard_work:
+            return seal(record, files, value, now, days, deadline, result)
+        if value.get('layout') != 'runs' or value['kind'] != 'work' or deadline is not None:
+            raise ValueError('--discard-work requires a project work group without a deadline')
+        if value['state'] == 'active':
+            seal(record, files, value, now, days, result=result)
+        status = evaluate(value, files, now)
+        if status == 'due':
+            delete_inventory(record, files, value, now)
+        elif status != 'deleted' or any(item != record for item in files.iterdir()):
+            raise ValueError('work cleanup blocked by run state or contents: ' + status)
+        return {'id': name, 'status': 'deleted'}
 
 def hold(root, name, reason, condition, now=None):
     now = stamp(now)
@@ -349,6 +360,27 @@ def evaluate(value, files, now):
         return 'changed'
     return 'due' if now >= stamp(value['expires_at']) else 'retained'
 
+def delete_inventory(record, files, value, now):
+    value['state'] = 'deleting'
+    atomic(record, value)
+    # No recursive delete: remove only sealed members. Recheck each file.
+    for rel, digest in value['inventory'].items():
+        item = safe(files / rel)
+        if not item.is_relative_to(files) or '..' in Path(rel).parts:
+            raise ValueError('inventory path escape')
+        if item.exists():
+            if hashlib.sha256(item.read_bytes()).hexdigest() != digest:
+                raise ValueError('content changed during deletion')
+            item.unlink()
+    for item in sorted(files.rglob('*'), key=lambda p: len(p.parts), reverse=True):
+        safe(item)
+        if item.is_dir():
+            item.rmdir()
+    if data_inventory(files, value):
+        raise ValueError('unexpected remaining content')
+    value.update(state='deleted', deleted_at=now.isoformat(), inventory={})
+    atomic(record, value)
+
 def sweep(root, apply=False, now=None):
     now = stamp(now)
     results = []
@@ -385,25 +417,7 @@ def sweep(root, apply=False, now=None):
                     results.append({'id': folder.name, 'status': 'receipt-expired'})
                     continue
                 if apply and status == 'due':
-                    value['state'] = 'deleting'
-                    atomic(record, value)
-                    # No recursive delete: remove only sealed members. Recheck each file.
-                    for rel, digest in value['inventory'].items():
-                        item = safe(files / rel)
-                        if not item.is_relative_to(files) or '..' in Path(rel).parts:
-                            raise ValueError('inventory path escape')
-                        if item.exists():
-                            if hashlib.sha256(item.read_bytes()).hexdigest() != digest:
-                                raise ValueError('content changed during deletion')
-                            item.unlink()
-                    for item in sorted(files.rglob('*'), key=lambda p: len(p.parts), reverse=True):
-                        safe(item)
-                        if item.is_dir():
-                            item.rmdir()
-                    if data_inventory(files, value):
-                        raise ValueError('unexpected remaining content')
-                    value.update(state='deleted', deleted_at=now.isoformat(), inventory={})
-                    atomic(record, value)
+                    delete_inventory(record, files, value, now)
                     status = 'deleted'
                 results.append({'id': folder.name, 'status': status})
             except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -431,14 +445,17 @@ def main(argv=None):
     p.add_argument('--kind', default='evidence')
     p.add_argument('--days', type=int, default=30)
     p.add_argument('--deadline')
+    p.add_argument('--discard-work', action='store_true')
     p.add_argument('--project', type=Path)
     p.add_argument('--development', action='store_true')
     p.add_argument('--workspace', type=Path)
     a, command = p.parse_known_args(argv)
     if command and a.action != 'lease': p.error('unexpected arguments')
+    if a.discard_work and a.action != 'close': p.error('--discard-work requires close')
     if a.action == 'enroll': result = enroll(a.root, project=a.project)
     elif a.action == 'register': result = register(a.root,a.group,a.owner,a.reason,a.kind,development=a.development,workspace=a.workspace)
-    elif a.action == 'close': result = close(a.root,a.group,a.days,deadline=a.deadline)
+    elif a.action == 'close':
+        result = close(a.root, a.group, a.days, deadline=a.deadline, discard_work=a.discard_work)
     elif a.action == 'hold': result = hold(a.root,a.group,a.reason,a.condition)
     elif a.action == 'review': result = review(a.root,a.group,a.reason,a.condition)
     elif a.action == 'release': result = release(a.root,a.group)
