@@ -40,6 +40,23 @@ backend/.venv/Scripts/python.exe -B -X utf8 C:/Users/Administrator/.skills-manag
 
 首查核在场文件、未保存增量和仓内内联Markdown链接/代码字面路径。负责人确认现行知识归位、Git可恢复性及活动消费者后，按授权处置；处置后用同一范围/提交加`--closed`，仍有路径或本地引用时非零。另运行`tools/oneoff/_list_tails.py --all`核余下票的实际依赖。动态路径、外部脚本及历史聊天等消费者不由文本扫描证明，具名保留的材料在原记录说明用途与解除条件。检查不删除、不判业务结项、不按年龄清理、不接每次提交钩子，也不替代运行组/预览/schema/工作树的各自退出核验。
 
+### 文档运维与阶段收尾试点
+
+从[当前活动工作](../status.md)进入试点任务。设备三账、前端打磨及通知书抓取的状态和验收写在 `docs/tasks/`。frontmatter 采用 YAML 顶层字段，列表用 JSON 形式（如 `["任务标识"]`）或缩进的 `-` 条目。工作树已退场时，将 `worktree` 和 `branch` 置空，`worktree_state` 记为 `retired`。
+
+现有 TAIL 命令仍读取 `.scratch/tails/issues/`。设备三账在途票及其前置票仍由该入口消费。旧票退出前按上节核对实际依赖、引用和 Git 恢复位置。
+
+更新任务或取得正式发布回执后，在主检出运行：
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/audit/doc_ops.py refresh --config tools/audit/doc-ops.config.json
+backend/.venv/Scripts/python.exe -B -X utf8 tools/audit/doc_ops.py check --config tools/audit/doc-ops.config.json
+```
+
+核对刷新后的状态页。以 Git 索引识别任务和仓内链接的目标。历史运行从状态页的 Git 历史及本机发布回执追溯。
+
+收尾时用同一入口运行 `closeout-plan --config tools/audit/doc-ops.config.json`。先核 `actions`、`blocked`、`retained`、`review`。需执行时，用 `--out <新 JSON 路径>` 保存待审批计划。得到当次授权后，执行 `closeout-apply --config tools/audit/doc-ops.config.json --plan <JSON 路径>`。遇到 `PLAN_STALE` 就重新生成计划并核对变化。再跑一次预检，确认已执行的动作退出清单。
+
 ## 共享记忆
 
 共同记忆政策由宿主已部署指令直接提供；setup 模板只用于布置，不是日常回读入口。本项目固定 bank ID 为 `coding-agent::mtrl-workbench`；子目录和同项目其他工作树沿用此身份，分支相关记录保留来源分支、必要版本及合并/部署状态。无有效内容不建空库。

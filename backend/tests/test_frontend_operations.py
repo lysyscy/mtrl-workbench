@@ -191,9 +191,9 @@ class ReleaseTests(unittest.TestCase):
             code = release.main()
         return code, json.loads(output.getvalue())
 
-    def check_status_main(self, commit):
+    def check_status_main(self, commit, *filters):
         output = io.StringIO()
-        argv = ['frontend_release.py', 'check-status', '--product-commit', commit]
+        argv = ['frontend_release.py', 'check-status', '--product-commit', commit, *filters]
         with patch.object(release, 'ROOT', self.root), patch.object(sys, 'argv', argv), \
              patch.object(release, 'WindowsService', side_effect=AssertionError('service must not be touched')), \
              patch.object(release, 'output_dir', side_effect=AssertionError('no run must be created')), \
@@ -288,6 +288,56 @@ class ReleaseTests(unittest.TestCase):
         code, result = self.check_status_main('b' * 40)
         self.assertEqual(code, 2)
         self.assertEqual(result['state'], 'unverified')
+
+    def test_sha_only_check_still_accepts_legacy_status_paragraph(self):
+        self.status_document('a' * 12)
+        self.assertEqual(self.check_status_main('a' * 40),
+                         (0, {'state': 'matched', 'recorded_commit': 'a' * 12}))
+        code, result = self.check_status_main('a' * 40, '--action', 'restart')
+        self.assertEqual((code, result['state']), (2, 'unverified'))
+
+    def test_check_distinguishes_publish_and_restart_with_the_same_commit(self):
+        commit = 'a' * 40
+        status = self.status_document(commit)
+        status.write_text(
+            '## 当前正式运行\n\n'
+            '| finished_at | run_id | action | product_commit | pid |\n'
+            '| --- | --- | --- | --- | ---: |\n'
+            f'| 2026-11-27T11:50:42+08:00 | `run-next` | `restart` | `{commit}` | 10332 |\n'
+            f'| 2026-11-27T11:17:05+08:00 | `run-first` | `publish` | `{commit}` | 19344 |\n',
+            encoding='utf-8',
+        )
+        code, newest = self.check_status_main(commit)
+        self.assertEqual((code, newest['recorded_run_id']), (0, 'run-next'))
+        for run_id, action, pid in [('run-first', 'publish', 19344), ('run-next', 'restart', 10332)]:
+            with self.subTest(run_id=run_id):
+                code, result = self.check_status_main(commit, '--run-id', run_id, '--action', action, '--pid', str(pid))
+                self.assertEqual((code, result['state']), (0, 'matched'))
+                self.assertEqual((result['recorded_run_id'], result['recorded_action'], result['recorded_pid']),
+                                 (run_id, action, pid))
+        for flags in [('--run-id', 'run-next', '--action', 'publish'),
+                      ('--run-id', 'run-next', '--pid', '19344'), ('--run-id', 'unknown-run')]:
+            with self.subTest(flags=flags):
+                code, result = self.check_status_main(commit, *flags)
+                self.assertEqual((code, result['state']), (2, 'needs_update'))
+
+    def test_publish_row_cannot_satisfy_the_new_restart_receipt(self):
+        commit = 'a' * 40
+        status = self.status_document(commit)
+        status.write_text(
+            '## 当前正式运行\n\n'
+            '| finished_at | run_id | action | product_commit | pid |\n'
+            '| --- | --- | --- | --- | ---: |\n'
+            f'| 2026-11-27T11:17:05+08:00 | `earlier-run` | `publish` | `{commit}` | 10 |\n',
+            encoding='utf-8',
+        )
+        code, outcome = self.release_main(admin=False, action='restart')
+        self.assertEqual((code, outcome['status']), (0, 'loaded'))
+        checked = outcome['status_document']
+        self.assertEqual(checked['state'], 'needs_update')
+        self.assertEqual(checked['recorded_run_id'], 'earlier-run')
+        self.assertEqual((checked['release_action'], checked['release_run_id'], checked['release_pid']),
+                         ('restart', self.report.parent.parent.name, 11))
 
     def test_restart_keeps_exact_configuration(self):
         self.assertEqual(self.apply(candidate=False)['status'], 'loaded')

@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.audit.workspace_paths import (close_runs, output_dir, owned_run, owned_work, attach_run,
                                          development_run, retire_preview_builds)
+from tools.audit.doc_ops.releases import parse_table, section_bounds
 from tools.dev import frontend_preview_runtime as previews
 from tools.dev.frontend_preview_runtime import product_sources, read_json, write_json
 
@@ -71,44 +72,71 @@ def no_links(path, root):
     return resolved
 
 
-def check_status_document(root, product_commit):
-    """Compare a verified frontend commit with the current-status section only."""
-    action = '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾'
+def check_status_document(root, product_commit, *, run_id=None, action=None, pid=None, allow_legacy=False):
+    """Check the current version or verify the identity of a specific run."""
+    update = '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾'
     if not isinstance(product_commit, str) or not re.fullmatch('[0-9a-f]{40}', product_commit):
-        return {'state': 'unverified', 'reason': '未取得已验证的正式前端版本', 'action': action}
+        return {'state': 'unverified', 'reason': '未取得已验证的正式前端版本', 'action': update}
     try:
         path = no_links(Path(root) / 'docs/status.md', root)
         text = path.read_text(encoding='utf-8-sig')
     except (OSError, UnicodeError, ValueError):
-        return {'state': 'unverified', 'reason': '状态文档无法安全读取', 'action': action}
-    headings = list(re.finditer(r'(?m)^##[ \t]+当前正式运行[ \t]*$', text))
-    if len(headings) != 1:
-        return {'state': 'unverified', 'reason': '当前正式运行段落不唯一或缺失', 'action': action}
-    section = text[headings[0].end():]
-    next_heading = re.search(r'(?m)^##[ \t]+', section)
-    if next_heading:
-        section = section[:next_heading.start()]
+        return {'state': 'unverified', 'reason': '状态文档无法安全读取', 'action': update}
+    try:
+        start, end = section_bounds(text, '## 当前正式运行')
+    except ValueError:
+        return {'state': 'unverified', 'reason': '当前正式运行段落不唯一或缺失', 'action': update}
+    section = text[start:end]
+    try:
+        runs = parse_table(section)
+    except ValueError:
+        return {'state': 'unverified', 'reason': '当前正式运行表格格式不完整', 'action': update}
+    filters = {name: value for name, value in {'run_id': run_id, 'action': action, 'pid': pid}.items()
+               if value is not None}
+    if runs:
+        if len(runs) > 2 or any(run.action not in ('publish', 'restart') for run in runs):
+            return {'state': 'unverified', 'reason': '当前正式运行表格的行数或动作不符', 'action': update}
+        candidates = runs if filters else runs[:1]
+        match = next((run for run in candidates if run.product_commit == product_commit
+                      and all(getattr(run, name) == value for name, value in filters.items())), None)
+        recorded = match or runs[0]
+        details = {'recorded_commit': recorded.product_commit, 'recorded_run_id': recorded.run_id,
+                   'recorded_action': recorded.action, 'recorded_pid': recorded.pid}
+        if match:
+            return {'state': 'matched', **details}
+        return {'state': 'needs_update', **details, 'action': update}
+    if filters and not allow_legacy:
+        return {'state': 'unverified', 'reason': '正式运行段落缺少可区分发布与重启的运行表格', 'action': update}
     versions = re.findall(r'正式前端资源[ \t]+`([0-9a-f]{8,40})`', section, flags=re.IGNORECASE)
     if len(versions) == 0:
-        return {'state': 'unverified', 'reason': '未在「当前正式运行」段找到「正式前端资源 `<提交>`」记录', 'action': action}
+        return {'state': 'unverified', 'reason': '未在「当前正式运行」段找到「正式前端资源 `<提交>`」记录', 'action': update}
     if len(versions) > 1:
         return {'state': 'unverified',
                 'reason': f'「当前正式运行」段发现 {len(versions)} 处「正式前端资源」记录，须保持唯一；请将历史条目改为「发布前端版本」后重试',
-                'action': action}
+                'action': update}
     recorded = versions[0].lower()
     if product_commit.startswith(recorded):
         return {'state': 'matched', 'recorded_commit': recorded}
-    return {'state': 'needs_update', 'recorded_commit': recorded, 'action': action}
+    return {'state': 'needs_update', 'recorded_commit': recorded, 'action': update}
+
+
+def status_run_identity(run, report):
+    listener = report.get('listener')
+    pids = listener.get('listener_pids') if isinstance(listener, dict) else None
+    pid = pids[0] if isinstance(pids, list) and len(pids) == 1 else None
+    return {'run_id': Path(run).name, 'action': report.get('action'), 'pid': pid}
 
 
 def record_status_document_check(root, run, report):
     """Save the post-release check without changing the verified release result."""
+    identity = status_run_identity(run, report)
     try:
-        result = check_status_document(root, report.get('product_commit'))
+        result = check_status_document(root, report.get('product_commit'), **identity, allow_legacy=True)
     except Exception:
         result = {'state': 'unverified', 'reason': '状态文档核对异常',
                   'action': '请按已核发布回执更新并保存 docs/status.md，再完成发布收尾'}
     evidence = {**result, 'product_commit': report.get('product_commit'),
+                **{f'release_{key}': value for key, value in identity.items()},
                 'release_finished_at': report.get('finished_at'),
                 'checked_at': datetime.now(timezone.utc).isoformat()}
     try:
@@ -127,10 +155,20 @@ def read_status_document_check(run, report):
                 or not report.get('finished_at') or evidence.get('release_finished_at') != report['finished_at']):
             raise ValueError('状态文档核对回执不属于本次发布')
         state, recorded, product_commit = evidence['state'], evidence.get('recorded_commit'), report.get('product_commit')
+        identity = status_run_identity(run, report)
+        if any(f'release_{key}' in evidence for key in identity) and any(
+            evidence.get(f'release_{key}') != value for key, value in identity.items()
+        ):
+            raise ValueError('状态文档核对回执不属于本次运行')
         if state != 'unverified':
             if (not isinstance(recorded, str) or not re.fullmatch('[0-9a-f]{8,40}', recorded)
-                    or not isinstance(product_commit, str) or not re.fullmatch('[0-9a-f]{40}', product_commit)
-                    or (state == 'matched') != product_commit.startswith(recorded)):
+                    or not isinstance(product_commit, str) or not re.fullmatch('[0-9a-f]{40}', product_commit)):
+                raise ValueError('状态文档核对回执内容矛盾')
+            matched = product_commit.startswith(recorded)
+            if 'recorded_run_id' in evidence:
+                matched = matched and all(evidence.get(f'recorded_{key}') == value
+                                          for key, value in identity.items() if value is not None)
+            if (state == 'matched') != matched:
                 raise ValueError('状态文档核对回执内容矛盾')
         if state != 'matched' and not evidence.get('action'):
             raise ValueError('状态文档核对回执缺少后续操作')
@@ -570,6 +608,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['publish', 'restart', 'check-status'])
     parser.add_argument('--product-commit', help='check-status使用本次已核发布回执的完整提交')
+    parser.add_argument('--run-id', help='check-status使用回执所属的运行组标识')
+    parser.add_argument('--action', dest='run_action', choices=['publish', 'restart'], help='check-status使用回执动作')
+    parser.add_argument('--pid', type=int, help='check-status使用回执的监听 PID')
     parser.add_argument('--service-name', default='mtrl-workbench-server')
     parser.add_argument('--wait-sec', type=int, default=20)
     parser.add_argument('--check-only', action='store_true')
@@ -580,11 +621,16 @@ def main():
     if args.action == 'check-status':
         if not args.product_commit or not re.fullmatch('[0-9a-f]{40}', args.product_commit):
             parser.error('check-status须提供已核发布回执中的40位前端提交')
-        result = check_status_document(ROOT, args.product_commit)
+        if args.run_id is not None and not re.fullmatch(r'[\w.-]+', args.run_id):
+            parser.error('--run-id格式不正确')
+        if args.pid is not None and args.pid < 1:
+            parser.error('--pid必须是正整数')
+        result = check_status_document(ROOT, args.product_commit, run_id=args.run_id,
+                                       action=args.run_action, pid=args.pid)
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result['state'] == 'matched' else 2
-    if args.product_commit:
-        parser.error('--product-commit仅用于check-status')
+    if any(value is not None for value in (args.product_commit, args.run_id, args.run_action, args.pid)):
+        parser.error('--product-commit、--run-id、--action 和 --pid 仅用于check-status')
     if not 1 <= args.wait_sec <= 120:
         parser.error('等待秒数须在1至120之间')
     os.environ.setdefault('MTRL_EFFORT', 'frontend-release')

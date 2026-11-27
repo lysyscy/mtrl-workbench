@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "git": {
+    "base": "master",
+    "remote": "origin",
+    "worktree_root": "../worktrees/mtrl-workbench"
+  },
+  "links": {
+    "exclude_sources": {
+      ".scratch/share-feasibility/research.md": "用户具名保留的历史研究，引用 2026-10-28 当时的本机依赖和验证输出。"
+    }
+  },
+  "entry": {
+    "status_path": "docs/status.md",
+    "release_heading": "## 当前正式运行",
+    "release_limit": 2,
+    "utc_offset_minutes": 480,
+    "release_history_note": "较早的正式运行可从 Git 中的本页历史及本机 `.artifacts/runs/*/reports/deployment.json` 追溯。表中 PID 为 HTTP 监听进程。",
+    "release_sources": [
+      {
+        "glob": ".artifacts/runs/*/reports/deployment.json",
+        "run_id_parent": 1
+      }
+    ],
+    "release_verified": {
+      "status": "loaded",
+      "health_status": 200,
+      "listener.owned": true
+    },
+    "release_fields": {
+      "action": "action",
+      "product_commit": "product_commit",
+      "pid": "listener.listener_pids.0",
+      "finished_at": "finished_at"
+    },
+    "release_actions": ["publish", "restart"],
+    "view_start": "<!-- BEGIN:DERIVED_ACTIVE_WORK -->",
+    "view_end": "<!-- END:DERIVED_ACTIVE_WORK -->",
+    "active_heading": "## 活动任务",
+    "worktree_heading": "## 工作树状态",
+    "labels": {
+      "status": "状态",
+      "acceptance": "待验收",
+      "next": "下一步",
+      "none": "暂无"
+    }
+  },
+  "tasks": {
+    "glob": "docs/tasks/**/*.md",
+    "id_pattern": "(?:TAIL-[1-9][0-9]*|[a-z][a-z0-9]*(?:-[a-z0-9]+)+)",
+    "kinds": ["ticket", "plan"],
+    "statuses": ["needs-info", "needs-human", "ready-for-human", "ready-for-agent", "waiting-user", "done"],
+    "finished_states": ["done"]
+  },
+  "closeout": {
+    "inspect_windows_processes": true,
+    "preview_registries": [
+      "var/state/react-writable-preview/current.json",
+      "var/state/react-writable-preview/instances/*.json"
+    ],
+    "worktrees": [
+      {
+        "id": "feat-equipment-ledger-2422e3af65ee03f8",
+        "label": "设备三账开发工作树",
+        "state": "retired",
+        "branch": "feat/equipment-ledger",
+        "task": "TAIL-497",
+        "reason": "Git 工作树和分支已退出。接续回退与业务验收沿各票保留。"
+      },
+      {
+        "id": "t3-a0519f43-082597183e4816c2",
+        "label": "通知书旧证据工作树",
+        "state": "blocked",
+        "branch": null,
+        "task": "notice-fetch-261126",
+        "reason": "开发已合入；独立复核证据按原登记保留至 2026-12-26，旧 T3 线程结案待核。",
+        "runs": [{"id": "notice-fetch-jc-review", "location": "worktree"}]
+      },
+      {
+        "id": "t3-3fd7b200-13d2a726b4842e50",
+        "label": "付款核对台账探索工作树",
+        "state": "in-use",
+        "branch": "前端重构",
+        "reason": "保留付款台账恢复与项目归属实验，供技术栈同题比较。",
+        "thread_bindings": [
+          {
+            "id": "thread:mcp:4aef1a63-c210-44fb-8657-32211b62b0ee:340a03a4-5e40-41e1-8983-3ec538defd46:0",
+            "state": "unsettled"
+          }
+        ]
+      },
+      {
+        "id": "前端打磨-d5c483635c4ec129",
+        "label": "前端打磨工作树",
+        "state": "in-use",
+        "branch": "前端打磨",
+        "task": "mtrl-site-polish-plan-20261127",
+        "reason": "多波计划等待样板方向，主检出受管证据仍在用。",
+        "runs": [{"id": "mtrl-site-polish-plan-20261127", "location": "primary"}]
+      }
+    ],
+    "handoffs": [
+      {
+        "path": ".scratch/notice-fetch-match-261126/handoff.md",
+        "sha256": "1c30532e9233d756303c300763cfb19f48ae424232d6020fd66769d23399bd6f",
+        "saved_commit": "c740bdab3587528c12f5ccc1e68d0c50e74a245b",
+        "run_id": "215529-339448-17560",
+        "action": "publish",
+        "reason": "开发前交接的要求已由正式规则承接，通知书抓取与关联已发布。"
+      }
+    ],
+    "runs": {
+      "runtime": "tools/_vendor/setup_solo_workflow/artifact_lifecycle.py",
+      "root": ".artifacts/runs",
+      "retention_days": 30,
+      "collection": {
+        "record": "impeccable.json",
+        "field": "phase",
+        "complete": "collected"
+      },
+      "release": [
+        {
+          "id": "tail502-20261118-workbench-preview",
+          "kind": "evidence",
+          "owner": "TAIL-502",
+          "released_on": "2026-11-22",
+          "reason": "用户否决该设备工作区预览，确认从设备分布重新设计。"
+        }
+      ]
+    },
+    "retention": {
+      "path": "var/state/frontend-release/retention.json",
+      "directories": "var/frontend/releases",
+      "registry_field": "releases",
+      "rollback_field": "previous_release",
+      "schema_version": 1,
+      "dir_pattern": "[0-9a-f]{12}",
+      "revision_prefix_length": 12
+    }
+  }
+}
