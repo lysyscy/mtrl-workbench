@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from app.core.config import Settings, get_settings
@@ -46,63 +44,32 @@ def test_系统内提供可发现的修改入口():
 
 
 def test_打印机地址只有这一处入口与一处存储():
-    """⭐⭐ 2026-09-21（用户裁定「打印设置从 `MOD-14` **合并进** `MOD-03`」）——
-    **单一入口 ＋ 单一存储**：⛔ 不许再出现"两个入口 / 两套存储"。
-
-    ⚠️ 为什么单列一条：重复的**实质**不是"两个界面"，而是**两套存储** ——
-       系统设置页写**库**、本页弹窗写 **`.env`**，而打印读取路径原先走 `effective_of`（**库优先**）
-       ⇒ **库里有值时，弹窗改的不生效**，而弹窗回执还说「已保存 · 即时生效」= 对用户说假话。
-       ⇒ 两条都要钉住：① 打印机项**不在** `SPECS`（否则库里又可能被写入）；
-       ② 打印读取路径**不看库**（⛔ 不再 import `effective_of`）。
-    """
-    import inspect
-    import re
-
     from app.core.app_settings import SPECS
+
+    assert not any(setting.key == "printer_ipp_url" for setting in SPECS)
+
+
+def test_保存后即时生效无需重启(tmp_path, monkeypatch):
+    import httpx
+
     from app.mod03_notice.print import dispatch, ipp
 
-    assert not any(s.key == "printer_ipp_url" for s in SPECS), (
-        "打印机地址又回到系统设置页（`SPECS`）了 ⇒ 「两个入口 ＋ 两套存储」的坑会重现")
-    for mod in (dispatch, ipp):
-        # ⭐ 判「有没有那个进口」用**语义**（`hasattr`），⛔ 不用文本搜 —— 否则注释里那句
-        #    「⛔ 别再改回 `effective_of`」会**把断言喂饱**（本仓记过 4 次的坑：注释会绊倒读源码的断言）。
-        assert not hasattr(mod, "effective_of"), (
-            f"`{mod.__name__}` 又把 `effective_of` 导进来了 —— 打印机地址只能读 `.env`；"
-            "「库优先」会让库里的旧值盖住弹窗刚改的值（= 改了不生效）")
-        code = re.sub(r"^\s*#.*$", "", inspect.getsource(mod), flags=re.M)   # ⚠️ 先剥注释再看文本
-        assert "printer_ipp_url" in code, f"`{mod.__name__}` 不再从 `.env` 读打印机地址？"
+    env = tmp_path / ".env"
+    env.write_text("PRINTER_IPP_URL=ipp://first.test\nPRINT_MODE=ipp\n", encoding="utf-8")
+    monkeypatch.setitem(Settings.model_config, "env_file", str(env))
+    monkeypatch.delenv("PRINTER_IPP_URL", raising=False)
+    monkeypatch.delenv("PRINT_MODE", raising=False)
+    observed = []
 
+    def reply(url, *, content, **kwargs):
+        observed.append((url.host, int.from_bytes(content[2:4], "big")))
+        return httpx.Response(200, content=bytes.fromhex("0101 0000 00000001 03"))
 
-# ------------------------------------------------------------------ 001-02
-
-
-def test_保存后即时生效无需重启(monkeypatch):
-    from app.mod03_notice.print import ipp
-
-    monkeypatch.setenv("PRINTER_IPP_URL", "ipp://10.0.0.9")
-    get_settings.cache_clear()
-    assert get_settings().printer_ipp_url == "ipp://10.0.0.9"
-
-    # 下一次取配置即新值（无需重启）——打印时按新地址投递
-    captured: dict[str, str] = {}
-
-    def _fake_post(url, **kw):
-        captured["url"] = url
-
-        class _Resp:
-            status_code = 200
-            content = b"\x01\x01\x00\x00" + b"\x00" * 8  # IPP successful-ok
-
-        return _Resp()
-
-    monkeypatch.setattr(ipp.httpx, "post", _fake_post)
-    ipp.send_pdf(b"%PDF-1.4")
-    assert captured["url"].startswith("http://10.0.0.9")
-
-    # 再改一次，同样即时生效
-    monkeypatch.setenv("PRINTER_IPP_URL", "ipp://10.0.0.10")
-    get_settings.cache_clear()
-    assert get_settings().printer_ipp_url == "ipp://10.0.0.10"
+    monkeypatch.setattr(ipp.httpx, "post", reply)
+    assert dispatch.lock_a4_channel().send(b"%PDF-first").last.status == "accepted"
+    apply_printer_setting("ipp://second.test", env_path=env)
+    assert dispatch.lock_a4_channel().send(b"%PDF-next").last.status == "accepted"
+    assert observed == [("first.test", 4), ("first.test", 2), ("second.test", 4), ("second.test", 2)]
 
 
 # ------------------------------------------------------------------ 001-03
@@ -162,15 +129,7 @@ def test_只改打印机不动其他配置(tmp_path):
     ]
     # 只有打印机那一行变化，其余（i8 账号 / 数据库 / 日志）一字不动
     assert changed == [("PRINTER_IPP_URL=ipp://192.168.5.248", "PRINTER_IPP_URL=ipp://192.168.5.250")]
-    # ⚠️ `TAIL-46`-③（2026-09-18）：打印机设置由「**只写地址**」扩成**三项**（地址 ＋ 出纸通道 ＋ 打印机名）
-    #    ⇒ 原先那句「行数不变」不再成立。**判据的 claim 没有变**（001-05 = 逐行改写、**其余配置一字不动**），
-    #    所以按 claim 改断言：① 原有 5 行里**除地址行外逐字未动**（上面 `changed` 已盯住）；
-    #                    ② 追加的行**只许是打印机设置自己那几个键**（⛔ 不许顺手写别的配置）。
-    _PRINTER_KEYS = ("PRINTER_IPP_URL", "PRINT_MODE", "PRINTER_NAME")
-    extra = [ln for ln in lines[len(original_lines):]]
-    assert extra, "文件里原本没有通道 / 打印机名两项 ⇒ 应当补在末尾"
-    assert all(ln.split("=", 1)[0] in _PRINTER_KEYS for ln in extra), \
-        f"只许追加打印机设置自己的键，实际追加：{extra}"
+    assert lines[len(original_lines):] == ["PRINT_MODE=ipp"]
     for a, b in zip(original_lines, lines):
         if a.startswith("PRINTER_IPP_URL="):
             continue

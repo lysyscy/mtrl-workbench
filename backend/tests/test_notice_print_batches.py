@@ -407,18 +407,21 @@ def test_blocked_channel_exports_or_switches_same_prepared_batch(setup_batch, mo
         # The device defaults to A4 but rejects the explicit media constraint.
         return ipp_response(0x040B, message="default is A4 but explicit A4 is unsupported")
 
-    def must_not_send(*args):
-        pytest.fail("A channel without explicit A4 was invoked")
-
+    monkeypatch.setenv("PRINT_MODE", blocked_mode)
+    get_settings.cache_clear()
     monkeypatch.setattr(ipp.httpx, "post", printer)
-    monkeypatch.setattr(channels, "send_driver", must_not_send)
-    monkeypatch.setattr(channels, "send_raw", must_not_send)
     try:
         batch_id = env.api.post(f"{PATH}/prepare", json=body()).json()["batch_id"]
         ready = wait_batch(env.api, batch_id)
         request_total = len(relay.requests)
         assert ready["status"] == "ready" and ready["prepared_count"] == 3
-        response = env.api.post(f"{PATH}/{batch_id}/dispatch", json={"mode": blocked_mode, "printer_name": "Driver"})
+        if blocked_mode == "ipp":
+            for invalid in ("", " ", "misspelled"):
+                rejected = env.api.post(f"{PATH}/{batch_id}/dispatch", json={"mode": invalid})
+                assert rejected.status_code == 422
+            assert env.api.get(f"{PATH}/{batch_id}").json() == ready
+            assert env.operations == []
+        response = env.api.post(f"{PATH}/{batch_id}/dispatch")
         assert response.status_code == 200, response.text
         blocked = response.json()
         block = blocked["a4_blocked"]
@@ -426,9 +429,12 @@ def test_blocked_channel_exports_or_switches_same_prepared_batch(setup_batch, mo
         assert block["code"] == "a4_blocked" and block["can_switch_channel"]
         assert env.api.get(f"{PATH}/{batch_id}").json()["a4_blocked"] == block
         assert len(env.operations) == (1 if blocked_mode in ("ipp", "auto") else 0)
-        if blocked_mode == "auto":
-            assert [item["channel"] for item in block["attempts"]] == ["ipp", "driver", "raw"]
+        if blocked_mode in ("ipp", "auto"):
+            assert [item["channel"] for item in block["attempts"]] == ["ipp"]
             assert "explicit A4 is unsupported" in block["attempts"][0]["reason"]
+        else:
+            assert [item["channel"] for item in block["attempts"]] == [blocked_mode]
+            assert "改用 IPP，或导出 PDF" in block["reason"]
         assert env.sent == []
 
         export = env.api.post(block["export_action"])
@@ -596,8 +602,8 @@ def test_restart_recovers_ready_scope_and_interrupted_dispatch_receipts(setup_ba
 
     worker = _DeferredWorker()
     monkeypatch.setattr(print_batch_store, "_workers", worker)
-    monkeypatch.setattr(print_batch_store, "lock_a4_channel",
-                        lambda **_: channels.DispatchPlan("ipp", "ipp://fixture", "", (("ipp", send),)))
+    monkeypatch.setattr(channels, "validate_a4", lambda uri: None)
+    monkeypatch.setattr(channels, "send_pdf", lambda pdf, *, printer_uri: send(pdf))
     assert env.api.post(f"{PATH}/{handle}/dispatch").status_code == 202
     assert persisted()["snapshot"]["stage"] == "dispatching" and not sends
     _, run, args = worker.jobs[0]

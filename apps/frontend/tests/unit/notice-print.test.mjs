@@ -63,7 +63,7 @@ registerHooks({
   },
 });
 
-const { NoticePrint, recoverNoticePrint } = await import('../../src/notice-print.tsx');
+const { NoticePrint, PrinterSettings, recoverNoticePrint } = await import('../../src/notice-print.tsx');
 const { NoticesPage } = await import('../../src/notices.tsx');
 const rows = [1, 2, 3].map(notice_id => ({notice_id, bill_no: 'PN-' + notice_id, amount_approved: '1.00'}));
 const root = '/api/m03/print-batches';
@@ -109,7 +109,8 @@ function mount(t, mode, handler, session = {mode: 'browser', connected: true}) {
   function render() {
     hooks.index = 0;
     hooks.effects = [];
-    const tree = NoticePrint({rows: initialRows, mode, owner, resumed, blocked: false, close() {}});
+    const tree = mode === 'settings' ? PrinterSettings({blocked: false, close() {}})
+      : NoticePrint({rows: initialRows, mode, owner, resumed, blocked: false, close() {}});
     for (const effect of hooks.effects) effect();
     return tree;
   }
@@ -500,7 +501,7 @@ test('A4 block exports prepared bytes and switches to IPP on the same batch', as
   const address = walk(dialog.render()).find(node => node.type === 'input');
   assert.ok(address);
   address.props.onChange({target: {value: 'ipp://a4-printer.example.test/ipp/print'}});
-  dialog.click('切换支持 A4 的通道（IPP）');
+  dialog.click('使用此 IPP 地址打印本批');
   await until(() => text(dialog.render()).includes('打印机已接收 3 / 共 3 张'));
   assert.deepEqual(dialog.calls.filter(call => call.path.endsWith('/dispatch')).map(call => call.payload),
     [null, {mode: 'ipp', printer_uri: 'ipp://a4-printer.example.test/ipp/print'}]);
@@ -516,11 +517,11 @@ test('refresh finds the exact owner batch, resumes live progress and keeps the t
   }};
   t.after(() => { delete globalThis.window; });
   const accepted = item(1, {delivery_status: 'accepted', channel: 'ipp', job_id: 123});
-  const failed = item(2, {delivery_status: 'failed', channel: 'ipp', attempts: [
-    {channel: 'first-ipp', status: 'failed', job_id: null, reason: '第一通道拒绝'},
-    {channel: 'ipp', status: 'failed', job_id: null, reason: '第二通道拒绝'},
+  const failed = item(2, {delivery_status: 'failed', channel: 'driver', attempts: [
+    {channel: 'ipp', status: 'failed', job_id: null, reason: '第一通道拒绝'},
+    {channel: 'driver', status: 'failed', job_id: null, reason: '第二通道拒绝'},
   ]});
-  const unknown = item(3, {delivery_status: 'unknown', channel: 'ipp'});
+  const unknown = item(3, {delivery_status: 'unknown', channel: 'raw'});
   const running = view('live', 'print', {stage: 'dispatching', prepared_count: 3, items: [accepted, item(2), item(3)],
     dispatch_processed_count: 1, dispatched_count: 1, current_bill_no: 'PN-2'});
   const complete = {...running, status: 'complete', dispatch_processed_count: 3, items: [accepted, failed, unknown]};
@@ -548,8 +549,8 @@ test('refresh finds the exact owner batch, resumes live progress and keeps the t
   await until(() => text(dialog.render()).includes('结果待核实'));
   const displayed = text(dialog.render());
   assert.match(displayed, /PN-1：打印机已接收，通道 IPP，作业号 123/);
-  assert.match(displayed, /PN-2：明确失败.*第一通道拒绝.*第二通道拒绝/);
-  assert.match(displayed, /PN-3：结果待核实.*勿盲目重打/);
+  assert.match(displayed, /PN-2：明确失败，通道 系统驱动.*第一通道拒绝.*系统驱动.*第二通道拒绝/);
+  assert.match(displayed, /PN-3：结果待核实，通道 RAW 9100.*勿盲目重打/);
   assert.equal(dialog.calls.filter(call => call.method === 'POST').length, 0);
 
   const recent = await recoverNoticePrint(dialog.owner);
@@ -649,4 +650,43 @@ test('a recovered in-progress batch updates numeric placeholders to bill numbers
   const grid = walk(dialog.render()).find(node => node.type === 'grid');
   assert.deepEqual(grid.props.rows.map(row => row.bill_no), ['PN-8', 'PN-5']);
   assert.equal(dialog.calls.length, 1);
+});
+
+
+test('retired printer stays saved while editing layouts until IPP is explicitly selected and saved', async t => {
+  const printerPath = '/api/m03/settings/printer', layoutPath = '/api/m14/settings';
+  const layoutItems = ['i8_print_id_material', 'i8_print_id_mechanical'].map(key =>
+    ({key, label: key, hint: '', stored: 'old', env: '', effective: 'old'}));
+  let savedPrinter = {printer_ipp_url: 'ipp://old', print_mode: 'driver', printer_name: 'old device'};
+  let layoutWrites = 0;
+  const dialog = mount(t, 'settings', ({path, method, payload}) => {
+    if (path === printerPath && method === 'PUT') {
+      assert.deepEqual(payload, {printer_ipp_url: 'ipp://new', print_mode: 'ipp'});
+      savedPrinter = {...payload, printer_name: ''};
+    }
+    if (path === printerPath) return savedPrinter;
+    assert.equal(path, layoutPath);
+    if (method === 'POST') {
+      assert.equal(payload.i8_print_id_material, 'edited');
+      layoutItems[0].stored = payload.i8_print_id_material;
+      layoutWrites++;
+    }
+    return {items: layoutItems};
+  });
+  const address = () => walk(dialog.render()).find(node => node.type === 'input' && node.props.placeholder === 'ipp://192.168.5.248');
+  await until(() => text(dialog.render()).includes('系统驱动'));
+  assert.ok(address().props.disabled);
+  const layout = walk(dialog.render()).find(node => node.type === 'input' && node.props.value === 'old');
+  layout.props.onChange({target: {value: 'edited'}});
+  dialog.click('保存');
+  await until(() => text(dialog.render()).includes('原打印通道仍停用'));
+  assert.equal(layoutWrites, 1);
+  assert.equal(dialog.calls.filter(call => call.path === printerPath && call.method === 'PUT').length, 0);
+  dialog.click('改用 IPP');
+  assert.equal(address().props.disabled, false);
+  address().props.onChange({target: {value: 'ipp://new'}});
+  assert.equal(dialog.calls.filter(call => call.method === 'PUT').length, 0);
+  dialog.click('保存');
+  await until(() => layoutWrites === 2 && text(dialog.render()).includes('即时生效'));
+  assert.equal(savedPrinter.print_mode, 'ipp');
 });

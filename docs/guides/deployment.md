@@ -39,7 +39,7 @@ i8 会话桥的浏览器安装、更新与连接核对见[扩展说明](../../ap
 | 配置 | 当前出口与生效 |
 |---|---|
 | i8 地址、两个打印版式 ID | 页面写库，经 app_settings.effective 取值，保存清缓存 |
-| 打印机 IPP 地址、PRINT_MODE/PRINTER_NAME | 页面入口写仓根 .env 并清缓存 |
+| 打印机 IPP 地址、PRINT_MODE（仅 IPP；旧 driver/raw 需明确改选） | 页面入口写仓根 .env 并清缓存 |
 | 数据库、账号口令、SESSION_SECRET、访问范围及其余启动项 | 仓根 .env，键名/默认值读 .env.example 与 core/config.py；启动时读取 |
 
 真实 .env、账号会话和私有恢复材料不提交；不能把示例当现场配置。配置更新后是否需要新进程按实际缓存/加载入口判断，需重启时另依授权操作。

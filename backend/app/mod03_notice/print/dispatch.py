@@ -1,174 +1,12 @@
-"""Select an explicitly A4-capable delivery channel and preserve each attempt."""
-
+"""Validate the selected A4 printer once and submit each PDF once."""
 from __future__ import annotations
 
-import importlib
-import os
-import re
-import socket
-import tempfile
-import threading
-import time
 from dataclasses import asdict, dataclass
-from functools import partial
-from pathlib import Path
-from typing import Callable
 
 from app.core.config import get_settings
 from app.core.errors import MustReportError, log_exc
 from app.mod03_notice.print.ipp import IppOutcome, send_pdf, validate_a4
-from app.mod03_notice.settings_store import MODE_LABEL, PRINT_MODES, validate_print_mode
-
-# Auto considers channels in this order, filtered by their explicit A4 capability.
-AUTO_ORDER: tuple[str, ...] = ("ipp", "driver", "raw")
-
-_RAW_PORT = 9100  # ⚠️ RAW 的标准端口；地址里那个端口（如 631）是 **IPP** 用的，两者不是一回事
-_URI_HOST_RE = re.compile(r"^(?:ipp|ipps|https?|raw)://([^/\s:@]+)", re.IGNORECASE)
-
-# ---------------------------------------------------------------- 打印落地件（`driver` 通道）
-#: ⭐⭐ 用户 **2026-09-20** 口径：「**如果打印的话，不要在本地留文件**」。
-#:   本来只有 `driver` 通道会在 `%TEMP%` 落一份 PDF（`ipp` / `raw` 是**整卷发字节**、零文件）。
-#: ⚠️⚠️ **不能写完就删**：Windows 驱动是**异步**读盘的，删早了会印出**空白件**（2026-09 实测教训）。
-#:   ⇒ 两条一起上：① **到点自删**（`_TMP_KEEP_SECONDS`）；② **下次打印前扫一遍**兜底
-#:   （进程被杀 / 崩溃时定时器没机会跑，靠这个收尾）。
-_TMP_KEEP_SECONDS = 90.0
-_TMP_PREFIX = "m03print_"
-
-
-def sweep_temp_files(now: float | None = None) -> int:
-    """清掉**上次遗留**的打印落地件 ⇒ 返回清掉几个。
-
-    ⚠️ 只按**时间**判（⛔ 绝不删"刚建的那份"）—— 那可能正是驱动在读的。
-    ⚠️ 这是**兜底**，不是常规路（常规路是 `_drop_later` 的定时删除）。
-    """
-    t = time.time() if now is None else now
-    dropped = 0
-    for path in Path(tempfile.gettempdir()).glob(f"{_TMP_PREFIX}*.pdf"):
-        try:
-            if t - path.stat().st_mtime > _TMP_KEEP_SECONDS:
-                path.unlink(missing_ok=True)
-                dropped += 1
-        except OSError:                                  # noqa: PERF203 —— 单个删不掉不影响别的
-            continue
-    return dropped
-
-
-def _drop_later(path: str, delay: float | None = None) -> None:
-    """到点自删（⚠️ 驱动异步读盘 ⇒ **不能立刻删**，见 `_TMP_KEEP_SECONDS` 那段）。
-
-    ⚠️ `delay` 的默认值**不能在形参上写 `=_TMP_KEEP_SECONDS`** —— 那是**定义时**求值，
-       自检改不动它（`monkeypatch` 模块常量无效）；这里改成**调用时**取。
-    ⚠️ 在**写完文件之后马上**调（⛔ 不是"投递成功之后"）：这样连
-       `ShellExecute` / `startfile` **抛异常**那条路也覆盖得到（否则那份文件会永久留下）。
-    ⚠️ `daemon=True` —— ⛔ 不许这个定时器把进程退出拖住。
-    """
-    wait = _TMP_KEEP_SECONDS if delay is None else delay
-    timer = threading.Timer(wait, lambda: Path(path).unlink(missing_ok=True))
-    timer.daemon = True
-    timer.start()
-
-
-def _stage_pdf(pdf: bytes) -> str:
-    """把 PDF 落成一份**待自删**的临时件 ⇒ 返回路径（**`driver` 通道唯一的落盘处**）。
-
-    ⭐ 抽成独立函数是为了**可测**：`send_driver` 会**真出纸**，⛔ 自检绝不能调它；
-       而"写完就排上自删"这件事必须被钉住 —— 否则「打印不留文件」只是一句空话。
-    """
-    sweep_temp_files()                                    # 顺手收上次的尾（⛔ 不碰"刚建的那份"）
-    fd, path = tempfile.mkstemp(suffix=".pdf", prefix=_TMP_PREFIX)
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(pdf)
-    _drop_later(path)                                     # ⭐ 写完就排上自删（异常路径也覆盖）
-    return path
-
-
-def raw_target(printer_uri: str) -> tuple[str, int]:
-    """打印机地址 → RAW 投递目标 `(host, 9100)`。
-
-    ⚠️ **端口固定 9100**：地址里写的端口（`ipp://host:631/…`）是 **IPP** 用的 —— 照抄到 RAW
-       等于投错门（631 上没人听 RAW）。
-    """
-    m = _URI_HOST_RE.match(str(printer_uri or "").strip())
-    if not m:
-        raise MustReportError(
-            f"打印机地址看不懂：「{printer_uri}」"
-            "（RAW 通道要能从中取出 IP —— 应形如 ipp://192.168.5.248）"
-        )
-    return m.group(1), _RAW_PORT
-
-
-def send_raw(pdf: bytes, printer_uri: str) -> str:
-    """整卷发到 `host:9100` → 返回"投递说明"。
-
-    ⚠️ RAW **没有任何回执**（发完即断连）⇒ 只能如实说「已投递（未核实）」：
-       ⛔ 不许谎报"打完了"，也⛔ **不算失败**（用户 2026-09-18 实测教训：假失败 ⇒ 人会重复打、白浪费纸）。
-    """
-    host, port = raw_target(printer_uri)
-    try:
-        with socket.create_connection((host, port), timeout=10.0) as sock:
-            sock.sendall(pdf)
-    except OSError as exc:
-        log_exc(f"RAW 投递失败（{host}:{port}）", exc)
-        raise MustReportError(
-            "RAW 投递失败 —— 打印机那边没接上（有的打印机根本没开 9100 这个口）；"
-            "请核对打印机地址，或把出纸通道改成「驱动」"
-        ) from exc
-    return (
-        f"已投递（未核实）—— 已按 RAW {host}:{port} 整卷发完（这个通道没有回执）；"
-        f"⚠️ 若打出乱码 ⇒ 这台打印机不认 PDF，请把出纸通道改成「{MODE_LABEL['driver']}」"
-    )
-
-
-def list_printers() -> list[str]:
-    """本机装了驱动的打印机名（设置弹窗给「系统驱动」通道选 —— 名字要**一字不差**）。
-
-    ⚠️ 拿不到就回空表：这只影响"给不给提示"，⛔ 不报错、⛔ 不猜一个名字出来。
-    """
-    try:
-        import win32print  # type: ignore
-    except Exception:  # noqa: BLE001  ← 没装 pywin32 / 不是 Windows：都是"拿不到"，一样对待
-        return []
-    try:
-        return [str(p[2]) for p in win32print.EnumPrinters(2)]
-    except Exception:  # noqa: BLE001
-        return []
-
-
-def send_driver(pdf: bytes, printer_name: str = "") -> str:
-    """交 **Windows 打印驱动**出纸 → 返回"投递说明"。
-
-    - 有 `pywin32` ⇒ `ShellExecute("printto", …)`：**能指定**打印机名（空则交给系统默认打印机）。
-    - 没有 `pywin32` ⇒ 退到 `os.startfile(…, "print")`：**只能**打到系统默认打印机
-      ⇒ 这时若用户指定了名字，**如实说清没指定上**（⛔ 不假装指定成功）。
-    - ⚠️ 「交给驱动」≠「打完了」（驱动是**异步**的）⇒ 一律「已投递（未核实）」。
-
-    ⭐ 落地的临时 PDF **到点自删**（用户 2026-09-20 口径：**打印不在本地留文件**）——
-       ⚠️ 但**不能立刻删**（驱动异步读盘，删早了印空白件）⇒ 见 `_TMP_KEEP_SECONDS` 那两段：
-       **到点自删** ＋ **下次打印前扫残留**。
-    """
-    name = str(printer_name or "").strip()
-    path = _stage_pdf(pdf)
-
-    try:
-        win32api = importlib.import_module("win32api")
-    except Exception:  # noqa: BLE001  ← 没装 pywin32 ⇒ 走下面那条退路
-        win32api = None
-
-    if win32api is not None:
-        win32api.ShellExecute(0, "printto" if name else "print", path,
-                              f'"{name}"' if name else "", ".", 0)
-        to = f"「{name}」" if name else "系统默认打印机"
-        return f"已投递（未核实）—— 已交系统打印驱动出纸（{to}）；出纸与否请看打印机"
-
-    if not hasattr(os, "startfile"):
-        raise MustReportError("「系统驱动」通道只在 Windows 上能用（本机不是）")
-    os.startfile(path, "print")  # type: ignore[attr-defined]  # 退路：走文件关联的"打印"动词
-    if name:
-        return (
-            f"已投递（未核实）—— 本机没有打印驱动接口（`pywin32` 未装）⇒ 已交**系统默认打印机**；"
-            f"⚠️ 你设的「{name}」**没能指定上**（要指定请先装 `pywin32`）"
-        )
-    return "已投递（未核实）—— 已交系统默认打印机（`pywin32` 未装，走文件关联的打印动词）"
+from app.mod03_notice.settings_store import configured_print_mode, require_ipp
 
 
 @dataclass(frozen=True)
@@ -198,57 +36,33 @@ class A4BlockedError(MustReportError):
     code = "a4_blocked"
     http_status = 409
 
-    def __init__(self, attempts: list[DispatchAttempt]):
-        super().__init__(
-            "；".join(f"{MODE_LABEL[attempt.channel]}：{attempt.reason}" for attempt in attempts),
-            detail={"attempts": [asdict(attempt) for attempt in attempts]},
-        )
+    def __init__(self, channel: str, reason: str):
+        attempt = DispatchAttempt("failed", reason, channel=channel)
+        super().__init__(reason, detail={"attempts": [asdict(attempt)]})
 
 
 @dataclass(frozen=True)
 class DispatchPlan:
-    mode: str
     printer_uri: str
-    printer_name: str
-    channels: tuple[tuple[str, Callable[[bytes], IppOutcome]], ...]
 
     def send(self, pdf: bytes) -> DispatchOutcome:
-        attempts = []
-        for channel, submit in self.channels:
-            try:
-                reply = submit(pdf)
-            except Exception as exc:  # noqa: BLE001
-                # A sender can fail after submission. Without proof, do not try another channel.
-                log_exc("投递打印机后未取得有效回执", exc)
-                reply = IppOutcome("unknown", "请先核对打印机作业和出纸情况，勿重复打印。")
-            attempts.append(DispatchAttempt(reply.status, reply.reason, reply.job_id, reply.job_state, channel))
-            if reply.status != "failed":
-                break
-        return DispatchOutcome(tuple(attempts))
-
-
-def lock_a4_channel(
-    *, mode: str | None = None, printer_uri: str | None = None, printer_name: str | None = None,
-) -> DispatchPlan:
-    settings = get_settings()
-    name = (settings.printer_name if printer_name is None else printer_name).strip()
-    mode = (settings.print_mode if mode is None else mode).strip().lower() or "auto"
-    if mode not in PRINT_MODES:
-        validate_print_mode(mode, name)
-    uri = (settings.printer_ipp_url if printer_uri is None else printer_uri).strip()
-
-    blocks = []
-    channels = []
-    for channel in AUTO_ORDER if mode == "auto" else (mode,):
-        if channel != "ipp":
-            blocks.append(DispatchAttempt("failed", "此通道无法在打印作业中指定 A4。", channel=channel))
-            continue
         try:
-            validate_a4(uri)
-        except MustReportError as exc:
-            blocks.append(DispatchAttempt("failed", exc.message, channel=channel))
-        else:
-            channels.append((channel, partial(send_pdf, printer_uri=uri)))
-    if not channels:
-        raise A4BlockedError(blocks)
-    return DispatchPlan(mode, uri, name, tuple(channels))
+            reply = send_pdf(pdf, printer_uri=self.printer_uri)
+        except Exception as exc:  # noqa: BLE001
+            # An interrupted submission may already have created a device job.
+            log_exc("投递打印机后未取得有效回执", exc)
+            reply = IppOutcome("unknown", "请先核对打印机作业和出纸情况，勿重复打印。")
+        attempt = DispatchAttempt(reply.status, reply.reason, reply.job_id, reply.job_state, "ipp")
+        return DispatchOutcome((attempt,))
+
+
+def lock_a4_channel(*, mode: str | None = None, printer_uri: str | None = None) -> DispatchPlan:
+    settings = get_settings()
+    channel = configured_print_mode(settings.print_mode, mode)
+    uri = (settings.printer_ipp_url if printer_uri is None else printer_uri).strip()
+    try:
+        require_ipp(channel)
+        validate_a4(uri)
+    except MustReportError as exc:
+        raise A4BlockedError(channel, exc.message) from exc
+    return DispatchPlan(uri)

@@ -45,7 +45,6 @@ from app.mod01_projects.models import TYPE_SMALL
 from app.mod02_i8 import wh_cache
 from app.mod03_notice import fetch_jobs, pdf_cache, print_batch_store
 from app.mod03_notice.domain import still_unsettled
-from app.mod03_notice.print.dispatch import list_printers
 from app.mod03_notice.repository import latest_unresolved
 from app.mod03_notice.schemas import (
     AssignRequest,
@@ -65,7 +64,7 @@ from app.mod03_notice.schemas import (
     WarehouseCheckRequest,
 )
 from app.mod03_notice.service import BatchResult
-from app.mod03_notice.settings_store import apply_printer_setting
+from app.mod03_notice.settings_store import apply_printer_setting, configured_print_mode
 
 # ⚠️ **兼容再导出**（2026-09-19 拆件）：四个名字的**实体在 `notice_executors.py`**，
 #    但落点表（`tools/chain_expected.txt`）与测试都从**本模块**取
@@ -413,35 +412,19 @@ def _download_headers(name: str) -> dict[str, str]:
     }
 
 
-@router.get("/settings/printers", response_model=list[str])
-def list_local_printers() -> list[str]:
-    """本机装了驱动的打印机名（给设置弹窗选 —— 选「系统驱动」通道时**名字要一字不差**）。
-
-    ⚠️ 拿不到就回**空表**（没装 `pywin32` / 不是 Windows）：说明"给不了提示"，⛔ 不是错误、⛔ 不猜名字。
-    """
-    return list_printers()
-
-
 @router.get("/settings/printer", response_model=PrinterSettingResponse)
 def get_printer_setting() -> PrinterSettingResponse:
-    """打印机设置当前值（设置弹窗回填用）—— **地址 ＋ 出纸通道 ＋ 打印机名**（`TAIL-46`-③）。"""
-    s = get_settings()
+    """Return the saved channel so the operator can explicitly replace a retired one."""
+    settings = get_settings()
     return PrinterSettingResponse(
-        printer_ipp_url=s.printer_ipp_url,
-        print_mode=s.print_mode or "auto",
-        printer_name=s.printer_name or "",
+        printer_ipp_url=settings.printer_ipp_url,
+        print_mode=configured_print_mode(settings.print_mode),
     )
 
 
 @router.put("/settings/printer", response_model=PrinterSettingResponse)
 def set_printer_setting(req: PrinterSettingRequest) -> PrinterSettingResponse:
-    """修改打印机设置（SETUP-001）：写 `.env` + `cache_clear()` ⇒ **即时生效、无需重启**。
-
-    ⚠️ 三项**一起写**；任一项非法 ⇒ **一个字都不写**（先校验后落盘 —— 不许出现"地址改了、通道没改"的半套）。
-    """
-    out = apply_printer_setting(
-        req.printer_ipp_url, mode=req.print_mode, printer_name=req.printer_name
-    )
+    out = apply_printer_setting(req.printer_ipp_url, mode=req.print_mode)
     return PrinterSettingResponse(**out)
 
 

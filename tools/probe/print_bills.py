@@ -34,7 +34,7 @@ from app.mod02_i8.notice_source import (  # noqa: E402
     EMPTY_RETRY, EMPTY_RETRY_SLEEP, LIST_FORM, NoticeDetailFetcher, _map_record,
 )
 from app.mod03_notice.print.design import DesignFetcher  # noqa: E402
-from app.mod03_notice.print.ipp import send_pdf  # noqa: E402
+from app.mod03_notice.print.dispatch import A4BlockedError, lock_a4_channel  # noqa: E402
 from app.mod03_notice.print.render import PdfRenderer  # noqa: E402
 from app.mod03_notice.print.signatures import (  # noqa: E402
     SignatureStore, bind_signatures, check_signature_coverage, signature_slots,
@@ -203,6 +203,14 @@ def main() -> int:
             print("\n（--no-print）已跳过出纸。PDF 在：%s" % outdir)
             return int(bool(failed))
 
+        if len(failed) == len(rows):
+            return 1
+        try:
+            plan = lock_a4_channel()
+        except A4BlockedError as exc:
+            print(f"未投递：{exc.message}。PDF 在：{outdir}")
+            return 1
+
         printed = 0
         unknown = []
         for row in (item for item in rows if item["ok"]):
@@ -213,12 +221,7 @@ def main() -> int:
                 failed.append(bill_no)
                 print("  ❌ %s → 无法读取 PDF：%s" % (bill_no, type(exc).__name__))
                 continue
-            try:
-                receipt = send_pdf(pdf, settings.printer_ipp_url)
-            except Exception:  # noqa: BLE001
-                unknown.append(bill_no)
-                print("  %s → 未取得有效的打印机回执" % bill_no)
-                continue
+            receipt = plan.send(pdf).last
             if receipt.status == "accepted":
                 printed += 1
                 print("  ✅ %s → 已投递打印机" % bill_no)

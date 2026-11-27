@@ -175,7 +175,7 @@ def application(args, run, env, owner, version, browser_notice_check=None):
         updates = dict(database_url=env['DATABASE_URL'], test_database_url=env['TEST_DATABASE_URL'],
             session_secret=secret, app_env='dev', allowed_ip_cidrs='127.0.0.1/32,::1/128', cors_allow_origins='',
             frontend_preview_dir=version['build_path'], frontend_app_dir='', artifacts_dir=str(ROOT / 'var/data/react-writable-preview' / run.name),
-            logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='', printer_name='')
+            logs_dir=str(run / 'logs/app'), i8_user='', i8_password='', printer_ipp_url='')
         if browser_notice_check is not None:
             updates['i8_base_url'] = browser_notice_check.origin
         return values.model_copy(update=updates)

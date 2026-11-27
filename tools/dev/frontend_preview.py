@@ -96,7 +96,7 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
                    PGOPTIONS=f'-c search_path={schema}', PGAPPNAME='frontend_preview_' + schema, SESSION_SECRET=secrets.token_hex(32),
                    APP_ENV='dev', ALLOWED_IP_CIDRS='127.0.0.1/32,::1/128',
                    CORS_ALLOW_ORIGINS='', I8_BASE_URL='', I8_USER='', I8_PASSWORD='',
-                   PRINTER_IPP_URL='', PRINTER_NAME='',
+                   PRINTER_IPP_URL='',
                    FRONTEND_PREVIEW_DIR=str(ROOT / 'apps/frontend/dist'), FRONTEND_APP_DIR='',
                    MTRL_PREVIEW_EXPORT_DIR=str(export_dir),
                    MTRL_PREVIEW_COPY_SOURCE='1' if copy_source else '0',

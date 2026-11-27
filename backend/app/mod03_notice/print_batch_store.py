@@ -494,7 +494,7 @@ def start_dispatch(owner: str, batch_id: str, req: PrintDispatchRequest | None =
                 _checkpoint(batch)
                 return batch._snapshot()
             batch.stage, batch.status = "dispatching", "running"
-            batch.channels = tuple(name for name, _ in plan.channels)
+            batch.channels = ("ipp",)
             batch.expires_at = time.time() + _TTL_SECONDS
             try:
                 _save_state(batch)

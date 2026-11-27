@@ -126,10 +126,13 @@ def test_probe_distinguishes_delivery_states_and_exit_codes(monkeypatch, tmp_pat
     import sys
     from types import SimpleNamespace
 
+    from app.mod03_notice.print import dispatch
     from tools.probe import print_bills as cli
 
     monkeypatch.setattr(cli, "OUT_DIR", tmp_path)
-    monkeypatch.setattr(cli, "get_settings", lambda: SimpleNamespace(printer_ipp_url="ipp://fixture"))
+    settings = SimpleNamespace(printer_ipp_url="ipp://fixture", print_mode="ipp")
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+    monkeypatch.setattr(dispatch, "get_settings", lambda: settings)
     for dependency in ("I8Client", "PdfRenderer", "NoticeDetailFetcher", "SignatureStore"):
         monkeypatch.setattr(cli, dependency, lambda *a, **kw: SimpleNamespace(close=lambda: None))
 
@@ -143,13 +146,15 @@ def test_probe_distinguishes_delivery_states_and_exit_codes(monkeypatch, tmp_pat
                     blank=[], missing=[], unresolved=0, pdf=pdf)
 
     sent = []
-    def send(pdf, uri):
-        sent.append((pdf, uri))
+    def send(pdf, printer_uri):
+        sent.append((pdf, printer_uri))
         status = {b"reject": "failed", b"timeout": "unknown"}.get(pdf, "accepted")
         return ipp.IppOutcome(status, "fixture receipt")
 
     monkeypatch.setattr(cli, "one_bill", render)
-    monkeypatch.setattr(cli, "send_pdf", send)
+    validated = []
+    monkeypatch.setattr(dispatch, "validate_a4", validated.append)
+    monkeypatch.setattr(dispatch, "send_pdf", send)
     monkeypatch.setattr(sys, "argv", ["print_bills", "missing", "reject", "timeout", "ok"])
     assert cli.main() == 1
     output = capsys.readouterr().out.splitlines()
@@ -157,12 +162,18 @@ def test_probe_distinguishes_delivery_states_and_exit_codes(monkeypatch, tmp_pat
     unknown = next(line for line in output if line.startswith("结果待核实"))
     assert "['timeout']" in unknown and "勿盲目重打" in unknown
     assert sent == [(bill, "ipp://fixture") for bill in (b"reject", b"timeout", b"ok")]
+    assert validated == ["ipp://fixture"]
     sent.clear()
     for bill, expected in (("ok", 0), ("reject", 1), ("timeout", 1)):
         monkeypatch.setattr(sys, "argv", ["print_bills", bill])
         assert cli.main() == expected
     sent.clear()
+    validated.clear()
     monkeypatch.setattr(sys, "argv", ["print_bills", "--expect", "material=2", "ok"])
     assert cli.main() == 2 and sent == []
     monkeypatch.setattr(sys, "argv", ["print_bills", "--no-print", "ok"])
-    assert cli.main() == 0 and sent == []
+    assert cli.main() == 0 and sent == [] and validated == []
+    for old_mode in ("driver", "raw"):
+        settings.print_mode = old_mode
+        monkeypatch.setattr(sys, "argv", ["print_bills", "ok"])
+        assert cli.main() == 1 and sent == [] and validated == []

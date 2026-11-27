@@ -25,7 +25,7 @@ SETTING_PRINT_ID_MATERIAL = "i8_print_id_material"
 SETTING_PRINT_ID_MECHANICAL = "i8_print_id_mechanical"
 # ⚠️⚠️ **打印机地址不在本页**（2026-09-21 用户裁定「打印设置从 `MOD-14` 合并进 `MOD-03`」）——
 #   它的**唯一入口** = 付款通知书页的「打印机设置」弹窗（`mod03_notice/settings_store.apply_printer_setting`），
-#   **唯一存储** = `.env`（`PRINTER_IPP_URL` / `PRINT_MODE` / `PRINTER_NAME` 三项）。
+#   **唯一存储** = `.env`（`PRINTER_IPP_URL` / `PRINT_MODE`）。
 #   ⛔ 别再把它加回 `SPECS`：加回来就是**同一件事两个入口 ＋ 两套存储** ⇒ 会重现那个坑
 #   （库里有值时，弹窗改的**不生效**，而回执还说"即时生效"）。
 

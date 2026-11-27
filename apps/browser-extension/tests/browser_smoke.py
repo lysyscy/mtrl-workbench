@@ -336,11 +336,25 @@ def notice_flow(context, protocol_page):
     prepare = []
     dispatch = []
 
+    fetch_jobs = "/api/m03/notices/fetch-jobs"
+
+    def completed_fetch(response):
+        assert response.status == 202, response.status
+        job = response.json()
+        app.bring_to_front()
+        result_dialog = app.get_by_role("dialog", name="付款通知书抓取完成", exact=True)
+        result_dialog.wait_for()
+        final = app.request.get(f"{ORIGIN}{fetch_jobs}/{job['id']}").json()
+        assert final["status"] == "completed", final
+        result_dialog.get_by_role("button", name="关闭", exact=True).click()
+        result_dialog.wait_for(state="hidden")
+        return final["result"]
+
     def observe(request):
         if request.method != "POST":
             return
         path = urlsplit(request.url).path
-        if path == "/api/m03/notices/fetch":
+        if path == fetch_jobs:
             submitted.append(request.post_data_json)
         elif path == BATCH_PATH + "/prepare":
             prepare.append(request.post_data_json)
@@ -387,14 +401,13 @@ def notice_flow(context, protocol_page):
           and app.evaluate("() => document.hasFocus()"), [tab.url for tab in i8_tabs])
     check("探测遇到未登录跳转时没有提交或跟随登录跳转", not submitted and i8_tabs[0].url == I8_ORIGIN + "/")
     i8 = i8_tabs[0]
-    with app.expect_response(lambda res: res.url.endswith("/api/m03/notices/fetch")) as fetched:
+    with app.expect_response(lambda res: urlsplit(res.url).path == fetch_jobs and res.request.method == "POST") as fetched:
         i8.goto(f"{I8_ORIGIN}/i8/business")
-    receipt = fetched.value.json()
-    app.get_by_role("button", name="关闭", exact=True).wait_for()
+    receipt = completed_fetch(fetched.value)
+    app.get_by_role("dialog").wait_for(state="hidden")
     notice_hits = [hit for hit in RECEIVED if hit["path"] == "/FC/FM/PaymentBill/getList"]
     check("登录后无需再次确认，原工作台只抓取一次并写入三条", len(submitted) == len(notice_hits) == 1
           and submitted[0]["expected_account"] == "smoke" and receipt.get("upserted") == 3, receipt)
-    app.get_by_role("button", name="关闭", exact=True).click()
     app.get_by_role("button", name="按月抓取 i8", exact=True).click()
     app.get_by_role("button", name="确认抓取", exact=True).wait_for()
 
@@ -417,13 +430,13 @@ def notice_flow(context, protocol_page):
         return (await chrome.tabs.discard(binding.tabId))?.discarded;
     }""", device)
     check("真实 Chromium 已释放原绑定标签", discarded)
-    with app.expect_response(lambda res: res.url.endswith("/api/m03/notices/fetch")) as fetched:
+    with app.expect_response(lambda res: urlsplit(res.url).path == fetch_jobs and res.request.method == "POST") as fetched:
         app.get_by_role("button", name="确认抓取", exact=True).click()
     state = app.request.get(ORIGIN + "/api/m02/browser/state", params={"device_id": device}).json()
-    app.get_by_role("button", name="关闭", exact=True).wait_for()
+    completed_fetch(fetched.value)
+    app.get_by_role("dialog").wait_for(state="hidden")
     check("已登录会话及标签释放时均无需点扩展，仅提交本次确认", len(submitted) == 2
           and state["generation"] > 1 and fetched.value.ok, state)
-    app.get_by_role("button", name="关闭", exact=True).click()
     app.get_by_role("button", name="按月抓取 i8", exact=True).click()
 
     # The next confirmation probes the existing binding. Simulate i8's JSON expiry response.
@@ -510,9 +523,8 @@ def print_flow(app, i8, device, prepare, dispatch):
     dialog.get_by_role("button", name="重试全批", exact=True).click()
     blocked = dialog.get_by_role("alert").filter(has_text="无法确认本批按 A4 出纸")
     blocked.wait_for()
-    for reason in ("A4 unavailable on smoke printer", "系统驱动", "RAW 9100"):
-        assert reason in blocked.inner_text(), blocked.inner_text()
-    check("A4 拒绝时保留 IPP 首因及后续通道的限制，零打印作业", [op for op, _, _ in IPP_REQUESTS] == [4])
+    assert "A4 unavailable on smoke printer" in blocked.inner_text(), blocked.inner_text()
+    check("A4 拒绝时保留设备原因，零打印作业", [op for op, _, _ in IPP_REQUESTS] == [4])
     check("打印和导出沿用抓取的浏览器连接标识，所有业务请求携带同一 HttpOnly 会话",
           len(prepare) == 3 and len(dispatch) == 1
           and all(item["device_id"] == device and item["session_mode"] == "browser" for item in prepare)
@@ -522,7 +534,7 @@ def print_flow(app, i8, device, prepare, dispatch):
 
     BLOCK_A4.clear()
     with app.expect_response(lambda res: res.url.endswith("/dispatch") and res.ok) as started:
-        dialog.get_by_role("button", name="切换支持 A4 的通道（IPP）", exact=True).click()
+        dialog.get_by_role("button", name="使用此 IPP 地址打印本批", exact=True).click()
     batch = started.value.json()
     batch_url = ORIGIN + BATCH_PATH + "/" + batch["batch_id"]
     assert SECOND_PRINT_RECEIVED.wait(10), "second Print-Job did not reach IPP stub"

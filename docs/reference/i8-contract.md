@@ -267,10 +267,7 @@
 
 ## 四、打印机（IPP 直投）
 
-| 通路 | 地址 | 应答 | 说明 |
-|---|---|---|---|
-| `ipp` | 配置的 IPP URI，例如 `ipp://<ip>:631/ipp/print` | IPP 状态及设备返回的作业号、作业状态 | 批量打印先用 Validate-Job 核对显式 A4 |
-| `driver` / `raw` | Windows 文件关联打印 / `<ip>:9100` | 无设备作业回执 | 当前实现无法指定作业纸型，批量打印会拦截 |
+工作台向配置的 IPP 地址（例如 `ipp://<ip>:631/ipp/print`）投递通知书。旧 `auto` 配置继续使用 IPP。旧 `driver` / `raw` 配置在出纸前停止并提示改用 IPP 或导出 PDF；历史回执保留当时的通道和原因。
 
 - **默认 IP** = `192.168.5.248`（**用户已确认无误**，工具与原型一致）
 - **实测机型** = **RICOH IM 3000 PS3**（`printer-info` 自报；`printer-state = Idle`）
@@ -281,7 +278,7 @@
 
 ### IPP报文与排障边界
 
-整批 PDF 就绪后，先用 Validate-Job 验证显式 A4。Validate-Job 和每个 Print-Job 均在操作属性组 `0x01` 发送 `document-format=application/pdf`（`mimeMediaType`，`0x49`）及 `ipp-attribute-fidelity=true`，在作业属性组 `0x02` 发送 `media=iso_a4_210x297mm`（`keyword`，`0x44`）。自动选择通道也受 A4 校验约束。校验未通过时，可切换通道或导出同一批已生成的 PDF。
+整批 PDF 就绪后，先用 Validate-Job 验证显式 A4。Validate-Job 和每个 Print-Job 均在操作属性组 `0x01` 发送 `document-format=application/pdf`（`mimeMediaType`，`0x49`）及 `ipp-attribute-fidelity=true`，在作业属性组 `0x02` 发送 `media=iso_a4_210x297mm`（`keyword`，`0x44`）。校验未通过时，可明确选择本批 IPP 打印机再校验，或导出同一批已生成的 PDF。
 
 IPP 成功表示打印机已接收。回执保留设备返回的作业号、作业状态、`status-message` 及各通道尝试的原因。设备拒绝或发送前连接失败记为明确失败。请求可能已送达但回执中断时记为结果待核实，当前批次禁止自动换通道重投。刷新后读取原批进度和回执。排障优先使用不出纸的属性读取或 Validate-Job。
 

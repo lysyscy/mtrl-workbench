@@ -466,7 +466,7 @@ export function NoticePrint({rows, hiddenIds, scale = 1, mode, owner, resumed, b
           <label>本批 IPP 地址（选填）<input placeholder="留空则沿用打印机设置" value={printerUri}
             disabled={busy || blocked} onChange={event => setPrinterUri(event.target.value)} /></label>
           <Button htmlType="button" disabled={busy || blocked || !visibleScope}
-            onClick={() => void dispatch('ipp')}>切换支持 A4 的通道（IPP）</Button>
+            onClick={() => void dispatch('ipp')}>使用此 IPP 地址打印本批</Button>
         </div>}
       </>}
       {batch && deliveryStage && <section aria-label="逐张投递回执">
@@ -501,30 +501,40 @@ export function NoticePrint({rows, hiddenIds, scale = 1, mode, owner, resumed, b
     </DialogContents>
   </BusinessModal>;
 }
-interface Printer { printer_ipp_url:string;print_mode:string;printer_name:string }
+interface Printer { printer_ipp_url: string; print_mode: string }
 interface Layout { key:string;label:string;hint:string;stored:string;env:string;effective:string }
 const settingsSignature=(printer:Printer|null,layouts:Layout[])=>JSON.stringify([printer,layouts.map(({key,stored})=>[key,stored])]);
 const plain=(value:string)=>value.replace(/\*\*/g,'').replace(/（§[^）]*）/g,'');
 export function PrinterSettings({ blocked, close }: { blocked:boolean;close:()=>void }) {
   const lock=useRef(false), initial=useRef('');
-  const [printer,setPrinter]=useState<Printer|null>(null),[layouts,setLayouts]=useState<Layout[]>([]),[names,setNames]=useState<string[]>([]);
+  const [printer,setPrinter]=useState<Printer|null>(null),[layouts,setLayouts]=useState<Layout[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[feedback,setFeedback]=useState('');
   const closing = useDialogClose({ busy, dirty: Boolean(printer) && settingsSignature(printer,layouts) !== initial.current, close });
   async function load(signal?:AbortSignal) {
     setError('');
     try {
       const [p,s]=await Promise.all([requestJson('/api/m03/settings/printer',signal?{signal}:{}),requestJson('/api/m14/settings',signal?{signal}:{})]);
-      if(!record(p)||!['printer_ipp_url','print_mode','printer_name'].every(k=>typeof p[k]==='string')||!record(s)||!Array.isArray(s.items))throw new ApiError('打印设置读取不完整，请重读。');
+      if(!record(p)||typeof p.printer_ipp_url!=='string'||typeof p.print_mode!=='string'||!record(s)||!Array.isArray(s.items))throw new ApiError('打印设置读取不完整，请重读。');
       const items=s.items.filter(x=>record(x)&&['i8_print_id_material','i8_print_id_mechanical'].includes(String(x.key)));
       if(items.length!==2||!items.every(x=>record(x)&&['key','label','hint','stored','env','effective'].every(k=>typeof x[k]==='string')))throw new ApiError('版式设置读取不完整，请重读。');
-      if(signal?.aborted)return;initial.current=settingsSignature(p as unknown as Printer,items as Layout[]);setPrinter(p as unknown as Printer);setLayouts(items as Layout[]);
+      if(signal?.aborted)return;
+      const loaded = {printer_ipp_url: p.printer_ipp_url, print_mode: p.print_mode};
+      initial.current=settingsSignature(loaded,items as Layout[]);setPrinter(loaded);setLayouts(items as Layout[]);
     }catch(e){if(!signal?.aborted)setError(e instanceof Error?e.message:'设置读取失败，请重读。');}
   }
-  useEffect(()=>{const c=new AbortController();void load(c.signal);void requestJson('/api/m03/settings/printers',{signal:c.signal}).then(x=>{if(Array.isArray(x)&&x.every(n=>typeof n==='string'))setNames(x);}).catch(()=>{});return()=>c.abort();},[]);
+  useEffect(()=>{const c=new AbortController();void load(c.signal);return()=>c.abort();},[]);
   async function save() {
     if(!printer||blocked||lock.current)return;lock.current=true;setBusy(true);setError('');setFeedback('');let printerSaved=false;
-    try { await requestJson('/api/m03/settings/printer',{method:'PUT',...body(printer)});printerSaved=true;await requestJson('/api/m14/settings',{method:'POST',...body(Object.fromEntries(layouts.map(x=>[x.key,x.stored.trim()])))});setFeedback('打印机和版式设置已保存，即时生效。');await load(); }
-    catch(e){setError((printerSaved?'打印机设置已保存，版式未保存。':'未保存。')+(e instanceof ApiError && e.status>=500 && !printerSaved?'打印设置保存失败，请联系维护人员核对配置文件的写入权限。':e instanceof Error?e.message:'请核对后重试。'));}
+    try {
+      if (printer.print_mode === 'ipp') {
+        await requestJson('/api/m03/settings/printer', {method: 'PUT', ...body(printer)});
+        printerSaved = true;
+      }
+      await requestJson('/api/m14/settings',{method:'POST',...body(Object.fromEntries(layouts.map(x=>[x.key,x.stored.trim()])))});
+      setFeedback(printerSaved ? '打印机和版式设置已保存，即时生效。' : '版式设置已保存，原打印通道仍停用。');
+      await load();
+    }
+    catch(e){setError((printerSaved?'打印机设置已保存，版式未保存。':'未保存。')+(e instanceof ApiError && e.status>=500 && printer.print_mode === 'ipp' && !printerSaved?'打印设置保存失败，请联系维护人员核对配置文件的写入权限。':e instanceof Error?e.message:'请核对后重试。'));}
     finally{lock.current=false;setBusy(false);}
   }
   const footer = <div className="dialog-actions printer-settings-actions">
@@ -536,15 +546,13 @@ export function PrinterSettings({ blocked, close }: { blocked:boolean;close:()=>
     <DialogContents title="打印机设置" titleId="printer-settings-title" closing={closing} footer={footer}>
       {printer ? <>
         <fieldset className="printer-settings-group" disabled={busy || blocked}>
-          <legend>打印机与出纸通道</legend>
-          <label>打印机 IPP 地址<input value={printer.printer_ipp_url} onChange={event => setPrinter({...printer, printer_ipp_url: event.target.value})} placeholder="ipp://192.168.5.248" /></label>
-          <label>出纸通道<select value={printer.print_mode} onChange={event => setPrinter({...printer, print_mode: event.target.value})}>
-            {[['auto','自动（推荐）'],['ipp','IPP'],['driver','系统驱动'],['raw','RAW 9100']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select></label>
-          <p>批量打印会先用 IPP 确认设备接受 A4。系统驱动和 RAW 目前无法为打印作业指定 A4。</p>
-          <label>打印机名<input list="notice-printer-names" value={printer.printer_name} onChange={event => setPrinter({...printer, printer_name: event.target.value})} /></label>
-          <datalist id="notice-printer-names">{names.map(name => <option key={name} value={name}/>)}</datalist>
-          {!names.length && <p className="muted">未取到本机打印机名，可手动填写。</p>}
+          <legend>A4 打印机</legend>
+          {printer.print_mode !== 'ipp' && <>
+            <p role="status">已保存的通道「{channelLabel[printer.print_mode] ?? printer.print_mode}」无法用于 A4 打印。可以改用 IPP，或在通知书页导出 PDF。</p>
+            <Button htmlType="button" onClick={() => setPrinter({...printer, print_mode: 'ipp'})}>改用 IPP</Button>
+          </>}
+          <label>打印机 IPP 地址<input value={printer.printer_ipp_url} disabled={printer.print_mode !== 'ipp'}
+            onChange={event => setPrinter({...printer, printer_ipp_url: event.target.value})} placeholder="ipp://192.168.5.248" /></label>
         </fieldset>
         <fieldset className="printer-settings-group" disabled={busy || blocked}>
           <legend>i8 打印版式 ID</legend>
