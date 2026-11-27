@@ -102,7 +102,7 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
     revealRule(next);
   }
 
-  return <section className="rules-page page-shell page-shell--flow" data-page-layout="flow" aria-label="规则配置" data-page-chrome>
+  return <section className="wb-surface rules-page page-shell page-shell--flow" data-page-layout="flow" aria-label="规则配置" data-page-chrome>
     <div className="rules-navigation">
       <nav className="rules-tabs" aria-label="规则所属业务">
         {(Object.keys(ruleTabs) as RulePage[]).map(tab =>

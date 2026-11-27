@@ -35,7 +35,7 @@ def test_real_two_step_association_and_uncertain_hint(server, browser_page, api,
     expect(radios.first).to_be_enabled()
     expect(dialog.locator('.contract-candidates input:checked')).to_have_count(0)
     radios.first.check()
-    expect(dialog.locator('.contract-selection')).to_contain_text(target['material'])
+    expect(dialog.locator('.notice-contract-summary')).to_contain_text(target['material'])
     after = dialog.locator('.notice-association-dialog').bounding_box()
     assert abs(before['width']-after['width']) < 1 and after['height'] <= 800, (before,after)
     dialog.get_by_role('button', name='上一步', exact=True).click()

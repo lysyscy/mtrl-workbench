@@ -109,7 +109,7 @@ export function OilLinkageSheet({ me, projects, accounts, active, blocked, scale
   // 切核算月即换查询身份：旧月的金额不留在屏上，占位替代原表而不冒充"无项目"。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
-  return <section aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label>
+  return <section className="wb-surface" aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label>
     <label>账户状态<Select aria-label="用油联动账户状态" value={status} onChange={setStatus} disabled={blocked || busy || dirty || uncertain} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
     {visibleRows.some(row => !row.enabled) && <p className="muted">待接续项目仅显示当月充值供核对，原特殊费用和导出仍取旧记录；核对旧用油总额后启用联动。</p>}
     {error && <p role="alert" className="notice">{error}<Button disabled={blocked || busy || !active} onClick={() => void saves.reread()}>重读核对</Button></p>}

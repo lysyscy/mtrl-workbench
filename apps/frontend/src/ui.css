@@ -1,4 +1,7 @@
 html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale))}
+.wb-surface{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-card)}
+.wb-toolbar{display:flex;flex-wrap:wrap;align-items:center;min-width:0;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));padding:calc(4px * var(--fscale)) calc(16px * var(--fscale))}
+.wb-toolbar>label{display:inline-flex;align-items:center;gap:calc(6px * var(--fscale));min-width:0;max-width:100%}
 .business-project-picker{display:inline-block;min-width:min(10rem,100%);max-width:100%;vertical-align:middle}
 .business-project-picker .ant-select{width:100%}
 .business-project-popup{max-width:calc(100vw - 24px)}
@@ -27,7 +30,8 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .business-grid .ag-cell.money.wrap-note{white-space:normal}
 .business-grid .ag-input-field-input,.business-grid .ant-input{font:inherit}
 .business-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
-.business-grid .ag-cell .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale))}
+.business-grid .ag-cell .ant-btn{height:var(--control-sm);min-height:var(--control-sm);padding-block:0}
+.business-grid .ag-cell :where(button:not([class*="ant-"]),select,input:not([class*="ant-"],.ant-picker input,[type=checkbox],[type=radio],[type=hidden])){min-height:var(--control-sm);padding-block:0}
 .ant-btn{font-variant-numeric:tabular-nums}
 .ant-btn.dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
 .ant-btn.dialog-close-button svg{width:1.1rem;height:1.1rem;fill:none;stroke:currentColor;stroke-width:1.8}
@@ -59,8 +63,8 @@ html{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscal
 .workspace .page-view .ag-cell{padding-inline:calc(4px * var(--fscale))}
 @media(min-width:801px) and (max-width:2000px){.workspace>.sidebar{width:calc(128px * var(--fscale))}.workspace .page-view,.workspace .main>header{padding-inline:calc(16px * var(--fscale))}}
 .workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-grid,.mechanical-detail-grid) .ag-cell{padding-block:calc(2px * var(--fscale));line-height:1.5}
-.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0}
-.workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}
+.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:var(--control-sm);min-height:var(--control-sm);padding-block:0}
+.workspace .page-view .mechanical-grid .mechanical-internal-input{height:var(--control-sm);min-height:0;padding-block:0}
 .workspace .page-view .contracts-grid .ant-btn{padding-block:0}
 
 /* Existing values stay legible when permission or pending state prevents editing.

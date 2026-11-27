@@ -3,6 +3,14 @@
   min-width: 0;
 }
 
+.wb-flow-width {
+  max-width: 1520px;
+}
+
+.page-shell--split {
+  container-type: inline-size;
+}
+
 .workspace .page-view > :is(.page-shell--fill, .page-shell--split) {
   display: flex;
   flex-direction: column;
@@ -54,6 +62,20 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+}
+
+@container (max-width: 780px) {
+  .page-split-panels .wb-split-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: minmax(0, 1fr);
+    row-gap: calc(12px * var(--fscale));
+  }
+
+  .page-split-panels .wb-split-grid > .wb-surface {
+    grid-row: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
 }
 
 /* BoundedGrid sizing is shared by modal and page tables. */

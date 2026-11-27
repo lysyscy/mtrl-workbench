@@ -165,7 +165,7 @@ function LocationDialog({ close }: { close: () => void }) {
       {action.error && <p role="alert">{action.error}</p>}
       {visible && (
         <div className="equipment-location-scroll" tabIndex={0} role="region" aria-label="非系统项目列表">
-          <table className="equipment-location-table">
+          <table className="wb-native-table equipment-location-table">
             <thead><tr>
               <th scope="col">非系统项目名称</th>
               <th scope="col">{defaultProjectLabel}</th>

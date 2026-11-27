@@ -130,7 +130,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
     });
     return () => cancelAnimationFrame(frame);
   }, [blocked, hash, key, placeheld]);
-  return <section data-page-chrome className="i8-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title">
+  return <section data-page-chrome className="wb-surface i8-page wb-flow-width page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title">
     <div className="i8-block">
       <I8Server blocked={blocked} me={me}/>
       <I8BrowserRelay/>

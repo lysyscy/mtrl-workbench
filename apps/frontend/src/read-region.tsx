@@ -1,4 +1,3 @@
-import './read-region.css';
 import Button from 'antd/es/button';
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';

@@ -71,7 +71,7 @@
 }
 .contract-payment-reference{width:min(calc(640px*var(--fscale)),calc(100vw - 48px))}
 .contract-payment-reference .ant-select{width:100%}
-.contract-inline-editor{padding:calc(16px*var(--fscale));border:1px solid var(--bd);border-radius:var(--radius-inner);background:var(--sf2)}
+.contract-inline-editor{padding:calc(16px * var(--fscale));background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-card);flex:none}
 .contract-inline-editor .contract-editor-body{max-height:none;overflow:visible}
 .contract-material-editor{width:min(calc(440px*var(--fscale)),calc(100vw - 48px))}
 .contract-material-editor .contract-form-grid{grid-template-columns:minmax(0,1fr)}

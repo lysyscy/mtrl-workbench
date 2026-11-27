@@ -2,6 +2,7 @@
 @import './style.css';
 @import './ui.css';
 @import './page-layout.css';
+@import './read-region.css';
 @import './appearance-preferences.css';
 @import './big.css';
 @import './contract-subtables.css';
@@ -27,4 +28,5 @@
 @import './grid-single-line.css';
 @import './grid-value-filter.css';
 @import './business-modal.css';
+@import './history-details.css';
 @import './ui-theme.css';

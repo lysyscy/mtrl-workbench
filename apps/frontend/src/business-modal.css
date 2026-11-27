@@ -6,10 +6,9 @@
 .business-modal .ant-modal-body{max-height:84dvh;overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--bd3) var(--sf2)}
 .business-modal .ant-modal-body>div{margin:0;border:0;border-radius:0;background:transparent;color:var(--tx);box-shadow:none}
 :where(.business-modal .ant-modal-body)>div{max-width:calc(100vw - 24px);max-height:none;overflow:visible}
-:where(.business-modal) section{background:transparent;border:0;border-radius:0;overflow:visible}
 
 /* Defaults for project-dialog consumers. Task-specific layouts can override them. */
-:where(.business-modal .project-dialog) label{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+:where(.business-modal .project-dialog) label{display:flex;flex-direction:column;gap:calc(8px * var(--fscale));margin:calc(16px * var(--fscale)) 0}
 :where(.business-modal .project-dialog) label :is(input,select){width:100%}
 :where(.business-modal .project-dialog) p{line-height:1.5;overflow-wrap:anywhere}
 :where(.business-modal .project-dialog) input[readonly]{background:var(--sf2);color:var(--tx2)}
@@ -52,6 +51,7 @@
 .business-modal.business-modal--pane .dialog-footer>.dialog-actions,
 .business-modal.business-modal--pane .dialog-footer>footer{margin-top:0;padding-top:0;padding-bottom:0;border-top:0}
 .business-modal.business-modal--pane .dialog-pane-fill{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;overflow:visible}
+.business-modal.business-modal--pane .wb-native-table-scroll{max-block-size:48dvh}
 
 /* Task widths and standard dialog paddings. */
 .business-modal .project-dialog{width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
@@ -61,10 +61,27 @@
 .business-modal .printer-settings-dialog{width:min(calc(620px * var(--fscale)),calc(100vw - 24px))}
 .business-modal.business-modal--pane .ant-modal-body>.notice-association-dialog{width:min(calc(1080px * var(--fscale)),calc(100vw - 24px));height:auto;max-height:min(800px,88dvh);min-height:0;padding:0}
 .business-modal .ledger-export-dialog{width:min(calc(650px * var(--fscale)),calc(100vw - 24px))}
-.business-modal .flow-revoke{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));padding:1.2rem}
+.business-modal .flow-revoke{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));padding:calc(16px * var(--fscale))}
+.flow-revoke dl{display:grid;grid-template-columns:min(33%,calc(110px * var(--fscale))) minmax(0,1fr);gap:calc(8px * var(--fscale))}
+.flow-revoke dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.flow-revoke fieldset{border:1px solid var(--bd);border-radius:var(--radius-inner);margin:calc(16px * var(--fscale)) 0;padding:calc(12px * var(--fscale))}
+.flow-revoke fieldset label{display:flex;align-items:center;gap:calc(8px * var(--fscale));margin:calc(8px * var(--fscale)) 0}
+.flow-revoke input[type=radio]{margin:0;accent-color:var(--pri);flex:none}
+.flow-revoke .dialog-body>label{display:grid;gap:calc(8px * var(--fscale))}
+.flow-revoke .dialog-body>label input{width:100%}
+@media(max-width:740px){
+  .flow-revoke dl{grid-template-columns:1fr;gap:calc(4px * var(--fscale))}
+  .flow-revoke dd{margin-bottom:calc(8px * var(--fscale))}
+}
 .business-modal .users-dialog,.business-modal .rules-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .business-modal .rules-search-dialog{width:min(calc(640px * var(--fscale)),calc(100vw - 24px))}
 .business-modal .jc-receipt-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
+:where(.business-modal) :is(.rules-dialog,.jc-receipt-dialog) :is(input:not([type=checkbox],[type=radio],[class*="ant-"],.ant-picker input),select){font-size:calc(12.5px * var(--fscale));line-height:1.5;padding:calc(4px * var(--fscale)) calc(7px * var(--fscale));min-height:var(--control-h);min-width:0}
+:where(.business-modal) :is(.rules-dialog,.jc-receipt-dialog) :is(input,select):focus{border-color:var(--pri)}
+:where(.business-modal) .rules-dialog :is(input,select):disabled{background:var(--sf2);color:var(--mut);cursor:default}
+:where(.business-modal) .rules-dialog label{display:flex;flex-direction:column;gap:calc(6px * var(--fscale));font-size:calc(12px * var(--fscale));color:var(--tx2);margin-bottom:calc(12px * var(--fscale))}
+:where(.business-modal) .rules-dialog :is(input,select){width:100%}
+:where(.business-modal) .rules-dialog .dialog-actions{margin-top:calc(4px * var(--fscale))}
 .business-modal .big-order-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600;margin:0}

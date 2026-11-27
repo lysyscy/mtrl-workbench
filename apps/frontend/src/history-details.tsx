@@ -1,4 +1,3 @@
-import './history-details.css';
 import Button from 'antd/es/button';
 import { useId, useState } from 'react';
 import { ApiError, record } from './api';
@@ -77,7 +76,7 @@ export function HistoryDetailsBody({ records }: { records: HistoryRecord[] }) {
       {records.length > initialRecords && <Button type="link" aria-expanded={expanded} aria-controls={rowsId}
         onClick={() => setExpanded(value => !value)}>{expanded ? '收起部分明细' : `查看其余 ${countLabel(records.length - initialRecords, type)}`}</Button>}
     </div>}
-    <table id={rowsId} className="history-details-table" aria-label="本次变更">
+    <table id={rowsId} className="wb-native-table history-details-table" aria-label="本次变更">
       <thead><tr>{batch && <th scope="col">{type ?? '业务对象'}</th>}
         <th scope="col">字段或范围</th><th scope="col">当前</th><th scope="col">执行后</th>
       </tr></thead>

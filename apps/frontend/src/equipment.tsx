@@ -32,7 +32,7 @@ export function EquipmentPage({ me, blocked }: { me: Identity | null; blocked: b
     { key: 'inventory', label: '盘点表', page: <Inventory scale={scale} goToDistribution={goToDistribution} /> },
   ];
   return (
-    <section className="page-shell page-shell--fill equipment-page equipment-page-bounded" data-page-layout="fill" aria-label="设备台账">
+    <section className="wb-surface page-shell page-shell--fill equipment-page equipment-page-bounded" data-page-layout="fill" aria-label="设备台账">
       <Tabs
         className="equipment-top-tabs"
         classNames={{ body: 'equipment-tabs-body', content: 'equipment-tab-panel' }}

@@ -325,7 +325,7 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   // 首读和失败只占表区，工具栏和冲突提示保持可见。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
-  return <section className="oilcard-ledger-pane" aria-label="发票台账">
+  return <section className="wb-surface oilcard-ledger-pane" aria-label="发票台账">
     <div className="oilcard-ledger-chrome">
     <div data-page-chrome className="oilcard-toolbar"><h2>发票</h2><div>
       <Dropdown trigger={['click']} menu={{ items: [{ key: 'links', label: '交付链接收票' }, { key: 'pdf', label: '上传PDF' }], onClick: ({ key }) => {

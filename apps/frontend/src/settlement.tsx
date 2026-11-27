@@ -27,7 +27,7 @@ const emptySettlement: SettlementRow[] = [];
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 export function SettlementPage(props: Props) {
   const [tab,setTab] = useState('month');
-  return <section className={`settlement-page page-shell page-shell--flow${tab === 'month' ? ' settlement-month-page' : ''}`} data-page-layout="flow" aria-label="收发结存与提取">
+  return <section className={`wb-surface settlement-page page-shell page-shell--flow${tab === 'month' ? ' settlement-month-page' : ''}`} data-page-layout="flow" aria-label="收发结存与提取">
     <Segmented data-page-chrome className="settlement-tabs" aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
     <div hidden={tab !== 'month'} inert={tab !== 'month'}><Monthly {...props} active={props.active && tab === 'month'} /></div>
     <div hidden={tab !== 'extract'} inert={tab !== 'extract'}><Extract {...props} active={props.active && tab === 'extract'} /></div>
@@ -163,7 +163,7 @@ function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').Annua
   },[grid,history,scale]);
   const total = useMemo<AnnualRow[]>(() => [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}], [grid]);
   const presentation = useGridPresentation({table: `extract-${grid.kind}`, root, active, rows: grid.rows, totals: total, columns, rowId: annualRowId, scale, scope: grid.year, identity: grid.year});
-  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><PreparedGrid presentation={presentation} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
+  return <section className="wb-surface settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><PreparedGrid presentation={presentation} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
     getRowId:p=>p.data.warehouse,defaultColDef:{resizable:true,sortable:false,suppressMovable:true},
     overlayNoRowsTemplate:`当前筛选条件下没有${grid.kind}数据`,suppressScrollOnNewData:true,suppressColumnVirtualisation:true}} /></section>;
 }

@@ -33,7 +33,7 @@ export function OilCardRelationsTable({ archives, projects, cards }: {
   archives: OilArchives; projects: Project[]; cards: OilCard[];
 }) {
   if (!cards.length) return <p className="state">此主卡暂无副卡。</p>;
-  return <div className="oilcard-relations-scroll"><table className="oilcard-relations-table" aria-label="副卡与账户对应关系">
+  return <div className="oilcard-relations-scroll wb-native-table-scroll"><table className="wb-native-table oilcard-relations-table" aria-label="副卡与账户对应关系">
     <thead><tr><th scope="col">副卡卡号</th><th scope="col">实体卡状态</th><th scope="col">用卡账户</th><th scope="col">账户状态</th></tr></thead>
     {cardGroups(archives, cards).map(({ card, accounts }) => <tbody key={card.id}>{accounts.length ? accounts.map((account, index) => <tr key={account.id}>
       {index === 0 && <><th scope="rowgroup" rowSpan={accounts.length}>{cardNumber(card)}</th><td rowSpan={accounts.length}>{stateLabel(card.status)}</td></>}
@@ -128,7 +128,7 @@ export function OilPdfReceiveDialog({ mode, archives, projects, invoices, upload
           <Button type="primary" loading={preparing} disabled={blocked || !files.length} onClick={() => { receive(files); setFiles([]); }}>上传并入账</Button>
           {preparing && <p role="status">已处理 {uploads.filter(item => item.message).length} / {uploads.length} 份</p>}
         </>}
-        {list.length > 0 ? <div className="oilcard-relations-scroll"><table className="oilcard-relations-table" aria-label="逐项收票结果">
+        {list.length > 0 ? <div className="oilcard-relations-scroll wb-native-table-scroll"><table className="wb-native-table oilcard-relations-table" aria-label="逐项收票结果">
           <thead><tr><th scope="col">发票</th><th scope="col">核对事项</th><th scope="col">操作</th></tr></thead>
           <tbody>{list.map((item, index) => <tr key={mode === 'pending' && item.invoice ? item.invoice.id : index}>
             <th scope="row">{item.title}</th><td className="oilcard-receipt-message">{item.message}</td>

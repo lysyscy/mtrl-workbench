@@ -257,10 +257,10 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   // 台账首读与失败只在表区原位呈现：工具栏和草稿错误行保持可见，未读不被当成空台账。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
-  return <section className="oilcard-ledger-sheet" aria-label="充值与发票">
+  return <div className="oilcard-ledger-sheet" role="region" aria-label="充值与发票">
     {error && <p className="notice" role="alert">{error}<Button disabled={blocked || busy} onClick={() => void saves.reread()}>重读核对</Button></p>}
     {(uncertain || verified && Object.keys(drafts).length > 0) && <p className="notice" role="alert">{uncertain ? '核对刚才的充值登记后再继续。' : '已读取当前记录，请核对保留的输入。'}<Button disabled={!verified || blocked || busy} onClick={confirm}>已核对，保留输入继续</Button></p>}
-    <div className="oilcard-ledger-panes"><section className="oilcard-ledger-pane" aria-label="充值台账"><div className="oilcard-ledger-chrome"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
+    <div className="oilcard-ledger-panes wb-split-grid"><section className="wb-surface oilcard-ledger-pane" aria-label="充值台账"><div className="oilcard-ledger-chrome"><div data-page-chrome className="oilcard-toolbar"><h2>充值与调整</h2><div><Button type="primary" disabled={structuralDisabled} onClick={add}>新增充值</Button>
       <Button disabled={structuralDisabled} onClick={() => { saves.clearFeedback(); setTransferOpen(true); }}>转账</Button></div></div>
       <OilOpeningHistory archives={archives} projects={projects} enabled={active && !blocked} scale={scale} />
       <ReadStatusLane phase={readState} announce="正在读取充值台账…">
@@ -292,5 +292,5 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
       })}
       <p>{deletion.row.transfer_id ? '转出与转入会同时移除。' : '该记录将从台账和累计金额中移除。'}可通过操作历史撤销。</p>
     </OilDeleteDialog>}</DialogPresence>
-  </section>;
+  </div>;
 }

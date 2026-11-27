@@ -336,7 +336,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active, onHistoryGuar
   const error = projects.error || state.error;
   const monthRead = readPhase(state);
   const readBody = <ReadPlaceholder rows={6} quiet={monthRead==='error'} />;
-  return <section className="mechanical-card page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
+  return <section className="wb-surface mechanical-card page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
     <div className="mechanical-month"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked||writing} onChange={value=>{setMonth(value);setDetailReview(null);}} /></div>
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id} onClick={()=>{setTab(id);setTemporary('');setProblemsOnly(false);setDetailReview(null);}}>{name}</Button>)}</div>
     <div className="mechanical-project-entry"><Button disabled={blocked||writing||state.isFetching} onClick={openPicker}>显示项目</Button></div>

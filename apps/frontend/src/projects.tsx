@@ -217,7 +217,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [listSettled, setListSettled] = useState(false);
   const [listPublished, setListPublished] = useState(false);
   const pendingSettled = [pending, archive].every(query => query.data !== undefined || query.isError);
-  return <section data-page-chrome className="projects-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><OwnershipReturn params={params} />
+  return <section data-page-chrome className="wb-surface projects-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><OwnershipReturn params={params} />
     {!me && <p className="state">登录后可维护项目和导出。</p>}
     <div className="project-tools">
     <form className="filters" onSubmit={e => e.preventDefault()}><label>状态<Select aria-label="项目状态筛选" value={status} onChange={setStatus} options={[{value:'active',label:'在建'},{value:'archived',label:'归档'},{value:'all',label:'全部'}]}/></label><label>项目类型<Select aria-label="项目类型筛选" value={type} onChange={setType} options={[{value:'all',label:'全部'},...Object.entries(typeNames).map(([value,label])=>({value,label}))]}/></label><label className="search">项目<Input aria-label="项目搜索" type="search" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="全名、仓库名或展示名" /></label><Button htmlType="submit" onClick={() => { setStatus('active'); setType('all'); setKeyword(''); setSort(null); }}>重置</Button></form>

@@ -1,5 +1,10 @@
 /* Geometry and component treatment consume the account theme's role tokens. */
 html{font-variant-numeric:tabular-nums}
+:focus-visible,:is(.workspace,.business-modal) .ant-btn:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.sidebar :focus-visible{outline-color:var(--sb-on-hl)}
+:is(input,select,textarea){caret-color:var(--pri)}
+:is(input,textarea)::placeholder{color:var(--mut2);opacity:1}
+::selection{background:var(--sel);color:var(--tx)}
 .sidebar{border-right:1px solid var(--sb-bd)}
 .sidebar .brand{color:var(--sb-hd)}
 .sidebar .preview-label,.sidebar .nav-group h2{color:var(--sb-mut)}
@@ -65,7 +70,7 @@ html{font-variant-numeric:tabular-nums}
 .page-view .ag-root-wrapper [class*="ant-"]{transition:none}
 
 /* Shared treatment accepted after the notice trial. Keep floating layers distinct. */
-.workspace section,.workspace .notice-selection{border-width:.5px}
+.workspace .notice-selection{border-width:.5px}
 :where(.workspace,.business-modal) :is(input:not([class*="ant-"]):not([type=checkbox]):not([type=radio]):not(.ant-picker input),select:not([class*="ant-"]),textarea:not([class*="ant-"]),.row-button){border-width:.5px;border-radius:var(--radius-input)}
 .workspace .ag-header-cell,.workspace .ag-header-group-cell{font-size:calc(12px * var(--fscale));font-weight:500}
 .workspace small,.business-modal small{font-size:calc(12px * var(--fscale))}

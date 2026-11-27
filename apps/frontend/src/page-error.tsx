@@ -25,6 +25,6 @@ export class PageErrorBoundary extends Component<{ active: boolean; title: strin
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
-    return this.state.failed ? <section hidden={!this.props.active} data-route-error><PageFailure title={this.props.title} /></section> : this.props.children;
+    return this.state.failed ? <section className="wb-surface" hidden={!this.props.active} data-route-error><PageFailure title={this.props.title} /></section> : this.props.children;
   }
 }

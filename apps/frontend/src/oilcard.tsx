@@ -292,7 +292,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     setTab(value);
   }
   const pageLayout = tab === 'ledger' || tab === 'archives' ? 'split' : 'flow';
-  return <section className={`oilcard-page page-shell page-shell--${pageLayout}${pageLayout === 'split' ? ' oilcard-page-bounded' : ''}`} data-page-layout={pageLayout} aria-label="油卡管理">
+  return <section className={`wb-surface oilcard-page page-shell page-shell--${pageLayout}${pageLayout === 'split' ? ' oilcard-page-bounded' : ''}`} data-page-layout={pageLayout} aria-label="油卡管理">
     <div data-page-chrome className="oilcard-workspace-bar"><div className="oilcard-tabs" role="tablist" aria-label="油卡工作表">{([{ value: 'overview', label: '账户核对' }, { value: 'ledger', label: '充值与发票' }, { value: 'linkage', label: '用油联动' }, { value: 'archives', label: '账户与油卡' }] as const).map(item => <button type="button" className="oilcard-tab" key={item.value} role="tab" id={`oilcard-tab-${item.value}`} aria-controls={`oilcard-panel-${item.value}`} aria-selected={tab === item.value} onClick={() => chooseTab(item.value)}>{item.label}{tab === item.value && <WorkspaceMarker className="oilcard-tab-marker" layoutId="oilcard-workspace-tab" />}</button>)}</div><OilTotalExport disabled={disabled || busy || ledgerLocked || linkageLocked} active={active && !blocked} /></div>
     {!me && <p className="state">登录后可维护油卡档案。</p>}
     {ledgerUncertain && tab !== 'ledger' && <p className="notice" role="alert">充值或收票结果待核实，请先核对后再继续编辑。<Button onClick={() => chooseTab('ledger')}>核对保存结果</Button></p>}
@@ -325,12 +325,12 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
           </div>
           {focusPrimary && <OilCardRelationsTable archives={data} projects={projects.data ?? []} cards={focusCards} />}
         </div>}
-        <div className="oilcard-archive-panes"><section className="oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button></div></div>
+        <div className="oilcard-archive-panes wb-split-grid"><section className="wb-surface oilcard-archive-section" aria-label="用卡账户"><div data-page-chrome className="oilcard-toolbar"><h2>用卡账户</h2><div><label>状态<Select aria-label="账户状态筛选" value={status} onChange={setStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={addAccount}>新增账户</Button></div></div>
         <FirstReadRegion className="oilcard-grid-slot" phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
         {!accounts.length ? <p className="state">尚无符合条件的用卡账户。</p> : <BusinessGrid table="oilcard-accounts" label="用卡账户档案" rows={accounts} columns={accountColumns} rowId={row => row.id ? String(row.id) : `draft-${row.request_id}`} scale={scale} domLayout="normal" grid={{ ...accountDrag.grid,
           rowClassRules: { 'oilcard-selected': p => Boolean(p.data?.id && p.data.id === historyAccount), 'grid-row-dragging': p => p.node.id === accountDrag.rowId },
         }} />}</FirstReadRegion></section>
-        <section className="oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增主卡</Button></div></div>
+        <section className="wb-surface oilcard-archive-section" aria-label="实体油卡"><div data-page-chrome className="oilcard-toolbar"><h2>实体油卡</h2><div><label>状态<Select aria-label="油卡状态筛选" value={cardStatus} onChange={setCardStatus} options={[{ value: 'all', label: '全部' }, { value: 'active', label: '在用' }, { value: 'archived', label: '归档' }]} /></label><Button type="primary" disabled={structuralDisabled} onClick={() => void addCard()}>新增主卡</Button></div></div>
         <FirstReadRegion className="oilcard-grid-slot" phase={dependencyPhase} placeholder={<div className="oilcard-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={dependencyPhase === 'error'} /></div>}>
         {!visibleCards.length ? <p className="state">尚无符合条件的实体油卡。</p> : <BusinessGrid table="oilcard-cards" label="实体油卡档案" rows={visibleCards} columns={cardColumns} rowId={row => String(row.id)} scale={scale} domLayout="normal" grid={{ ...cardDrag.grid,
           rowClassRules: { 'oilcard-primary-row': p => p.data?.kind === 'primary', 'grid-row-dragging': p => p.node.id === cardDrag.rowId },
@@ -344,7 +344,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       <p>{'name' in deletion.row ? deletion.row.name : cardLabel(deletion.row)}</p>
       <p>仅可删除未被业务使用的档案。主卡须先处理所属副卡。</p>
     </OilDeleteDialog>}</DialogPresence>
-    {historyAccount > 0 && tab === 'archives' && <section className="oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
+    {historyAccount > 0 && tab === 'archives' && <section className="wb-surface oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
       {assignments.isPending ? <p role="status">正在读取关联历史…</p> : assignments.isError ? <p role="alert" className="notice">{assignments.error.message}<Button disabled={blocked} onClick={() => void assignments.refetch()}>重读关联历史</Button></p> : <BoundedGrid maxHeight="24dvh" minRows={2} table="oilcard-assignments" label="账户关联历史" rows={assignments.data ?? []} rowId={row => String(row.id)} scale={scale} columns={[
         { field: 'changed_at', headerName: '关联时间' },
         { colId: 'change', headerName: '操作', valueGetter: p => p.data?.change_kind === 'replacement' ? '换卡' : '关联维护' },

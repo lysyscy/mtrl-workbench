@@ -98,7 +98,7 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
   const totals=useMemo<FeeYearRow[]>(()=>query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[]}]:[],[query.data]);
   const presentation=useGridPresentation({table:'fees',root,active:active&&Boolean(ready),rows,totals,columns,rowId,scale,scope:year+':'+project,identity:year+':'+project});
   useEffect(()=>{if(!project&&query.data?.project)setProject(query.data.project);},[project,query.data]);
-  return <section className="fees-page page-shell page-shell--flow" data-page-layout="flow" aria-label="特殊费用">
+  return <section className="wb-surface fees-page page-shell page-shell--flow" data-page-layout="flow" aria-label="特殊费用">
     <div data-page-chrome className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data??[]).filter(p=>p.warehouse_name&&p.project_type!=='shell')} selected={(projects.data??[]).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused||projects.isPending} /></label></div>
     <div data-page-chrome className="fee-toolbar"><div><Button disabled={disabled||busy||dirty||query.isFetching} onClick={()=>void add()}>增加手填项</Button></div><span className="muted">随逐月欠款台账导出，特殊费用月报表</span></div>

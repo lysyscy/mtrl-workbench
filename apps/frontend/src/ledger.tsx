@@ -359,7 +359,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   </div>;
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
-    <section className="ledger-card" aria-labelledby="ledger-title">
+    <section className="wb-surface ledger-card" aria-labelledby="ledger-title">
       <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
       <div className="ledger-card-body">
         <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>

@@ -66,7 +66,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
   const readState = readPhase(query);
   const placeheld = data === undefined;
 
-  return <section className="users-page page-shell page-shell--flow" data-page-layout="flow" aria-label="用户管理" data-page-chrome>
+  return <section className="wb-surface users-page page-shell page-shell--flow" data-page-layout="flow" aria-label="用户管理" data-page-chrome>
     <div className="users-block">
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">

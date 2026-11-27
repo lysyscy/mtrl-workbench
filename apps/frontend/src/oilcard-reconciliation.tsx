@@ -74,7 +74,7 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
   const readState = readPhase(query);
   const phase = dependencyPhase === 'error' || (!query.data && readState === 'error') ? 'error' : dependencyPhase === 'content' && query.data ? 'content' : 'pending';
   const placeheld = phase !== 'content';
-  return <section aria-label="账户充值与开票核对"><div data-page-chrome className="oilcard-toolbar"><h2>充值与开票核对</h2><label>账户状态<Select aria-label="核对账户状态" value={status} onChange={setStatus} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
+  return <section className="wb-surface" aria-label="账户充值与开票核对"><div data-page-chrome className="oilcard-toolbar"><h2>充值与开票核对</h2><label>账户状态<Select aria-label="核对账户状态" value={status} onChange={setStatus} options={[{ value: 'active', label: '在用' }, { value: 'archived', label: '归档' }, { value: 'all', label: '全部' }]} /></label></div>
     <ReadStatusLane phase={readState} announce="正在核对充值累计…">
       {query.isError && <p className="notice" role="alert"><span className="read-failure-text">{query.data && '更新未成功，保留上次结果。'}{query.error.message}</span><Button disabled={blocked} onClick={() => void query.refetch()}>重读账户累计</Button></p>}
     </ReadStatusLane>

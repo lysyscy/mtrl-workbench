@@ -150,7 +150,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   const singleMonth = /^\d{4}-\d{2}$/.test(period);
-  return <section className="inventory-page page-shell page-shell--fill" data-page-layout="fill" aria-label="库存单据与调整单">
+  return <section className="wb-surface inventory-page page-shell page-shell--fill" data-page-layout="fill" aria-label="库存单据与调整单">
     <div className="inventory-toolbar" data-page-chrome>
       <div className="inventory-toolbar-field"><span>核算期间</span><TimePicker singleEntry label="库存核算期间" value={period} modes={['月','跨月','年','全部']} onChange={setPeriod} disabled={paused} /></div>
       <ProjectPicker label="库存项目" projects={(projects.data ?? []).filter(p => query.data?.projects.includes(p.warehouse_name ?? ''))} selected={ids} pick={setIds} multiple emptyLabel="全部项目" disabled={paused || projects.isPending || projects.isError} />

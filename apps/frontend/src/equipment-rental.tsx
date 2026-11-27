@@ -245,7 +245,7 @@ function ProjectGrid({
     }] : [];
   }, [group.lines, group.subtotal]);
   return (
-    <section className="equipment-project" id={projectAnchor(group)}>
+    <section className="wb-surface equipment-project" id={projectAnchor(group)}>
       <h3>{group.project_name}</h3>
       {rows.length ? <BusinessGrid
         table="equipment-rental"

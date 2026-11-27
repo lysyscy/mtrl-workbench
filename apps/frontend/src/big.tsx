@@ -57,7 +57,7 @@ export function BigPage(props: Props) {
   const [ym,setYm] = useState(reportMonth), [visited,setVisited] = useState(() => [ym]);
   const projects = useQuery({queryKey:['projects','all'],enabled:props.active && !props.blocked,queryFn:async({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   function choose(value: string) {setYm(value);setVisited(old => old.includes(value) ? old : [...old,value]);}
-  return <section className="big-page page-shell page-shell--flow" data-page-layout="flow" aria-label="月度会大表">
+  return <section className="wb-surface big-page page-shell page-shell--flow" data-page-layout="flow" aria-label="月度会大表">
     <div data-page-chrome className="big-period"><label>核算月<TimePicker label="大表核算月" value={ym} onChange={choose} modes={['月']} disabled={props.blocked} /></label></div>
     {visited.map(month => <div className="big-month" key={month} hidden={month !== ym} inert={month !== ym}><BigMonth {...props} ym={month} active={props.active && month === ym} projects={projects.data ?? []} projectsRead={projects} /></div>)}
   </section>;
