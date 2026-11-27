@@ -37,7 +37,7 @@ import { NoticePayment, PayAmountCell, paymentValue, amount } from './notice-pay
 import type { PayOverride } from './notice-payment';
 import { NoticePrint, PrinterSettings, recoverNoticePrint } from './notice-print';
 import type { BatchView } from './notice-print';
-import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
+import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { NoticeFlows } from './notice-flows';
 import { saveBlob } from './flow-api';
 import { TimePicker, timeMatches, timeRange } from './time-picker';
@@ -268,10 +268,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const cellDirty = Object.keys(cellSaves.drafts).length > 0;
   const cellError = cellSaves.uncertain ? cellSaves.error : Object.values(cellSaves.drafts).find(draft => draft.error)?.error;
   const unavailable = draftUncertain || blocked || !active || !me || busy || cellSaves.busy || cellSaves.uncertain || cellDirty || query.isPending || query.isError || query.isFetching;
-  // The list owns one read state: the first read keeps a skeleton in the reserved table box,
-  // a failed reread keeps the rows it already published, and only the status lane reports it.
   const readState = readPhase(query, query.data !== undefined && rows.length === 0);
-  // Nothing has been published yet, so the table area holds its reserved box with a quiet skeleton.
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current ? '付款通知书有未保存输入，请先处理。' : '');
   const actionsUnavailable = unavailable || searchBusy;
@@ -518,8 +515,16 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>
       <label>分类<Select aria-label="通知书分类" disabled={false} value={filters.category} onChange={value=>setFilters(f=>({...f,category:value, link: ''}))} options={[{value:'',label:'全部'},...Object.entries(categories).map(([value,label])=>({value,label})),{value:'exclude',label:'剔除'}]}/></label><label>合同关联（集采）<Select aria-label="合同关联" disabled={!['','jc'].includes(filters.category)} value={filters.link} onChange={value=>setFilters(f=>({...f,link:value}))} options={[{value:'',label:'全部'},{value:'no',label:'未关联'},{value:'yes',label:'已关联'}]}/></label>
-      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>{filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="button" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}<label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label><Button htmlType="button" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
-      <Button htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button></div>
+      <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>
+      {filters.pending && <span className="notice-pending-chip">只看{filters.pending === 'ownership' ? '待指定归属' : '撤单有牵涉'}<Button htmlType="button" aria-label="清除待办筛选" onClick={() => setFilters(f => ({ ...f, pending: '' }))}>×</Button></span>}
+      <div className="notice-filter-search">
+        <label className="notice-search-field">搜索<Input aria-label="通知书搜索" type="search" allowClear placeholder="搜索各列内容" {...searchInput} /></label>
+        <div className="notice-filter-buttons">
+          <Button htmlType="button" onClick={() => { setFilters(defaults()); setSearch(''); setPasteScope(null); }}>重置</Button>
+          <Button htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => setPasteOpen(true)}>粘贴单据号勾选</Button>
+        </div>
+      </div>
+      </div>
       {exportError && <p className="notice notice-export-error" role="alert">Excel 导出失败。{exportError}</p>}
       <DialogPresence>{pasteOpen && <NoticePaste blocked={blocked || !active} close={() => setPasteOpen(false)} read={async () => { const latest = await query.refetch({ throwOnError: true }); return latest.data!; }} apply={ids => { setPasteScope(null); setFilters({ ...defaults(), paid: '' }); setSearch(''); setSelection({picked: new Map(ids.map(id => [id, Symbol()])), pasteOrder: new Set(ids)}); requestAnimationFrame(() => api.current?.ensureIndexVisible(0, 'top')); }} process={ids => { clearSelection(); setPasteScope(ids); setFilters({ ...defaults(), paid: '', category: 'exclude' }); setSearch(''); }} />}</DialogPresence>
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="button" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
@@ -528,14 +533,16 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       {cellSaves.uncertain && <div className="notice-feedback"><Button disabled={blocked || cellSaves.busy} onClick={() => void cellSaves.reread('')}>重读核对金额</Button><Button disabled={blocked || cellSaves.busy || !cellSaves.verified} onClick={() => cellSaves.confirm()}>已核对，继续编辑</Button></div>}
       {cellSaves.uncertain && cellSaves.readback.map(item=><p key={item.key} className="notice" role="status">{item.bill}，{item.field}：当前输入 {item.input}，系统 {item.actual}{item.submitted !== null && `，本次提交 ${item.submitted}`}</p>)}
       <ReadStatusLane phase={readState} announce="正在读取付款通知书…" className="notice-read-status">{noticeId > 0 && !linkedNotice && query.isSuccess && !query.isFetching && <p role="status">当前通知书列表中未找到这张单据。</p>}{(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained={readState === 'stale' ? '列表更新失败，保留上次结果。' : undefined} />}{projects.isError && <ReadFailure read={projects} label="项目清单" retained="项目清单更新未成功，保留上次结果。" />}</ReadStatusLane>
-      {placeheld ? <div className="notice-grid page-fill-stage notice-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : (
-        <PublishedNotices.Provider value={publishedNotices}>
+      <FirstReadRegion className="page-fill-stage"
+        phase={readState === 'error' ? 'error' : placeheld ? 'pending' : 'content'}
+        placeholder={<div className="notice-read-reserve read-reserve"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div>}>
+        {!placeheld && <PublishedNotices.Provider value={publishedNotices}>
           <NoticeDraftDisabled.Provider value={busy || blocked}>
             <PreparedGrid inert={searchBusy} presentation={presentation} className="notice-grid page-fill-stage grid-single-line"
               role="region" aria-label="付款通知书列表" grid={gridOptions} />
           </NoticeDraftDisabled.Provider>
-        </PublishedNotices.Provider>
-      )}
+        </PublishedNotices.Provider>}
+      </FirstReadRegion>
       {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'}，尚未保存，返回本页可继续填写。<Button htmlType="button" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="button" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
       <OwnershipPending blocked={blocked || !active} disabled={unavailable} open={document => { if (!unavailable) setMaintenance({ kind: 'ownership', document }); }} />

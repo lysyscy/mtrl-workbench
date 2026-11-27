@@ -10,7 +10,7 @@ export function MatchItems<T>({ items, itemKey, render }: {
   items: readonly T[]; itemKey: (item: T) => string | number; render: (item: T) => ReactNode;
 }) {
   if (items.length > 12) {
-    return <Virtuoso className="notice-match-list notice-match-list--scroll" data={items}
+    return <Virtuoso className="notice-match-list notice-match-list--scroll" style={{ height: 'min(280px, 28dvh)' }} data={items}
       computeItemKey={(_, item) => itemKey(item)} itemContent={(_, item) => render(item)} />;
   }
   return <div className="notice-match-list">{items.map(item => <div key={itemKey(item)}>{render(item)}</div>)}</div>;

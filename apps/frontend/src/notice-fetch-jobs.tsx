@@ -120,7 +120,7 @@ function FetchResult({ job, acknowledge }: { job: FinishedNoticeFetchJob; acknow
     finally { lock.current = false; setClosingResult(false); }
   }
   const closing = useDialogClose({ busy: closingResult, dirty: false, close: () => void close() });
-  return <BusinessModal open zIndex={1600} layout="scroll-body" className="project-dialog notice-contract-dialog notice-fetch-result"
+  return <BusinessModal open zIndex={1600} layout="scroll-body" className="project-dialog notice-dialog notice-contract-dialog notice-fetch-result"
     titleId="notice-fetch-result-title" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="notice-fetch-result-title" closing={closing}>
       <div className="dialog-body">

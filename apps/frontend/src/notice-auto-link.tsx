@@ -125,7 +125,7 @@ export function AutoLinkDialog({ ids, blocked, close, refresh, announce, openMan
 
   const confirmDisabled = blocked || busy || uncertain;
   return <BusinessModal open={!blocked} layout={groups ? 'scroll-body' : 'compact'}
-    className={groups ? 'project-dialog notice-contract-dialog' : 'project-dialog'}
+    className={groups ? 'project-dialog notice-dialog notice-contract-dialog' : 'project-dialog notice-dialog'}
     titleId="auto-link-title" requestClose={closing.requestClose}>
     <DialogContents title="批量关联集采合同" titleId="auto-link-title" closing={closeState}>
       <div className="dialog-body">

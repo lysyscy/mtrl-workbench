@@ -50,7 +50,7 @@ export function NoticeFetch({ me, blocked, close }: { me: Identity | null; block
     } finally { setChecking(false); }
   }
 
-  return <BusinessModal open={!blocked} layout="compact" className="project-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="compact" className="project-dialog notice-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}>
     <DialogContents titleId="notice-fetch-title" title="抓取 i8 付款通知书" closing={closing}>
       <div className="dialog-body">
         <div className="notice-fetch-connection" role="group" aria-label="账号与 i8 会话">

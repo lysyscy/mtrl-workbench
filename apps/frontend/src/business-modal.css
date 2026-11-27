@@ -16,9 +16,6 @@
 :where(.business-modal .project-dialog) .dialog-actions{gap:.6rem;margin-top:1.2rem;flex-wrap:wrap}
 :where(.business-modal .project-dialog) .notice{padding:.65rem}
 
-/* Mode 1: compact (default) — short forms, light confirmations, discard confirmations. */
-.business-modal.business-modal--compact .ant-modal-body{max-height:84dvh;overflow:auto;overscroll-behavior:contain}
-
 /* Mode 2: scroll-body — pinned header & footer, single vertical scroll region in the middle. */
 .business-modal.business-modal--scroll-body .ant-modal-body{max-height:88dvh;overflow:hidden;display:flex;flex-direction:column}
 .business-modal.business-modal--scroll-body .ant-modal-body>div{display:flex;flex-direction:column;flex:0 1 auto;min-height:0;max-height:88dvh;overflow:hidden}
@@ -71,8 +68,54 @@
 .business-modal .big-order-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600;margin:0}
-.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(12px * var(--fscale))}
 .business-modal .contract-dialog{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+
+/* Notice dialogs share an inset across the header, content and actions. */
+.business-modal .notice-dialog {
+  --notice-dialog-inset: calc(24px * var(--fscale));
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.business-modal .ant-modal-body > .notice-dialog:not(.contract-dialog) { padding: var(--notice-dialog-inset); }
+.business-modal .notice-dialog .dialog-close-heading { align-items: center; gap: 8px; }
+.business-modal .notice-dialog .dialog-frame > .dialog-close-heading { margin-block-end: calc(16px * var(--fscale)); }
+.business-modal .notice-dialog .dialog-close-heading h2 { min-inline-size: 0; line-height: 1.4; }
+.business-modal .notice-dialog .dialog-close-button.ant-btn { inline-size: var(--control-h); padding: 0; }
+.business-modal.business-modal--scroll-body .ant-modal-body > .notice-dialog {
+  padding-inline: calc(var(--notice-dialog-inset) - 4px);
+}
+.business-modal--scroll-body .notice-dialog
+  :is(.dialog-close-heading, .dialog-footer, .dialog-frame > .dialog-actions, .dialog-form > .dialog-actions) {
+  margin-inline: 4px;
+}
+.business-modal--scroll-body .notice-dialog .dialog-body {
+  /* The scroll gutter gives focus outlines room on each side. */
+  margin-block: -4px;
+  padding: 4px;
+  scroll-padding: 4px;
+}
+.business-modal .notice-dialog .dialog-body > :first-child { margin-block-start: 0; }
+.business-modal .notice-dialog .dialog-body > :last-child { margin-block-end: 0; }
+.business-modal .notice-dialog :is(.dialog-footer, .dialog-frame > .dialog-actions, .dialog-form > .dialog-actions) {
+  margin-block-start: calc(16px * var(--fscale));
+}
+.business-modal:is(.business-modal--scroll-body, .business-modal--pane) .notice-dialog
+  :is(.dialog-footer, .dialog-frame > .dialog-actions, .dialog-form > .dialog-actions) {
+  padding-block: calc(8px * var(--fscale)) 0;
+}
+.business-modal .notice-dialog .dialog-actions { gap: 8px; min-inline-size: 0; }
+.business-modal .notice-dialog :is(.dialog-actions, .contract-footer) > .ant-btn {
+  flex: none;
+  max-inline-size: 100%;
+  min-block-size: var(--control-h);
+  block-size: auto;
+  padding-block: 4px;
+  white-space: normal;
+  font-variant-numeric: inherit;
+}
+@media (max-width: 740px) {
+  .business-modal .notice-dialog { --notice-dialog-inset: calc(16px * var(--fscale)); }
+}
 
 /* Decision-only prompts always shrink back to the compact 420px frame, including within large workflows. */
 .business-modal .ant-modal-container .ant-modal-body:has(.dialog-discard,.contract-decision){height:auto;max-height:84dvh;overflow:auto;display:block}

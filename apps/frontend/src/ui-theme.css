@@ -14,24 +14,13 @@ html{font-variant-numeric:tabular-nums}
 .ant-btn.danger:not(:disabled),.row-button.danger{color:var(--dg-d);border-color:var(--dg-bd)}
 .ant-btn.danger:not(:disabled):hover,.row-button.danger:hover{color:var(--dg-d);background:var(--dg-l);border-color:var(--dg-d)}
 .ant-btn:disabled,.row-button[aria-disabled=true]{cursor:not-allowed}
-.ant-btn.dialog-close-button,.ant-btn.contract-close{box-shadow:none;border:0;transform:none}
+.ant-btn.dialog-close-button{box-shadow:none;border:0;transform:none}
 .workspace .status-tag,.workspace .enum-tag,.notices-page .notice-tag,.contract-dialog .contract-state,.workspace .project-type{border-radius:4px;border-width:.5px}
 
-.notices-page{--field-short:calc(112px * var(--fscale));--field-medium:calc(144px * var(--fscale));--field-wide:calc(220px * var(--fscale));--field-search:calc(248px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.notices-page{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .notices-page .notice-selection{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));gap:8px 24px;margin-bottom:calc(16px * var(--fscale))}
 .notices-page .notice-tools{gap:8px;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .notices-page .notice-batch>span{color:var(--tx2);font-size:calc(12px * var(--fscale))}
-.notices-page .notice-selection .notice-pay-action:disabled{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd);opacity:.65;cursor:not-allowed}
-.notices-page .notice-filters{padding:calc(16px * var(--fscale));gap:12px calc(16px * var(--fscale));align-items:flex-end;border-bottom:1px solid var(--bd)}
-.notices-page .notice-filters>label,.notices-page .notice-filters>.time-picker-field,.notices-page .notice-filters>.notice-project{display:flex;flex-direction:column;align-items:stretch;gap:6px;font-size:calc(12px * var(--fscale));line-height:20px;width:var(--field-short);min-width:0;margin:0;color:var(--tx2)}
-.notices-page .notice-filters>.time-picker-field,.notices-page .notice-filters>label:has([aria-label="合同关联"]){width:var(--field-medium)}
-.notices-page .notice-filters>.notice-project{width:var(--field-wide);max-width:100%}
-.notices-page .notice-filters>.notice-search-field{width:var(--field-search);flex:1;max-width:360px;min-width:180px}
-.notices-page .notice-filters .business-project-picker{width:100%!important;min-width:0}
-.notices-page .notice-filters .ant-select{width:100%;min-width:0;height:var(--control-h)}
-.notices-page .notice-filters .ant-input,.notices-page .notice-filters>.ant-btn,.notices-page .notice-filters .business-period-trigger{height:var(--control-h);min-height:var(--control-h)}
-.notices-page .notice-filters input[type=search]{width:100%;border-radius:var(--radius-pill)}
-.notices-page .notice-count{font-size:calc(12px * var(--fscale));margin:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
 .notices-page .notice-grid{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .notices-page .notice-grid .ag-header-cell{font-size:calc(12px * var(--fscale));font-weight:500}
 .notices-page .notice-grid .ag-cell{padding-block:4px}
@@ -39,25 +28,8 @@ html{font-variant-numeric:tabular-nums}
 .notices-page .notice-grid .ag-cell.money input{text-align:right}
 .notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]):not(.ant-picker input){border-radius:var(--radius-input);background:var(--sf2);padding-inline:4px;box-shadow:none}
 .notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]):not(.ant-picker input):focus{background:var(--sf);border-color:var(--pri)}
-.contract-dialog .contract-fixed-header{flex:none;border-bottom:1px solid var(--bd);background:var(--sf)}
-.contract-dialog .contract-dialog-heading{padding:16px 24px 12px}
-.contract-dialog .contract-dialog-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
-.contract-dialog .contract-notice{margin:0 24px 16px;padding:12px 16px;border-radius:var(--radius-inner)}
-.contract-dialog .contract-current{margin:12px 24px;flex:none}
-.contract-dialog .contract-candidate-note{margin:0 24px 8px;flex:none}
-.contract-dialog .contract-candidate{padding:16px;border-radius:var(--radius-inner);box-shadow:none;transition:border-color var(--motion-fast),background-color var(--motion-fast)}
-.contract-dialog .contract-candidate:hover{border-color:var(--bd3)}
-.contract-dialog .contract-candidate.is-selected{outline:none;border-color:var(--pri);background:var(--pri-l)}
-.contract-dialog .contract-state.recommended{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
-.contract-dialog .contract-amounts{border-radius:var(--radius-input)}
-.contract-dialog .contract-reasons{color:var(--pri-d)}
-.contract-dialog .contract-selection{flex:none;margin:12px 24px 0;border-radius:var(--radius-inner)}
-.contract-dialog .contract-footer{flex:none;position:static;margin-top:12px;padding:12px 24px}
-.contract-dialog>.notice{flex:none}
 .business-period-popover .ant-popover-container{border-radius:var(--radius-inner);box-shadow:var(--shadow-pop)}
 .business-period-panel .business-period-month.ant-btn{border-radius:var(--radius-input);box-shadow:none;transform:none}
-.business-modal .payment-terms,.business-modal .payment-confirmation{border-radius:var(--radius-inner)}
-@media(max-width:740px){.notices-page .notice-tools .notice-toolbar{margin-left:0}.notices-page .notice-filters>.notice-project{width:100%;max-width:300px}.notices-page .notice-filters>.notice-search-field{flex-basis:100%;max-width:300px}.contract-dialog .contract-dialog-heading,.contract-dialog .contract-footer{padding-inline:16px}.contract-dialog .contract-notice,.contract-dialog .contract-current,.contract-dialog .contract-candidate-note,.contract-dialog .contract-selection{margin-inline:16px}.contract-dialog .contract-candidate{padding:12px}}
 /* Native editors and appearance cards use the same short color feedback as AntD.
    Never animate geometry, values or table rows. */
 :where(.workspace,.business-modal) :is(input:not([class*="ant-"]):not([type=checkbox]):not([type=radio]):not(.ant-picker input),select:not([class*="ant-"]),textarea:not([class*="ant-"])),.appearance-choice,.appearance-close{transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}

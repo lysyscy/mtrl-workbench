@@ -278,7 +278,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
         ]
       : [{ id: 'payment', naturalHeight: payMetrics.naturalHeight, minHeight: payMetrics.minHeight, weight: 100 }],
   ), [availableHeight, hasTerms, payMetrics, termsMetrics]);
-  return <BusinessModal open={!blocked} layout="pane" className={`project-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
+  return <BusinessModal open={!blocked} layout="pane" className={`project-dialog notice-dialog notice-pay-dialog${phase === 'saved' ? ' notice-pay-result' : warningIds.length ? ' notice-pay-with-terms' : ''}`} titleId="notice-pay-title" requestClose={closing.requestClose}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     <div ref={stageRef} className="notice-pay-stage">
       {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读</Button></p> : <>
         {message && <p role="status" className="notice-feedback">{message}</p>}

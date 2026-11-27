@@ -138,7 +138,7 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     </article></div>;
   }
 
-  return <BusinessModal open={!blocked} layout="pane" className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>
+  return <BusinessModal open={!blocked} layout="pane" className="project-dialog notice-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>
     {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><DialogHeading ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</DialogHeading><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" danger loading={busy} disabled={unavailable} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
       <div className="contract-fixed-header"><div className="dialog-close-heading contract-dialog-heading"><DialogHeading id="contract-dialog-title">供应商与合同关联</DialogHeading><Button htmlType="button" className="dialog-close-button" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       <div className="association-steps"><span aria-current={step === 1 ? 'step' : undefined}>1. 确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2. 选择合同</span><small>确认前不会改变现有关联</small></div>
@@ -153,14 +153,14 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
         {rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p>
           : rows.length <= 2 ? <ul className="contract-candidates" role="list" aria-label={candidateLabel}>
             {rows.map(candidate => <li key={candidate.id}>{renderCandidate(candidate)}</li>)}
-          </ul> : <Virtuoso className="contract-candidates contract-candidates--virtual" components={candidateList}
+          </ul> : <Virtuoso className="contract-candidates" style={{ height: 'min(480px, 54dvh)' }} components={candidateList}
             context={candidateLabel} data={rows} computeItemKey={(_index, candidate) => candidate.id}
             itemContent={(_index, candidate) => renderCandidate(candidate)} />}
       </>}
       {chosen && <div className="contract-selection" role="status"><div><span>{modifying ? chosen.id === current?.id ? '保持当前关联' : '拟换合同' : '已选合同'}</span><strong>{contractName(chosen)}</strong></div><div><span>关联前欠款</span><b>{money(chosen.debt)} 元</b></div><div><span>本条统计付款</span><b>{money(row.stat_paid)} 元</b></div><p className="contract-match">{cents(chosen.debt) === cents(row.stat_paid) ? '金额一致' : '金额不一致，仍可关联'}</p></div>}
       </>}
       {error && <p className="notice" role="alert">{error}{saved && <Button disabled={busy} onClick={() => void readBack()}>重读核对</Button>}</p>}
-      <div className="contract-footer"><div>{modifying && <Button htmlType="button" danger disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}</div><div className="dialog-actions">{step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}<Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>{step === 1 ? <>{!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}<Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button></> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}</div></div>
+      <div className="contract-footer">{modifying && <Button htmlType="button" danger disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}<div className="dialog-actions">{step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}<Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>{step === 1 ? <>{!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}<Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button></> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}</div></div>
     </>}
   </BusinessModal>;
 }

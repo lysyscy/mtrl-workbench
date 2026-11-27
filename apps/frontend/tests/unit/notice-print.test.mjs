@@ -54,7 +54,7 @@ registerHooks({
     if (specifier === './grid-text') return data('export const completeColumnWidth = () => 40; export const EllipsisText = "ellipsis";');
     if (specifier === './notice-cell-save') return data('export const NoticeCells = {Provider: "provider"}, PublishedNotices = NoticeCells;' +
       'export const useNoticeCellSaves = () => ({drafts: {}}); export const PaidAmountCell = "paid", StatCell = "stat";');
-    if (specifier === './read-region') return data('export const readPhase = () => "ready", ReadFailure = "error", ReadPlaceholder = "placeholder", ReadStatusLane = "lane";');
+    if (specifier === './read-region') return data('export const readPhase = () => "ready", FirstReadRegion = "read-region", ReadFailure = "error", ReadPlaceholder = "placeholder", ReadStatusLane = "lane";');
     if (specifier === './grid-presentation') return data('export const PreparedGrid = "prepared-grid", useGridPresentation = props => ({...props, state: "ready"});');
     if (specifier === './time-picker') return data('export const TimePicker = "TimePicker", timeMatches = () => true, timeRange = () => ({});');
     if (specifier in pageComponents) return data(pageComponents[specifier].map(name => name === 'NoticeDraftDisabled'

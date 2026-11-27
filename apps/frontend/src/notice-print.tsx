@@ -444,7 +444,7 @@ export function NoticePrint({rows, hiddenIds, scale = 1, mode, owner, resumed, b
         <Button htmlType="button" disabled={busy || blocked} onClick={() => void retryDownload()}>重试下载</Button>}
     </div>
   </div>;
-  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="notice-print-title" closing={closing} footer={footer}>
       <p>本批 {batch?.total ?? scope.length} 条通知书{hiddenCount > 0 && '（含搜索隐藏行）'}。</p>
       {scope.length > 0 && <BoundedGrid maxHeight="calc(220px * var(--fscale))" minRows={3} scale={scale} table="notice-print-list" className="notice-print-list" label="本批通知书" rows={listedScope} rowId={row => String(row.notice_id)} columns={[
@@ -532,7 +532,7 @@ export function PrinterSettings({ blocked, close }: { blocked:boolean;close:()=>
     <Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>
     <Button htmlType="button" type="primary" loading={busy} disabled={blocked || !printer} onClick={() => void save()}>保存</Button>
   </div>;
-  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog printer-settings-dialog" titleId="printer-settings-title" requestClose={closing.requestClose}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-dialog printer-settings-dialog" titleId="printer-settings-title" requestClose={closing.requestClose}>
     <DialogContents title="打印机设置" titleId="printer-settings-title" closing={closing} footer={footer}>
       {printer ? <>
         <fieldset className="printer-settings-group" disabled={busy || blocked}>

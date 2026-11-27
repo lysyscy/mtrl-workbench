@@ -19,7 +19,7 @@ export function NoticeFlows({ notice, scale, blocked, close }: { notice: NoticeR
     queryFn: async ({ signal }) => loadFlows(signal, notice.notice_id) });
   const rows = query.data ?? [];
   const paid = decimal(rows.reduce((sum, flow) => flow.status === 'revoked' ? sum : sum + cents(flow.amount), 0n));
-  return <BusinessModal open={!blocked} layout="pane" className="project-dialog notice-flows-dialog" titleId="notice-flows-title" requestClose={closing.requestClose}><DialogContents title={`${notice.bill_no}，付款流水`} titleId="notice-flows-title" closing={closing}>
+  return <BusinessModal open={!blocked} layout="pane" className="project-dialog notice-dialog notice-flows-dialog" titleId="notice-flows-title" requestClose={closing.requestClose}><DialogContents title={`${notice.bill_no}，付款流水`} titleId="notice-flows-title" closing={closing}>
     <dl className="notice-flow-summary">
       <div><dt>项目</dt><dd>{notice.project_display || '—'}</dd></div>
       <div><dt>收款单位</dt><dd>{notice.payee || '—'}</dd></div>

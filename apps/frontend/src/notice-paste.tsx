@@ -23,7 +23,7 @@ export function NoticePaste({ blocked, close, read, apply, process }: { blocked:
     finally { lock.current = false; if (alive.current) setBusy(false); }
   }
   const groups: [string,string[]][] = report ? [['未识别为单据号的文本',report.invalid],['未找到的单据号',report.missing],['系统重号，未勾选',report.ambiguous],['重复输入，已合并',report.duplicates],['已付清，仍可打印',report.paid]] : [];
-  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-paste-dialog" titleId="notice-paste-title" requestClose={closing.requestClose}><DialogContents titleId="notice-paste-title" title={report ? '单据号勾选结果' : '粘贴单据号勾选'} closing={closing}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-dialog notice-paste-dialog" titleId="notice-paste-title" requestClose={closing.requestClose}><DialogContents titleId="notice-paste-title" title={report ? '单据号勾选结果' : '粘贴单据号勾选'} closing={closing}>
     {!report ? <form className="dialog-form" onSubmit={event => { event.preventDefault(); void match(); }}>
       <div className="dialog-body">
         <label>单据号<textarea aria-label="单据号" autoFocus rows={7} value={raw} disabled={busy} placeholder="从 Excel 复制单据号列，粘贴到这里" onChange={event => setRaw(event.target.value)} /></label>

@@ -97,7 +97,7 @@ export function NoticeDeleteDialog({ row, blocked, close, refresh, announce }: {
   const titleId = 'notice-maintenance-title';
   return <BusinessModal open={!blocked} className="project-dialog notice-dialog" titleId={titleId} requestClose={closing.requestClose}>
     <DialogContents title="删除手动通知书" titleId={titleId} closing={closing}>
-      <form onSubmit={event => { event.preventDefault(); void remove(); }}>
+      <form className="dialog-form" onSubmit={event => { event.preventDefault(); void remove(); }}>
         <p>{row.bill_no}，{row.bill_name}，{row.project_display}</p>
         {query.isPending && <p role="status">正在读取…</p>}
         {query.isError && <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重试读取</Button></p>}
