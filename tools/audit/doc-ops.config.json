@@ -6,9 +6,7 @@
     "worktree_root": "../worktrees/mtrl-workbench"
   },
   "links": {
-    "exclude_sources": {
-      ".scratch/share-feasibility/research.md": "用户具名保留的历史研究，引用 2026-10-28 当时的本机依赖和验证输出。"
-    }
+    "exclude_sources": {}
   },
   "entry": {
     "status_path": "docs/status.md",

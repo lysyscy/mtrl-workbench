@@ -1,6 +1,6 @@
 # 油卡管理
 
-油卡功能已正式加载，本页持有当前业务规则，术语归[油卡术语](../../GLOSSARY.md#油卡)。旧台账首次正式接续已完成，写入回执和恢复入口归[TAIL-474](../../.scratch/tails/issues/TAIL-474-油卡旧台账核对与正式接续.md)，当前运行状态回[项目状态](../status.md)。
+油卡功能已正式加载，本页持有当前业务规则，术语归[油卡术语](../../GLOSSARY.md#油卡)。旧台账首次正式接续已完成，写入回执和恢复入口见[TAIL-474 历史记录](https://github.com/lysyscy/mtrl-workbench/blob/c2bc8047a276f24c99750f2bc3c21167aadee10c/.scratch/tails/issues/TAIL-474-%E6%B2%B9%E5%8D%A1%E6%97%A7%E5%8F%B0%E8%B4%A6%E6%A0%B8%E5%AF%B9%E4%B8%8E%E6%AD%A3%E5%BC%8F%E6%8E%A5%E7%BB%AD.md)，当前运行状态回[项目状态](../status.md)。
 
 ## 管理范围
 
