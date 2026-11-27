@@ -187,3 +187,17 @@ test('static guard: all BusinessModal layout props use one of compact | scroll-b
   }
   assert.deepEqual(violations, [], violations.join('\n'));
 });
+
+test('surfaces leave edge focus rings visible and modal sections need no reset', () => {
+  const surface = /\.wb-surface(?![\w-])/;
+  const sheets = readSrcFiles('.css');
+  assert.match(sheets.find(file => file.name === 'ui.css').text, surface);
+  for (const { name, text } of sheets) {
+    const css = stripCssComments(text);
+    if (name === 'business-modal.css') assert.doesNotMatch(css, /(?:^|[\s>+~])section\s*\{/m);
+    for (const [, selector, declarations] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!surface.test(selector)) continue;
+      assert.doesNotMatch(declarations, /\boverflow(?:-[\w-]+)?\s*:\s*(?:hidden|clip)\b/, name);
+    }
+  }
+});

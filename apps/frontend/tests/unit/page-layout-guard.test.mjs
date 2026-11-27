@@ -97,3 +97,23 @@ test('bounded page tables use BoundedGrid and keep scrolling inside the grid', (
 test('process matrices use the page height budget without subtracting assumed chrome', () => {
   assert.doesNotMatch(css('process.css'), /100dvh\s*-\s*104px/);
 });
+
+test('split panes stack when the content container reaches 780px', () => {
+  const layout = css('page-layout.css');
+  assert.match(layout, /\.page-shell--split\s*\{[^{}]*container-type:\s*inline-size/);
+  assert.match(layout, /@container\s*\(\s*max-width:\s*780px\s*\)\s*\{\s*\.page-split-panels\s+\.wb-split-grid\s*\{[^{}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+});
+
+test('native table markup opts into sticky column headers', () => {
+  const tableCounts = new Map([
+    ['equipment-dialogs.tsx', 1],
+    ['history-details.tsx', 1],
+    ['oilcard-receive-detail.tsx', 2],
+  ]);
+  for (const file of readdirSync(src).filter(name => name.endsWith('.tsx'))) {
+    const tables = [...read(file).matchAll(/<table\b[^>]*>/g)];
+    assert.equal(tables.length, tableCounts.get(file) ?? 0, file);
+    for (const [tag] of tables) assert.match(tag, /\bclassName="[^"]*\bwb-native-table\b/, file);
+  }
+  assert.match(css('style.css'), /\.wb-native-table thead th\s*\{[^{}]*position:\s*sticky/);
+});
