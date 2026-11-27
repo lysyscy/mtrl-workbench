@@ -1,6 +1,8 @@
 """本机备份发布前必须校验；失败或坏档不能冒充完整备份。"""
 import importlib.util
+from contextlib import nullcontext
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -11,6 +13,24 @@ backup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup)
 URLS = {'development': 'postgresql://fixture:dummy@127.0.0.1/dev',
         'test': 'postgresql://fixture:dummy@127.0.0.1/test'}
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows service registration')
+def test_default_cli_follows_postgres_when_service_image_moves(monkeypatch, tmp_path):
+    import winreg
+
+    config = {'mtrl-workbench-server': {'DependOnService': ['postgresql-x64-fixture']},
+              'postgresql-x64-fixture': {}}
+    monkeypatch.setattr(winreg, 'OpenKey', lambda _, path: nullcontext(config[Path(path).name]))
+    monkeypatch.setattr(winreg, 'QueryValueEx', lambda key, name: (key[name], winreg.REG_SZ))
+    monkeypatch.setattr(sys, 'argv', ['backup_databases.py', '--verify', str(tmp_path)])
+    selected = []
+    monkeypatch.setattr(backup, 'verify_backup', lambda folder, pg_bin: selected.append(pg_bin))
+    bins = [tmp_path / 'old' / 'bin', tmp_path / 'new install' / 'bin']
+    for pg_bin in bins:
+        config['postgresql-x64-fixture']['ImagePath'] = f'"{pg_bin / "pg_ctl.exe"}" runservice'
+        assert backup.main() == 0
+    assert selected == bins
 
 
 def test_backup_publishes_only_verified_archives_and_detects_corruption(tmp_path, monkeypatch):

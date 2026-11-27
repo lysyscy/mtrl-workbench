@@ -16,6 +16,29 @@ from sqlalchemy.engine import make_url
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def registered_pg_bin() -> Path:
+    import winreg
+    from win32api import CommandLineToArgv
+
+    services = r'SYSTEM\CurrentControlSet\Services'
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, services + r'\mtrl-workbench-server') as app:
+        dependencies, _ = winreg.QueryValueEx(app, 'DependOnService')
+    pg_services = [name for name in dependencies if name.lower().startswith('postgresql-')]
+    if len(pg_services) != 1:
+        raise ValueError('Expected one PostgreSQL service dependency for mtrl-workbench-server')
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, services + '\\' + pg_services[0]) as pg:
+        image, kind = winreg.QueryValueEx(pg, 'ImagePath')
+    if kind == winreg.REG_EXPAND_SZ:
+        image = winreg.ExpandEnvironmentStrings(image)
+    argv = CommandLineToArgv(image)
+    if len(argv) < 2 or argv[1].lower() != 'runservice':
+        raise ValueError('Expected a PostgreSQL runservice command')
+    pg_ctl = Path(argv[0])
+    if not pg_ctl.is_absolute() or pg_ctl.name.lower() != 'pg_ctl.exe':
+        raise ValueError('Expected an absolute PostgreSQL pg_ctl.exe service path')
+    return pg_ctl.parent
+
+
 def _run(exe: Path, args: list[str], env: dict | None = None) -> bytes:
     result = subprocess.run([str(exe), *args], env=env, capture_output=True, timeout=600)
     if result.returncode:
@@ -69,21 +92,22 @@ def backup_databases(urls: dict[str, str], pg_bin: Path, output: Path) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--pg-bin', type=Path, required=True)
+    parser.add_argument('--pg-bin', type=Path, help='手工指定工具目录；默认从工作台依赖的 PostgreSQL 服务读取')
     parser.add_argument('--output', type=Path, default=ROOT / 'var/backups/databases')
     parser.add_argument('--verify', type=Path, help='只读核对一份已完成备份')
     args = parser.parse_args()
     try:
+        pg_bin = args.pg_bin or registered_pg_bin()
         if args.verify:
-            verify_backup(args.verify, args.pg_bin)
+            verify_backup(args.verify, pg_bin)
             print('Backup archive and checksums verified')
         else:
             sys.path.insert(0, str(ROOT / 'backend'))
             from app.core.config import get_settings
             settings = get_settings()
             saved = backup_databases({'development': settings.database_url,
-                                      'test': settings.test_database_url}, args.pg_bin, args.output)
-            receipt = {'ok': True, 'backup': str(saved), 'checked': datetime.now().astimezone().isoformat()}
+                                      'test': settings.test_database_url}, pg_bin, args.output)
+            receipt = {'ok': True, 'backup': str(saved), 'pg_bin': str(pg_bin), 'checked': datetime.now().astimezone().isoformat()}
             print(saved)
     except Exception as error:
         print(f'Backup failed ({type(error).__name__}); previous backups retained', file=sys.stderr)
