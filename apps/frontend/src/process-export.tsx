@@ -14,7 +14,7 @@ export function ProcessExport({projects,current,tab,paused,reason}:{projects:Pro
   const chosen=(selected??[current]).filter(key=>projects.some(p=>p.warehouse_name===key));
   const state=useRef({paused,reason,tab});state.current={paused,reason,tab};
   const close=()=>{setOpen(false);requestAnimationFrame(()=>trigger.current?.focus());};
-  const closing=useDialogClose({busy,dirty:false,close,active:open&&!paused});
+  const closing=useDialogClose({busy,dirty:false,close,open,active:!paused});
   useEffect(()=>{if(paused){request.current?.abort();setOpen(false);}},[paused]);
   useEffect(()=>()=>request.current?.abort(),[]);
   async function download() {

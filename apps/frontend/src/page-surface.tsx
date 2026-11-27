@@ -40,7 +40,7 @@ export function PageSurface({ active, direction, position, title, children }: { 
         complete.current = true; setReady(true); observer.disconnect(); unsubscribe();
       } catch (failure) {
         if (!disposed) {
-          setError(failure instanceof Error ? failure.message : '字体加载失败，请重试。');
+          setError(failure instanceof Error ? failure.message : '页面准备失败，请重新加载。');
           observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame);
         }
         preparing = false;
@@ -53,7 +53,7 @@ export function PageSurface({ active, direction, position, title, children }: { 
     return () => { disposed = true; observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame); };
   }, [active, client]);
   return <>
-    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton>}</div>}
+    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <WorkspaceReloadButton>重新加载页面</WorkspaceReloadButton>}</div>}
     <motion.div ref={root} className="page-view" hidden={!active} inert={!active || !ready} aria-hidden={active ? undefined : true}
       initial={{ opacity: 0, y: reduced ? 0 : direction * 18, visibility: 'hidden' }}
       animate={active && ready ? { opacity: 1, y: 0, visibility: 'visible' } : { opacity: 0, y: reduced ? 0 : (position || direction) * 18, transitionEnd: { visibility: 'hidden' } }}

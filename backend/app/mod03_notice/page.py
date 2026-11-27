@@ -110,13 +110,9 @@ def nav_violations() -> list[str]:
 #    （中性档 `--in-*` / 特殊档 `--vi-*` / 侧栏 `--sb-*` / 阴影 `--shadow-*` / 几何与字体
 #    `--r` `--r2` `--fs` `--fm`）**一并收进本表** ⇒ 壳此后**零本地变量定义**（只有一条 `<link>`）。
 #    ⛔ 再往壳里写色值字面量或自带 `:root` ⇒ `test_theme.py` 的红灯（已扫壳）。
-FONT_CSS = """
-@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Regular.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
-@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Medium.woff2') format('woff2');font-style:normal;font-weight:500;font-display:swap}
-@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Semibold.woff2') format('woff2');font-style:normal;font-weight:600;font-display:swap}
-"""
+FONT_CSS = "@import url('/static/fonts/misans-web.css');\n"
 
-THEME_CSS = """
+THEME_CSS = FONT_CSS + """
 :root{
   /* 中性 / 表面 */
   --bg:#f4f6f9; --sf:#fff; --sf2:#f8fafc; --sf3:#f4f4f5;
@@ -154,7 +150,6 @@ THEME_CSS = """
   --fm:var(--fs);
 }
 """
-THEME_CSS += FONT_CSS
 
 # ============================================================ 多主题（《说明书》§7.7）
 # ⭐ 用户 2026-09-20 定：预置主题清单**≥10 套**（"换着玩"）。
@@ -765,7 +760,7 @@ def render_theme(name: str) -> str:
             f"主题「{name}」缺变量 {missing} —— §7.7：每套必须覆盖同一组变量名，缺项即显式报错"
             "（⛔ 不得静默沿用旧值）")
     body = "\n".join(f"  {k}:{v[k]};" for k in _var_names())
-    return ":root{\n" + body + "\n}\n" + FONT_CSS
+    return FONT_CSS + ":root{\n" + body + "\n}\n"
 
 
 def _var_names() -> list[str]:

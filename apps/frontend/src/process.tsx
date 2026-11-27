@@ -162,7 +162,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   }
   const disabled=blocked||!active||!me||uncertain||query.isError||projects.isError;
   const paused=blocked||!active;
-  const closing=useDialogClose({busy,dirty:false,close:()=>setSource(null),active:Boolean(source)&&active});
+  const closing=useDialogClose({busy,dirty:false,close:()=>setSource(null),open:Boolean(source),active});
   const matrix=query.data?.matrices[warehouse],kind=tab===0?'raw':'adjusted',scale=Number(me?.ui_scale_css??1);
   const displayRows=useMemo(()=>{
     const rows=matrix?.[kind]??[];

@@ -3,14 +3,17 @@ import { useContext, useId, useRef, useState } from 'react';
 import { BusinessModalTitle } from './business-modal';
 import { useHistoryGuard } from './history';
 import type { ComponentProps, MouseEvent, ReactNode, SyntheticEvent } from 'react';
-import { useIsPresent } from 'motion/react';
 
-export function useDialogClose({ busy, dirty, close, beforeRequestClose, active = true }: {
-  busy: boolean; dirty: boolean; close: () => void; beforeRequestClose?: () => void; active?: boolean;
+export function useDialogClose({ busy, dirty, close, beforeRequestClose, active = true, open = true }: {
+  busy: boolean; dirty: boolean; close: () => void; beforeRequestClose?: () => void; active?: boolean; open?: boolean;
 }) {
   const id = useId();
-  const present = useIsPresent();
-  useHistoryGuard(id, () => !active || !present ? '' : busy ? '正在处理操作，请稍候。' : dirty ? '有未保存输入，请先处理。' : '');
+  // Most editors mount when opened. A retained open editor still owns its draft
+  // after the user changes pages. Only a document reload would discard it.
+  useHistoryGuard(id, action => {
+    if (!open || (action === 'history' && !active)) return '';
+    return busy ? '正在处理操作，请稍候。' : dirty ? '有未保存输入，请先处理。' : '';
+  });
   const [confirming, setConfirming] = useState(false);
   const previousFocus = useRef<HTMLElement | null>(null);
   function requestClose() {

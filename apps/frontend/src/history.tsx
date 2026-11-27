@@ -28,24 +28,26 @@ export function HistoryGate({ children }: { children: ReactNode }) {
   const { busy, uncertain } = useHistoryState();
   return <div className="history-gate" inert={busy || uncertain} aria-busy={busy}>{children}</div>;
 }
-const Guards = createContext<Map<string, () => string> | null>(null);
-function guardReason(guards: Map<string, () => string> | null) {
-  for (const reason of guards?.values() ?? []) { const text = reason(); if (text) return text; }
+type GuardAction = 'history' | 'reload';
+type Guard = (action: GuardAction) => string;
+const Guards = createContext<Map<string, Guard> | null>(null);
+function guardReason(guards: Map<string, Guard> | null, action: GuardAction) {
+  for (const reason of guards?.values() ?? []) { const text = reason(action); if (text) return text; }
   return '';
 }
-export function useHistoryProtection() {
+export function useReloadProtection() {
   const guards = useContext(Guards);
   const { busy, uncertain } = useHistoryState();
-  return () => busy ? '操作历史正在处理，请稍候。' : uncertain ? '操作历史结果待核实，请先重读核对。' : guardReason(guards);
+  return () => busy ? '操作历史正在处理，请稍候。' : uncertain ? '操作历史结果待核实，请先重读核对。' : guardReason(guards, 'reload');
 }
-export function useHistoryGuard(name: string, reason: () => string) {
+export function useHistoryGuard(name: string, reason: Guard) {
   const guards = useContext(Guards), id = useId(), present = useIsPresent();
   const current = useRef(reason); current.current = present ? reason : () => '';
-  useEffect(() => { const key = `${name}:${id}`; guards?.set(key, () => current.current()); return () => { guards?.delete(key); }; }, [guards, name, id]);
+  useEffect(() => { const key = `${name}:${id}`; guards?.set(key, action => current.current(action)); return () => { guards?.delete(key); }; }, [guards, name, id]);
 }
 export function HistoryScope({ children, workspaceGuard = '' }: { children: ReactNode; workspaceGuard?: string }) {
   const currentWorkspaceGuard = useRef(workspaceGuard); currentWorkspaceGuard.current = workspaceGuard;
-  const [guards] = useState(() => new Map<string, () => string>([['workspace', () => currentWorkspaceGuard.current]]));
+  const [guards] = useState(() => new Map<string, Guard>([['workspace', () => currentWorkspaceGuard.current]]));
   const [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false);
   const state = useMemo(() => ({ busy, uncertain, setBusy, setUncertain }), [busy, uncertain]);
   return <ReplayState.Provider value={state}><Guards.Provider value={guards}>{children}</Guards.Provider></ReplayState.Provider>;
@@ -59,14 +61,14 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
   const [feedback, setFeedback] = useState('');
   const [confirmation, setConfirmation] = useState<{ direction: 'undo' | 'redo'; item: HistoryItem; details: HistoryDetails } | null>(null);
   // Replay has its own lock; a page guard for this modal would block its confirmation.
-  const closing = useDialogClose({ busy, dirty: false, close: () => setConfirmation(null), active: false });
+  const closing = useDialogClose({ busy, dirty: false, close: () => setConfirmation(null), open: Boolean(confirmation), active: false });
   const lock = useRef(false), alive = useRef(true), request = useRef<AbortController | null>(null);
   const state = useRef({ me, blocked, guard }); state.current = { me, blocked, guard };
   useEffect(() => { alive.current = true; return () => { alive.current = false; request.current?.abort(); }; }, []);
   function protectedReason(ownConfirmation = false) {
     if (!state.current.me || state.current.blocked) return '当前账号暂不能操作。';
     if (state.current.guard) return state.current.guard;
-    const reason = guardReason(guards); if (reason) return reason;
+    const reason = guardReason(guards, 'history'); if (reason) return reason;
     const dialogs = document.querySelectorAll('.ant-modal-wrap:not([style*="display: none"]):not(.business-modal-leaving *),dialog[open]');
     if ([...dialogs].some(dialog => !ownConfirmation || !dialog.querySelector('.history-confirm-dialog'))) return '请先关闭弹窗。';
     return '';

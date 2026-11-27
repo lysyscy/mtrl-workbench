@@ -46,7 +46,8 @@ def test_font_retry_preserves_retained_draft(server, browser_page, disposable, f
           window.__fontRecoveryCalls.push({font, length:text?.length ?? 0, pageGlyphs, shellGlyphs, selected});
         }
         if (selected && window.__fontRecoveryBlocked) {
-          const face = window.__fontRecoveryFailure ??= new FontFace('RecoveryFailureProbe', new Uint8Array([0, 1, 2, 3]).buffer);
+          const face = window.__fontRecoveryFailure ??= new FontFace('MiSans', 'url(data:font/woff2;base64,AAECAw==)', {unicodeRange:'U+E000'});
+          document.fonts.add(face);
           try { await face.load(); }
           finally { window.__fontRecoveryFaceStatus = face.status; }
         }
@@ -64,6 +65,8 @@ def test_font_retry_preserves_retained_draft(server, browser_page, disposable, f
         pytest.fail(f'{failure_scope} font failure was not exposed: '
                     f'{page.evaluate("window.__fontRecoveryCalls")}', pytrace=False)
     assert page.evaluate('window.__fontRecoveryFaceStatus') == 'error'
+    expect(page.locator('.workspace')).not_to_have_attribute('inert', '')
+    expect(page.locator('.page-view:not([hidden])')).to_be_visible()
     # Keep the controlled failure present until the user's actual retry click;
     # PageSurface can revisit the dependency after a query-cache notification.
     retry.evaluate("button => button.addEventListener('click', () => { window.__fontRecoveryBlocked = false; }, {once:true})")
@@ -93,22 +96,27 @@ def test_font_retry_respects_replay_in_flight_and_unknown(server, browser_page):
     """Exercise the real scoped reload guard with controlled replay state."""
     page, _ = browser_page
     source = """
-import {createElement as h} from 'react';
+import {createElement as h, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {HistoryScope, useHistoryState} from '__HISTORY__';
 import {WorkspaceReloadButton} from '__PAGE_ERROR__';
+import {useDialogClose} from '__DIALOG_CLOSE__';
 
 window.specimenDocument = crypto.randomUUID();
 function ReplayStateControls() {
   const {setBusy, setUncertain} = useHistoryState();
-  return h('div', null, ['busy', 'uncertain', 'idle'].map(state => h('button', {
+  const [open,setOpen] = useState(false);
+  // The same mounted component can retain old input after the user closes it.
+  useDialogClose({active:false, open, dirty:true, busy:false, close:()=>setOpen(false)});
+  return h('div', null, ['busy', 'uncertain', 'retained', 'idle'].map(state => h('button', {
     key: state,
-    onClick: () => {setBusy(state === 'busy'); setUncertain(state === 'uncertain');}
+      onClick: () => {setBusy(state === 'busy'); setUncertain(state === 'uncertain'); setOpen(state === 'retained');}
   }, state)), h(WorkspaceReloadButton, null, '重试字体加载'));
 }
 createRoot(document.getElementById('probe')).render(h(HistoryScope, null, h(ReplayStateControls)));
 """.replace('__HISTORY__', (FRONTEND / 'src/history.tsx').as_posix()).replace(
-        '__PAGE_ERROR__', (FRONTEND / 'src/page-error.tsx').as_posix())
+        '__PAGE_ERROR__', (FRONTEND / 'src/page-error.tsx').as_posix()).replace(
+        '__DIALOG_CLOSE__', (FRONTEND / 'src/dialog-close.tsx').as_posix())
     bundle = bundle_browser_specimen(source)
     # This page renders only the production guard and its context, with no
     # business requests. Reload still replaces the real browser document.
@@ -121,7 +129,7 @@ createRoot(document.getElementById('probe')).render(h(HistoryScope, null, h(Repl
     original_document = page.evaluate('window.specimenDocument')
     assert original_document
     retry = page.get_by_role('button', name='重试字体加载', exact=True)
-    for state, reason in [('busy', '操作历史正在处理'), ('uncertain', '操作历史结果待核实')]:
+    for state, reason in [('busy', '操作历史正在处理'), ('uncertain', '操作历史结果待核实'), ('retained', '未保存')]:
         page.get_by_role('button', name=state, exact=True).click()
         retry.click()
         expect(page.get_by_role('status')).to_contain_text(reason)
@@ -131,3 +139,24 @@ createRoot(document.getElementById('probe')).render(h(HistoryScope, null, h(Repl
     retry.click()
     page.wait_for_function('original => window.specimenDocument && window.specimenDocument !== original',
                            arg=original_document)
+
+
+def test_font_retry_preserves_hidden_contract_supplier(server, browser_page, disposable):
+    page, _ = browser_page
+    login(page, server)
+    page.get_by_role('link', name='集采台账', exact=True).click()
+    page.get_by_role('button', name='手工新增合同').click()
+    supplier = page.get_by_role('textbox', name='供应商', exact=True)
+    supplier.fill('字体恢复验证供应商')
+    page.go_back()
+    expect(page.locator('#page-title')).to_have_text('项目档案')
+    page.evaluate("""async () => {
+      const face = new FontFace('MiSans', 'url(data:font/woff2;base64,AAECAw==)', {unicodeRange:'U+E000'});
+      document.fonts.add(face);
+      await face.load().catch(() => {});
+    }""")
+    retry = page.get_by_role('button', name='重试字体加载', exact=True)
+    retry.click()
+    expect(retry.locator('..').get_by_role('status')).to_contain_text('未保存')
+    page.get_by_role('link', name='集采台账', exact=True).click()
+    expect(supplier).to_have_value('字体恢复验证供应商')

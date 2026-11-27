@@ -3,13 +3,22 @@ import type { Identity } from './api';
 let applied: string | undefined;
 
 export async function loadTextFonts(text: string, weights: readonly number[] = [400, 500, 600]) {
-  const chars = [...new Set(text)].join('');
-  if (!chars) return;
-  try {
-    await Promise.all(weights.map(weight => document.fonts.load(`${weight} 14px MiSans`, chars)));
-  } catch {
-    throw new Error('字体加载失败，请重试。');
-  }
+  const chars = [...new Set(text)];
+  if (!chars.length) return;
+  const sample = chars.join('');
+  await Promise.all(weights.map(async weight => {
+    const font = `${weight} 14px MiSans`;
+    try {
+      await document.fonts.load(font, sample);
+    } catch {
+      // One failed shard rejects the whole sample while its other shards can still
+      // be loading. Settle only the remaining glyphs this view needs before measuring.
+      if (document.fonts.status === 'loading') {
+        const pending = chars.filter(char => !document.fonts.check(font, char));
+        await Promise.allSettled(pending.map(char => document.fonts.load(font, char)));
+      }
+    }
+  }));
 }
 
 export async function prepareAppearance(me: Identity | null, signal: AbortSignal) {

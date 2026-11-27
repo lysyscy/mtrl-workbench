@@ -38,17 +38,24 @@ def test_font_assets_and_license_are_public_and_revalidated():
 
 
 
-def test_react_subsets_are_local_and_unknown_font_paths_are_rejected():
+def test_login_and_react_use_local_subsets_and_full_font_fallback():
     import hashlib
     import json
     from app.mod03_notice.theme_react import render_react_theme
 
     manifest = json.loads((FONTS / 'misans-web/manifest.json').read_text(encoding='utf-8'))
-    assert render_react_theme('松绿').startswith("@import url('/static/fonts/misans-web.css');")
+    stylesheet = "@import url('/static/fonts/misans-web.css');"
+    assert 'href="/static/theme.css"' in login_html()
+    for theme in ['默认', '松绿']:
+        for css in [render_theme(theme), render_react_theme(theme)]:
+            assert css.startswith(stylesheet)
+            assert '@font-face' not in css
     with TestClient(create_app(), client=('127.0.0.1', 50123)) as client:
         css = client.get('/static/fonts/misans-web.css')
         assert css.status_code == 200 and css.content == (FONTS / 'misans-web.css').read_bytes()
         assert 'https://' not in css.text
+        for weight in ['Regular', 'Medium', 'Semibold']:
+            assert f"/static/fonts/MiSans-{weight}.woff2" in css.text
         assert client.get('/static/fonts/misans-web.css', headers={'If-None-Match': css.headers['etag']}).status_code == 304
         for weight in ['400', '500', '600']:
             files = [f for f in manifest['unmodified_official_subsets'] if f['file'].startswith(weight + '-')]

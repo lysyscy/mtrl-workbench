@@ -71,11 +71,16 @@ def test_font_failure_has_retry_and_theme_is_not_reloaded_after_identity(server,
     page.on('request',lambda request: theme.append(request.url) if '/static/theme.css' in request.url else None)
     context.route('**/static/fonts/**/*.woff2',lambda route:route.abort('failed'))
     page.goto(server + '/preview/notices')
-    expect(page.locator('.page-loading[role=alert]')).to_contain_text('字体')
+    notice = page.get_by_role('alert').filter(has_text='部分字体未能加载')
+    expect(notice).to_be_visible()
+    table = page.get_by_role('region',name='付款通知书列表',exact=True)
+    expect(table).to_be_visible()
+    expect(page.locator('.workspace')).not_to_have_attribute('inert', '')
     context.unroute('**/static/fonts/**/*.woff2')
     assert len(theme)==1, theme
-    page.get_by_role('button',name='重试字体加载',exact=True).click()
-    expect(page.get_by_role('region',name='付款通知书列表',exact=True)).to_be_visible()
+    notice.get_by_role('button',name='重试字体加载',exact=True).click()
+    expect(table).to_be_visible()
+    expect(notice).to_have_count(0)
     assert len(theme)==2, theme
 
 
