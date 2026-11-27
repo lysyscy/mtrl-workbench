@@ -8,6 +8,7 @@ import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
+import { contentWidth } from './grid';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
@@ -102,8 +103,8 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
     revealRule(next);
   }
 
-  return <section className="wb-surface rules-page page-shell page-shell--flow" data-page-layout="flow" aria-label="规则配置" data-page-chrome>
-    <div className="rules-navigation">
+  return <section className="wb-surface rules-page wb-flow-width page-shell page-shell--flow" data-page-layout="flow" aria-label="规则配置" data-page-chrome>
+    <div className="rules-navigation wb-toolbar">
       <nav className="rules-tabs" aria-label="规则所属业务">
         {(Object.keys(ruleTabs) as RulePage[]).map(tab =>
           <Button key={tab} aria-current={page === tab ? 'page' : undefined} onClick={() => selectTab(tab)}>{ruleTabs[tab]}</Button>)}
@@ -115,7 +116,7 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
     </div>
     <div hidden={page !== 'notice'}>
       <PageActivity.Provider value={enabled && page === 'notice'}>
-        <ExclusionRules query={notice} writable={writable && page === 'notice'} blocked={!enabled || page !== 'notice'}
+        <ExclusionRules query={notice} writable={writable && page === 'notice'} blocked={!enabled || page !== 'notice'} scale={Number(me?.ui_scale_css) || 1}
           selected={location?.page === 'notice' ? location.id : null}
           onPublished={() => { if (location?.page === 'notice') revealRule(location); }} />
       </PageActivity.Provider>
@@ -136,18 +137,19 @@ export function RulesPage({ me, blocked, active }: { me: Identity | null; blocke
         {keyword && !notice.isFetching && !procurement.isFetching && !notice.isError && !procurement.isError && matches.length === 0 && <p className="state">没有匹配的规则</p>}
         {matches.length > 0 && <ul className="rules-search-results">{matches.map(row => <li key={`${row.page}-${row.id}`}>
           <button type="button" onClick={() => locate(row)}>
-            <span className="muted">{ruleTabs[row.page]} › {headings[row.page]}</span>
+            <span className="rules-search-source">{ruleTabs[row.page]} › {headings[row.page]}</span>
             <strong>{row.condition}</strong>
             {row.meaning && <span>{row.meaning}</span>}
           </button>
         </li>)}</ul>}
+        <div className="dialog-actions"><Button htmlType="button" onClick={searchClose.requestClose}>关闭</Button></div>
       </DialogContents>
     </BusinessModal>}</DialogPresence>
   </section>;
 }
 
-function ExclusionRules({ query, writable, blocked, selected, onPublished }: {
-  query: UseQueryResult<RulesData, Error>; writable: boolean; blocked: boolean;
+function ExclusionRules({ query, writable, blocked, scale, selected, onPublished }: {
+  query: UseQueryResult<RulesData, Error>; writable: boolean; blocked: boolean; scale: number;
   selected: number | null; onPublished: () => void;
 }) {
   const [form, setForm] = useState<RuleDraft | null>(null);
@@ -282,13 +284,13 @@ function ExclusionRules({ query, writable, blocked, selected, onPublished }: {
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
     {data && <>
       <Feedback receipt={confirmedReadFailed ? '' : receipt} error={error} />
-      <BoundedGrid maxHeight="52dvh" minRows={4} table="exclusion-rules" className="rules-table" label="剔除规则列表" rows={data.rules} rowId={rule=>String(rule.id)} columns={[
-        {field:'kindLabel',headerName:'规则类别',cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
+      <BoundedGrid maxHeight="52dvh" minRows={4} table="exclusion-rules" className="rules-table" label="剔除规则列表" rows={data.rules} rowId={rule=>String(rule.id)} scale={scale} columns={[
+        {field:'kindLabel',headerName:'规则类别',...contentWidth(168,220,scale),cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
           {rule.kindLabel}<span className="rules-match-kind">{rule.kind === 'bill_name' ? '包含' : '精确'}</span>
         </div>},
-        {field:'values',headerName:'命中值',cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
-        {field:'meaning',headerName:'剔除的业务含义',valueFormatter:p=>p.value||'—'},
-        {colId:'actions',headerName:'操作',minWidth:140,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
+        {field:'values',headerName:'命中值',minWidth:280*scale,initialFlex:2,suppressAutoSize:true,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
+        {field:'meaning',headerName:'剔除的业务含义',minWidth:196*scale,initialFlex:1,suppressAutoSize:true,valueFormatter:p=>p.value||'—'},
+        {colId:'actions',headerName:'操作',...contentWidth(140,180,scale),cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
       ]}/>
     </>}</FirstReadRegion>
     <DialogPresence>{draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>

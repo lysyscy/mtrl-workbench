@@ -1,5 +1,6 @@
 """项目写后历史头协调：只写disposable中的合成项目/账号。"""
 from uuid import uuid4
+import re
 import time
 
 from playwright.sync_api import expect, Error as PlaywrightError
@@ -80,7 +81,7 @@ def test_old_account_history_read_cannot_restore_old_head_after_switch(server, b
     other='__history_'+uuid4().hex
     assert api.post('/api/m15/actions/create',json={'account':other,'name':'合成切换账号','password':''}).json()['ok']
     row=synthetic(api);page,_=browser_page;login(page,server);expect(undo(page)).to_be_disabled()
-    expect(page.locator('.history-tools [role=status]')).to_contain_text('不支持撤销')
+    expect(undo(page)).to_have_attribute('title', re.compile('不支持撤销'))
     held=[]
     def hold_first(route):
         if held:

@@ -7,6 +7,7 @@ import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { DialogPresence } from './workspace-motion';
 import { BusinessGrid, ReadGrid } from './business-grid';
+import { estimateBoundedGridHeight } from './bounded-grid-layout';
 import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { readProjectPending, readProjectTrails } from './project-maintenance-reads';
 import type { Pending, Trail } from './project-maintenance-reads';
@@ -55,6 +56,37 @@ function OrderInput({ project, disabled, move }: { project: ArchiveProject; disa
 type EditableField = 'name_full' | 'disp' | 'match_keywords';
 type ProjectDraft = { value: string; error: string; pending: boolean; uncertain: boolean };
 const fieldKey = (id: number, field: EditableField) => `${id}:${field}`;
+const editableColumns: Partial<Record<string, EditableField>> = { disp: 'disp', name_full: 'name_full', keywords: 'match_keywords' };
+
+function measureProjectGridHeight(api: GridApi<ArchiveProject>, page: HTMLElement) {
+  const grid = api.getGridElement();
+  const header = grid?.querySelector<HTMLElement>('.ag-header');
+  const body = grid?.querySelector<HTMLElement>('.ag-grid-scrolling-container');
+  const horizontal = grid?.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
+  if (!header || !body || !horizontal) return;
+
+  const update = () => {
+    const last = api.getDisplayedRowAtIndex(api.getDisplayedRowCount() - 1);
+    if (last?.rowTop == null || last.rowHeight == null || !header.offsetHeight) return;
+    const scrollbar = horizontal.classList.contains('ag-invisible') ? 0 : horizontal.offsetHeight;
+    const height = Math.ceil(header.offsetHeight + last.rowTop + last.rowHeight + scrollbar);
+    page.style.setProperty('--project-grid-measured-height', `${height}px`);
+  };
+
+  const observer = new ResizeObserver(update);
+  observer.observe(header);
+  observer.observe(horizontal);
+  const layout = new MutationObserver(update);
+  layout.observe(body, { attributes: true, attributeFilter: ['style'] });
+  layout.observe(horizontal, { attributes: true, attributeFilter: ['class'] });
+  api.addEventListener('gridPreDestroyed', () => {
+    observer.disconnect();
+    layout.disconnect();
+    page.style.removeProperty('--project-grid-measured-height');
+  });
+  update();
+}
+
 function ProjectField({ project, field, disabled, readDisabled, draft, changeDraft, save, reread }: {
   project: ArchiveProject; field: EditableField; disabled: boolean; readDisabled: boolean; draft: ProjectDraft | undefined;
   changeDraft: (draft: ProjectDraft | null) => void; save: (project: ArchiveProject, field: EditableField, value: string) => Promise<void>;
@@ -85,6 +117,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [statusEdit, setStatusEdit] = useState<{ id: number; value: Project['status'] } | null>(null), [statusErrors, setStatusErrors] = useState<Record<number,string>>({});
   const [drafts, setDrafts] = useState<Record<string, ProjectDraft>>({});
   const [inlineSaving, setInlineSaving] = useState(0);
+  const page = useRef<HTMLElement>(null);
   const lock = useRef(false), mounted = useRef(true), gridApi = useRef<GridApi<ArchiveProject> | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
@@ -189,8 +222,16 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     }, `已按显示顺序导出 ${ids.length} 个项目。`);
   }
   const scale=Number(me?.ui_scale_css)||1;
-  const gridState=useRef({all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal});
-  gridState.current={all,fieldInput,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal};
+  const gridState=useRef({all,fieldInput,drafts,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal});
+  gridState.current={all,fieldInput,drafts,statusEdit,statusErrors,unavailable,editableDisabled,pending:pending.data,changeStatus,move,setModal};
+  const measurement = useMemo(() => ({
+    signature: (row: ArchiveProject, column: string) => {
+      const state = gridState.current, field = editableColumns[column];
+      const draft = field && state.drafts[fieldKey(row.id, field)];
+      const error = column === 'status' ? state.statusErrors[row.id] : draft?.error;
+      return JSON.stringify([row, error, draft?.uncertain ?? false]);
+    },
+  }), []);
   useEffect(()=>{gridApi.current?.refreshCells({force:true});},[drafts,statusEdit,statusErrors,unavailable,editableDisabled]);
   useEffect(()=>{gridApi.current?.refreshCells({columns:['actions'],force:true});},[pending.data]);
   const phidWidth=fullTextWidth(all.map(p=>p.phid||'—'),scale).minWidth;
@@ -217,11 +258,26 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [listSettled, setListSettled] = useState(false);
   const [listPublished, setListPublished] = useState(false);
   const pendingSettled = [pending, archive].every(query => query.data !== undefined || query.isError);
-  return <section data-page-chrome className="wb-surface projects-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><OwnershipReturn params={params} />
+  const estimatedHeight = estimateBoundedGridHeight({ rowCount: projectsPlaceheld ? 8 : rows.length, scale });
+  const archiveHeight = `min(65dvh, var(--project-grid-measured-height, ${estimatedHeight}px))`;
+  return <section ref={page} data-page-chrome className="wb-surface projects-page page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="page-title"><OwnershipReturn params={params} />
     {!me && <p className="state">登录后可维护项目和导出。</p>}
-    <div className="project-tools">
-    <form className="filters" onSubmit={e => e.preventDefault()}><label>状态<Select aria-label="项目状态筛选" value={status} onChange={setStatus} options={[{value:'active',label:'在建'},{value:'archived',label:'归档'},{value:'all',label:'全部'}]}/></label><label>项目类型<Select aria-label="项目类型筛选" value={type} onChange={setType} options={[{value:'all',label:'全部'},...Object.entries(typeNames).map(([value,label])=>({value,label}))]}/></label><label className="search">项目<Input aria-label="项目搜索" type="search" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="全名、仓库名或展示名" /></label><Button htmlType="submit" onClick={() => { setStatus('active'); setType('all'); setKeyword(''); setSort(null); }}>重置</Button></form>
-    <div className="project-toolbar"><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'create' })}>+ 手工建档</Button><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'warehouses' })}>同步仓库名单</Button><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'common-projects' })}>同步常用项目列表</Button><Button htmlType="submit" className="primary" disabled={unavailable || !listPublished || !rows.length} onClick={() => void exportRows()}>导出 Excel</Button></div>
+    <div className="project-tools wb-toolbar">
+      <form className="filters wb-toolbar" onSubmit={e => e.preventDefault()}>
+        <label>状态<Select aria-label="项目状态筛选" value={status} onChange={setStatus}
+          options={[{value:'active',label:'在建'},{value:'archived',label:'归档'},{value:'all',label:'全部'}]}/></label>
+        <label>项目类型<Select aria-label="项目类型筛选" value={type} onChange={setType}
+          options={[{value:'all',label:'全部'},...Object.entries(typeNames).map(([value,label])=>({value,label}))]}/></label>
+        <label className="project-search">项目<Input aria-label="项目搜索" type="search" value={keyword}
+          onChange={e => setKeyword(e.target.value)} placeholder="全名、仓库名或展示名" /></label>
+        <Button htmlType="submit" onClick={() => { setStatus('active'); setType('all'); setKeyword(''); setSort(null); }}>重置</Button>
+      </form>
+      <div className="project-toolbar wb-toolbar">
+        <Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'create' })}>+ 手工建档</Button>
+        <Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'warehouses' })}>同步仓库名单</Button>
+        <Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'common-projects' })}>同步常用项目列表</Button>
+        <Button htmlType="submit" className="primary" disabled={unavailable || !listPublished || !rows.length} onClick={() => void exportRows()}>导出 Excel</Button>
+      </div>
     </div>
     {feedback && <p className="notice project-feedback" role="alert">{feedback}</p>}
     <ReadStatusLane phase={projectsRead} announce="正在读取项目…" className="project-read-status">
@@ -229,14 +285,18 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       {[pending, archive].map((query, index) => query.isError && <ReadFailure key={index} read={query} label={index === 0 ? '待人工指认' : '待人工建档'} />)}
     </ReadStatusLane>
     <FirstReadRegion phase={projectsPlaceheld ? projectsRead === 'error' ? 'error' : 'pending' : pendingSettled ? 'content' : 'pending'}
-      onSettledChange={setListSettled} onPublished={() => setListPublished(true)} placeholder={<div className="project-first-reserve read-reserve"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div>}>
+      onSettledChange={setListSettled} onPublished={() => setListPublished(true)} placeholder={<div className="project-first-reserve read-reserve" style={{height:`calc(${archiveHeight} + var(--project-count-height))`}}><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div>}>
     {[pending, archive].map((query, index) => {
       const label = index === 0 ? '待人工指认' : '待人工建档';
       if (!query.data?.items.length) return null;
       return <div className="project-pending" key={index}><h2>{label}</h2><p className="project-source">{query.data.source.target}，{query.data.source.at}</p>{query.data.items.map((item, i) => <div className="project-task" key={`${item.full_name}:${item.warehouse_name ?? i}`}><span>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</span><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: index === 0 ? 'promote' : 'archive', item })}>{index === 0 ? '选择档案扶正' : '选择仓库建档'}</Button></div>)}</div>;
     })}
-    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result">共 {rows.length} 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" style={{height:'65dvh'}} grid={{...drag.grid,
-      onGridReady: e => { gridApi.current = e.api; },
+    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result project-count">共 <strong>{rows.length}</strong> 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" measurement={measurement} style={{height:archiveHeight}} grid={{...drag.grid,
+      onGridReady: e => {
+        gridApi.current = e.api;
+        if (page.current) measureProjectGridHeight(e.api, page.current);
+      },
+      onGridPreDestroyed: () => { gridApi.current = null; },
       postSortRows: e => { e.nodes.sort((a, b) => Number(a.data?.status === 'archived') - Number(b.data?.status === 'archived')); },
       onSortChanged: e => { const column = e.api.getColumnState().find(c => c.sort); setSort(column ? { key: column.colId, descending: column.sort === 'desc' } : null); },
       getRowClass: p => p.data?.is_placeholder ? 'project-placeholder' : '',
@@ -309,7 +369,7 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
     }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
-  return <BusinessModal open={!blocked} layout={state.kind === 'delete' || state.kind === 'sync' ? 'scroll-body' : 'compact'} className={`project-dialog${state.kind === 'sync' ? ' project-sync-dialog' : ''}`} titleId="project-dialog-title" requestClose={closing.requestClose}><DialogContents titleId="project-dialog-title" title={title} closing={closing}><form className="dialog-form" onSubmit={e => { e.preventDefault(); if (cannot || waiting) return;
+  return <BusinessModal open={!blocked} layout={state.kind === 'delete' || state.kind === 'sync' ? 'scroll-body' : 'compact'} className="project-dialog project-maintenance-dialog" titleId="project-dialog-title" requestClose={closing.requestClose}><DialogContents titleId="project-dialog-title" title={title} closing={closing}><form className="dialog-form" onSubmit={e => { e.preventDefault(); if (cannot || waiting) return;
     if (state.kind === 'sync') void runWhenReady(choice => save(undefined, choice));
     else void save(); }}><div className="dialog-body">{p && <p>{label(p)}</p>}{item && <p>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</p>}
     {state.kind === 'create' && <><label>项目全名<Input aria-label="项目全名" autoFocus required value={full} disabled={busy} onChange={e => setFull(e.target.value)} /></label><label>展示名<Input aria-label="展示名" value={disp} disabled={busy} placeholder="留空取项目全名" onChange={e => setDisp(e.target.value)} /></label></>}

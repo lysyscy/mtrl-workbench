@@ -4,13 +4,14 @@
 
 * 通道停了而服务端还留着连接 ⇒ 页面必须显示未连接，并且抓取入口当场拦住；
 * 同一账号登录失效后，「取数方式」仍停在用户选过的浏览器方式；
-* 选了浏览器方式但连接不在 ⇒ 提交按钮不可用、一个请求都不发；
-* 直连方式 ⇒ 仍按原来的载荷走（`session_mode=http` + 原有强踢授权）；
+* 选了浏览器方式但连接不在 ⇒ 确认后尝试连接，失败时不发抓取请求或回退直连；
+* 主动选直连 ⇒ 发送原业务范围，遇到在线冲突须确认后才提交一次性令牌；
 * i8 执行记录首次读取/失败/重试：占位保持区域、不报零、失败后可重读。
 
 夹具与登录流程复用 `test_preview.py`（同一个已登记的预览，由主控在本机运行）。
 """
 
+from datetime import datetime, timezone
 import json
 import re
 
@@ -46,16 +47,6 @@ def json_route(payload, status=200):
     return lambda route: route.fulfill(status=status, content_type='application/json', body=body)
 
 
-def record_and_accept(bucket, payload, status=200):
-    """记下请求内容并正常回应，避免用例结束时还挂着未完成的请求。"""
-
-    def handler(route):
-        bucket.append(route.request.post_data_json)
-        route.fulfill(status=status, content_type='application/json', body=json.dumps(payload))
-
-    return handler
-
-
 def hold_and_record(bucket, status=500):
     """记下请求内容并回一个中立错误，避免把浏览器请求挂在半空。"""
 
@@ -78,11 +69,16 @@ def open_i8(page):
     expect(page.locator('#page-title')).to_have_text('i8 接入层')
 
 
-def choose_browser_mode(page):
-    open_i8(page)
-    item = page.locator('.i8-relay .ant-segmented-item').filter(has_text='浏览器已有会话')
+def select_mode(page, label):
+    item = page.locator('.i8-relay .ant-segmented-item').filter(has_text=label)
     item.click()
     expect(item).to_have_class(re.compile('ant-segmented-item-selected'))
+
+
+def choose_browser_mode(page):
+    open_i8(page)
+    select_mode(page, '工作台直连')
+    select_mode(page, '浏览器已有会话')
 
 
 def simulated_bridge(page, connects):
@@ -91,7 +87,7 @@ def simulated_bridge(page, connects):
       window.chrome ??= {};
       Object.defineProperty(window.chrome, 'runtime', {configurable:true, value:{
         sendMessage(_id, message, reply) {
-          if (message.type === 'i8-relay:identity') reply({ok:true,origin:'https://i8.example.test'});
+          if (message.type === 'i8-relay:identity') reply({ok:true,origin:'https://i8.example.test',sessionReady:true});
           else reply({ok:true,generation:message.generation});
         }
       }});
@@ -180,7 +176,7 @@ def test_browser_mode_survives_session_loss_for_the_same_account(server, browser
 
 
 def test_browser_mode_without_connection_sends_nothing(server, browser_page):
-    """选了浏览器方式但连接不在（服务端仍 connected，本页已停）⇒ 按钮不可用、零请求。"""
+    """服务端仍有旧连接时，本页连接失败也不能提交抓取或回退直连。"""
     page, _ = browser_page
     page.route('**/api/m02/browser/state*', json_route(CONNECTED_STATE))
     page.route('**/api/m02/browser/pending*', json_route({'request': MALFORMED_REQUEST}))
@@ -194,33 +190,69 @@ def test_browser_mode_without_connection_sends_nothing(server, browser_page):
         'ready': True, 'account': me['account'], 'i8_user': 'tester001', 'message': '',
     }))
     fetched = []
-    page.route('**/api/m03/notices/fetch', hold_and_record(fetched))
+    page.route(re.compile(r'/api/m03/notices/(fetch|fetch-jobs)$'), hold_and_record(fetched))
     page.locator('a[href="/preview/notices"]').click()
     # 本页工具栏在列表读完之后才可用，先等它，避免把「列表未读完」当成「连接被拦」。
     fetch = page.get_by_role('button', name='按月抓取 i8')
     expect(fetch).to_be_enabled(timeout=30000)
     fetch.click()
 
-    expect(page.get_by_role('alert').filter(has_text='本次不会改用工作台直连')).to_be_visible(timeout=20000)
-    expect(page.locator('.i8-fetch-mode')).to_contain_text('浏览器已有会话')
-    submit = page.get_by_role('button', name='确认抓取')
-    expect(submit).to_be_disabled()
-    submit.click(force=True)
-    page.wait_for_timeout(500)
+    dialog = page.get_by_role('dialog', name='抓取 i8 付款通知书', exact=True)
+    expect(dialog.locator('.i8-fetch-mode')).to_contain_text('浏览器已有会话')
+    submit = dialog.get_by_role('button', name='确认抓取')
+    expect(submit).to_be_enabled()
+    assert fetched == []
+    with page.expect_request('**/api/m02/browser/state*'):
+        submit.click()
+    expect(dialog.get_by_role('status').filter(has_text='没有检测到浏览器扩展')).to_be_visible()
+    expect(submit).to_have_count(0)
+    assert fetched == []
+    dialog.get_by_role('button', name='取消等待', exact=True).click()
+    expect(submit).to_be_enabled()
+    expect(dialog.locator('.i8-fetch-mode')).to_contain_text('浏览器已有会话')
     assert fetched == [], '浏览器连接不在时不应发出抓取请求'
 
 
-def test_http_mode_submit_keeps_the_original_payload(server, browser_page):
-    """直连方式下提交的载荷与改动前一致：`session_mode=http` + 原有强踢授权。"""
+def test_http_mode_submit_keeps_scope_and_requires_kick_confirmation(server, browser_page):
+    """主动直连只在确认下线后带令牌重发同账号、同月份的抓取。"""
     page, _ = browser_page
+    page.clock.set_fixed_time(datetime(2026, 11, 15, 12, tzinfo=timezone.utc))
     login(page, server)
+    open_i8(page)
+    select_mode(page, '工作台直连')
     me = page.request.get(server + '/api/m15/users').json()['me']
     page.route('**/api/m02/config*', json_route({
         'ready': True, 'account': me['account'], 'i8_user': 'tester001', 'message': '',
     }))
     fetched = []
-    page.route('**/api/m03/notices/fetch', record_and_accept(fetched, {
-        'fetched': 1, 'upserted': 1, 'ignored': [], 'year_month': '2026-11',
+    jobs = '**/api/m03/notices/fetch-jobs'
+    month = '2026-11'
+    time = '2026-11-15T12:00:00Z'
+    job = {
+        'id': 1971, 'account': me['account'], 'year_month': month, 'status': 'running',
+        'stage': 'fetching_notices', 'stage_label': '正在抓取通知书', 'error_message': '',
+        'created_at': time, 'updated_at': time, 'completed_at': None, 'acknowledged_at': None, 'result': None,
+    }
+    result = {
+        'year_month': month, 'notices_saved': True, 'fetched': 1, 'saved': 1, 'upserted': 1, 'created': 1,
+        'updated': 0, 'excluded': 0, 'ignored_count': 0, 'unresolved': 0, 'ignored': [], 'auto_linked': 0,
+        'auto_linked_items': [], 'manual_review': 0, 'manual_review_items': [], 'payable_source_failed': False,
+        'payable_source_error': '', 'fetch_error': '', 'matching_error': '',
+    }
+
+    def fetch_job(route):
+        fetched.append(route.request.post_data_json)
+        if len(fetched) == 1:
+            route.fulfill(status=409, json={
+                'ok': False, 'code': 'i8_online_conflict', 'message': 'i8 账号已有在线会话。', 'kick_token': 'synthetic-kick',
+            })
+        else:
+            route.fulfill(status=202, json=job)
+
+    page.route(jobs, fetch_job)
+    page.route(f'{jobs}/{job["id"]}', json_route({
+        **job, 'status': 'completed', 'stage': 'completed', 'stage_label': '抓取完成',
+        'updated_at': '2026-11-15T12:00:01Z', 'completed_at': '2026-11-15T12:00:01Z', 'result': result,
     }))
     page.locator('a[href="/preview/notices"]').click()
     page.get_by_role('button', name='按月抓取 i8').click()
@@ -228,14 +260,15 @@ def test_http_mode_submit_keeps_the_original_payload(server, browser_page):
     submit = page.get_by_role('button', name='确认抓取')
     expect(submit).to_be_enabled(timeout=20000)
     submit.click()
-    expect(page.get_by_text('抓取单据 1 条', exact=True)).to_be_visible(timeout=20000)
-
-    assert len(fetched) == 1, fetched
-    body = fetched[0]
-    assert body['session_mode'] == 'http', body
-    assert body['allow_kick'] is True, body
-    assert body['expected_account'] == me['account'], body
-    assert 'device_id' not in body, body
+    confirm = page.get_by_role('button', name='让现有会话下线并继续', exact=True)
+    expect(confirm).to_be_enabled()
+    original = {'session_mode': 'http', 'expected_account': me['account'], 'year_month': month}
+    assert fetched == [original]
+    confirm.click()
+    receipt = page.get_by_role('dialog', name='付款通知书抓取完成', exact=True)
+    saved = receipt.locator('.i8-receipt-count').filter(has=page.get_by_text('已保存', exact=True))
+    expect(saved.locator('dd')).to_have_text('1 条', timeout=20000)
+    assert fetched == [original, {**original, 'kick_token': 'synthetic-kick'}]
 
 
 def test_i8_records_first_read_failure_and_retry(server, browser_page):

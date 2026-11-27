@@ -53,11 +53,25 @@ def test_invoice_instances_share_native_width_and_reset(server, browser_page, ap
     preview_screenshot('pilot-candidate-invoices')
 
 
-def test_detail_draft_keeps_inputs_and_complete_totals(server, browser_page, api, projects, disposable, preview_screenshot):
+def test_detail_draft_keeps_inputs_and_complete_totals(
+    server, browser_page, api, projects, disposable, preview_screenshot, request,
+):
     page, _ = browser_page
     open_page(page, server, 'mechanical', '机械费')
     ym = page.get_by_label('月份', exact=True).input_value()
     state = get(api, '/api/m06/workbench', ym=ym)
+    shown_projects = state['settings']['shown_projects']
+
+    def restore_shown_projects():
+        settings = get(api, '/api/m06/workbench', ym=ym)['settings']
+        if settings['shown_projects'] != shown_projects:
+            response = api.post('/api/m06/workbench/settings', json={
+                'revision': settings['revision'], 'shown_projects': shown_projects,
+            })
+            response.raise_for_status()
+            assert get(api, '/api/m06/workbench', ym=ym)['settings']['shown_projects'] == shown_projects
+
+    request.addfinalizer(restore_shown_projects)
     warehouse = state['projects'][0]['warehouse']
     project = next(p for p in projects if p['warehouse_name'] == warehouse)
     page.get_by_role('button', name='显示项目', exact=True).click()

@@ -150,7 +150,9 @@ def test_notice_tools_are_usable_while_first_data_is_pending(server, browser_pag
     assert held, 'The actual first data request was not held'
     expect(page.get_by_role('button', name='手动新增', exact=True)).to_be_disabled()
     expect(page.get_by_role('region', name='付款通知书列表', exact=True)).to_have_count(0)
-    before = page.locator('.notice-grid').bounding_box()
+    reserve = page.locator('.notice-read-reserve')
+    expect(reserve).to_be_visible()
+    before = reserve.bounding_box()
     for route in held:
         route.continue_()
     page.unroute('**/api/m03/notice-list?*')
@@ -162,6 +164,7 @@ def test_notice_tools_are_usable_while_first_data_is_pending(server, browser_pag
 
 def test_fee_tools_publish_while_first_fee_data_is_pending(server,browser_page):
     page,_=browser_page;login(page,server);held=[]
+    table = page.get_by_label('特殊费用年度表', exact=True)
     page.route('**/api/m09/fee/year?*',lambda route:held.append(route))
     try:
         with page.expect_request('**/api/m09/fee/year?*'):
@@ -169,11 +172,12 @@ def test_fee_tools_publish_while_first_fee_data_is_pending(server,browser_page):
         expect(page.get_by_label('费用年份',exact=True)).to_be_visible()
         expect(page.get_by_label('费用年份',exact=True)).to_be_enabled()
         assert held
-        assert not page.locator('.fees-grid').count()
+        expect(page.locator('.fees-read-reserve')).to_be_visible()
+        expect(table).to_have_count(0)
     finally:
         for route in held:route.continue_()
         page.unroute('**/api/m09/fee/year?*')
-    expect(page.locator('.fees-grid')).to_have_attribute('data-layout-state','ready')
+    expect(table).to_have_attribute('data-layout-state','ready')
 
 
 def test_process_module_does_not_wait_for_retained_i8_read(server,browser_page):

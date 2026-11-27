@@ -37,9 +37,9 @@ def test_font_retry_preserves_retained_draft(server, browser_page, disposable, f
       window.__fontRecoveryBlocked = true;
       window.__fontRecoveryCalls = [];
       document.fonts.load = async (font, text) => {
-        // loadTextFonts deduplicates characters across the whole load, so
-        // phrases need not be contiguous even when each glyph is requested.
-        const pageGlyphs = [...'剔除规则'].every(glyph => text?.includes(glyph));
+        // Font loads group glyphs by weight and deduplicate them. Match the
+        // rules heading, which is one sample even before the table publishes.
+        const pageGlyphs = [...'付款通知书抓取剔除'].every(glyph => text?.includes(glyph));
         const shellGlyphs = [...'首页工作台撤销重做'].every(glyph => text?.includes(glyph));
         const selected = scope === 'page' ? pageGlyphs : shellGlyphs;
         if (window.__fontRecoveryCalls.length < 24) {

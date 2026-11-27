@@ -66,14 +66,14 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
   const readState = readPhase(query);
   const placeheld = data === undefined;
 
-  return <section className="wb-surface users-page page-shell page-shell--flow" data-page-layout="flow" aria-label="用户管理" data-page-chrome>
+  return <section className="wb-surface users-page wb-flow-width page-shell page-shell--flow" data-page-layout="flow" aria-label="用户管理" data-page-chrome>
     <div className="users-block">
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">
           <Button htmlType="submit" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'transfer' }); setError(''); }}>转让管理员</Button>
           <Button htmlType="submit" className="primary" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'add' }); setError(''); }}>+ 新增账号</Button>
         </div></div>
-      {current && <p className="muted users-note">当前登录 {current.name || current.account}（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : '，只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
+      {current && <p className="users-note users-current">当前登录 <strong>{current.name || current.account}</strong>（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : '，只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
       <ReadStatusLane phase={readState} announce="正在读取账号列表…" className="users-read-status">
         {(readState === 'error' || readState === 'stale') && <ReadFailure read={query} retained="账号列表更新失败，保留上次结果。" />}
       </ReadStatusLane>
@@ -92,7 +92,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
             <Button disabled={!isAdmin||lockAdmin(user)} title={!isAdmin?'只有管理员可启停账号':lockAdmin(user)?'不能停用最后一个管理员（请先转让）':''} onClick={()=>void run(()=>requestJson('/api/m15/actions/status',{method:'POST',...body({id:user.id,status:user.state==='在用'?'已停用':'在用'})}),'已切换状态')}>{user.state==='在用'?'停用':'启用'}</Button>
             {!self&&<Button danger disabled={!isAdmin||lockAdmin(user)} title={!isAdmin?'只有管理员可删除账号':lockAdmin(user)?'不能删除最后一个管理员（防锁死）':''} onClick={()=>{setDialog({kind:'delete',row:user});setError('');}}>删除</Button>}</>}</div>;}},
         ]}/>
-        <p className="muted users-note">停用 = 暂不可登录，可再启用；删除为软删，账号名与已有留痕保留、可恢复。密码与 i8 绑定按账号各存一份。</p>
+        <p className="users-note users-footnote">停用 = 暂不可登录，可再启用；删除为软删，账号名与已有留痕保留、可恢复。密码与 i8 绑定按账号各存一份。</p>
       </>}
     </div>
     <DialogPresence>{dialog?.kind === 'add' && <AddDialog blocked={blocked} close={() => setDialog(null)} done={text => { setDialog(null); setReceipt(text); void query.refetch(); }} />}</DialogPresence>
@@ -167,7 +167,7 @@ function PasswordDialog({ row, blocked, close, done }: { row: UserRow; blocked: 
     } finally { setBusy(false); }
   }
   return <BusinessModal open={!blocked} className="users-dialog" titleId="users-pwd-title" requestClose={closing.requestClose}><DialogContents title={`密码与 i8 绑定，${row.name || row.account}`} titleId="users-pwd-title" closing={closing}>
-    <p className="users-note muted">新密码留空会清空该账号密码，空密码即可登录。</p>
+    <p className="users-warning">新密码留空会清空该账号密码，空密码即可登录。</p>
     <label>新密码（可为空）<input value={password} disabled={busy} placeholder="留空即清空该账号密码" onChange={event => setPassword(event.target.value)} /></label>
     <label>i8 账号（绑定到本系统账号、每人一份）<input value={i8User} disabled={busy} placeholder="留空 = 解绑（解绑后抓取会被拦下，提示你先填）" onChange={event => setI8User(event.target.value)} /></label>
     <label>i8 密码<input value={i8Password} disabled={busy} placeholder="留空 = 不改（要清空就把上面的账号也清掉）" onChange={event => setI8Password(event.target.value)} /></label>

@@ -65,7 +65,14 @@ function I8Server({blocked, me}: {blocked: boolean; me: Identity | null}) {
     } catch (failure) { setNeedsRead(uncertainWrite(failure) || failure instanceof ApiError && failure.status === 409); setError(failure instanceof Error ? failure.message : '保存失败，请重读配置。'); }
     finally { lock.current = false; setSaving(false); }
   }
-  return <><div className="i8-server"><label>i8 服务器<Select<string> aria-label="i8 服务器" value={value ?? null} options={options} onChange={next => setSelected(next)} disabled={blocked || !me || saving || config.isFetching || needsRead} loading={config.isFetching}/></label><Button onClick={() => void save()} loading={saving} disabled={blocked || !me || !config.data || config.isFetching || needsRead || value === config.data.address}>保存</Button></div>{(error || config.isError) && <ReadError message={error || config.error?.message || '读取失败'} retry={() => void reread()} label="重读配置" />}</>;
+  return <>
+    <div className="i8-server wb-toolbar">
+      <label>i8 服务器<Select<string> aria-label="i8 服务器" value={value ?? null} options={options}
+        onChange={next => setSelected(next)} disabled={blocked || !me || saving || config.isFetching || needsRead} loading={config.isFetching}/></label>
+      <Button onClick={() => void save()} loading={saving} disabled={blocked || !me || !config.data || config.isFetching || needsRead || value === config.data.address}>保存</Button>
+    </div>
+    {(error || config.isError) && <ReadError message={error || config.error?.message || '读取失败'} retry={() => void reread()} label="重读配置" />}
+  </>;
 }
 /**
  * 「i8 接入」：浏览器会话通道的连接区（`TAIL-476`）。
@@ -87,10 +94,9 @@ function I8BrowserRelay() {
       工作台自动查找已授权站点的 i8 标签，复用浏览器当前登录态。
     </p>
     <div className="i8-relay-row">
-      <label>取数方式
-        <Segmented<SessionMode> aria-label="取数方式" value={session.mode} options={modeOptions}
-          onChange={next => session.selectMode(next)} disabled={session.busy}/>
-      </label>
+      <span className="i8-relay-label">取数方式</span>
+      <Segmented<SessionMode> aria-label="取数方式" value={session.mode} options={modeOptions}
+        onChange={next => session.selectMode(next)} disabled={session.busy} block/>
     </div>
     <div className="i8-relay-row">
       <Tag className={`status-tag status-${connected ? 'positive' : session.maintaining ? 'pending' : 'neutral'}`}>{connected ? '已连接' : session.maintaining ? '正在连接' : '未连接'}</Tag>
@@ -105,7 +111,7 @@ function I8BrowserRelay() {
     </div>
     {session.mode === 'browser' && session.connectionCode === 'permission-required' &&
       <Button htmlType="button" onClick={() => void session.requestPermission()}>授权 i8 站点</Button>}
-    {!extensionReady && !connected && <p className="i8-relay-note">没检测到浏览器扩展：请按安装说明装好「工作台 i8 会话桥」（装一次即可，扩展 ID 是固定的），刷新本页后再点连接。</p>}
+    {!extensionReady && !connected && <p className="i8-relay-note i8-relay-warning"><strong>没检测到浏览器扩展</strong>：请按安装说明装好「工作台 i8 会话桥」（装一次即可，扩展 ID 是固定的），刷新本页后再点连接。</p>}
     {session.maintaining && <p className="i8-relay-note">短暂断网后会自动恢复连接。请在 i8 标签页处理登录，已发出的抓取可在执行记录中核对。</p>}
     {session.notice && <p role="status" className="i8-relay-note">{session.notice}</p>}
   </div>;
@@ -134,22 +140,30 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
     <div className="i8-block">
       <I8Server blocked={blocked} me={me}/>
       <I8BrowserRelay/>
-      <h2>抓取结果回显</h2>
-      <ReadStatusLane phase={readState} announce="正在读取执行记录…" className="i8-read-status">
-        {(readState === 'error' || readState === 'stale') && <ReadFailure read={records} retained="执行记录更新失败，保留上次结果。"/>}
-      </ReadStatusLane>
-      {placeheld
-        ? <div className="i8-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'}/></div>
-        : <>
-        <ReadGrid table="i8-latest" className="i8-latest" label="各来源最近结果" domLayout="autoHeight" rows={(Object.keys(sourceNames) as (keyof typeof sourceNames)[]).map(source=>({source,row:(records.data??[]).find(item=>recordSource(item)===source)}))} rowId={item=>item.source} columns={[
-          {colId:'source',headerName:'来源',valueGetter:p=>sourceNames[p.data!.source]},
-          {colId:'scope',headerName:'范围',valueGetter:p=>p.data!.row?recordScope(p.data!.row):'—'},
-          {colId:'result',headerName:'最近结果',cellRenderer:({data}:{data:{row:RunRecord|undefined}})=>data.row?<Status row={data.row}/>:'最近 '+limit+' 条中暂无记录'},
-          {colId:'time',headerName:'开始时间',valueGetter:p=>p.data!.row?when(p.data!.row.started_at):'—'},
-        ]}/>
+      <div className="i8-results">
+        <h2>抓取结果回显</h2>
+        <ReadStatusLane phase={readState} announce="正在读取执行记录…" className="i8-read-status">
+          {(readState === 'error' || readState === 'stale') && <ReadFailure read={records} retained="执行记录更新失败，保留上次结果。"/>}
+        </ReadStatusLane>
+        {placeheld
+          ? <div className="i8-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'}/></div>
+          : <ReadGrid table="i8-latest" className="i8-latest" label="各来源最近结果" domLayout="autoHeight" rows={(Object.keys(sourceNames) as (keyof typeof sourceNames)[]).map(source=>({source,row:(records.data??[]).find(item=>recordSource(item)===source)}))} rowId={item=>item.source} columns={[
+            {colId:'source',headerName:'来源',valueGetter:p=>sourceNames[p.data!.source]},
+            {colId:'scope',headerName:'范围',valueGetter:p=>p.data!.row?recordScope(p.data!.row):'—'},
+            {colId:'result',headerName:'最近结果',cellRenderer:({data}:{data:{row:RunRecord|undefined}})=>data.row?<Status row={data.row}/>:'最近 '+limit+' 条中暂无记录'},
+            {colId:'time',headerName:'开始时间',valueGetter:p=>p.data!.row?when(p.data!.row.started_at):'—'},
+          ]}/>}
+      </div>
+      {!placeheld &&
         <details id="execution-records" ref={historySection} className="i8-history" open>
           <summary>执行记录</summary>
-          <div className="i8-record-tools"><label>读取范围<Select aria-label="读取范围" value={limit} onChange={setLimit} options={[50,100,200].map(value=>({value,label:`最近 ${value} 条`}))}/></label><label>动作<Select aria-label="动作" value={type} onChange={setType} options={[['all','全部'],['fetch','抓取'],['sync','同步'],['print','打印'],['export_pdf','导出 PDF']].map(([value,label])=>({value,label}))}/></label>{records.isFetching && <span role="status">正在更新记录…</span>}</div>
+          <div className="i8-record-tools wb-toolbar">
+            <label>读取范围<Select aria-label="读取范围" value={limit} onChange={setLimit}
+              options={[50,100,200].map(value=>({value,label:`最近 ${value} 条`}))}/></label>
+            <label>动作<Select className="i8-record-type" aria-label="动作" value={type} onChange={setType}
+              options={[['all','全部'],['fetch','抓取'],['sync','同步'],['print','打印'],['export_pdf','导出 PDF']].map(([value,label])=>({value,label}))}/></label>
+            {records.isFetching && <span role="status">正在更新记录…</span>}
+          </div>
           {visible.length === 0
             ? <p className="state">{(records.data ?? []).length === 0 ? '还没有执行记录。完成抓取、同步或打印后可在这里核对。' : '当前读取范围内没有这类执行记录。'}</p>
             : <BoundedGrid maxHeight="min(55dvh, 600px)" minRows={4} table="i8-records" className="i8-records" label="执行记录列表" rows={visible} rowId={row=>String(row.id)} columns={[
@@ -167,8 +181,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
             }},
             {colId:'duration',headerName:'耗时',valueGetter:p=>duration(p.data!)},
           ]}/>}
-        </details>
-      </>}
+        </details>}
     </div>
     <DialogPresence>{receipt && (receipt.source === 'contracts'
       ? <JcFetchReceipt active={!blocked} close={() => setReceipt(null)} runId={receipt.id} />
