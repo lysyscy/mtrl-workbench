@@ -13,11 +13,10 @@
 
 ## 活动任务
 
-- [全站前端打磨](tasks/mtrl-site-polish-plan-20261127.md) · 状态 waiting-user · 待验收 用户点验 PR-W0 隔离构建中的新版松绿及共享布局 · 下一步 点验 PR-W0。通过后再推进 PR-W1a。
+- [全站前端打磨](tasks/mtrl-site-polish-plan-20261127.md) · 状态 ready-for-agent · 待验收 PR-W1a 共享壳与首页/集采标杆页隔离预览点验 / PR-W1b 至 PR-W4 分波实现与隔离预览点验 · 下一步 在独立工作树推进 PR-W1a（共享壳 + 首页 / 与集采台账 /contracts 标杆页）。
 
 ## 工作树状态
 
 - `t3-3fd7b200-13d2a726b4842e50` · in-use · 付款核对台账探索工作树 · 保留付款台账恢复与项目归属实验，供技术栈同题比较。
-- `前端打磨-d5c483635c4ec129` · in-use · [全站前端打磨](tasks/mtrl-site-polish-plan-20261127.md) · 多波计划等待样板方向，主检出受管证据仍在用。
 
 <!-- END:DERIVED_ACTIVE_WORK -->
