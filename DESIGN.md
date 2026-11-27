@@ -55,25 +55,25 @@ components:
     textColor: "{colors.on-primary}"
     typography: "{typography.control}"
     rounded: "{rounded.input}"
-    height: "calc(32px * var(--fscale, 1))"
+    height: "var(--control-h)"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     typography: "{typography.control}"
     rounded: "{rounded.input}"
-    height: "calc(32px * var(--fscale, 1))"
+    height: "var(--control-h)"
   button-danger:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.danger}"
     typography: "{typography.control}"
     rounded: "{rounded.input}"
-    height: "calc(28px * var(--fscale, 1))"
+    height: "var(--control-sm)"
   input:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     typography: "{typography.control}"
     rounded: "{rounded.input}"
-    height: "calc(32px * var(--fscale, 1))"
+    height: "var(--control-h)"
   navigation:
     backgroundColor: "{colors.sidebar}"
     textColor: "{colors.sidebar-text}"
@@ -118,7 +118,7 @@ components:
 
 ## Colors
 
-默认主题是“中性灰白＋清晰蓝色交互”。账号可选择中性浅色（存储名“默认”）、松绿、暖色纸面、深侧栏、深色、高对比、玫瑰柔粉和丁香浅紫；实际主题由各账号偏好决定。
+当前唯一主题为新版「松绿」（方向 A，精工深墨松绿）。画布 `--bg` 为 `#edf3f0`，侧栏 `--sb` 为 `#0b221d`，主色 `--pri` 为 `#0c6b61`，控件边框 `--bd3` 为 `#6b8177`。未设置、退役或未知的账号主题在读取时统一解析为「松绿」，保留已存偏好。
 
 ### Primary
 
@@ -126,7 +126,7 @@ components:
 
 ### Neutral
 
-页面底、主表面和内层分组底建立安静的层次；普通边界与控件边界各有角色。正文与辅助文字区分阅读层级，辅助文字仍是有效信息。侧栏背景、文字、悬停和选中消费侧栏专属角色，兼容深侧栏及深色主题。
+页面底、主表面和内层分组底建立安静的层次；普通边界与控件边界各有角色。正文与辅助文字区分阅读层级，辅助文字仍是有效信息。侧栏背景、文字、悬停和选中消费侧栏专属角色。
 
 ### Semantic
 
@@ -134,9 +134,9 @@ components:
 
 **The 单一主题来源 Rule.** 色值由[主题主人](backend/app/mod03_notice/page.py)维护，[React主题消费](backend/app/mod03_notice/theme_react.py)同时服务整页和主题预览；新组件引用角色，不在业务CSS复制配色表。
 
-**The 语义稳定 Rule.** 更换账号主题不改变成功、警告、危险、信息和类别的含义；重要状态同时通过文字、位置或形状表达。
+**The 语义稳定 Rule.** 成功、警告、危险、信息和类别各自使用专用角色。重要状态同时通过文字、位置或形状表达。
 
-普通有效文字及占位文字的现行要求为至少4.5:1，大字号为至少3:1；实际合规仍需按具体主题和状态核验。侧车文件中的八步色阶仅为面板预览合成，跟随角色变量，不是新增主题或可直接用于业务状态的令牌。
+普通有效文字及占位文字对比度至少 4.5:1，大字号及识别控件所必需的边界至少 3:1。以实际相邻颜色核验。
 
 ## Typography
 
@@ -150,7 +150,7 @@ components:
 - **Control:** 紧凑按钮、日期和选择控件的文字；表格内原生数字编辑器可沿正文大小，不强制全站一刀切。
 - **Totals:** 沿对应正文大小使用600字重，并与金额列对齐。
 
-字号档位为1、1.12、1.25、1.4。文字、控件和网格几何按当前账号档位协调变化；前置令牌保存缩放公式，不能把某次浏览器实测大小当成固定基准。按基准计算，1.12档正文为15.12px，标题为20.16px，表头为13.44px。
+`--fscale` 有 1、1.12、1.25、1.4 四档，由[账号偏好](backend/app/mod15_user/domain.py)提供。未设置按 1.0×。1080P 日常验收用 1.0×，2K 日常验收用 1.12×。文字、控件和网格几何随应用字号一起缩放。
 
 **The 完整数值 Rule.** 不借字号、排版或省略改变金额精度、单位和业务口径；自动布局保护完整金额/合计及指定标识，用户主动手调列宽的例外按原规范执行。
 
@@ -158,17 +158,17 @@ components:
 
 桌面以侧栏导航和业务工作区组成。侧栏与正文分别滚动；页头、范围筛选、批量操作和表区按任务组织。分组节奏沿前置间距令牌，实际控件内部另有更小间隔，不把三档节奏强加到所有内部尺寸。
 
-常规控件基准高度为32px，网格内紧凑控件为28px；数据行基准为36px、表头为34px。多层表头、来源反馈、确认及过程矩阵有任务例外，实际行高可随内容增大。同组控件等高，窄窗口工具条自然换行；不用缩字换空间。
+常规控件用 `--control-h`（32px × `--fscale`），网格及行内紧凑控件用 `--control-sm`（28px × `--fscale`）。两者在[共享控件样式](apps/frontend/src/ui.css)定义。数据行基准 36px，表头 34px，随应用字号缩放。`.wb-toolbar` 让标签在控件左侧对齐，常规桌面使用紧凑单行，较窄或较大字号时自然换行。
 
 既有字段、列序及完整内容要求见[前端设计规范](docs/guides/frontend-design.md#阅读与操作)。新页面可提出主表与详情的组织方案，具体字段安排须逐页确认；不据此改变现有表格。
 
 业务数据表统一使用AG Grid Community，表单和常规交互控件复用Ant Design。自动列宽使用既有原生内容拟宽/flex，编辑和保存读回期间不重新排宽；账号手调偏好沿既有存储和恢复规则。通知书、集采台账及机械费的单行显示有明确适用范围，不推广成全站禁止换行；长文本截断提示与手调列宽的适用范围见[前端设计规范](docs/guides/frontend-design.md#密集表格单行)。
 
-页面根节点配对声明 `data-page-layout` 和 `page-shell--*`。`flow` 让报表、概览和配置页面自然增高。`fill` 把剩余高度留给主工作表，首读占位与表格共用表区。`split` 把剩余高度分给活动页签内的分栏，各表在所属栏内滚动。矮窗保留可用的表区高度，由页面承接外层滚动。实现见[共享页面布局](apps/frontend/src/page-layout.css)。
+页面根节点配对声明 `data-page-layout` 和 `page-shell--*`。`flow` 让报表、概览和配置页面自然增高。`fill` 把剩余高度留给主工作表，首读占位与表格共用表区。`split` 把剩余高度分给活动页签内的分栏，各表在所属栏内滚动。内容区宽度不超过 780px 时，已接入的分栏在 `.page-split-panels` 内改为上下排列。内容较少的 `flow` 区块可通过 `.wb-flow-width` 限宽 1520px，密集数据表使用可用空间。矮窗由页面承接外层滚动。实现见[共享页面布局](apps/frontend/src/page-layout.css)。
 
 页面和弹窗的限高表格复用 `BoundedGrid`。短表随末行结束，合计紧跟。长表在 AG Grid 内部滚动，表头及固定合计留在本表可见位置。列少的容器按内容收敛，列多的工作区充分使用宽度。完整金额、选择和动作的可达性优先。
 
-现有样式在520px、740px、800px和900px处理不同构件，801—2000px另收窄桌面侧栏；这些是实现中的构件阈值，不是新设的一组全站设备规格。900px及以下的外观面板改为覆盖式。常规桌面核验基线为1920×1080、显示缩放100%、应用1.12档，相关窄窗及放大态仍需检查。
+900px 及以下的外观面板使用覆盖式。桌面四档验收见[前端设计规范](docs/guides/frontend-design.md#浏览器支持用户2026-11-12确认)。
 
 ## Elevation & Depth
 
@@ -181,13 +181,13 @@ components:
 - **业务弹窗:** 较高层的对话框（`--shadow-md`），背景遮罩沿`--mask`。
 - **短回执:** 独立动作的短消息（`--shadow-toast`），避开合计和滚动条。
 
-阴影值随主题提供，具体变量表达保存在侧车扩展中；高对比主题的这些阴影角色为`none`，以遮罩、边界及层叠区分。普通容器不抬升、浮层层级清楚是当前已确认原则。
+主题提供阴影和遮罩值。普通业务表面靠边界分组，弹窗和定位浮层用各自阴影角色。
 
 **The 平稳表面 Rule.** 普通背景、边界和间距负责分组，浮层用层叠、边界及必要阴影区分前后关系，不给每张业务卡片增加独立悬浮层。
 
 ## Shapes
 
-形状是轻微圆角的业务控件与平直的专业网格。输入、按钮、卡片、内层分组和标签沿前置圆角令牌；不能从圆角令牌名推导胶囊外观。普通边界以0.5px轻线为基线，编辑、焦点、错误和高对比状态保清楚边界。识别控件与状态所必需的自定义线索，按[前端设计规范](docs/guides/frontend-design.md#视觉基础)检查相邻颜色的非文本对比度，不以线宽代替判断；范围限当次受影响控件。提取时个别组件实测为1px，不能据提取文档宣称全站像素一致。
+输入和按钮用 6px 圆角（`--r`），卡片和弹窗用 8px 圆角（`--r2`）。`.wb-surface` 使用 `1px solid var(--bd)`，留出焦点描边空间。`.wb-native-table` 使用 `--bd` 分隔表格，列头在 `thead` 内粘顶，正文行头随表体滚动。共享原生控件使用 `--bd3` 标示边界，键盘焦点为 2px 主色描边。各处以实际相邻颜色核验[非文本对比度](docs/guides/frontend-design.md#视觉基础)。
 
 ## Components
 

@@ -13,7 +13,7 @@
 
 ## 活动任务
 
-- [全站前端打磨](tasks/mtrl-site-polish-plan-20261127.md) · 状态 waiting-user · 待验收 从 A 精工深墨松绿、B 清透浅雾松绿、C 沉稳暖石松绿中选定一个方向 · 下一步 用户选定方向后，按原计划先推进 Wave 0，共用底座通过后再进入后续波次。
+- [全站前端打磨](tasks/mtrl-site-polish-plan-20261127.md) · 状态 waiting-user · 待验收 用户点验 PR-W0 隔离构建中的新版松绿及共享布局 · 下一步 点验 PR-W0。通过后再推进 PR-W1a。
 
 ## 工作树状态
 
