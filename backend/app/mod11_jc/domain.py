@@ -480,43 +480,44 @@ def match_notice_contract(
         ))
     candidates.sort(key=lambda c: (c.contract_id not in mentioned, not c.selectable, not c.payable_codes, not c.invoice_match))
 
-    def review(code: str, reason: str) -> MatchOutcome:
-        return MatchOutcome("needs_review", code, reason, candidates)
+    def review(code: str, reason: str, review_candidates: list[MatchCandidate]) -> MatchOutcome:
+        return MatchOutcome("needs_review", code, reason, review_candidates)
 
     if mentioned:
         if any(c["id"] in mentioned and c["tag"] != TAG_IN for c in contracts):
-            return review("contract_excluded", "通知书提及的合同未纳入台账")
+            return review("contract_excluded", "通知书提及的合同未纳入台账", candidates)
         if len(mentioned) != 1:
-            return review("contract_ambiguous", "通知书提及多份合同")
+            return review("contract_ambiguous", "通知书提及多份合同", candidates)
         target = candidates[0]
         if not target.selectable:
-            return review("supplier_conflict", "通知书提及的合同与已填供应商不一致")
+            return review("supplier_conflict", "通知书提及的合同与已填供应商不一致", candidates)
         return MatchOutcome("auto_ready", "explicit_contract", "通知书明确提及本合同号", target=target)
 
     if not included:
-        return review("no_contracts", "本项目没有纳入台账的合同")
+        return review("no_contracts", "本项目没有纳入台账的合同", candidates)
     if len(matched_suppliers) != 1:
-        return review("supplier_unresolved", "单据名称命中多家供应商" if matched_suppliers else "未能确定实际供应商")
+        return review("supplier_unresolved", "单据名称命中多家供应商" if matched_suppliers else "未能确定实际供应商", candidates)
     selected_supplier = matched_suppliers[0]
     supplier_contracts = [c for c in candidates if c.selectable and c.supplier_name == selected_supplier]
     if not any(c.contract_no.strip() for c in supplier_contracts):
-        return review("no_supplier_contract", "本项目没有该供应商带合同号的纳入合同")
+        return review("no_supplier_contract", "本项目没有该供应商带合同号的纳入合同", supplier_contracts)
     if payables is None:
-        return (review("payable_source_failed", "采购应付读取失败，需人工核对") if payable_source_failed
-                else review("payable_required", "需核对采购应付"))
+        if payable_source_failed:
+            return review("payable_source_failed", "采购应付读取失败，需人工核对", supplier_contracts)
+        return review("payable_required", "需核对采购应付", supplier_contracts)
 
     numbers = {number for name, number in exact_payables if name == selected_supplier}
     targets = [c for c in supplier_contracts if c.contract_no.strip() and c.payable_codes]
     if len(numbers) != 1 or len(targets) != 1:
         if not numbers:
-            return review("no_exact_payable", "未找到同项目、同供应商且金额一致的采购应付")
-        return review("payable_contract_unresolved", "同额采购应付无法唯一对应一份纳入台账的合同")
+            return review("no_exact_payable", "未找到同项目、同供应商且金额一致的采购应付", supplier_contracts)
+        return review("payable_contract_unresolved", "同额采购应付无法唯一对应一份纳入台账的合同", supplier_contracts)
     target = targets[0]
     if len(supplier_contracts) == 1:
         return MatchOutcome("auto_ready", "sole_supplier_contract", "同额采购应付对应本项目该供应商的唯一纳入合同", target=target)
     if target.invoice_match and sum(c.invoice_match for c in candidates) == 1:
         return MatchOutcome("auto_ready", "unique_payment_invoice", "同额采购应付与本项目唯一同额付款侧发票对应同一合同", target=target)
-    return review("insufficient_corroboration", "同额采购应付有对应合同，仍需核对付款侧发票或合同")
+    return review("insufficient_corroboration", "同额采购应付有对应合同，仍需核对付款侧发票或合同", supplier_contracts)
 
 
 def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_notices, remark: str = ''):

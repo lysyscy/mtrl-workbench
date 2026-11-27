@@ -215,7 +215,7 @@ def test_amount_match_uses_unique_supplier_project_and_exact_amount(rollback_db,
     with session_scope() as s:
         project = _project(s, "__付款应付范围__")
         first = contract(s, project, "CGHT1", supplier="甲方物资有限公司")
-        contract(s, project, "CGHT2", supplier="乙方建材有限公司")
+        other = contract(s, project, "CGHT2", supplier="乙方建材有限公司")
         item = notice(s, project, "供应商判断", title=title, supplier=supplier)
         row = S.auto_link_plan(s, [item.id], [payable])[0].as_row()
         assert row["rule_code"] == expected
@@ -223,7 +223,20 @@ def test_amount_match_uses_unique_supplier_project_and_exact_amount(rollback_db,
             assert row["target"]["contract_id"] == first.id
         else:
             assert row["bucket"] == "needs_review"
-            assert row["candidates"]
+            expected_ids = {first.id, other.id} if expected == "supplier_unresolved" else {first.id}
+            assert {c["contract_id"] for c in row["candidates"]} == expected_ids
+
+
+def test_title_matched_supplier_without_included_contracts_has_no_review_candidates(rollback_db):
+    with session_scope() as s:
+        project = _project(s, "__供应商无纳入合同__")
+        contract(s, project, "CGHT1", supplier="甲方物资有限公司", tag=D.TAG_OUT)
+        contract(s, project, "CGHT2", supplier="乙方建材有限公司")
+        item = notice(s, project, "无候选", title="甲方物资钢材款")
+        row = S.auto_link_plan(s, [item.id])[0].as_row()
+        assert row["bucket"] == "needs_review"
+        assert row["rule_code"] == "no_supplier_contract"
+        assert row["candidates"] == []
 
 
 @pytest.mark.parametrize("target_side, other_side, second_payable, expected", [
@@ -238,7 +251,7 @@ def test_amount_match_checks_unique_payment_side_invoice_across_project(
     with session_scope() as s:
         project = _project(s, "__付款侧发票__")
         target = contract(s, project, "CGHT1", trade_co="贸易公司")
-        contract(s, project, "CGHT2")
+        same_supplier = contract(s, project, "CGHT2")
         competitor = contract(s, project, "CGHT3", supplier="乙")
         excluded = contract(s, project, "CGHT4", tag=D.TAG_OUT)
         item = notice(s, project, "付款侧发票校验", supplier="甲")
@@ -258,6 +271,7 @@ def test_amount_match_checks_unique_payment_side_invoice_across_project(
             assert row["target"]["contract_id"] == target.id
             assert row["target"]["invoice_ids"] == [invoice.id]
         else:
+            assert {c["contract_id"] for c in row["candidates"]} == {target.id, same_supplier.id}
             evidence = next(c for c in row["candidates"] if c["contract_id"] == target.id)
             assert row["bucket"] == "needs_review"
             assert evidence["invoice_match"] == (target_side == "trade")
