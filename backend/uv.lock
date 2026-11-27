@@ -530,7 +530,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pypdf", specifier = "==7.2.0" },
+    { name = "pypdf", specifier = ">=7.2.0,<8" },
     { name = "python-multipart" },
     { name = "pywin32" },
     { name = "sqlalchemy" },
