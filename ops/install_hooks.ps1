@@ -1,35 +1,22 @@
 ﻿<#
 .SYNOPSIS
-  把 `ops/hooks/` 里的 git 钩子装进 `.git/hooks/`（**幂等** · 可反复跑）。
-
+  为普通克隆及其工作树安装共享的 pre-commit 入口。
 .NOTES
-  ⚠️ **为什么需要这个脚本**：`.git/hooks/` **不被 git 跟踪** ⇒ 钩子本体必须先进仓（`ops/hooks/`），
-     再由本脚本显式安装一次。⛔ 别用 `git config core.hooksPath` —— 那会改你的 git 配置（本仓规矩：不动 git config）。
-
-  装什么：语法/字节暂存检查与.env文件名拦截。文档和业务按影响入口执行，不在提交时重复跑。
-
-  卸载：删掉 `.git/hooks/pre-commit` 即可。
-  检查失败：修复报告的问题后正常提交，按项目贡献指南保留适用检查。
-
-  用法（在仓库根）：
-    powershell -NoProfile -ExecutionPolicy Bypass -File ops\install_hooks.ps1
+  在仓库内运行一次。规则由主检出的 ops/hooks/pre-commit 维护。
+  工作树沿用自己的暂存区和审计脚本。安装器不修改 Git 配置。
 #>
 $ErrorActionPreference = 'Stop'
 
-$root = (& git rev-parse --show-toplevel).Trim()
-if (-not $root) { throw '不在 git 仓库里（git rev-parse 没回路径）' }
+$common = & git rev-parse --path-format=absolute --git-common-dir
+if ($LASTEXITCODE -ne 0 -or -not $common) { throw '无法定位仓库的公共 Git 目录' }
+$rule = Join-Path (Split-Path -Parent $common) 'ops/hooks/pre-commit'
+if (-not (Test-Path -LiteralPath $rule -PathType Leaf)) { throw "找不到主检出的钩子规则：$rule" }
 
-$src = Join-Path $root 'ops\hooks\pre-commit'
-if (-not (Test-Path $src)) { throw "找不到钩子本体：$src" }
-
-$dstDir = Join-Path $root '.git\hooks'
-if (-not (Test-Path $dstDir)) { throw "找不到 .git/hooks 目录：$dstDir（这不是个普通 git 仓库？）" }
-$dst = Join-Path $dstDir 'pre-commit'
-
-Copy-Item -LiteralPath $src -Destination $dst -Force
-Write-Host "✅ 已装：$dst"
-Write-Host "   （来源 = ops\hooks\pre-commit · 幂等 ⇒ 改了源文件重跑本脚本即可）"
-Write-Host "   检查失败请先修复，再正常提交；安装或卸载按当次授权执行。"
-
-# git commit --dry-run不会调用钩子；真正验证以正常提交输出为准。
-Write-Host '真正的验证 = 下一次 git commit（由git调用sh）；不跳过适用检查。'
+$target = Join-Path $common 'hooks/pre-commit'
+$entry = @'
+#!/bin/sh
+common=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
+exec sh "$common/../ops/hooks/pre-commit" "$@"
+'@
+[IO.File]::WriteAllText($target, ($entry.Replace("`r`n", "`n") + "`n"), [Text.UTF8Encoding]::new($false))
+Write-Host "提交钩子已安装到 $target"

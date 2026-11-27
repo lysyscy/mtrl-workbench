@@ -8,6 +8,6 @@
 | 首次空库安装与只读环境核对 | `ops/deploy_restore.ps1`、`ops/selfcheck.ps1` |
 | 服务注册 | `ops/nssm_install.ps1`，实际安装须当前授权 |
 | 初始化定义 | `ops/init_db.sql`；凭据风险及数据库写入边界回部署指南 |
-| 提交保护 | `ops/hooks/pre-commit`；实际安装钩子与源码分别核验 |
+| 提交保护 | `ops/hooks/pre-commit`；每个克隆运行一次 `ops/install_hooks.ps1`。工作树共用主检出的规则，审计当前工作树的暂存内容。更新规则后直接生效 |
 
 脚本在场不构成服务启停、安装、登录或真实业务写入授权。

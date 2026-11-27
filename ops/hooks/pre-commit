@@ -3,6 +3,10 @@
 # 文档、台账、变异登记不随每次提交重复扫描；全量/现场核验由用户按需执行。
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
 PY="$ROOT/backend/.venv/Scripts/python.exe"
+if [ ! -x "$PY" ]; then
+  common=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
+  PY="$common/../backend/.venv/Scripts/python.exe"
+fi
 
 # 文件名拦截不依赖Python；真实.env不提交，示例模板放行。
 for f in $(git diff --cached --name-only 2>/dev/null); do
