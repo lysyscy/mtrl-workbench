@@ -82,12 +82,15 @@ backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --list
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop --port 8066
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop --all
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --prune --files-only
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --prune --source-env <正式检出的.env>
 ```
 
 `--list` 列出所有登记中的活动预览和已退出的残留登记，包括旧实例。`--stop` 默认只作用当前工作树，可显式按端口或全仓停止。已就绪实例按登记进程和实际 HTTP 身份请求正常退出，待用构建清单不影响停止。用户试用 schema 和私有状态保留，可丢弃验证 schema 由创建者清理。需要在同一工作树临时做写入验证时，先停止并保留试用副本，验证后恢复原试用入口。
 
-`--prune` 清除已确认进程退出的登记，包括残留的旧 `current.json`。数据库清理使用指定 `--source-env`，默认使用当前工作树的 `.env`。没有配置文件时只清理残留登记。数据库清理范围是 `mtrl_workbench_test` 中由测试库账号拥有、且所有活动预览均未引用的 `frontend_rewrite_397_*` schema。命令列出移除的登记和清理的 schema。
+`--prune` 清除已确认进程退出的登记，包括旧 `current.json`。预览运行目录只剩 0 字节 `runtime.env` 且无活动登记引用时一并清理。`--files-only` 只执行本地文件清理。默认 `.env` 缺失时也只清理本地文件。
+
+数据库清理使用指定 `--source-env`，默认使用当前工作树的 `.env`，仅作用于 `mtrl_workbench_test` 中由测试库账号拥有且无活动预览引用的 `frontend_rewrite_397_*` schema。命令列出移除的登记、运行目录和 schema。
 
 正式 `publish` 在核实 `/app` 已加载目标版本后，请求同工作树的可丢弃预览正常退出。其他工作树与用户试用实例记录在发布回执的 `other_active_previews`。`preview_cleanup` 记录停止结果、清理警告及已经释放的 `work/build-*` 目录，目录清理限于同工作树内已登记、无活动消费者且未受保护的预览 run。清理警告不影响已核验的发布结果。
 

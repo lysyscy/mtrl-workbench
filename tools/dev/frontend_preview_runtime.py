@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_PREVIEW_PORTS = (8065, 8066, 8067)
 MAX_CONCURRENT_PREVIEWS = 3
 DISPOSABLE_SCHEMA_PREFIX = 'frontend_rewrite_397_'
+PRIVATE_STATE = Path('var/state/react-writable-preview')
 
 
 def read_json(path):
@@ -31,10 +33,14 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def private_state_dir(root=None):
+    return Path(root or ROOT) / PRIVATE_STATE
+
+
 def state_dir(root=None):
     common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
         cwd=root or ROOT, capture_output=True, encoding="utf-8", check=True).stdout.strip()
-    return Path(common).parent / "var/state/react-writable-preview"
+    return private_state_dir(Path(common).parent)
 
 
 def _registry_directory(root):
@@ -265,6 +271,47 @@ def reserve_preview(port, path, *, schema, disposable, root=None):
 def prune_registrations(*, root=None):
     with _checked_registry(_registry_directory(root)) as (live, stale):
         return _reap(stale, legacy=True), live
+
+
+
+def _prune_runtime_dirs(directory: Path, referenced: set[str]) -> list[str]:
+    if not directory.is_dir():
+        return []
+    removed = []
+    keep = {'instances', 'slots', 'files'} | referenced
+    for run in sorted(directory.iterdir()):
+        if run.name.casefold() in keep or run.is_symlink() or run.is_junction() or not run.is_dir():
+            continue
+        env = run / 'runtime.env'
+        if list(run.iterdir()) != [env]:
+            continue
+        try:
+            info = env.lstat()
+        except FileNotFoundError:
+            continue
+        if (not stat.S_ISREG(info.st_mode) or info.st_size
+                or getattr(info, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT):
+            continue
+        env.unlink()
+        run.rmdir()
+        removed.append(run.name)
+    return removed
+
+
+def prune_preview_state(*, root=None):
+    directory = _registry_directory(root)
+    private = private_state_dir(root)
+    for path in (directory, private, directory / 'registry.lock', directory / 'instances'):
+        if any(item.is_symlink() or item.is_junction() for item in (*reversed(path.parents), path)):
+            raise RuntimeError('预览状态路径含链接，保留现场')
+    with _checked_registry(directory) as (live, stale):
+        removed = _reap(stale, legacy=True)
+        # Read all remaining pointers under the same lock, including aliases of a live PID.
+        owners = [entry.path for entry in _registrations(directory)]
+        if any(not owner.is_absolute() or owner.parent.name != 'reports' for owner in owners):
+            raise RuntimeError('活动预览的运行目录无法确认，保留本地状态')
+        referenced = {owner.parent.parent.name.casefold() for owner in owners}
+        return removed, live, _prune_runtime_dirs(private, referenced)
 
 
 def product_inputs(*, frontend_only=False):

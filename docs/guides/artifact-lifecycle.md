@@ -2,6 +2,8 @@
 
 本项目的产物分类、实际入口和退出规则。2026-11-06按[已批准方案](../adr/0001-development-artifact-ownership.md)切换开发输出；业务资料、项目例外与固定旧运行保持原保护。
 
+需要查目录归属、保留条件或清理入口时，使用[目录清单](../../tools/audit/directory_manifest.json)和[只读目录审计](../../tools/README.md)。目录治理与专用清理器的职责见 [ADR-0002](../adr/0002-workspace-directory-governance.md)。
+
 
 ### 1. 先确定材料身份
 

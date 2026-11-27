@@ -17,7 +17,7 @@ import threading
 import uuid
 
 from tools.dev.frontend_preview_runtime import (ALLOWED_PREVIEW_PORTS, DISPOSABLE_SCHEMA_PREFIX, ROOT,
-    product_sources, read_json, reserve_preview, validate_port, verify_build, write_json)
+    private_state_dir, product_sources, read_json, reserve_preview, validate_port, verify_build, write_json)
 from tools.audit.workspace_paths import owned_run as validate_run, owned_work, consume_run, attach_run
 
 
@@ -35,6 +35,7 @@ def arguments():
     command.add_argument('--stop', action='store_true')
     command.add_argument('--list', action='store_true')
     command.add_argument('--prune', action='store_true')
+    parser.add_argument('--files-only', action='store_true', help='与 --prune 一起使用，只清理本地预览文件')
     parser.add_argument('--all', action='store_true', help='停止所有工作树的预览，需与 --stop 一起使用')
     parser.add_argument('--pg-bin', type=Path, help='既有匹配PostgreSQL工具目录，仅已有副本升级需要')
     parser.add_argument('--browser-notice-check', type=Path,
@@ -42,6 +43,8 @@ def arguments():
     args = parser.parse_args()
     if args.all and (not args.stop or args.port is not None):
         parser.error('--all 仅用于 --stop，且不能与 --port 一起使用')
+    if args.files_only and not args.prune:
+        parser.error('--files-only 仅用于 --prune')
     if args.port is not None and (args.list or args.prune):
         parser.error('--list 和 --prune 作用于全部端口，不能指定 --port')
     return args
@@ -160,7 +163,7 @@ def existing_environment(args, run, guard):
 
 def application(args, run, env, owner, version, browser_notice_check=None):
     from app.core import config
-    private = ROOT / 'var/state/react-writable-preview' / run.name
+    private = private_state_dir(ROOT) / run.name
     private.mkdir(parents=True, exist_ok=True)
     config.ENV_FILE = private / 'runtime.env'
     config.ENV_FILE.touch(exist_ok=True)

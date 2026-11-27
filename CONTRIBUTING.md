@@ -14,6 +14,7 @@
 
 ```text
 backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/backend_verify.py --source-env <明确来源.env> --test <backend内测试文件或节点> -- <pytest选项>
+backend/.venv/Scripts/python.exe -X utf8 tools/audit/directory_audit.py --staged
 backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged
 backend/.venv/Scripts/python.exe -X utf8 tools/audit/bytes_guard.py --staged
 backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py
@@ -28,7 +29,7 @@ backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py
 - 实现细节、源码形状、纯文案/布局及低概率理论边界不默认成为永久回归或交付阻塞；已修 bug 也按当前风险取舍，混合测试只裁多余断言并清无消费者专用夹具。
 - 选择足以验证本次改动的最小检查集合，项目明确规定的必跑检查仍执行，复用输入和预期仍有效的证据；相关检查通过、实质发现关闭即结束验证。只有新改动、新失败或明确未覆盖的风险才能扩大或重复检查，并说明新增检查要回答的问题；不得仅为更放心、更完整或增加通过数量而加码。
 
-未执行、失败、空选择、超时和未知都不报通过。文档变动核语义、当前引用、实际工具读取及接手路径；不为此运行应用或业务测试。真实pre-commit检查暂存语法、字节和凭据文件名，前端push/PR检查由现有CI按受影响路径触发。
+未执行、失败、空选择、超时和未知都不报通过。文档变动核语义、当前引用、实际工具读取及接手路径；不为此运行应用或业务测试。真实 pre-commit 检查暂存文件的顶层目录、语法、字节和凭据文件名，前端push/PR检查由现有CI按受影响路径触发。
 
 ## 审查与完成
 

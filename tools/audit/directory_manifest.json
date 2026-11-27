@@ -1,0 +1,745 @@
+{"version": 1,
+  "directories": [
+    {
+      "path": ".git",
+      "owner": "Git", "class": "metadata", "git_policy": "local",
+      "manager": "git worktree / git gc", "retention": "按 Git 的仓库和工作树规则", "exit_condition": "通过 Git 原生入口维护",
+      "apply_eligible": false
+    },
+    {
+      "path": ".github",
+      "owner": "CI 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".github/workflows",
+      "owner": "CI 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": ".impeccable",
+      "owner": "设计维护者", "class": "design", "git_policy": "mixed",
+      "manager": "none", "retention": "配置随实现保留，评级和原型沿用途保留", "exit_condition": "维护者核查用途，已登记产物交适配器",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".impeccable/critique",
+      "owner": "设计维护者", "class": "design", "git_policy": "tracked",
+      "manager": "none", "retention": "随当前设计保留", "exit_condition": "内容归位和用途关闭后退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".impeccable/questions",
+      "owner": "设计维护者", "class": "design", "git_policy": "tracked",
+      "manager": "none", "retention": "随当前设计保留", "exit_condition": "内容归位和用途关闭后退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".impeccable/surfaces",
+      "owner": "设计维护者", "class": "design", "git_policy": "tracked",
+      "manager": "none", "retention": "随当前设计保留", "exit_condition": "内容归位和用途关闭后退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".impeccable/mocks",
+      "owner": "设计评审", "class": "artifact", "git_policy": "ignored",
+      "manager": "tools/_vendor/setup_solo_workflow/impeccable_artifacts.py finish", "retention": "按登记和评审用途保留", "exit_condition": "已关闭评审且消费者已退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".pytest_cache",
+      "owner": "pytest", "class": "cache", "git_policy": "ignored",
+      "manager": "pytest --cache-clear", "retention": "按生产者策略", "exit_condition": "按 pytest 规则重建",
+      "apply_eligible": false
+    },
+    {
+      "path": ".scratch",
+      "owner": "任务负责人", "class": "task", "git_policy": "mixed",
+      "manager": "tools/audit/doc_ops.py closeout-plan", "retention": "活动 Markdown、规格和票", "exit_condition": "核可恢复性与消费者后按任务文件退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".scratch/tails",
+      "owner": "票负责人", "class": "task", "git_policy": "tracked",
+      "manager": "tools/oneoff/_list_tails.py --all", "retention": "旧票协议和登记", "exit_condition": "按票协议退出",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".scratch/tails/issues",
+      "owner": "票负责人", "class": "task", "git_policy": "tracked",
+      "manager": "tools/oneoff/_list_tails.py --all", "retention": "旧票仍在用时保留", "exit_condition": "按票协议退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".scratch/local",
+      "owner": "本机开发者", "class": "artifact", "git_policy": "ignored",
+      "manager": "人工核对用途", "retention": "按固定旧运行保留", "exit_condition": "确认无消费者、唯一内容和恢复用途",
+      "apply_eligible": false
+    },
+    {
+      "path": ".artifacts",
+      "owner": "开发产物负责人", "class": "artifact", "git_policy": "ignored",
+      "manager": "none", "retention": "按各运行归属和期限", "exit_condition": "交所属生产者结项",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".artifacts/runs",
+      "owner": "运行组负责人", "class": "artifact", "git_policy": "ignored",
+      "manager": "tools/artifact_lifecycle.py check", "retention": "按 run.json 的状态、租约和期限", "exit_condition": "使用已登记生命周期结项和清理",
+      "apply_eligible": false, "retention_groups": true
+    },
+    {
+      "path": ".artifacts/active",
+      "owner": "旧运行负责人", "class": "artifact", "git_policy": "ignored",
+      "manager": "tools/audit/audit_work.py（只读）", "retention": "按固定运行用途", "exit_condition": "核实消费者和退出条件后专项退出",
+      "apply_eligible": false, "retention_groups": true
+    },
+    {
+      "path": ".artifacts/archive",
+      "owner": "旧运行负责人", "class": "artifact", "git_policy": "ignored",
+      "manager": "tools/audit/audit_work.py（只读）", "retention": "按各组 retention.json", "exit_condition": "到期、无保护且已授权的组才能退出",
+      "apply_eligible": false, "retention_groups": true
+    },
+    {
+      "path": ".artifacts/machinery-skill-rebind-backup",
+      "owner": "机械费技能恢复负责人", "class": "backup", "git_policy": "ignored",
+      "manager": "人工核验技能回退", "retention": "作为本机恢复资料保留", "exit_condition": "确认已无回退用途后沿原负责人退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".artifacts/machinery-skill-rebind-name-backup",
+      "owner": "机械费技能恢复负责人", "class": "backup", "git_policy": "ignored",
+      "manager": "人工核验技能回退", "retention": "作为本机恢复资料保留", "exit_condition": "确认已无回退用途后沿原负责人退出",
+      "apply_eligible": false
+    },
+    {
+      "path": ".codex-attachments",
+      "owner": "用户", "class": "business", "git_policy": "ignored",
+      "manager": "用户", "retention": "本机会话附件", "exit_condition": "按用户授权处理原件",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps",
+      "owner": "应用维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "apps/browser-extension",
+      "owner": "浏览器扩展维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/settlement-desktop",
+      "owner": "桌面客户端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "apps/frontend/patches",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/src",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/tests",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/public",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/.impeccable",
+      "owner": "React 设计维护者", "class": "design", "git_policy": "mixed",
+      "manager": "人工核对设计材料", "retention": "按原生设计用途", "exit_condition": "确认配置或评审已退役",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/node_modules",
+      "owner": "pnpm", "class": "cache", "git_policy": "ignored",
+      "manager": "corepack pnpm install --frozen-lockfile", "retention": "按生产者策略", "exit_condition": "无消费者后按锁文件重建",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/dist",
+      "owner": "React 构建器", "class": "artifact", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prepare-build", "retention": "仅构建或预览消费期", "exit_condition": "核对在用构建后交构建者释放",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "backend/.pytest_cache",
+      "owner": "pytest", "class": "cache", "git_policy": "ignored",
+      "manager": "pytest --cache-clear", "retention": "按生产者策略", "exit_condition": "按 pytest 规则重建",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/.venv",
+      "owner": "后端运行环境", "class": "runtime", "git_policy": "ignored",
+      "manager": "uv sync --frozen", "retention": "当前服务和验证工具仍在使用时保留", "exit_condition": "确认无服务、工具或回退消费者",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/alembic",
+      "owner": "数据库迁移维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/alembic/versions",
+      "owner": "数据库迁移维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/tests",
+      "owner": "后端验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/tool_tests",
+      "owner": "后端验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "backend/app/core",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/home",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/import_kit",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod01_projects",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod02_i8",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod03_notice",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod04_plan",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod05_flow",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod06_proc",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod07_setl",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod08_inv",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod09_fee",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod11_jc",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod13_oilcard",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod14_config",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod15_user",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/mod16_equipment",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/report_export",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/resources",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "backend/app/web",
+      "owner": "后端维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "backend/app/web/fonts",
+      "owner": "运行字体维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "backend/app/resources/templates",
+      "owner": "报表模板维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "data",
+      "owner": "业务资料负责人", "class": "business", "git_policy": "ignored",
+      "manager": "业务负责人", "retention": "按原件或依据用途保留", "exit_condition": "仅由业务流程和明确授权处置",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "data/source",
+      "owner": "业务原件负责人", "class": "business", "git_policy": "ignored",
+      "manager": "业务负责人", "retention": "原始业务输入长期保留", "exit_condition": "仅由业务流程和明确授权处置",
+      "apply_eligible": false
+    },
+    {
+      "path": "data/reference",
+      "owner": "业务依据负责人", "class": "business", "git_policy": "ignored",
+      "manager": "业务负责人", "retention": "按业务依据用途长期保留", "exit_condition": "仅由业务流程和明确授权处置",
+      "apply_eligible": false
+    },
+    {
+      "path": "dist",
+      "owner": "技能打包工具", "class": "artifact", "git_policy": "ignored",
+      "manager": "按技能打包入口重建", "retention": "发布或分发使用期", "exit_condition": "无分发消费者后由打包者退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "docs/adr",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/agents",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/architecture",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/guides",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/reference",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/requirements",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/tasks",
+      "owner": "文档维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "docs/archive",
+      "owner": "文档维护者", "class": "legacy", "git_policy": "mixed",
+      "manager": "none", "retention": "已退役正文按 Git 历史查找", "exit_condition": "旧残留按实际内容核验",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "exports",
+      "owner": "业务交付负责人", "class": "business", "git_policy": "ignored",
+      "manager": "业务负责人", "retention": "正式交付长期保留", "exit_condition": "仅由业务流程和明确授权处置",
+      "apply_eligible": false
+    },
+    {
+      "path": "ops",
+      "owner": "运维维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "ops/hooks",
+      "owner": "提交检查维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "ops/nssm",
+      "owner": "Windows 服务维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "ops/nssm_install.ps1", "retention": "服务运行资源", "exit_condition": "服务确认退役后由运维维护者处理",
+      "apply_eligible": false
+    },
+    {
+      "path": "skills",
+      "owner": "业务技能维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "skills/machinery-fee-consolidation",
+      "owner": "机械费技能维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "skills/payment-plan-audit",
+      "owner": "付款计划审查技能维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "tools/audit",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools/dev",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools/mut",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools/oneoff",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools/probe",
+      "owner": "开发工具维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "tools/_vendor",
+      "owner": "setup 部署维护者", "class": "source", "git_policy": "tracked",
+      "manager": "setup-solo-workflow", "retention": "按项目锁定版本", "exit_condition": "经维护源升级或卸载",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "tools/_vendor/setup_solo_workflow",
+      "owner": "setup 部署维护者", "class": "source", "git_policy": "tracked",
+      "manager": "setup-solo-workflow", "retention": "按 deployment.json", "exit_condition": "经维护源升级或卸载",
+      "apply_eligible": false
+    },
+    {
+      "path": "var",
+      "owner": "运行维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "none", "retention": "按各具体状态和用途", "exit_condition": "交相应运行机制",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "var/backups",
+      "owner": "数据库备份负责人", "class": "backup", "git_policy": "ignored",
+      "manager": "ops/backup_databases.py", "retention": "按备份保留策略", "exit_condition": "只使用备份管理入口",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/cache",
+      "owner": "缓存生产者", "class": "runtime", "git_policy": "ignored",
+      "manager": "none", "retention": "按各缓存策略", "exit_condition": "交所属生产者",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "var/cache/i8_warehouse",
+      "owner": "i8 仓库缓存", "class": "cache", "git_policy": "ignored",
+      "manager": "i8 仓库缓存刷新", "retention": "按生产者策略", "exit_condition": "由取数缓存入口重建",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/cache/signatures",
+      "owner": "签名缓存", "class": "cache", "git_policy": "ignored",
+      "manager": "签名读取与缓存机制", "retention": "按生产者策略", "exit_condition": "由签名维护者核对",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/data",
+      "owner": "运行数据负责人", "class": "runtime", "git_policy": "ignored",
+      "manager": "none", "retention": "按业务运行用途", "exit_condition": "交所属生产者",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "var/data/i8_source",
+      "owner": "i8 取数负责人", "class": "business", "git_policy": "ignored",
+      "manager": "业务负责人", "retention": "按来源和复核用途保留", "exit_condition": "由 i8 取数维护者处理",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/data/react-writable-preview",
+      "owner": "React 预览维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prune --files-only", "retention": "预览副本用途期间", "exit_condition": "核副本用途和业务状态后专项退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/frontend",
+      "owner": "前端发布器", "class": "runtime", "git_policy": "ignored",
+      "manager": "ops/frontend_release.py（正式发布收尾）", "retention": "按正式和回退版本保留", "exit_condition": "沿发布流程核验和退出",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "var/frontend/releases",
+      "owner": "前端发布器", "class": "runtime", "git_policy": "ignored",
+      "manager": "ops/frontend_release.py（正式发布收尾）", "retention": "当前和上一完整正式版本", "exit_condition": "核发布登记、指针、实际服务和清单后由发布器退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/log",
+      "owner": "服务维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "服务日志轮换", "retention": "按部署日志策略", "exit_condition": "由服务日志管理入口轮换",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state",
+      "owner": "运行状态负责人", "class": "runtime", "git_policy": "ignored",
+      "manager": "none", "retention": "按各状态用途", "exit_condition": "交所属生产者",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": "var/state/frontend-release",
+      "owner": "前端发布器", "class": "runtime", "git_policy": "ignored",
+      "manager": "ops/frontend_release.py（正式发布收尾）", "retention": "正式发布归属和回退登记", "exit_condition": "随发布器维护",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/i8_cookie",
+      "owner": "i8 会话维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "i8 会话管理", "retention": "当前会话所需", "exit_condition": "由 i8 会话机制失效和刷新",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/import_preview",
+      "owner": "导入预览生产者", "class": "runtime", "git_policy": "ignored",
+      "manager": "backend/app/core/preview_store.py（save / prune）", "retention": "最多 7 天，超过 500 份时回收最早写入的预览", "exit_condition": "由导入预览暂存回收",
+      "apply_eligible": false,
+      "soft_thresholds": {
+        "max_files": 500,
+        "max_mb": 128,
+        "remediation_hint": "核实导入预览的文件数量和大小，通过 preview_store.prune() 回收过期或超量文件。"
+      }
+    },
+    {
+      "path": "var/state/legacy-credential-recovery",
+      "owner": "原凭据恢复负责人", "class": "runtime", "git_policy": "ignored",
+      "manager": "专项核验 retention.json", "retention": "按旧恢复记录", "exit_condition": "过期且无 Hold 或有效恢复用途后经授权退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/print-batches",
+      "owner": "打印批次生产者", "class": "runtime", "git_policy": "ignored",
+      "manager": "backend/app/mod03_notice/print_batch_store.py", "retention": "按批次生命周期", "exit_condition": "由打印批次存储回收",
+      "apply_eligible": false,
+      "soft_thresholds": {
+        "max_files": 1000,
+        "max_mb": 64,
+        "remediation_hint": "检查完成批次是否由打印批次存储正常退出。"
+      }
+    },
+    {
+      "path": "var/state/react-writable-preview",
+      "owner": "React 预览维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prune --files-only", "retention": "活动预览和有效试用状态", "exit_condition": "目录只剩空 runtime.env 且无活动登记时回收",
+      "apply_eligible": false,
+      "soft_thresholds": {
+        "max_files": 120,
+        "max_mb": 64,
+        "remediation_hint": "先用 frontend_preview.py --list 核活动登记，再用 --prune --files-only 清理空目录。"
+      }
+    },
+    {
+      "path": "var/state/react-writable-preview/instances",
+      "owner": "React 预览维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prune --files-only", "retention": "保留登记和锁目录", "exit_condition": "由预览运行机制维护",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/react-writable-preview/slots",
+      "owner": "React 预览维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prune --files-only", "retention": "保留登记和锁目录", "exit_condition": "由预览运行机制维护",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/react-writable-preview/files",
+      "owner": "React 预览维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/dev/frontend_preview.py --prune --files-only", "retention": "保留登记和锁目录", "exit_condition": "由预览运行机制维护",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/verification",
+      "owner": "验证维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "none", "retention": "按验证工具或活动用途保留", "exit_condition": "必要记录归位后由所属验证入口退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/state/worktree-preservation",
+      "owner": "工作树恢复负责人", "class": "backup", "git_policy": "ignored",
+      "manager": "人工核对工作树恢复记录", "retention": "按已确认的恢复用途", "exit_condition": "确认保存位置和解除条件后专项退出",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/tmp",
+      "owner": "运行维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "各生产者的临时路径", "retention": "单次运行期间", "exit_condition": "交该运行生产者收尾",
+      "apply_eligible": false
+    },
+    {
+      "path": "var/worktrees",
+      "owner": "工作树维护者", "class": "runtime", "git_policy": "ignored",
+      "manager": "tools/audit/worktree_check.py（只读）", "retention": "按工作树消费者保留", "exit_condition": "按 CONTRIBUTING 的工作树退出检查处理",
+      "apply_eligible": false
+    },
+    {
+      "path": "outputs",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "backend/app/web/shell",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "ops/实测快照",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "var/state/verification/shell-baselines",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "docs/archive/machinery-fee-workflow-20261019",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "tools/oneoff/_归档-20261011",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录为空",
+      "apply_eligible": true
+    },
+    {
+      "path": "**/__pycache__",
+      "owner": "none", "class": "residue", "git_policy": "ignored",
+      "manager": "none", "retention": "无", "exit_condition": "仅当目录只含无对应源码的 Python 字节码且不在保护范围内",
+      "apply_eligible": true
+    }
+  ]
+}

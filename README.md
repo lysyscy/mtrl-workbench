@@ -17,4 +17,4 @@
 
 `docs` 只保当前知识；`.scratch` 保活动规格和票。已结束且无活动消费者的历史材料通过 Git 读取，例如 `git log --all -- <原路径>`、`git show <提交>:<原路径>`。不复制另一套历史目录。
 
-用户原件在 `data/source`，成品在 `exports`；正式前端构建在 `var/frontend/releases`，技能打包时可按需重建 `dist`。`var` 下 data/state/cache/log/tmp/backups 各按运行职责保存。`.codex-attachments` 保存本机用户附件，`.github` 保存持续集成配置；实际模板、字体及授权文件由运行资源目录持有。开发产物生命周期见[项目工作流](docs/agents/workflow.md)。
+用户原件在 `data/source`，成品在 `exports`；正式前端构建在 `var/frontend/releases`，技能打包时可按需重建 `dist`。`var` 下 data/state/cache/log/tmp/backups 各按运行职责保存。`.codex-attachments` 保存本机用户附件，`.github` 保存持续集成配置；实际模板、字体及授权文件由运行资源目录持有。开发产物生命周期见[项目工作流](docs/agents/workflow.md)。查目录归属和维护入口用[目录清单](tools/audit/directory_manifest.json)，治理边界见[ADR-0002](docs/adr/0002-workspace-directory-governance.md)。

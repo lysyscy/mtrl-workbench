@@ -9,7 +9,8 @@
 | React 验看与失败截图 | dev/frontend_capture.py；对已存在预览页采集截图和身份JSON；React失败自动截图与按需截图fixture共用，不创建服务或写业务数据。 |
 | React布局采集 | dev/frontend_layout.py；指定本任务run并核唯一最新可丢弃副本，从真实导航采目标视口/字号与可见网格，未就绪/空样本/溢出非零；见预览指南布局入口。 |
 | React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
-| 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用；--staged只检查Git index，显式无参数保全量模式，Git失败非零 |
+| 暂存目录、语法、字节与凭据保护 | audit/directory_audit.py、syntax_audit.py、bytes_guard.py，由 pre-commit 调用。`--staged` 只检查 Git 暂存区，Git 读取失败时退出码非零。 |
+| 工作区目录审计 | `audit/directory_audit.py` 默认只读，`--dry-run` 同默认。目录归属与阈值见[目录清单](audit/directory_manifest.json)，清理边界见 [ADR-0002](../docs/adr/0002-workspace-directory-governance.md)。 |
 | 工作树退出证据 | audit/worktree_check.py；仅任务收尾按需调用，只读输出JSON，0表示扫描完整、2表示失败/不完整；不决定删除资格。退出判据由CONTRIBUTING持有 |
 | 运行输出与生命周期 | audit/workspace_paths.py自动管理项目内新运行；artifact_lifecycle.py查询/清理已登记产物；audit_work.py仅保留旧目录检查 |
 | 开、关、列票 | oneoff/_tail_open.py、_tail_close.py、_list_tails.py；协议见docs/agents/issue-tracker.md，默认干跑 |

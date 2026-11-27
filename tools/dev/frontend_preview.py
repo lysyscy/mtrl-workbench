@@ -183,16 +183,18 @@ def migrate(env, revision, *, log=None):
                    cwd=ROOT / 'backend', env=env, check=True, stdout=log, stderr=log)
 
 
-def prune(source_env):
-    from sqlalchemy import create_engine, text
-    from tools.dev.frontend_preview_runtime import DISPOSABLE_SCHEMA_PREFIX, prune_registrations
+def prune(source_env, *, files_only=False):
+    from tools.dev.frontend_preview_runtime import DISPOSABLE_SCHEMA_PREFIX, prune_preview_state
 
-    if source_env is None:
-        source_env = ROOT / '.env'
-        if not source_env.is_file():
-            removed, _ = prune_registrations()
-            return dict(removed_registrations=removed, dropped_schemas=[], schema_cleanup='no-source-env')
-    _, guard = verified_database_source(source_env)
+    default_env = ROOT / '.env'
+    if files_only or (source_env is None and not default_env.is_file()):
+        removed, _, runtime_dirs = prune_preview_state()
+        return dict(removed_registrations=removed, removed_runtime_dirs=runtime_dirs, dropped_schemas=[],
+                    schema_cleanup='files-only' if files_only else 'no-source-env')
+
+    from sqlalchemy import create_engine, text
+
+    _, guard = verified_database_source(source_env if source_env is not None else default_env)
     engine = create_engine(guard.test_url, hide_parameters=True)
     try:
         guard.assert_runtime(engine.url)
@@ -215,7 +217,7 @@ def prune(source_env):
             '''), {'prefix': DISPOSABLE_SCHEMA_PREFIX}).scalars().all()
             # New servers reserve their schema before creating it. Snapshot the
             # registry after discovering candidates, without holding it during DDL.
-            removed, live = prune_registrations()
+            removed, live, runtime_dirs = prune_preview_state()
             if any(not entry.owner.get('schema') for entry in live):
                 raise RuntimeError('活动预览的 schema 无法确认，未执行数据库清理')
             protected = {entry.owner.get('schema') for entry in live}
@@ -225,7 +227,7 @@ def prune(source_env):
                     continue
                 connection.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
                 dropped.append(schema)
-        return dict(removed_registrations=removed, dropped_schemas=dropped)
+        return dict(removed_registrations=removed, removed_runtime_dirs=runtime_dirs, dropped_schemas=dropped)
     finally:
         engine.dispose()
 
@@ -244,7 +246,7 @@ def main() -> None:
         return
     if args.prune:
         import json
-        print(json.dumps(prune(args.source_env), ensure_ascii=False))
+        print(json.dumps(prune(args.source_env, files_only=args.files_only), ensure_ascii=False))
         return
     if args.stop:
         if not args.all:
