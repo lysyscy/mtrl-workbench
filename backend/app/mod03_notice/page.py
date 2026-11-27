@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-import re
-
 # ============================================================ §4.1.2 付款域的范围定义
 
 SCOPE_INCLUDED: tuple[str, ...] = (
@@ -89,723 +87,85 @@ def nav_violations() -> list[str]:
     return bad
 
 
-# ============================================================
-# 主题变量 —— **全站唯一真源**（页面件主人 = 本文件）
-# ============================================================
-# 命名与语义**照 `demo/` 原型**（原型 = 交互规格主人；其 `:root` 与本表同名同义）。
-# ⚠️ **为什么必须有这一层**：`sumrow` / `vsep` 两条规则本来就是从原型抄的（连 `var(--sf2)`、
-#    `var(--bd)` 都照抄），却**没抄原型的 `:root`** ⇒ 变量无定义 ⇒ **整条声明静默失效**
-#    （合计行吸附底色、内阴影、分段竖线全都不显示；2026-09-16 实测确认）。
-#    本表补齐定义，并把 BASE_CSS 里的裸色值**全部**收进来（此后 CSS 里不再出现色值字面量）。
-# ⚠️ **多主题约定（用户 2026-09-16 定：要支持多套主题自选）**：
-#    ① **语义命名**（`--pri` 而非 `--blue`）—— 换一套主题时名字不变；
-#    ② **成对颜色必须成组**：状态色按「主色 / 深字 / 浅底 / 浅边框」四档一组
-#       （`--ok` `--ok-d` `--ok-l` `--ok-bd`），否则第 2 套会出现"新绿字配旧浅绿底"；
-#    ③ **换主题 = 换这一份取值** ⇒ 零 CSS 改动（一套主题 ≈ 下面这段 `:root`）。
-# ⭐ 2026-09-19（`§19` 性能·**主题②**）：**取值本尊换成了 `demo/` 原型那一套**（此前是另一套
-#    「站点配色」）。原委：本表的**第三路消费者 = 前端壳** `backend/app/web/index.html`
-#    （经 `GET /static/theme.css`）—— 壳原先自带一份 `:root`（同名的 16 个取值都不同），
-#    那是**第二份真源**；用户 2026-09-19 裁定「**服务端渲染页迟早删干净、只看壳**」⇒ 以**壳现值**
-#    为准（观感零变化），服务端那几页跟着变（它们本就在删除清单上）。同时把壳需要的角色
-#    （中性档 `--in-*` / 特殊档 `--vi-*` / 侧栏 `--sb-*` / 阴影 `--shadow-*` / 几何与字体
-#    `--r` `--r2` `--fs` `--fm`）**一并收进本表** ⇒ 壳此后**零本地变量定义**（只有一条 `<link>`）。
-#    ⛔ 再往壳里写色值字面量或自带 `:root` ⇒ `test_theme.py` 的红灯（已扫壳）。
+# 两个样式端点和外观卡片共用同一组颜色角色。
 FONT_CSS = "@import url('/static/fonts/misans-web.css');\n"
-
-THEME_CSS = FONT_CSS + """
-:root{
-  /* 中性 / 表面 */
-  --bg:#f4f6f9; --sf:#fff; --sf2:#f8fafc; --sf3:#f4f4f5;
-  --bd:#e3e8ef; --bd2:#eef1f5; --bd3:#c4ccd8;
-  --tx:#1f2329; --tx2:#5c6675; --mut:#6b7280; --mut2:#c9d0da;
-  --on:#fff;
-  /* 主色（四档 ＋ 高亮档） */
-  --pri:#2563eb; --pri-d:#1d4ed8; --pri-l:#eff5ff; --pri-bd:#dbeafe; --pri-hl:#93c5fd;
-  /* 状态色：绿 / 琥珀 / 红 —— 各四档成组 */
-  --ok:#16a34a; --ok-d:#15803d; --ok-l:#f0fdf4; --ok-bd:#bbf7d0;
-  --wn:#d97706; --wn-d:#92400e; --wn-l:#fffbeb; --wn-bd:#fde68a;
-  --dg:#dc2626; --dg-d:#991b1b; --dg-l:#fef2f2; --dg-bd:#fecaca;
-  /* 中性档（普通 / 未付款）与特殊档（集采 / 紫）—— 同样四档成组 */
-  --in:#64748b; --in-d:#475569; --in-l:#f1f5f9; --in-bd:#e2e8f0;
-  --vi:#7c3aed; --vi-d:#6d28d9; --vi-l:#f5f3ff; --vi-bd:#ddd6fe;
-  --bl:#2563eb; --bl-d:#1e40af; --bl-l:#eff6ff; --bl-bd:#bfdbfe;
-  /* 行态 / 可改格 */
-  --row-hover:#fafbfc; --ex-bg:#fafafa; --hl:#fff8f0; --hl-hover:#fef3c7;
-  --sel:#e0e7ff; --void-bg:#fffbf5; --draft:#fffdf5; --edit-l:#fffbeb; --edit-bd:#fcd34d;
-  --th-hover:#e9eef5; --del-line:#d4d4d4;
-  /* 侧栏（深色面板）与提示条 —— ⭐ 2026-09-21 立**三档文字**规范（用户报「侧栏在各类主题下视觉不平衡」）：
-     `--sb-hd`（品牌名/悬停项 —— 最亮）· `--sb-tx`（普通项）· `--sb-mut`（编号·分组标题·页脚 —— 次要）
-     ＋ `--sb-on`（**选中项底 = 主色本尊**）与 `--sb-on-hl`（选中项里的编号 —— `--on` 的浅化档）。
-     ⚠️ 选中项底**不再是"更暗的面板色"**：那样配 `color:var(--on)`（主色之上的前景）在深色套里
-        会变成**黑字压近黑底**（2026-09-21 实测对比度 **1.05** ⇒ 等于看不见，正是"不平衡"的根）。 */
-  --sb:#1e293b; --sb-bd:#334155; --sb-tx:#cbd5e1; --sb-hd:#ffffff; --sb-mut:#aab8ca; --sb-dis:#8fa0b8;
-  --sb-hover:#273449; --sb-on:#2563eb; --sb-on-hl:#f2f6ff;
-  --toast-bg:#1e293b; --code-bg:#fff9;
-  /* 阴影 / 遮罩 */
-  --shadow:0 1px 2px #0f172a12; --shadow-pop:0 8px 24px #0f172a26;
-  --shadow-md:0 12px 32px #0f172a2e; --shadow-toast:0 8px 22px #0f172a3d; --mask:#0f172a66;
-  /* 几何与字体（非颜色；壳与页面共用同一份，故一并收进真源） */
-  --r:8px; --r2:12px;
-  --fs:'MiSans','Microsoft YaHei','PingFang SC',system-ui,sans-serif;
-  --fm:var(--fs);
-}
-"""
-
-# ============================================================ 多主题（《说明书》§7.7）
-# ⭐ 用户 2026-09-20 定：预置主题清单**≥10 套**（"换着玩"）。
-#
-# ⚠️⚠️ **为什么是"种子 + 派生"而不是 12 份手抄**：
-#   一套主题 = **67 个变量**（色值 ＋ 几何/字体）⇒ 12 套手抄 = **800 多个值**，
-#   必然出现**漏项**（引用了没定义 ⇒ 整条声明静默失效）与**跨套漂移**（第 3 套的
-#   `--ok-l` 忘了跟着 `--ok` 改 ⇒ "新绿字配旧浅绿底"，§7.7 明确要防的就是这个）。
-#   ⇒ 改成**一行种子 → 派生整套**：清单再长，**产出形态不变**（仍是"一份变量取值"），
-#     而"每套覆盖同一组变量名"**由构造保证**（不是靠人记）。
-#
-# ⚠️ **默认套不走派生** —— 它**原样沿用**下面那段 `THEME_CSS` 字面量 ⇒ **观感零变化**，
-#    `BASE_CSS` / `test_theme.py` 的既有断言**一个字都不用动**（零破坏）。
-
-
-def _rgb(c: str) -> tuple[int, int, int]:
-    c = str(c).lstrip("#")
-    if len(c) == 3:
-        c = "".join(ch * 2 for ch in c)
-    return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
-
-
-def _hex(x) -> str:
-    return "#%02x%02x%02x" % tuple(max(0, min(255, round(v))) for v in x)
-
-
-def _mix(a: str, b: str, t: float) -> str:
-    """线性混色：`t=0` 全取 `a`、`t=1` 全取 `b`。
-
-    ⚠️ **`--x-l`（浅底）要朝"本套的底色"混、⛔ 不是朝白色混** —— 否则深色主题会派生出一堆
-       白底浅色块（深色主题里的"浅底"必须是"比底色稍亮"）。
-    """
-    ca, cb = _rgb(a), _rgb(b)
-    return _hex(tuple(x + (y - x) * t for x, y in zip(ca, cb)))
-
-
-def _lum(c: str) -> float:
-    r, g, b = _rgb(c)
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
-
-
-def _on(c: str) -> str:
-    """该色**上面**的前景色（黑或白）—— 按亮度选，保证能看清。
-
-    ⚠️ 区外函数 ⇒ 只许用区里那两个常量（⛔ 不写字面量）。
-    """
-    return _PURE_WHITE if _lum(c) < 0.58 else _PURE_BLACK
-
+DEFAULT_THEME = "松绿"
 
 # ==== 主题定义区（THEME-DEF BEGIN）====
-# ⚠️⚠️ **本区是"颜色字面量"唯一允许出现的地方**（`test_theme.py` 按这两个标记断区）
-#   —— §7.7 说的「一份主题变量表统管」就是它。⛔ 别把色值写到区外。
-_PURE_BLACK = "#000000"
-_PURE_WHITE = "#ffffff"
+THEME_SEEDS: dict[str, dict[str, str]] = {
+    DEFAULT_THEME: {
+        "--bg": "#edf3f0", "--sf": "#ffffff", "--sf2": "#f2f7f5", "--sf3": "#e6efeb",
+        "--tx": "#182c26", "--tx2": "#304640", "--mut": "#4c625b", "--mut2": "#526a61",
+        "--on": "#ffffff",
+        "--bd": "#cfddd7", "--bd2": "#e0e9e4", "--bd3": "#6b8177",
+        "--pri": "#0c6b61", "--pri-d": "#09544c", "--pri-l": "#e6f2ee",
+        "--pri-bd": "#98c5bc", "--pri-hl": "#4d9a90",
+        "--sb": "#0b221d", "--sb-bd": "#28453e", "--sb-hd": "#f4faf7",
+        "--sb-tx": "#d9e9e2", "--sb-mut": "#a9c1b7", "--sb-dis": "#a9c1b7",
+        "--sb-hover": "#15352c", "--sb-on": "#17483d", "--sb-on-hl": "#effbf6",
+        "--toast-bg": "#0b221d", "--code-bg": "#ffffff",
+        "--row-hover": "#edf6f2", "--sel": "#c5e7dc", "--th-hover": "#ddeae4",
+        "--ex-bg": "#f2f7f5", "--hl": "#f3eedf", "--hl-hover": "#ebdfc4",
+        "--edit-l": "#f2ecdc", "--edit-bd": "#c8a265", "--void-bg": "#efece8",
+        "--draft": "#eef1ea", "--del-line": "#6b8177",
+        "--ok": "#215b45", "--ok-d": "#184433", "--ok-l": "#eaf4ed", "--ok-bd": "#b3cdbe",
+        "--wn": "#69490c", "--wn-d": "#523808", "--wn-l": "#fcf2db", "--wn-bd": "#ddc58f",
+        "--dg": "#962f38", "--dg-d": "#78222a", "--dg-l": "#f9eaea", "--dg-bd": "#e1b6b8",
+        "--bl": "#245974", "--bl-d": "#1b4358", "--bl-l": "#ebf4f8", "--bl-bd": "#b5cedc",
+        "--in": "#455650", "--in-d": "#32403b", "--in-l": "#eef2f0", "--in-bd": "#bac7c2",
+        "--vi": "#5b3b8c", "--vi-d": "#452b6c", "--vi-l": "#f3effa", "--vi-bd": "#cabce3",
+        "--mask": "rgba(8, 27, 22, 0.52)",
+        "--shadow": "0 1px 2px rgba(8, 27, 22, 0.08)",
+        "--shadow-pop": "0 6px 20px rgba(8, 27, 22, 0.14)",
+        "--shadow-md": "0 16px 40px rgba(8, 27, 22, 0.2)",
+        "--shadow-toast": "0 8px 22px rgba(8, 27, 22, 0.24)",
+    },
+}
+# ==== /主题定义区（THEME-DEF END）====
 
-#: 侧栏面板的**锚色**（浅色套用）：带一点蓝的近黑 —— 比纯黑"透气"，且**不带任何色相**
-#: ⇒ 与主色相混出"本套的深面板"（`_derive` 的侧栏那一段）。⚠️ 换它 = 换**所有浅色套**的侧栏深浅。
-_SB_ANCHOR = "#070b14"
+THEME_SPEC = {
+    DEFAULT_THEME: {"scene": "日常录入 · 台账核对", "style": "精工深墨松绿"},
+}
+REACT_THEME_SPEC = {
+    name: {"description": spec["style"], "scene": spec["scene"], "label": name}
+    for name, spec in THEME_SPEC.items()
+}
 
-#: 三个状态色 ＋ 中性档 ＋ 特殊档的**种子**（每套主题一样，只有色相不同）
-_STATE_SEEDS = {"ok": "#16a34a", "wn": "#d97706", "dg": "#dc2626", "bl": "#2563eb",
-                "in": "#64748b", "vi": "#7c3aed"}
-
-
-def _derive(seed: dict) -> dict[str, str]:
-    """种子 → **整套变量**（67 个）。每套都由这一个函数产出 ⇒ 覆盖面天然一致。"""
-    bg, sf, tx = seed["bg"], seed["sf"], seed["tx"]
-    pri = seed["pri"]
-    dark = bool(seed.get("dark"))
-    # 表面 / 中性：深色套往**更亮**走、浅色套往**更暗**走
-    step = -1 if dark else 1
-    v = {
-        "--bg": bg,
-        "--sf": sf,
-        "--sf2": _mix(sf, bg, 0.45),
-        "--sf3": _mix(sf, bg, 0.85),
-        "--bd": _mix(bg, tx, 0.14),
-        "--bd2": _mix(bg, tx, 0.07),
-        "--bd3": _mix(bg, tx, 0.32),
-        "--tx": tx,
-        "--tx2": _mix(tx, bg, 0.32),
-        # ⚠️ 2026-09-21：`--mut` 由 0.55 收到 **0.42** —— 它是**给人读的**（空态 / 提示 / 占位），
-        #    0.55 时实测只有 2.8~2.9（低于 AA 的 4.5），用户对它的原话是「看着发灰、不清爽」。
-        "--mut": _mix(tx, bg, 0.34),
-        "--mut2": _mix(tx, bg, 0.70),      # 更弱的档（分隔符号 / 占位）：可辨即可
-        "--on": _on(pri),
-    }
-    # 主色四档 ＋ 高亮档
-    # ⚠️ 2026-09-21：**浅底（`-l`）朝 `sf` 混，⛔ 不再朝 `bg`** —— 浅色套的 `bg` 本身带色、
-    #    混出来的"浅底"偏暗 ⇒ `-d` 压上去只有 4.3~4.5（蓝灰工控实测 4.32/4.48，卡在线上）。
-    #    朝 `sf`（卡片面，近白）混 ⇒ 浅底够浅、深字够读；深色套仍朝 `bg`（那里的"浅底"=比底色稍亮）。
-    face = sf if not dark else bg
-    v["--pri"] = pri
-    v["--pri-d"] = _mix(pri, "#000000" if not dark else "#ffffff", 0.22)
-    v["--pri-l"] = _mix(pri, face, 0.90 if not dark else 0.86)
-    v["--pri-bd"] = _mix(pri, bg, 0.66 if not dark else 0.72)
-    v["--pri-hl"] = _mix(pri, bg, 0.35 if not dark else 0.45)
-    # 状态 / 中性档 / 特殊档：各四档成组（§7.7 硬要求）
-    for k, c in _STATE_SEEDS.items():
-        v[f"--{k}"] = c
-        v[f"--{k}-d"] = _mix(c, "#000000" if not dark else "#ffffff", 0.28)
-        v[f"--{k}-l"] = _mix(c, face, 0.90 if not dark else 0.84)
-        v[f"--{k}-bd"] = _mix(c, bg, 0.66 if not dark else 0.72)
-    # 行态 / 可改格
-    v["--row-hover"] = _mix(sf, pri, 0.06)
-    v["--ex-bg"] = _mix(sf, bg, 0.75)
-    v["--hl"] = _mix(bg, "#d97706", 0.10 if not dark else 0.14)
-    v["--hl-hover"] = _mix(bg, "#d97706", 0.20 if not dark else 0.24)
-    v["--sel"] = _mix(bg, pri, 0.22 if not dark else 0.30)
-    v["--void-bg"] = _mix(bg, "#dc2626", 0.06 if not dark else 0.10)
-    v["--draft"] = _mix(bg, "#d97706", 0.05 if not dark else 0.09)
-    v["--edit-l"] = _mix(bg, "#d97706", 0.12 if not dark else 0.16)
-    v["--edit-bd"] = _mix(bg, "#d97706", 0.42)
-    v["--th-hover"] = _mix(bg, pri, 0.10 if not dark else 0.16)
-    v["--del-line"] = _mix(tx, bg, 0.70)
-    # 侧栏（**深面板 · 带本套色相**）—— ⭐ 2026-09-21 重做（用户报「左侧页面选择栏在各类主题下视觉不平衡」）。
-    # ⚠️ 原实现两个毛病，都在下一条注释里说明；现规范 = 三条，**全部由构造保证**：
-    #   ① `--sb` **带本套主色相**（浅色套 = 主色压暗到近黑；深色套 = 底色抬升一档再掺主色）
-    #      —— 原先恒定往无彩色的 `#0b1220` / `#000000` 混 ⇒ **各套侧栏几乎一样**（"换主题侧栏没反应"）；
-    #   ② 三档文字由 sb 往白混**固定比例** ⇒ 各套对比度**同量级**（不会"某几套特别糊"）；
-    #   ③ 选中项底 = **主色本尊**、文字 = `--on` ⇒ 深浅两族都读得清（详见 `THEME_CSS` 里那段注释）。
-    if dark:
-        sb = _mix(_mix(bg, "#ffffff", 0.10), pri, 0.10)   # 抬升一档 ⇒ 与内容区**分得开**，再掺主色相
-    else:
-        sb = _mix(pri, _SB_ANCHOR, 0.86)                  # 主色相 × 近黑 ⇒ 经典深面板
-    v["--sb"] = sb
-    v["--sb-bd"] = _mix(sb, "#ffffff", 0.16)
-    v["--sb-hd"] = _mix(sb, "#ffffff", 0.94)      # 品牌名 / 悬停项（最亮档）
-    v["--sb-tx"] = _mix(sb, "#ffffff", 0.78)      # 普通项
-    v["--sb-mut"] = _mix(sb, "#ffffff", 0.62)     # 编号 / 分组标题 / 页脚（次要，仍须 ≥4.5）
-    v["--sb-dis"] = _mix(sb, "#ffffff", 0.62)     # ⚠️ 不再"压到看不见"：`暂缓` 那一项**仍可点**，得读得清
-    v["--sb-hover"] = _mix(sb, "#ffffff", 0.12)
-    v["--sb-on"] = pri                            # ⭐ 选中项底 = 主色（配 `--on` 正好是"主色之上的前景"）
-    # 选中项里的编号：`--on` 往主色**只混一点点**（0.06）—— ⚠️ 2026-09-21 实测：混 0.26 时
-    #   「默认/松绿/琥珀/绛红/蓝灰工控」5 套在真机上只有 **3.33~4.40**（低于 4.5）⇒ 用户读不清那个编号。
-    #   主色底上的文字**天花板就是 `--on` 自己**（`#2563eb` 上白字也只有 5.12）⇒ 只能贴到接近 `--on`。
-    v["--sb-on-hl"] = _mix(_on(pri), pri, 0.06)
-    v["--toast-bg"] = sb if not dark else _mix(bg, "#ffffff", 0.10)
-    v["--code-bg"] = "#fff9" if not dark else "#ffffff14"
-    # 阴影 / 遮罩（透明度固定，深浅由"叠在什么底上"决定）
-    v["--shadow"] = "0 1px 2px #0f172a12" if not dark else "0 1px 2px #00000040"
-    v["--shadow-pop"] = "0 8px 24px #0f172a26" if not dark else "0 8px 24px #00000059"
-    v["--shadow-md"] = "0 12px 32px #0f172a2e" if not dark else "0 12px 32px #00000066"
-    v["--shadow-toast"] = "0 8px 22px #0f172a3d" if not dark else "0 8px 22px #00000073"
-    v["--mask"] = "#0f172a66" if not dark else "#000000a6"
-    return v
-
-
-#: 几何与字体 —— **所有主题共用**（不是颜色；换主题不该改变尺寸与字号）
 GEOMETRY = {
-    "--r": "8px", "--r2": "12px",
+    "--r": "6px", "--r2": "8px",
     "--fs": "'MiSans','Microsoft YaHei','PingFang SC',system-ui,sans-serif",
     "--fm": "var(--fs)",
 }
-
-#: ⭐ **预置主题清单的种子表**（加一套 = 加一行；《说明书》§7.7 列了清单与取向）
-#:
-#: ⭐⭐ 2026-09-21 **重定案（用户裁定）**：清单**恰好 10 套 · 每套独立**（⛔ 不再有"深色·X"这类
-#:   变体 —— 用户原话「10 个完整、**独立**、可切换的主题方案」）；每套的**适用场景 ＋ 设计风格**
-#:   落在 `THEME_SPEC`（与本表**键集必须相同**，`test_theme.py` 钉着）。
-#: ⚠️ 四条硬约束（改写种子时**逐条自检**，`tools/_theme_contrast.py` 会算给你看）：
-#:   ① `pri` 作**链接/强调字**要能在 `bg` 上读（≥4.5）⇒ 不能取太亮的色；
-#:   ② `tx` 与 `bg` ≥4.5；③ `sf` 与 `bg` 要**看得出层次**（卡片浮起来）；
-#:   ④ 各套的 `bg` 差异要**看得出来**（这个值取自上一版"看着都一样"的教训：原先只差 1~3 个灰阶）。
-# React uses the same palette choices, with its accepted surface and geometry vocabulary.
-_REACT_LIGHT = {
-    "--bg": "#f6f6f4", "--sf": "#ffffff", "--sf2": "#fafaf8",
-    "--bd": "#ececea", "--bd2": "#ececea", "--bd3": "#e0dfdc",
-    "--tx": "#1d1c1a", "--tx2": "#6f6d68", "--mut": "#6f6d68",
-}
-_REACT_STATES = {
-    "ok": ("#2f9e6e", "#20734f", "#e6f6ef", "#b9dfce"),
-    "wn": ("#c7881a", "#865d0f", "#fdf3e0", "#ecd49f"),
-    "dg": ("#d64545", "#b72e35", "#fdeaea", "#efbcbc"),
-    "bl": ("#3d7fd6", "#245fa6", "#e9f2fc", "#bdd2ef"),
-    "vi": ("#5b5bd6", "#4d4dc9", "#eeeefc", "#c9c8ee"),
-}
-_REACT_SHADOWS = {
-    "--shadow": "0 1px 2px rgba(25,24,20,.05)",
-    "--shadow-pop": "0 4px 16px rgba(25,24,20,.07),0 1px 3px rgba(25,24,20,.04)",
-    "--shadow-md": "0 24px 64px rgba(25,24,20,.16),0 8px 20px rgba(25,24,20,.08)",
+REACT_GEOMETRY = {
+    "--ui-scheme": "light",
+    "--font-ui-size": "13.5",
+    "--radius-input": "var(--r)",
+    "--radius-card": "var(--r2)",
+    "--radius-inner": "var(--r)",
+    "--radius-pill": "var(--r)",
+    "--motion-fast": "130ms",
 }
 
-THEME_SEEDS: dict[str, dict] = {
-    "默认": {},                                            # ⚠️ 空 = 用上面那段字面量（观感基准）
-    "靛青": {"bg": "#f2f3fb", "sf": "#ffffff", "tx": "#1b1830", "pri": "#4338ca"},
-    "松绿": {"bg": "#eff6f3", "sf": "#ffffff", "tx": "#10241d", "pri": "#0f766e"},
-    "琥珀": {"bg": "#faf4ea", "sf": "#fffdf9", "tx": "#2a2117", "pri": "#b45309"},
-    "绛红": {"bg": "#faf1f1", "sf": "#ffffff", "tx": "#2a1616", "pri": "#b91c1c"},
-    "石墨": {"bg": "#f1f2f4", "sf": "#ffffff", "tx": "#1c1f24", "pri": "#3f4a5a"},
-    "米黄": {"bg": "#f7f1e4", "sf": "#fffcf5", "tx": "#292317", "pri": "#7c532a"},
-    "蓝灰工控": {"bg": "#e9edf3", "sf": "#fbfcfe", "tx": "#16202c", "pri": "#1d4ed8"},
-    "深色": {"bg": "#0f172a", "sf": "#172033", "tx": "#e2e8f0", "pri": "#7cb2fb", "dark": True},
-    "高对比": {"bg": "#ffffff", "sf": "#ffffff", "tx": "#000000", "pri": "#0000ee"},
-}
 
-#: ⭐ **主题规范表**（2026-09-21 立）：每套的**适用场景**与**设计风格** —— 与 `THEME_SEEDS` **键集相同**
-#: （`test_theme.py` 有断言钉着；⛔ 别只加种子不加这里）。
-#: ⚠️ 它是**给人看的口径**（谁该用哪套），由 `/api/m15/theme` 一并出给壳 ⇒ 卡片上显示"这套是干什么用的"。
-#: ⚠️ 文案说"适用场景"时**只描述观察到的使用条件**（环境光 / 用途 / 时长），⛔ 别吹成"护眼/防近视"这类功效。
-THEME_SPEC: dict[str, dict[str, str]] = {
-    "默认": {"scene": "日常通用", "style": "中性蓝白 · 白面 ＋ 极浅灰底，长期看不腻"},
-    "靛青": {"scene": "长时段录入（半天以上盯着看）", "style": "冷靛 · 低饱和底 ＋ 深靛主色，久看不刺眼"},
-    "松绿": {"scene": "财务对账 · 数据核对", "style": "青绿 · 冷调浅底 ＋ 墨绿主色，数字区不眩光"},
-    "琥珀": {"scene": "仓储 / 工单（暖光或偏黄灯光下）", "style": "暖橙 · 纸感米底 ＋ 焦糖主色，暖光下不发灰"},
-    "绛红": {"scene": "风控 / 异常盯盘", "style": "红褐 · 极浅粉底 ＋ 正红主色，异常项一眼跳出"},
-    "石墨": {"scene": "数据密集大表（列多、行多）", "style": "冷灰 · 无彩色 ＋ 石板主色，把注意力留给数据"},
-    "米黄": {"scene": "长时间阅读 / 弱光办公", "style": "米纸 · 暖白底 ＋ 胡桃主色，低蓝光的纸感"},
-    "蓝灰工控": {"scene": "现场 / 大屏（车间、走廊侧看）", "style": "工控 · 冷蓝灰 ＋ 高结构感分隔，远看仍分得清"},
-    "深色": {"scene": "夜间 / 暗室（值班、加班）", "style": "深空 · 低亮深蓝底 ＋ 天蓝主色，整体亮度压到底"},
-    "高对比": {"scene": "弱视 / 强光环境 / 投影演示", "style": "纯黑白 ＋ 高饱和蓝主色，对比拉满"},
-}
-# React eight-theme palette approved in TAIL-441. Legacy themes above keep their output.
-REACT_GEOMETRY = {'--ui-scheme': 'light',
- '--font-ui-size': '13.5',
- '--radius-input': '6px',
- '--radius-card': '8px',
- '--radius-inner': '6px',
- '--radius-pill': '6px',
- '--motion-fast': '130ms',
- '--r': '6px',
- '--r2': '8px'}
-REACT_THEME_SPEC = {'默认': {'description': '灰白层级 · 蓝色交互', 'scene': '日常录入 · 综合台账', 'label': '中性浅色'},
- '松绿': {'description': '原版松绿 · 完整保留', 'scene': '财务对账 · 数据核对', 'label': '松绿'},
- '暖色纸面': {'description': '米纸底 · 胡桃主色', 'scene': '暖光办公 · 长表阅读', 'label': '暖色纸面'},
- '深侧栏': {'description': '海军蓝侧栏 · 冷白表面', 'scene': '多模块切换 · 集中操作', 'label': '深侧栏'},
- '深色': {'description': '石墨深底 · 表面逐层提亮', 'scene': '暗环境 · 夜间工作', 'label': '深色'},
- '高对比': {'description': '黑白强边界 · 清晰焦点', 'scene': '强光环境 · 清晰辨认', 'label': '高对比'},
- '玫瑰柔粉': {'description': '柔粉底 · 莓玫主色', 'scene': '柔和玫瑰粉底、浅粉导航，莓玫色强调操作。', 'label': '玫瑰柔粉'},
- '丁香浅紫': {'description': '雾紫底 · 葡萄紫主色', 'scene': '雾紫色页面、浅丁香导航，深紫色文字与操作。', 'label': '丁香浅紫'}}
-REACT_THEME_OVERRIDES = {'默认': {'--bg': '#f4f4f4',
-        '--sf2': '#f4f4f4',
-        '--sf3': '#e8e8e8',
-        '--bd': '#d6d6d6',
-        '--bd2': '#e7e7e7',
-        '--bd3': '#8d8d8d',
-        '--tx': '#161616',
-        '--tx2': '#525252',
-        '--mut': '#525252',
-        '--mut2': '#8d8d8d',
-        '--on': '#ffffff',
-        '--pri': '#0053d6',
-        '--pri-d': '#0043ce',
-        '--pri-l': '#edf5ff',
-        '--pri-bd': '#a6c8ff',
-        '--pri-hl': '#78a9ff',
-        '--row-hover': '#edf1f5',
-        '--ex-bg': '#f4f4f4',
-        '--hl': '#fff3d6',
-        '--hl-hover': '#ffe7b0',
-        '--sel': '#d0e2ff',
-        '--void-bg': '#fff1f1',
-        '--draft': '#fff8e6',
-        '--edit-l': '#fff3d6',
-        '--edit-bd': '#9f6c00',
-        '--th-hover': '#e0e0e0',
-        '--del-line': '#8d8d8d',
-        '--sb-bd': '#d6d6d6',
-        '--sb-tx': '#525252',
-        '--sb-hd': '#161616',
-        '--sb-mut': '#525252',
-        '--sb-dis': '#525252',
-        '--sb-hover': '#e8e8e8',
-        '--sb-on': '#d0e2ff',
-        '--sb-on-hl': '#002d9c',
-        '--toast-bg': '#262626',
-        '--code-bg': '#ffffff',
-        '--shadow': '0 1px 2px #1616160d',
-        '--shadow-pop': '0 4px 16px #1616161a',
-        '--shadow-md': '0 16px 48px #16161626',
-        '--shadow-toast': '0 8px 22px #16161633',
-        '--mask': '#16161666'},
- '松绿': {},
- '暖色纸面': {'--bg': '#eee4d1',
-          '--sf': '#fffdf5',
-          '--sf2': '#f6efdf',
-          '--sf3': '#f1e7d2',
-          '--bd': '#cfc1a6',
-          '--bd2': '#e0d4bd',
-          '--bd3': '#9d8766',
-          '--tx': '#312719',
-          '--tx2': '#68533c',
-          '--mut': '#68533c',
-          '--mut2': '#9b896e',
-          '--on': '#fffdf5',
-          '--pri': '#744923',
-          '--pri-d': '#573419',
-          '--pri-l': '#eee1c9',
-          '--pri-bd': '#b99b71',
-          '--pri-hl': '#c8aa81',
-          '--row-hover': '#f0e6d3',
-          '--ex-bg': '#f6efdf',
-          '--hl': '#f8e7bf',
-          '--hl-hover': '#f0d99e',
-          '--sel': '#dfcba9',
-          '--void-bg': '#faebe0',
-          '--draft': '#faf0d5',
-          '--edit-l': '#f8e7bf',
-          '--edit-bd': '#9a6c2c',
-          '--th-hover': '#e8dbc1',
-          '--del-line': '#9b896e',
-          '--sb': '#e2d4b8',
-          '--sb-bd': '#c1ad8a',
-          '--sb-tx': '#58452f',
-          '--sb-hd': '#312719',
-          '--sb-mut': '#58452f',
-          '--sb-dis': '#58452f',
-          '--sb-hover': '#d8c5a2',
-          '--sb-on': '#744923',
-          '--sb-on-hl': '#fffdf5',
-          '--toast-bg': '#473622',
-          '--code-bg': '#fffdf5',
-          '--shadow': '0 1px 2px #60432012',
-          '--shadow-pop': '0 6px 20px #60432024',
-          '--shadow-md': '0 20px 48px #60432033',
-          '--shadow-toast': '0 8px 22px #6043203d',
-          '--mask': '#31271966'},
- '深侧栏': {'--bg': '#eaf0f7',
-         '--sf2': '#f1f5fb',
-         '--sf3': '#dfe8f3',
-         '--bd': '#c5d3e5',
-         '--bd2': '#dce5f0',
-         '--bd3': '#8299b7',
-         '--tx': '#182c49',
-         '--tx2': '#455a77',
-         '--mut': '#455a77',
-         '--mut2': '#8296ae',
-         '--on': '#ffffff',
-         '--pri': '#2454a4',
-         '--pri-d': '#193c7c',
-         '--pri-l': '#e7effb',
-         '--pri-bd': '#9db7df',
-         '--pri-hl': '#7b9ed3',
-         '--row-hover': '#eaf1fa',
-         '--ex-bg': '#f1f5fb',
-         '--hl': '#fff1cf',
-         '--hl-hover': '#f9e3ad',
-         '--sel': '#c6d9f3',
-         '--void-bg': '#fcebec',
-         '--draft': '#fff8e4',
-         '--edit-l': '#fff1cf',
-         '--edit-bd': '#9e6d1b',
-         '--th-hover': '#d8e4f3',
-         '--del-line': '#8296ae',
-         '--sb': '#132942',
-         '--sb-bd': '#304a68',
-         '--sb-tx': '#d3dfed',
-         '--sb-hd': '#ffffff',
-         '--sb-mut': '#b3c3d7',
-         '--sb-dis': '#b3c3d7',
-         '--sb-hover': '#263f5c',
-         '--sb-on': '#d7e6ff',
-         '--sb-on-hl': '#17386b',
-         '--toast-bg': '#132942',
-         '--code-bg': '#ffffff',
-         '--shadow': '0 1px 2px #10264210',
-         '--shadow-pop': '0 6px 18px #10264224',
-         '--shadow-md': '0 20px 48px #10264233',
-         '--shadow-toast': '0 8px 22px #1026423d',
-         '--mask': '#10264266'},
- '深色': {'--bg': '#161616',
-        '--sf': '#262626',
-        '--sf2': '#353535',
-        '--sf3': '#454545',
-        '--bd': '#525252',
-        '--bd2': '#454545',
-        '--bd3': '#8d8d8d',
-        '--tx': '#f4f4f4',
-        '--tx2': '#c6c6c6',
-        '--mut': '#c6c6c6',
-        '--mut2': '#8d8d8d',
-        '--on': '#161616',
-        '--pri': '#a6c8ff',
-        '--pri-d': '#d0e2ff',
-        '--pri-l': '#23364d',
-        '--pri-bd': '#648dbd',
-        '--pri-hl': '#78a9ff',
-        '--ok': '#54bd90',
-        '--ok-d': '#91e4b8',
-        '--ok-l': '#193a2b',
-        '--ok-bd': '#397959',
-        '--wn': '#e8b85a',
-        '--wn-d': '#f3ce82',
-        '--wn-l': '#43361c',
-        '--wn-bd': '#8b6c30',
-        '--dg': '#f17b7b',
-        '--dg-d': '#ffadad',
-        '--dg-l': '#442727',
-        '--dg-bd': '#a55959',
-        '--in': '#b6bec9',
-        '--in-d': '#d4d9e0',
-        '--in-l': '#343a42',
-        '--in-bd': '#77818e',
-        '--vi': '#b7a5fb',
-        '--vi-d': '#d1c5ff',
-        '--vi-l': '#362e51',
-        '--vi-bd': '#7867ab',
-        '--bl': '#81b5f5',
-        '--bl-d': '#a6ceff',
-        '--bl-l': '#23364d',
-        '--bl-bd': '#537daa',
-        '--row-hover': '#343b45',
-        '--ex-bg': '#353535',
-        '--hl': '#473c24',
-        '--hl-hover': '#574a2c',
-        '--sel': '#365170',
-        '--void-bg': '#412b2b',
-        '--draft': '#3b3427',
-        '--edit-l': '#473c24',
-        '--edit-bd': '#c6a257',
-        '--th-hover': '#414b58',
-        '--del-line': '#8d8d8d',
-        '--sb': '#202020',
-        '--sb-bd': '#525252',
-        '--sb-tx': '#d6d6d6',
-        '--sb-hd': '#ffffff',
-        '--sb-mut': '#c6c6c6',
-        '--sb-dis': '#c6c6c6',
-        '--sb-hover': '#393939',
-        '--sb-on': '#a6c8ff',
-        '--sb-on-hl': '#161616',
-        '--toast-bg': '#353535',
-        '--code-bg': '#353535',
-        '--shadow': '0 1px 2px #00000040',
-        '--shadow-pop': '0 8px 24px #00000059',
-        '--shadow-md': '0 20px 48px #00000066',
-        '--shadow-toast': '0 8px 22px #00000073',
-        '--mask': '#000000a6',
-        '--ui-scheme': 'dark'},
- '高对比': {'--bg': '#ffffff',
-         '--sf2': '#f0f0f0',
-         '--sf3': '#e0e0e0',
-         '--bd': '#000000',
-         '--bd2': '#000000',
-         '--bd3': '#000000',
-         '--tx': '#000000',
-         '--tx2': '#262626',
-         '--mut': '#262626',
-         '--mut2': '#595959',
-         '--on': '#ffffff',
-         '--pri': '#0000bb',
-         '--pri-d': '#000088',
-         '--pri-l': '#e6eaff',
-         '--pri-bd': '#0000bb',
-         '--pri-hl': '#0000bb',
-         '--ok': '#176137',
-         '--ok-d': '#124b2b',
-         '--ok-l': '#e4f4ea',
-         '--ok-bd': '#176137',
-         '--wn': '#805800',
-         '--wn-d': '#614200',
-         '--wn-l': '#fff0bf',
-         '--wn-bd': '#805800',
-         '--dg': '#aa1111',
-         '--dg-d': '#870000',
-         '--dg-l': '#ffe3e3',
-         '--dg-bd': '#aa1111',
-         '--in': '#404040',
-         '--in-d': '#262626',
-         '--in-l': '#eeeeee',
-         '--in-bd': '#404040',
-         '--vi': '#633099',
-         '--vi-d': '#4d1d80',
-         '--vi-l': '#f0e5ff',
-         '--vi-bd': '#633099',
-         '--bl': '#143f99',
-         '--bl-d': '#002775',
-         '--bl-l': '#e6edff',
-         '--bl-bd': '#143f99',
-         '--row-hover': '#e8e8e8',
-         '--ex-bg': '#f0f0f0',
-         '--hl': '#fff0b3',
-         '--hl-hover': '#ffe584',
-         '--sel': '#ccd8ff',
-         '--void-bg': '#ffe0e0',
-         '--draft': '#fff4cc',
-         '--edit-l': '#fff0b3',
-         '--edit-bd': '#594300',
-         '--th-hover': '#d4d4d4',
-         '--del-line': '#595959',
-         '--sb-bd': '#000000',
-         '--sb-tx': '#262626',
-         '--sb-hd': '#000000',
-         '--sb-mut': '#262626',
-         '--sb-dis': '#262626',
-         '--sb-hover': '#e0e0e0',
-         '--sb-on': '#000000',
-         '--sb-on-hl': '#ffffff',
-         '--toast-bg': '#000000',
-         '--code-bg': '#ffffff',
-         '--shadow': 'none',
-         '--shadow-pop': 'none',
-         '--shadow-md': 'none',
-         '--shadow-toast': 'none',
-         '--mask': '#00000099'},
- '玫瑰柔粉': {'--bg': '#f9edf2',
-          '--sf': '#fffafb',
-          '--sf2': '#f9ecf2',
-          '--sf3': '#f7e6ee',
-          '--bd': '#d9b9c9',
-          '--bd2': '#ead1dd',
-          '--bd3': '#b987a0',
-          '--tx': '#36242f',
-          '--tx2': '#684153',
-          '--mut': '#684153',
-          '--mut2': '#a48092',
-          '--on': '#ffffff',
-          '--pri': '#85305c',
-          '--pri-d': '#682243',
-          '--pri-l': '#f3dce8',
-          '--pri-bd': '#bd82a0',
-          '--pri-hl': '#dcb0c7',
-          '--row-hover': '#f8e9f0',
-          '--ex-bg': '#f9ecf2',
-          '--hl': '#fff3d6',
-          '--hl-hover': '#ffe7b0',
-          '--sel': '#eac6d8',
-          '--void-bg': '#fff0f3',
-          '--draft': '#fff8e6',
-          '--edit-l': '#fff3d6',
-          '--edit-bd': '#9f6c00',
-          '--th-hover': '#eccddc',
-          '--del-line': '#a48092',
-          '--sb': '#f0d6e3',
-          '--sb-bd': '#cc9fb7',
-          '--sb-tx': '#684153',
-          '--sb-hd': '#36242f',
-          '--sb-mut': '#684153',
-          '--sb-dis': '#684153',
-          '--sb-hover': '#e8c6d7',
-          '--sb-on': '#85305c',
-          '--sb-on-hl': '#ffffff',
-          '--toast-bg': '#4c273c',
-          '--code-bg': '#fffafb',
-          '--shadow': '0 1px 2px #56304412',
-          '--shadow-pop': '0 6px 20px #56304424',
-          '--shadow-md': '0 20px 48px #56304433',
-          '--shadow-toast': '0 8px 22px #5630443d',
-          '--mask': '#36242f66'},
- '丁香浅紫': {'--bg': '#f0edfa',
-          '--sf': '#fefcff',
-          '--sf2': '#f1edf9',
-          '--sf3': '#ece6f7',
-          '--bd': '#c9bcdf',
-          '--bd2': '#dfd5ee',
-          '--bd3': '#a28abd',
-          '--tx': '#2e2540',
-          '--tx2': '#58426e',
-          '--mut': '#58426e',
-          '--mut2': '#9c8baa',
-          '--on': '#ffffff',
-          '--pri': '#5f3d85',
-          '--pri-d': '#482a66',
-          '--pri-l': '#e7def3',
-          '--pri-bd': '#9f84bc',
-          '--pri-hl': '#c5b0dd',
-          '--row-hover': '#f0e7fa',
-          '--ex-bg': '#f1edf9',
-          '--hl': '#fff3d6',
-          '--hl-hover': '#ffe7b0',
-          '--sel': '#d6c6e9',
-          '--void-bg': '#faedf6',
-          '--draft': '#fff8e6',
-          '--edit-l': '#fff3d6',
-          '--edit-bd': '#9f6c00',
-          '--th-hover': '#ddcfef',
-          '--del-line': '#9c8baa',
-          '--sb': '#e5dcf4',
-          '--sb-bd': '#b9a5d2',
-          '--sb-tx': '#58426e',
-          '--sb-hd': '#2e2540',
-          '--sb-mut': '#58426e',
-          '--sb-dis': '#58426e',
-          '--sb-hover': '#d8c9eb',
-          '--sb-on': '#5f3d85',
-          '--sb-on-hl': '#ffffff',
-          '--toast-bg': '#392b4c',
-          '--code-bg': '#fefcff',
-          '--shadow': '0 1px 2px #44305b12',
-          '--shadow-pop': '0 6px 20px #44305b24',
-          '--shadow-md': '0 20px 48px #44305b33',
-          '--shadow-toast': '0 8px 22px #44305b3d',
-          '--mask': '#2e254066'}}
-
-# ==== /主题定义区（THEME-DEF END）====
+def theme_name(name: str | None) -> str:
+    """未设置、退役或未知的主题名显示为松绿。"""
+    return name if name is not None and name in THEME_SEEDS else DEFAULT_THEME
 
 
-#: 未设置时的回落套（§7.7 ④）—— ⚠️ **必须在 `THEMES` 构造之前定义**：`render_theme` 会读它，
-#:   而 `THEMES = {… render_theme(n) …}` 是**模块级立即求值** ⇒ 定义晚了就是 `NameError`。
-DEFAULT_THEME = "默认"
+def theme_variables(name: str | None) -> dict[str, str]:
+    return {**THEME_SEEDS[theme_name(name)], **GEOMETRY}
 
 
-def render_theme(name: str) -> str:
-    """主题名 → CSS（**唯一产出出口**）。⚠️ **非法名 / 未设置 ⇒ 显式回落默认套**（§7.7）。"""
-    if name == DEFAULT_THEME or name not in THEME_SEEDS:
-        return THEME_CSS
-    seed = THEME_SEEDS[name]
-    if not seed:
-        return THEME_CSS
-    v = _derive(seed)
-    v.update(GEOMETRY)
-    missing = [k for k in _var_names() if k not in v]
-    # ⚠️⚠️ §7.7「缺项即**显式报错**，不得静默沿用旧值」—— 这里**必须报**，⛔ 不能 `if k in v` 跳过：
-    #    跳过 = 引用那条变量的声明**静默失效**（页面少一块样式、且**没有任何错误信号**），
-    #    正是 §7.7 要防的那类错。报错**要带名字**（裸 `KeyError` 只说一个键、看不出是哪套主题缺的）。
-    if missing:
-        raise ValueError(
-            f"主题「{name}」缺变量 {missing} —— §7.7：每套必须覆盖同一组变量名，缺项即显式报错"
-            "（⛔ 不得静默沿用旧值）")
-    body = "\n".join(f"  {k}:{v[k]};" for k in _var_names())
+def render_theme(name: str | None) -> str:
+    body = "\n".join(f"  {key}:{value};" for key, value in theme_variables(name).items())
     return FONT_CSS + ":root{\n" + body + "\n}\n"
 
 
-def _var_names() -> list[str]:
-    """变量**名**的基准序（取自默认套）—— ⛔ 顺序也由它定，免得多套之间漂。"""
-    return list(re.findall(r"(--[a-z0-9-]+):", THEME_CSS))
-
-
-def theme_coverage_gaps() -> dict[str, list[str]]:
-    """**覆盖面校验**：每套主题缺哪些变量名（空 dict = 全部齐）。
-
-    ⚠️ 这是 §7.7「每套必须覆盖同一组变量名，**缺项即显式报错、不得静默沿用旧值**」的落点 ——
-       缺项时引用它的那条声明 **不报错、只是静默失效**（页面少一块样式），是最难查的一类错。
-    """
-    base = set(_var_names())
-    out: dict[str, list[str]] = {}
-    for name, seed in THEME_SEEDS.items():
-        if not seed:                                  # 「默认」= 走字面量，本身就是基准
-            continue
-        # ⚠️ **直接算派生结果的键**，⛔ 不靠"渲染一遍再正则抠" ——
-        #    渲染会在缺项时**抛错**（那是对的），但那样这个函数就成了"要么空、要么崩"，
-        #    没法给出"缺哪些"的清单。
-        got = set(_derive(seed)) | set(GEOMETRY)
-        if got != base:
-            out[name] = sorted(base - got) + [f"+多余 {x}" for x in sorted(got - base)]
-    return out
-
-
 def theme_names() -> list[str]:
-    """预置主题清单（**可列举** —— §7.7 判据的一条）。"""
     return list(THEME_SEEDS)
 
 
-#: 清单 → 成品 CSS（**唯一真源的成品形态**）
-#:
-#: ⚠️⚠️ `render_theme` 在**缺变量**时是**显式抛错**的（那是 §7.7 的要求）——
-#:    但这里是**模块级立即构造**，抛出来就是**导入即崩** ⇒ 那时连"哪套缺哪个变量"都看不到。
-#:    ⇒ 所以这里**接住它、把原因记下来**（`_THEME_BUILD_ERROR`），让调用方/判据能**读出原因**。
-#:    ⛔ 这**不是把错误吞掉**：`render_theme(name)` 该抛还抛（运行时照样显式报错），
-#:       而且 `test_theme.py` 会断言 `_THEME_BUILD_ERROR` 为空 ⇒ 有缺项**必定变红**。
-_THEME_BUILD_ERROR = ""
-try:
-    THEMES: dict[str, str] = {n: render_theme(n) for n in THEME_SEEDS}
-except ValueError as _exc:                          # pragma: no cover —— 正常永远不进来
-    THEMES = {}
-    _THEME_BUILD_ERROR = str(_exc)
+THEME_CSS = render_theme(DEFAULT_THEME)
 
 
 STICKY_BOTTOM_CSS = (

@@ -1,14 +1,4 @@
-"""主题变量层（`page.THEME_CSS`）的工程自检 —— 离线 · 不连库。
-
-⚠️ 这里守的是**机制**，不是观感：
-  - 颜色**只能经变量出口**（CSS 里不得再出现色值字面量）—— 可断言；
-  - 变量**定义完整**（引用了但没定义 = 静默失效，这类错最难发现）；
-  - 状态色**成组**（主色 / 深字 / 浅底 / 浅边框 四档齐全）—— 多主题的前提；
-  - **打印件不受站点主题影响**（印在纸上的颜色与屏幕主题是两件事）。
-
-⚠️ 观感（哪个颜色好不好看、对比度够不够）**只能靠人眼**，断言测不了。
-⚠️ 本文件用 `@acc()` **显式不绑定判据点** —— 要变成 `ACC-*` 判据属契约层动作。
-"""
+"""Theme roles, stylesheet ownership, and contrast."""
 
 from __future__ import annotations
 
@@ -39,8 +29,12 @@ _VAR_USE_RE = re.compile(r"var\((--[a-z0-9-]+)\)")
 
 
 
+def _variables(css: str) -> dict[str, str]:
+    return dict(re.findall(r"(--[a-z0-9-]+):\s*([^;\n]+);", css))
+
+
 def _theme_vars() -> dict[str, str]:
-    return dict(re.findall(r"(--[a-z0-9-]+):\s*([^;\n]+);", page.THEME_CSS))
+    return _variables(page.THEME_CSS)
 
 
 def _iter_app_py():
@@ -65,9 +59,8 @@ def test_主题变量表可列举且覆盖全中性与状态色():
 
 
 def test_状态色一律四档成组():
-    """⚠️ 多主题的硬前提：底 / 字 / 深字 / 边框必须同套，否则第 2 套会「新绿字配旧浅绿底」。"""
     defined = set(_theme_vars())
-    for name in ("ok", "wn", "dg"):
+    for name in ("ok", "wn", "dg", "bl", "in", "vi"):
         group = {f"--{name}", f"--{name}-d", f"--{name}-l", f"--{name}-bd"}
         assert group <= defined, f"状态色 {name} 缺档：{group - defined}"
 
@@ -86,31 +79,16 @@ def test_全工程引用的变量都有定义_引用了没定义会静默失效(
 
 
 def test_除主题表本身外_全工程CSS不再出现色值字面量():
-    """这条是**防回归**用的：以后谁顺手写个 `#fff` 进来，这里就会红。
-
-    - `page.py` 的 `THEME_CSS` 段 = 唯一的色值定义处（白名单）；
-    - `print/` 目录 = 打印件，**故意排除**（它的颜色不属于站点主题）。
-    - ⭐ 2026-09-19（主题②）：**前端壳**（`app/web/index.html`）也一并扫 —— 同一判据点、加宽观测面
-      （它原先自带一份 `:root`，是**第二份真源**：同名变量取值都与真源不同）。
-    """
     seen: list[str] = []
     for f in _iter_app_py():
         text = f.read_text(encoding="utf-8")
         if f == THEME_SOURCE:
-            # 只放行 THEME_CSS 那一段，其余部分仍受约束
-            head, _, tail = text.partition('THEME_CSS = """')
-            theme_body, _, rest = tail.partition('"""')
-            text = head + rest
-            # ⭐ 2026-09-20（多主题）：**主题定义区**（`THEME-DEF BEGIN/END`）也放行 ——
-            #    它装的是**种子色**（`THEME_SEEDS` 一行一套）与派生用的纯色常量。
-            #    ⚠️ §7.7 说的「一份主题变量表统管」就是它 ⇒ 它**是那个出口**，不是违规。
-            #    ⛔ 按标记断区（而不是"放行整个 page.py"）：区外的色值**仍然会红**。
-            before, _, tail2 = text.partition("THEME-DEF BEGIN")
-            _, _, after = tail2.partition("THEME-DEF END")
+            before, begin, body = text.partition("THEME-DEF BEGIN")
+            _, end, after = body.partition("THEME-DEF END")
+            assert begin and end
             text = before + after
-        for hit in _HEX_RE.findall(text):
-            seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
-    assert not seen, "CSS 里又出现色值字面量了（应改走 var(--…)）：\n  " + "\n  ".join(seen)
+        seen.extend(f"{f.relative_to(APP_DIR.parent)}: {hit}" for hit in _HEX_RE.findall(text))
+    assert not seen, "主题定义区外有硬编码色值：\n  " + "\n  ".join(seen)
 
 
 def test_基础样式自带主题变量_引用BASE_CSS的页面自动获得定义():
@@ -159,14 +137,13 @@ def test_主题只在一处定义_不得出现第二份副本():
         if f.name != 'theme_react.py' and ":root{" in f.read_text(encoding="utf-8"):
             owners.append(f.name)
     assert owners == ["page.py"], f"主题调色板只能由page.py持有，实际：{owners}"
-    assert theme_react.REACT_THEME_OVERRIDES is page.REACT_THEME_OVERRIDES
     assert theme_react.REACT_THEME_SPEC is page.REACT_THEME_SPEC
 
 
 def test_一套主题的值互不重复_成对色的底与字必须不同():
     """守卫「取值表本身」的健全性：状态色的浅底与深字不能是同一个值（那样等于没有对比度）。"""
     vals = _theme_vars()
-    for name in ("ok", "wn", "dg"):
+    for name in ("ok", "wn", "dg", "bl", "in", "vi"):
         fg = vals[f"--{name}"].strip().lower()
         bg = vals[f"--{name}-l"].strip().lower()
         deep = vals[f"--{name}-d"].strip().lower()
@@ -238,181 +215,68 @@ def test_主题端点使用共享变量与React主题():
         assert gone not in paths
 
 
-# ---------------------------------------------------------------- 多主题（《说明书》§7.7 · 2026-09-20）
+def test_主题清单和样式共同使用新版松绿():
+    assert page.theme_names() == ["松绿"]
+    assert set(page.THEME_SEEDS) == set(page.THEME_SPEC) == set(theme_react.REACT_THEME_SPEC) == {"松绿"}
+    assert all(page.THEME_SPEC["松绿"].values())
+
+    pine = _theme_vars()
+    react = _variables(theme_react.render_react_theme("松绿"))
+    assert {key: react[key] for key in pine} == pine
+    for key, value in {
+        "--bg": "#edf3f0", "--sb": "#0b221d", "--pri": "#0c6b61", "--bd3": "#6b8177",
+        "--r": "6px", "--r2": "8px",
+    }.items():
+        assert pine[key] == value
+    for css in (page.THEME_CSS, theme_react.render_react_theme("松绿")):
+        assert css.startswith(page.FONT_CSS + ":root{")
+        assert css.rstrip().endswith("}")
 
 
-def test_主题清单可列举且每套覆盖同一组变量名():
-    """claim：「**主题清单可列举**，且每套主题必须**覆盖同一组变量名**
-    （**缺项即显式报错**，不得静默沿用旧值）」。
-
-    ⚠️⚠️ 「缺项即显式报错」是这条的**命门**：CSS 里 `var(--x)` 引用了**没定义**的变量，
-       **不报错、只静默失效** ⇒ 页面上少一块样式（合计行没底色、分段竖线不见、标签没色），
-       而**没有任何错误信号** —— 这正是 `page.py` 里那段注释记着的历史 bug（`sumrow`/`vsep` 抄了
-       原型却**没抄 `:root`**）。⇒ 判据**不能**只数"清单里有几个名字"，
-       必须**真的逐套比对变量名集合**。
-
-    ⚠️ 另加一条**防空**：基准集合本身必须**够大** —— 否则"每套都是空集合的子集"也恒成立，
-       覆盖面校验就变成了摆设（这类"恒真断言"比红更难发现）。
-    """
-    names = page.theme_names()
-    # §7.7：用户 2026-09-20 定「清单 ≥10 套，换着玩」
-    assert len(names) >= 10, f"预置主题清单只有 {len(names)} 套 —— §7.7 用户裁定「至少 10 套」"
-    assert page.DEFAULT_THEME in names, "回落默认套必须**自己也在清单里**（否则它是个影子）"
-
-    base = page._var_names()
-    assert len(base) >= 60, (
-        f"变量名基准集只有 {len(base)} 个 —— ⚠️ 基准太小（甚至为空）会让"
-        "「每套都覆盖同一组」**恒真**，覆盖面校验就成了摆设。")
-    assert page.THEME_CSS.count("--") >= 60, "默认套自己的变量数不对 —— 基准取错了源"
-
-    # ⚠️ 先看"构造期有没有报错"：`render_theme` 缺项是**显式抛错**的，模块级构造会接住并记下原因
-    assert not page._THEME_BUILD_ERROR, (
-        "主题清单构造时就报错了（缺项）—— 原因：\n  " + page._THEME_BUILD_ERROR)
-
-    gaps = page.theme_coverage_gaps()
-    assert not gaps, (
-        "这些主题**缺变量** ⇒ 引用它们的声明会**静默失效**（页面少一块样式、且不报错）：\n  "
-        + "\n  ".join(f"{k}: 缺 {v}" for k, v in gaps.items()))
-
-    # ⭐ 每套都真的能产出（不是"清单里写了、渲染不出来"）
-    #    ⚠️ `page.THEME_CSS` 那段字面量**开头带一个换行**（`"""` 后面直接换行）⇒ 用 `lstrip()` 比。
-    for n in names:
-        css = page.render_theme(n)
-        assert css.lstrip().startswith(":root{") and css.rstrip().endswith("}"), \
-            f"「{n}」产出的 CSS 形态不对"
+def test_退役或未知的主题回落松绿():
+    react = theme_react.render_react_theme("松绿")
+    for name in (None, "", "  ", "默认", "靛青", "深色", "玫瑰柔粉", "不存在的主题"):
+        assert page.theme_name(name) == theme_react.theme_name(name) == "松绿"
+        assert page.render_theme(name) == page.THEME_CSS
+        assert theme_react.render_react_theme(name) == react
 
 
-def test_非法主题名显式处理_回落默认套():
-    """claim：「未知 / 非法主题名必须**显式处理**（回落默认套或显式报错，**两者择一**；
-    不得白屏或半套样式）」。
-
-    ⚠️ 本实现选的是「**回落默认套**」这一支（§7.7 ④「未设置时回落默认套」）。
-    ⚠️ 三类输入都要覆盖，缺一类就会漏：
-       ① **未设置**（`None` / 空串）；② **不认识的名字**；③ **路径穿越式**的名字。
-       ⛔ ③ 尤其要紧：主题名会进 URL（`/static/theme.css?theme=…`），
-       若拿它去拼路径（`open(f"themes/{name}.css")`）就是**任意文件读取**。
-       本实现是**字典查表**（⛔ 不拼路径）⇒ 天然安全 —— 这条断言就是**把"查表"钉住**，
-       防哪天被改成拼路径（那时它会红）。
-    """
-    default = page.THEME_CSS
-    for bad in (None, "", "  ", "不存在的主题", "../page", "../../etc/passwd",
-                "默认 ", "默认\n", "'; drop table", "<script>"):
-        got = page.render_theme(bad)                       # type: ignore[arg-type]
-        assert got == default, (
-            f"非法/未知主题名 {bad!r} **没有显式回落默认套** ⇒ 会白屏或半套样式"
-            "（`render_theme` 必须查表回落，⛔ 不许拿主题名去拼路径或抛裸异常）")
-    # ⭐ 反过来：合法名**不许**被回落掉（否则"回落"就成了"永远默认"—— 那清单白列了）
-    for good in page.theme_names():
-        assert page.render_theme(good) == page.THEMES[good], f"合法主题「{good}」被误回落了"
-    assert page.render_theme("深色") != default, "「深色」与默认套产出相同 ⇒ 派生没起作用（清单是假的）"
-
-
-# ---------------------------------------------------------------- 主题规范表（2026-09-21 · 用户裁定）
-# ⭐⭐ 用户原话：「重新设计并交付 **10 个完整、独立、可切换**的主题方案，每个主题需明确其
-#    **适用场景与设计风格**，并提供**统一的结构规范**以保证一致性与可维护性」。
-#    ⇒ 落成两条可执行的东西：① 清单**恰好 10 套**且有场景/风格（`THEME_SPEC`）
-#      ② **对比度下限**（下面那条 —— "视觉平衡"没法直接断言，但"看不清"可以量化）。
-
-
-def test_主题清单恰好十套且每套都有适用场景与设计风格():
-    """claim（`001-02`）：「主题清单**可列举**」—— ⭐ 2026-09-21 加严：可列举 ⇒ **每套都要说得清
-    "它是干什么用的"**（场景）与"它长什么样"（风格）。⛔ 只有名字的清单 = 用户无从选择。
-
-    ⚠️ 为什么钉"**恰好 10 套**"：用户 2026-09-21 裁定的口径是「**10 个完整、独立**的方案」——
-       原来 13 套里有 3 套是「深色·X」**变体**（不独立）⇒ 已删。多一套少一套都要**改口径**，
-       ⛔ 不是"顺手加一行"。
-    """
-    names = page.theme_names()
-    assert len(names) == 10, (
-        f"主题清单是 {len(names)} 套 —— 用户 2026-09-21 裁定「恰好 **10** 个完整、独立的方案」"
-        f"（多/少都要改口径，⛔ 不是顺手加一行）：{names}")
-    assert set(page.THEME_SPEC) == set(names), (
-        "`THEME_SPEC`（场景/风格）与 `THEME_SEEDS`（种子）**键集不同** —— "
-        f"只加了种子忘了写规范：{sorted(set(names) ^ set(page.THEME_SPEC))}")
-    scenes: list[str] = []
-    for n in names:
-        spec = page.THEME_SPEC[n]
-        assert spec.get("scene", "").strip(), f"「{n}」没写**适用场景** ⇒ 用户不知道该选哪套"
-        assert spec.get("style", "").strip(), f"「{n}」没写**设计风格**"
-    scenes = [page.THEME_SPEC[n]["scene"] for n in names]
-    assert len(set(scenes)) == len(scenes), (
-        f"有两套主题的**适用场景一模一样** ⇒ 它们其实是一套：{[s for s in scenes if scenes.count(s) > 1]}")
-
-
-#: ⭐ **可读性下限**：配对照 `backend/app/web/index.html` 的 `<style>` **逐条抄**（⛔ 不是"哪个色配哪个色"）。
-#: ⚠️ 阈值就一条线：**凡是"给人读的文字"一律 4.5**（WCAG AA 的 3.0 只放行 ≥24px 或 ≥18.66px 粗体，
-#:    本仓没有那个字号）⇒ ⛔ 别拿"它是次要文字"当降标准的理由 —— 用户已经两次报"看不清 / 不平衡"。
-#: 只有**纯装饰**（分隔线）按可辨性 1.15。
-_CONTRAST_PAIRS: list[tuple[str, str, str, float]] = [
-    ("正文", "--tx", "--bg", 4.5),
-    ("正文/卡片", "--tx", "--sf", 4.5),
-    ("次正文", "--tx2", "--sf", 4.5),
-    ("弱化文字（空态/提示）", "--mut", "--sf", 4.5),
-    ("主色作链接字", "--pri", "--bg", 4.5),
-    ("按钮字", "--on", "--pri", 4.5),
-    ("⭐侧栏-普通项", "--sb-tx", "--sb", 4.5),
-    ("⭐侧栏-品牌/悬停项", "--sb-hd", "--sb", 4.5),
-    ("⭐侧栏-编号·分组·页脚", "--sb-mut", "--sb", 4.5),
-    ("⭐侧栏-悬停底上的字", "--sb-hd", "--sb-hover", 4.5),
-    ("⭐侧栏-选中项", "--on", "--sb-on", 4.5),
-    ("⭐侧栏-选中项里的编号", "--sb-on-hl", "--sb-on", 4.5),
-    ("侧栏分隔线可辨", "--sb-bd", "--sb", 1.15),
-    ("标签-主色", "--pri-d", "--pri-l", 4.5),
-    ("标签-成功", "--ok-d", "--ok-l", 4.5),
-    ("标签-提醒", "--wn-d", "--wn-l", 4.5),
-    ("标签-危险", "--dg-d", "--dg-l", 4.5),
-    ("标签-手动剔除", "--bl-d", "--bl-l", 4.5),
-    ("标签-中性", "--in-d", "--in-l", 4.5),
-    ("标签-特殊", "--vi-d", "--vi-l", 4.5),
-]
-
-
-def _srgb_lin(c: float) -> float:
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def _srgb_lin(channel: float) -> float:
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
 def _rel_lum(hex_color: str) -> float:
-    """⚠️ 用**真正的 WCAG 相对亮度**（sRGB → 线性 → 0.2126R+0.7152G+0.0722B）。
-    ⛔ 别用 `page._lum()`：那是给 `_on()` 选黑白用的**粗略加权**，两者混用会算出假达标。"""
-    h = hex_color.lstrip("#")
-    if len(h) == 3:
-        h = "".join(ch * 2 for ch in h)
-    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
-    return 0.2126 * _srgb_lin(r) + 0.7152 * _srgb_lin(g) + 0.0722 * _srgb_lin(b)
+    r, g, b = (_srgb_lin(int(hex_color[i:i + 2], 16) / 255) for i in (1, 3, 5))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def _contrast(a: str, b: str) -> float:
-    la, lb = _rel_lum(a), _rel_lum(b)
-    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    la, lb = sorted((_rel_lum(a), _rel_lum(b)))
+    return (lb + 0.05) / (la + 0.05)
 
 
-def _theme_vars_of(name: str) -> dict[str, str]:
-    return {("--" + m.group(1)): m.group(2).strip()
-            for m in re.finditer(r"--([a-z0-9-]+):\s*([^;\n]+);", page.render_theme(name))}
-
-
-def test_每套主题的关键配对都过对比度AA():
-    """⭐⭐ **把"视觉平衡/看不清"变成可测的数字**（2026-09-21 用户报「左侧页面选择栏在各类主题下
-    视觉不平衡」⇒ 排查发现**硬故障**：4 个深色套的侧栏选中项是**黑字压近黑底**，实测对比度 **1.05**）。
-
-    ⚠️ 为什么不靠肉眼：观感是主观的，但"**文字与底的对比度**"是客观量 —— 低于 AA 就是**看不清**，
-       不需要争论。⚠️ 这条**测不了**"好不好看"（那要人眼），它测的是"**能不能看清**"这条底线。
-
-    ⚠️ 本断言当前是 `@acc()` **未绑定**（属工程守卫）：把它升成判据点要先在交付面新建一条
-       （口径由用户 2026-09-21 的话直接给出，但**新建判据点 = 契约层动作**）。
-    """
-    rows: list[str] = []
-    bad: list[str] = []
-    for name in page.theme_names():
-        v = _theme_vars_of(name)
-        for label, fg, bg, need in _CONTRAST_PAIRS:
-            if fg not in v or bg not in v:
-                bad.append(f"{name}｜{label}：变量缺失（{fg} / {bg}）")
-                continue
-            r = _contrast(v[fg], v[bg])
-            if r < need:
-                bad.append(f"{name}｜{label}：{v[fg]} on {v[bg]} = {r:.2f} < {need}")
-            rows.append(f"{name:8s} {label:22s} {v[fg]:>9s} on {v[bg]:>9s} = {r:5.2f} (需 {need})")
-    assert not bad, (
-        "这些主题/配对**读不清**（阈值：文字 4.5 / 装饰 1.15）—— ⛔ 别调低阈值，去调 `_derive`／种子：\n  "
-        + "\n  ".join(bad) + "\n\n全部实测：\n  " + "\n  ".join(rows))
+def test_松绿正文侧栏与状态色达到WCAG_AA():
+    values = _theme_vars()
+    text_pairs = [
+        ("--tx", "--bg"), ("--pri", "--bg"), ("--on", "--pri"),
+        ("--sb-hd", "--sb"), ("--sb-tx", "--sb"), ("--sb-mut", "--sb"),
+        ("--sb-dis", "--sb"), ("--sb-hd", "--sb-hover"),
+        ("--on", "--sb-on"), ("--sb-on-hl", "--sb-on"), ("--on", "--toast-bg"),
+        ("--pri-d", "--pri-l"),
+    ]
+    text_pairs.extend(
+        (text, surface)
+        for surface in ("--sf", "--sf2")
+        for text in ("--tx", "--tx2", "--mut", "--mut2")
+    )
+    text_pairs.extend(
+        (f"--{role}{suffix}", f"--{role}-l")
+        for role in ("ok", "wn", "dg", "bl", "in", "vi")
+        for suffix in ("", "-d")
+    )
+    for fg, bg in text_pairs:
+        ratio = _contrast(values[fg], values[bg])
+        assert ratio >= 4.5, f"{fg} / {bg} = {ratio:.2f}:1"
+    for bg in ("--sf", "--sf2", "--bg"):
+        ratio = _contrast(values["--bd3"], values[bg])
+        assert ratio >= 3, f"--bd3 / {bg} = {ratio:.2f}:1"
