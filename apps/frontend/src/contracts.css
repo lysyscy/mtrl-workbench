@@ -31,11 +31,15 @@
 .contract-amount-action{display:flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;gap:4px;width:100%;min-width:0}
 .contract-amount-action>span{white-space:nowrap}
 .contracts-grid .ant-input{width:100%;min-width:0;font-size:inherit;height:var(--control-sm);padding:0 4px}
-.contract-scroll-method{display:flex;align-items:center;justify-content:space-between;gap:4px;width:100%;height:var(--control-sm);padding:0 7px;border:1px solid var(--bd3);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);font:inherit;text-align:start;cursor:pointer}
+.contracts-grid .contract-scroll-method,
+.contracts-grid .contract-inline-select{box-sizing:border-box;align-items:center;width:100%;min-width:0;height:var(--control-sm);min-height:var(--control-sm);padding-block:0;padding-inline:calc(4px * var(--fscale));line-height:1.5}
+.contract-scroll-method{display:flex;justify-content:space-between;gap:4px;border:1px solid var(--bd3);border-radius:var(--radius-input);background:var(--sf);color:var(--tx);font:inherit;text-align:start;cursor:pointer}
 .contract-scroll-method::after{content:'';width:6px;height:6px;flex:none;border:solid var(--tx2);border-width:0 1px 1px 0;transform:translateY(-2px) rotate(45deg)}
 .contract-scroll-method:disabled{background:var(--sf2);cursor:not-allowed}
 .contracts-grid .status-tag{max-width:100%;white-space:nowrap;overflow-wrap:normal;padding-inline:.25em}
-.contracts-grid .contract-inline-select .enum-tag{padding-inline:.25em}
+.contracts-grid .contract-scroll-method .enum-tag,
+.contracts-grid .contract-inline-select .enum-tag{margin:0;padding:0 .25em;line-height:1.4;white-space:nowrap}
+.contracts-grid .contract-inline-select .ant-select-content{display:flex;align-items:center;min-height:0;height:100%}
 .contract-object{display:flex;align-items:center;gap:calc(8px * var(--fscale));width:100%;min-width:0}
 .contracts-grid .contract-object .ant-btn{flex:1 1 55%;min-width:0;max-width:100%}
 .contract-object small{flex:1 1 45%;min-width:0;color:var(--tx2);line-height:1.4}
@@ -69,12 +73,6 @@
 .business-modal .contract-editor-discard,.business-modal .contract-tool-discard{width:min(calc(420px * var(--fscale)),calc(100vw - 24px))}
 @media(max-width:700px){.contract-form-grid,.contract-evidence{grid-template-columns:1fr}.contract-toolbar>div{width:100%}}
 
-.contract-inline-select{width:100%;min-width:0;height:var(--control-sm)}
-.contract-inline-select .ant-tag{margin:0}
-
-/* The selected enum must fit the table's 28px control, including its border. */
-.contracts-grid .contract-inline-select .ant-select-content{display:flex;align-items:center;min-height:0;height:100%}
-.contracts-grid .contract-inline-select .enum-tag{line-height:1.4;padding-block:0;white-space:nowrap}
 .business-modal .contract-remark-editor{width:min(calc(640px * var(--fscale)),calc(100vw - 72px));padding:calc(20px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .contract-remark-editor textarea.ant-input{height:min(calc(240px * var(--fscale)),40dvh);min-height:calc(120px * var(--fscale));font-size:inherit;line-height:1.6;resize:vertical}
 .contract-remark-editor .dialog-actions{margin-top:calc(24px * var(--fscale))}

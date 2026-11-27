@@ -38,6 +38,24 @@ test('style contract: sections and sticky table headers require explicit classes
   }
 });
 
+test('style contract: deferred and mounted contract payment methods share control and tag geometry', () => {
+  const controls = ['.contracts-grid .contract-scroll-method', '.contracts-grid .contract-inline-select'];
+  const sheet = rules('contracts.css');
+  for (const [suffix, required] of [
+    ['', ['height:var(--control-sm)', 'min-height:var(--control-sm)', 'padding-inline:calc(4px * var(--fscale))',
+      'line-height:1.5', 'align-items:center', 'box-sizing:border-box']],
+    [' .enum-tag', ['margin:0', 'padding:0 .25em', 'line-height:1.4']],
+  ]) {
+    const shared = sheet.find(([, names]) => {
+      const selectors = names.split(',').map(name => name.trim());
+      return controls.every(control => selectors.includes(control + suffix));
+    });
+    assert.ok(shared, `Missing shared payment method rule for ${suffix.trim() || 'control'}`);
+    const declarations = shared[2].trim().split(/\s*;\s*/).map(value => value.replace(/\s*:\s*/, ':'));
+    for (const declaration of required) assert.ok(declarations.includes(declaration), declaration);
+  }
+});
+
 test('style contract: domain classes have one owner', () => {
   const owners = {
     'contract-selection': [],
