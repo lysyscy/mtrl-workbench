@@ -13,6 +13,7 @@ from test_preview import browser_page, login, server  # noqa: F401 (fixtures)
 
 def test_contract_list_keeps_its_reserved_box_while_the_first_read_lands(server, browser_page):
     page, _ = browser_page
+    page.emulate_media(reduced_motion='reduce')
     login(page, server)
     held = []
     page.route('**/api/m11/list', lambda route: held.append(route))
@@ -101,6 +102,7 @@ def test_contract_project_read_failure_is_announced_and_blocks_writes(server, br
 
 def test_contract_subtable_reads_inside_the_dialog_without_moving_the_summary(server, browser_page, api):
     page, _ = browser_page
+    page.emulate_media(reduced_motion='reduce')
     row, label = contract_sample(api)
     held = []
     page.route('**/api/m11/detail*', lambda route: held.append(route))
@@ -110,8 +112,6 @@ def test_contract_subtable_reads_inside_the_dialog_without_moving_the_summary(se
     page.get_by_role('button', name=label + ' 付款子表', exact=True).click()
     modal = page.locator('.contract-subtable-dialog')
     expect(modal).to_be_visible()
-    # Measure the open dialog, not a scaled frame of Ant Design's entrance motion.
-    modal.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " ant-modal ")]').evaluate("async e => { await Promise.all(e.getAnimations({subtree:true}).filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => {}))); }")
     expect(modal.locator('.subtable-read-status')).to_have_attribute('data-read-phase', 'reading', timeout=20000)
     assert held, 'The actual subtable read was not held'
 

@@ -38,13 +38,21 @@ import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-
 
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
 
-type ContractSelection={shown:ContractRow[];picked:Set<number>;pending:boolean;chooseAll:(checked:boolean)=>void};
+type ContractSelection={visibleCount:number;selectedVisible:number;pending:boolean;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
 // The header observes selection and filter results through context, so ticking a row never rebuilds the column definitions.
 function ContractSelectionHeader(){
-  const current=useContext(ContractSelectionContext);
-  return <Checkbox aria-label="选择当前合同" disabled={current.pending} checked={current.shown.length>0&&current.shown.every(row=>current.picked.has(row.id))} onChange={e=>current.chooseAll(e.target.checked)}/>;
+  const {visibleCount, selectedVisible, pending, chooseAll} = useContext(ContractSelectionContext);
+  return <Checkbox aria-label="选择当前合同" disabled={pending}
+    checked={visibleCount > 0 && selectedVisible === visibleCount}
+    indeterminate={selectedVisible > 0 && selectedVisible < visibleCount}
+    onChange={event => chooseAll(event.target.checked)} />;
 }
+const amountSubtables = new Map<string, { kind: 'supplier' | 'trade' | 'payment'; label: string }>([
+  ['inv_sum', {kind: 'supplier', label: '供应商发票'}],
+  ['trade_inv_sum', {kind: 'trade', label: '贸易公司发票'}],
+  ['pay_sum', {kind: 'payment', label: '付款'}],
+]);
 const approvalOptions = ['', ...contractApprovalStatuses, '无状态'].map(value => ({ value, label: value || '全部' }));
 const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:'',approval:''});
 const inlineKeys = ['remark','arch_no','ret_date','payment_term','payment_method'] as const;
@@ -74,7 +82,7 @@ function ContractRemarkEditor({ row, initial, busy, disabled, paused, error, sav
   const [text,setText]=useState(initial);
   const closing=useDialogClose({busy,dirty:text!==initial,close,active:!paused});
   const date=contractHistoryDate(row.remark),maxLength=255-(date?historyContractRemark(date,'').length:0);
-  return <BusinessModal open={!paused} className="contract-remark-editor" titleId="contract-remark-title" requestClose={closing.requestClose}><DialogContents title="编辑合同备注" titleId="contract-remark-title" closing={closing}>
+  return <BusinessModal open={!paused} className="contract-work-dialog contract-remark-editor" titleId="contract-remark-title" requestClose={closing.requestClose}><DialogContents title="编辑合同备注" titleId="contract-remark-title" closing={closing}>
     <p className="muted">{row.contract_no||row.material}{date?`，历史核对截至 ${date}`:''}</p>
     <Input.TextArea autoFocus aria-label="合同备注全文" value={text} maxLength={maxLength} showCount disabled={busy||disabled} onChange={event=>setText(event.target.value)}/>
     {error&&<p className="notice" role="alert">{error}</p>}
@@ -241,10 +249,12 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     if (columns.size) api.refreshCells({force:true, columns:[...columns]});
   }, [active, inlineDisabled, actionDisabled, paymentMethodsKey, rows, picked, shown]);
   const state=useRef({unavailable,actionDisabled,picked,shown,tag,advance});state.current={unavailable,actionDisabled,picked,shown,tag,advance};
-  // The select header reads the live selection through context, so ticking a row no longer rebuilds every column.
-  const selection=useMemo<ContractSelection>(()=>({shown,picked,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[shown,picked,searchBusy]);
+  const visibleCount = shown.length;
+  const selectedVisible = selected.length - hidden;
+  const selection=useMemo<ContractSelection>(()=>({visibleCount,selectedVisible,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[visibleCount,selectedVisible,searchBusy]);
   const scale=Number(me?.ui_scale_css??1);
-  const widths=useGridWidths('contracts',root,scale,active&&!blocked);
+  // AG Grid already resizes the viewport and flex columns. Refitting here remounts the inline editors.
+  const widths=useGridWidths('contracts',root,scale,active&&!blocked,{resetOnContainerResize:false});
   const measureWidths = useMemo(() => contractWidthMeasurements(query.data?.columns ?? [], query.data?.payment_methods ?? [], scale),
     [query.data?.columns, query.data?.payment_methods, scale]);
   const {completeWidths, moneyWidths} = useMemo(() => measureWidths(rows, archiveNumbers), [measureWidths, rows, archiveNumbers, widths.layoutKey]);
@@ -253,6 +263,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
     selectionColumn,
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
       const numeric=amountColumnIds.has(c.key);
+      const subtable = amountSubtables.get(c.key);
       const editKey = inlineKeys.find(key => key === c.key);
       const editorParams = {editKey, control: () => inlineControl.current};
       // Keep formatted amounts and totals intact before flexible text columns shrink.
@@ -262,15 +273,20 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
         ...(editKey === 'payment_method' ? {loadingCellRenderer: ContractInlineCell, loadingCellRendererParams: {...editorParams, scrolling:true}} : {}),
         comparator:numeric?(a:string|null,b:string|null)=>compareAmounts(a??'0',b??'0'):undefined,
         cellRenderer:editKey ? ContractInlineCell : (p:ICellRendererParams<ContractRow>)=>{
-          if(p.node.rowPinned)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
+          if(p.node.rowPinned && !subtable)return c.key==='material'?'合计':numeric?money(p.value??'0'):'';
           const row=p.data!;
+          if (subtable) return <div className="contract-amount-action">
+            <span>{money(String(p.value ?? '0'))}</span>
+            {!p.node.rowPinned && (subtable.kind !== 'trade' || row.trade_co) && <Button size="small"
+              aria-label={`${row.contract_no || row.material} ${subtable.label}子表`}
+              onClick={() => setSubtable({row, kind: subtable.kind})}>子表</Button>}
+          </div>;
           if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectNames.get(row.project_key)||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
           if(c.key==='tag'||c.key==='arch')return <Tag className={`status-tag ${c.key==='tag'?(row.tag==='纳入台账'?'status-positive':'status-neutral'):(row.arch==='已存档'?'status-positive':row.arch==='资产处'?'status-pending':'status-neutral')}`}>{String(p.value||'未存档')}</Tag>;
           if(c.key==='approve_status'){
             if(row.approve_status===null)return <span className="muted">—</span>;
             return <Tag className={`status-tag ${row.approve_status==='已审批'?'status-positive':'status-pending'}`}>{row.approve_status}</Tag>;
           }
-          if(['inv_sum','trade_inv_sum','pay_sum'].includes(c.key)&&!(c.key==='trade_inv_sum'&&!row.trade_co))return <div className="contract-amount-action"><span>{money(String(p.value??'0'))}</span><Button size="small" aria-label={`${row.contract_no||row.material} ${c.key==='inv_sum'?'供应商发票':c.key==='trade_inv_sum'?'贸易公司发票':'付款'}子表`} onClick={()=>setSubtable({row,kind:c.key==='inv_sum'?'supplier':c.key==='trade_inv_sum'?'trade':'payment'})}>子表</Button></div>;
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
@@ -292,10 +308,19 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const placeheld=readState==='idle'||readState==='reading'||readState==='error';
   const pageState=useRef({blocked,active,editorId});pageState.current={blocked,active,editorId};
   function created(id:number){if(pageState.current.blocked||!pageState.current.active||pageState.current.editorId!=='new')return;setFilters({...initialFilters(),tag:''});setSearch('');pendingFocus.current=id;const row=client.getQueryData<{rows:ContractRow[]}>(['contracts'])?.rows.find(r=>r.id===id);closeEditor('new');if(row){grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');if(contractHistoryDate(row.remark))setSubtable({row,kind:'supplier'});}}
-  return <section className="wb-surface contracts-page page-shell page-shell--fill" data-page-layout="fill" aria-labelledby="page-title" data-page-chrome><div className="contract-toolbar"><h2>集采台账，合同主表</h2><div><Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button><Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button><Button disabled={unavailable} onClick={()=>openEditor(null)}>+ 手工新增合同</Button><ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,searchInput.value,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} searchBusy={searchBusy} unavailable={exportUnavailable} paused={blocked||!active}/></div></div>
-    <div className="jc-bulk-selection"><span>已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||searchBusy||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
-    <div className="contract-filters">
-      <label>项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label>
+  return <section className="wb-surface contracts-page page-shell page-shell--fill" data-page-layout="fill" aria-labelledby="page-title" data-page-chrome>
+    <div className="contract-toolbar">
+      <h2>集采台账，合同主表</h2>
+      <div className="contract-chrome-actions">
+        <Button disabled={unavailable} onClick={()=>setTool('fetch')}>抓取采购合同信息</Button>
+        <Button onClick={()=>{if(trade)grid.current?.applyColumnState({state:['trade_co','trade_contract_amt','trade_inv_sum'].map(colId=>({colId,sort:null}))});setTrade(old=>!old);}}>{trade?'隐藏':'显示'}贸易公司列</Button>
+        <Button disabled={unavailable} onClick={()=>openEditor(null)}>+ 手工新增合同</Button>
+        <ContractExports owner={me?`${me.id}:${me.account}`:'anonymous'} projects={projectRows} project={filters.projects.length===1?filters.projects[0]!:0} getIds={exportIds} scope={JSON.stringify([filters,searchInput.value,sort,query.dataUpdatedAt,projects.dataUpdatedAt])} searchBusy={searchBusy} unavailable={exportUnavailable} paused={blocked||!active}/>
+      </div>
+    </div>
+    <div className="jc-bulk-selection"><span className="contract-selection-count">已勾选 {selected.length} 行{hidden>0?`（列表外 ${hidden} 行）`:''}</span>{picked.size>0&&<Button size="small" onClick={()=>setPicked(new Set())}>清空勾选</Button>}<div>{(query.data?.tags??[]).map(value=><Button key={value} disabled={unavailable||searchBusy||!picked.size||hidden>0} title={hidden?'请先清空搜索或调整筛选核对勾选范围':''} onClick={()=>void tag([...picked],value)}>批量{value}</Button>)}</div></div>
+    <div className="wb-toolbar contract-filters">
+      <label className="contract-project-field">项目<ProjectPicker projects={projectRows} selected={filters.projects} multiple label="合同筛选项目" emptyLabel="全部项目" disabled={blocked||projects.isPending} pick={ids=>setFilters(old=>({...old,projects:ids}))}/></label>
       <label>纳入状态<Select aria-label="纳入状态" value={filters.tag} options={['',...(query.data?.tags??[])].map(value=>({value,label:value||'全部'}))} onChange={tag=>setFilters(old=>({...old,tag}))}/></label>
       <label>审批状态<Select aria-label="审批状态" value={filters.approval} options={approvalOptions} onChange={approval=>setFilters(old=>({...old,approval}))}/></label>
       <label>存档情况<Select aria-label="合同存档筛选" value={filters.arch} options={['','未存档','资产处','已存档'].map(value=>({value,label:value||'全部'}))} onChange={arch=>setFilters(old=>({...old,arch}))}/></label>

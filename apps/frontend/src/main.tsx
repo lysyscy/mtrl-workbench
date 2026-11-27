@@ -20,6 +20,8 @@ import { resetBrowserRelay } from './i8-browser-relay';
 import { I8SessionProvider } from './i8-session';
 import { NoticeFetchJobs } from './notice-fetch-jobs';
 import { DialogPresence, MotionAccess, WorkspaceMarker } from './workspace-motion';
+import { resolveSidebarCollapsed, sidebarNarrowWidth, toggleSidebarPreference } from './sidebar-state';
+import type { SidebarPreference } from './sidebar-state';
 
 type WorkspacePageProps = {
   me: Identity | null; blocked: boolean; active: boolean;
@@ -48,24 +50,24 @@ const groups = [
   { id: 'contracts', title: '集采域' }, { id: 'materials', title: '材料与报表' },
   { id: 'global', title: '全局' },
 ];
-const pages: { path: string; title: string; mod: string; group: string; loading?: string; component: ComponentType<WorkspacePageProps> }[] = [
-  { path: '/', title: '首页', mod: '', group: 'home', loading: '正在读取首页…', component: HomeEntry },
-  { path: '/projects', title: '项目档案', mod: '01', group: 'base', loading: '正在读取项目档案…', component: lazy(() => import('./projects').then(module => ({ default: module.Projects }))) },
-  { path: '/i8', title: 'i8 接入层', mod: '02', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
-  { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: NoticeEntry },
-  { path: '/debt', title: '欠款台账', mod: '05', group: 'payment', loading: '正在读取欠款台账…', component: lazy(() => import('./flow').then(module => ({ default: module.DebtPage }))) },
-  { path: '/ledger', title: '付款流水', mod: '05', group: 'payment', loading: '正在读取付款流水…', component: lazy(() => import('./flow').then(module => ({ default: module.FlowPage }))) },
-  { path: '/contracts', title: '集采台账', mod: '11', group: 'contracts', loading: '正在读取集采合同…', component: lazy(() => import('./contracts').then(module => ({ default: module.ContractsPage }))) },
-  { path: '/process', title: '过程资料', mod: '06', group: 'materials', loading: '正在读取过程资料…', component: lazy(() => import('./process').then(module => ({ default: module.ProcessPage }))) },
-  { path: '/settlement', title: '收发结存与提取', mod: '07', group: 'materials', loading: '正在读取收发结存…', component: lazy(() => import('./settlement').then(module => ({ default: module.SettlementPage }))) },
-  { path: '/big', title: '月度会大表', mod: '07', group: 'materials', loading: '正在读取月度会大表…', component: lazy(() => import('./big').then(module => ({ default: module.BigPage }))) },
-  { path: '/inventory', title: '库存单据与调整单', mod: '08', group: 'materials', loading: '正在读取库存单据…', component: lazy(() => import('./inventory').then(module => ({ default: module.InventoryPage }))) },
-  { path: '/fees', title: '特殊费用', mod: '09', group: 'materials', loading: '正在读取费用…', component: lazy(() => import('./fees').then(module => ({ default: module.FeesPage }))) },
-  { path: '/mechanical', title: '机械费', mod: '10', group: 'materials', loading: '正在读取机械费…', component: lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage }))) },
-  { path: '/equipment', title: '设备台账', mod: '16', group: 'materials', loading: '正在读取设备分布…', component: lazy(() => import('./equipment').then(module => ({ default: module.EquipmentPage }))) },
-  { path: '/oilcard', title: '油卡管理', mod: '13', group: 'materials', loading: '正在读取油卡档案…', component: lazy(() => import('./oilcard').then(module => ({ default: module.OilCardPage }))) },
-  { path: '/rules', title: '规则配置', mod: '14', group: 'global', loading: '正在读取规则配置…', component: lazy(() => import('./rules').then(module => ({ default: module.RulesPage }))) },
-  { path: '/users', title: '用户管理', mod: '15', group: 'global', loading: '正在读取用户管理…', component: lazy(() => import('./users').then(module => ({ default: module.UsersPage }))) },
+const pages: { path: string; title: string; icon: string; group: string; loading?: string; component: ComponentType<WorkspacePageProps> }[] = [
+  { path: '/', title: '首页', icon: 'M3 10 12 3l9 7v10H3z M9 20v-7h6v7', group: 'home', loading: '正在读取首页…', component: HomeEntry },
+  { path: '/projects', title: '项目档案', icon: 'M3 6h7l2 2h9v12H3z M3 12h18', group: 'base', loading: '正在读取项目档案…', component: lazy(() => import('./projects').then(module => ({ default: module.Projects }))) },
+  { path: '/i8', title: 'i8 接入层', icon: 'M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0zm6 9v4', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
+  { path: '/notices', title: '付款通知书', icon: 'M5 3h10l4 4v14H5z M14 3v5h5M8 12h8m-8 4h6', group: 'payment', loading: '正在读取付款通知书…', component: NoticeEntry },
+  { path: '/debt', title: '欠款台账', icon: 'M4 4h16v16H4z M9 4v16M12 9h5m-5 5h5', group: 'payment', loading: '正在读取欠款台账…', component: lazy(() => import('./flow').then(module => ({ default: module.DebtPage }))) },
+  { path: '/ledger', title: '付款流水', icon: 'M3 8h17l-4-4m4 12H3l4 4M20 8l-4 4M3 16l4-4', group: 'payment', loading: '正在读取付款流水…', component: lazy(() => import('./flow').then(module => ({ default: module.FlowPage }))) },
+  { path: '/contracts', title: '集采台账', icon: 'M4 6h16v15H4z M9 6V3h6v3M8 11h8m-8 5h8', group: 'contracts', loading: '正在读取集采合同…', component: lazy(() => import('./contracts').then(module => ({ default: module.ContractsPage }))) },
+  { path: '/process', title: '过程资料', icon: 'M3 7h5v5H3zm13 7h5v5h-5zM8 9.5h4v7h4M12 5v4.5h5', group: 'materials', loading: '正在读取过程资料…', component: lazy(() => import('./process').then(module => ({ default: module.ProcessPage }))) },
+  { path: '/settlement', title: '收发结存与提取', icon: 'm3 8 9-5 9 5-9 5zm0 0v9l9 4 9-4V8m-9 5v8', group: 'materials', loading: '正在读取收发结存…', component: lazy(() => import('./settlement').then(module => ({ default: module.SettlementPage }))) },
+  { path: '/big', title: '月度会大表', icon: 'M3 5h18v14H3zm0 5h18M9 10v9m6-9v9', group: 'materials', loading: '正在读取月度会大表…', component: lazy(() => import('./big').then(module => ({ default: module.BigPage }))) },
+  { path: '/inventory', title: '库存单据与调整单', icon: 'M4 3h16v5H4zm1 5v13h14V8m-9 4h4m-5 4h6', group: 'materials', loading: '正在读取库存单据…', component: lazy(() => import('./inventory').then(module => ({ default: module.InventoryPage }))) },
+  { path: '/fees', title: '特殊费用', icon: 'M5 3h14v18l-3.5-2-3.5 2-3.5-2L5 21zm4 5h6m-6 4h6', group: 'materials', loading: '正在读取费用…', component: lazy(() => import('./fees').then(module => ({ default: module.FeesPage }))) },
+  { path: '/mechanical', title: '机械费', icon: 'M14 6a5 5 0 0 0-6 6l-5 5 4 4 5-5a5 5 0 0 0 6-6l-3 3-4-4z', group: 'materials', loading: '正在读取机械费…', component: lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage }))) },
+  { path: '/equipment', title: '设备台账', icon: 'M3 5h18v12H3zm5 16h8m-4-4v4m-5-8 3-4 3 2 4-2', group: 'materials', loading: '正在读取设备分布…', component: lazy(() => import('./equipment').then(module => ({ default: module.EquipmentPage }))) },
+  { path: '/oilcard', title: '油卡管理', icon: 'M3 6h18v12H3zm0 4h18m-14 4h4', group: 'materials', loading: '正在读取油卡档案…', component: lazy(() => import('./oilcard').then(module => ({ default: module.OilCardPage }))) },
+  { path: '/rules', title: '规则配置', icon: 'M4 6h6m4 0h6M4 12h10m4 0h2M4 18h2m4 0h10M10 4v4m4 2v4m-8 2v4', group: 'global', loading: '正在读取规则配置…', component: lazy(() => import('./rules').then(module => ({ default: module.RulesPage }))) },
+  { path: '/users', title: '用户管理', icon: 'M15 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0z M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2z', group: 'global', loading: '正在读取用户管理…', component: lazy(() => import('./users').then(module => ({ default: module.UsersPage }))) },
 ];
 
 // Skip parent-only updates for unrelated retained pages; context updates still propagate.
@@ -84,12 +86,54 @@ function AccountMenu({ me, busy, logout, appearance }: { me: Identity; busy: boo
   </Dropdown>;
 }
 
+function NavigationIcon({ path }: { path: string }) {
+  return <svg className="navigation-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={path} /></svg>;
+}
+
+function Sidebar({ collapsed, inert, toggle }: { collapsed: boolean; inert: boolean; toggle: () => void }) {
+  const toggleLabel = collapsed ? '展开侧栏' : '收起侧栏';
+  return <aside className="sidebar" inert={inert}>
+    <div className="sidebar-heading">
+      <div className="sidebar-identity">
+        <div className="brand">材料工作台</div>
+        {appBase === '/preview' && <p className="preview-label">独立预览</p>}
+      </div>
+      <button className="sidebar-toggle" type="button" data-testid="sidebar-toggle" aria-controls="workspace-navigation"
+        aria-expanded={!collapsed} aria-label={toggleLabel} title={toggleLabel} onClick={toggle}>
+        <NavigationIcon path={collapsed ? 'M3 5h18v14H3z M9 5v14 M14 9l3 3-3 3' : 'M3 5h18v14H3z M9 5v14 M17 9l-3 3 3 3'} />
+      </button>
+    </div>
+    <nav id="workspace-navigation" aria-label="主导航">
+      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={'nav-' + group.id}>
+        <p id={'nav-' + group.id} className="nav-group-label">{group.title}</p>
+        {pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'} title={collapsed ? entry.title : undefined}>
+          {({ isActive }) => <>
+            {isActive && <WorkspaceMarker className="navigation-marker" layoutId="workspace-navigation" />}
+            <NavigationIcon path={entry.icon} />
+            <span className="navigation-label">{entry.title}</span>
+          </>}
+        </NavLink>)}
+      </div>)}
+    </nav>
+  </aside>;
+}
+
 function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; preparing: boolean; fontError: boolean; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [sidebarPreference, setSidebarPreference] = useState<SidebarPreference>('auto');
+  const [sidebarViewportWidth, setSidebarViewportWidth] = useState(() => window.innerWidth);
+  const sidebarCollapsed = resolveSidebarCollapsed(sidebarPreference, sidebarViewportWidth);
   const [compactAppearance, setCompactAppearance] = useState(() => window.matchMedia('(max-width:900px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia(`(max-width:${sidebarNarrowWidth}px)`);
+    const update = () => setSidebarViewportWidth(window.innerWidth);
+    query.addEventListener('change', update);
+    update();
+    return () => query.removeEventListener('change', update);
+  }, []);
   useEffect(() => {
     const query = window.matchMedia('(max-width:900px)');
     const update = () => setCompactAppearance(query.matches);
@@ -120,12 +164,19 @@ function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogou
   }
   return <MotionAccess.Provider value={!blocked && !obscured}><QueryClientProvider client={client}><GridWidthOwner value={me ? `${me.id}:${me.account}` : 'anonymous'}><HistoryScope workspaceGuard={historyGuard}><I8SessionProvider blocked={blocked} owner={me ? `${me.id}:${me.account}` : 'anonymous'}><NoticeFetchJobs account={me?.account ?? ''} paused={blocked}>
     {fontError && !obscured && <div className="session-notice" role="alert"><span>部分字体未能加载，已用系统字体显示。</span><WorkspaceReloadButton>重试字体加载</WorkspaceReloadButton></div>}
-    <div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
+    <div className="workspace shell" data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'} hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content" inert={appearanceOpen && compactAppearance}>跳到内容</a>
-    <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div>{appBase === '/preview' && <p className="preview-label">独立预览</p>}<nav aria-label="主导航">
-      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{({ isActive }) => <>{isActive && <WorkspaceMarker className="navigation-marker" layoutId="workspace-navigation" />}<span className="navigation-label">{entry.title}</span></>}</NavLink>)}</div>)}
-    </nav></aside>
-    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={historyGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div></header>
+    <Sidebar collapsed={sidebarCollapsed} inert={appearanceOpen && compactAppearance}
+      toggle={() => setSidebarPreference(preference => toggleSidebarPreference(preference, sidebarViewportWidth))} />
+    <div className="main" inert={appearanceOpen && compactAppearance}>
+      <header>
+        <div className="page-heading">
+          <h1 id="page-title" key={page}>{title}</h1>
+          {appBase === '/preview' && sidebarCollapsed && <span className="topbar-preview-label">独立预览</span>}
+          <div id="ledger-status" />
+        </div>
+        <div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={historyGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl()}>登录</a>}</div>
+      </header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<div className="page-view"><section className="wb-surface page-shell page-shell--flow" data-page-layout="flow" aria-labelledby="not-found-title"><h2 id="not-found-title">没有找到这个页面</h2><NavLink to="/">返回首页</NavLink></section></div>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;

@@ -7,7 +7,7 @@ html{font-variant-numeric:tabular-nums}
 ::selection{background:var(--sel);color:var(--tx)}
 .sidebar{border-right:1px solid var(--sb-bd)}
 .sidebar .brand{color:var(--sb-hd)}
-.sidebar .preview-label,.sidebar .nav-group h2{color:var(--sb-mut)}
+.sidebar .preview-label,.sidebar .nav-group-label{color:var(--sb-mut)}
 .sidebar nav a{border-radius:var(--radius-input);text-decoration:none;transition:background-color var(--motion-fast),color var(--motion-fast)}
 .sidebar nav a:hover{background:var(--sb-hover);color:var(--sb-hd);text-decoration:none}
 .sidebar nav a.active{background:var(--sb-on);color:var(--sb-on-hl);font-weight:500}

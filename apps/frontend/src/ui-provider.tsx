@@ -27,6 +27,7 @@ function appearance() {
     colorSuccess: read('--ok-d'), colorWarning: read('--wn-d'), colorError: read('--dg-d'), colorInfo: read('--bl-d'),
     boxShadow: read('--shadow-pop'), boxShadowSecondary: read('--shadow-md'),
     motionDurationFast: '130ms', motionDurationMid: '240ms', motionDurationSlow: '320ms',
+    motionEaseOutBack: 'ease-out', motionEaseInBack: 'ease-in',
   } };
 }
 

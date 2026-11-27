@@ -167,7 +167,7 @@ export function ContractSubtableDialog({ row, kind, contracts, workspace, paused
     close();
   } });
   const title = kind === 'payment' ? '付款子表' : kind === 'trade' ? '贸易公司发票子表' : historyDate ? '历史未结金额' : '供应商发票子表';
-  return <BusinessModal open={!paused} centered={false} layout="pane" className={`project-dialog contract-subtable-dialog${kind === 'payment' ? '' : ' contract-invoice-dialog'}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
+  return <BusinessModal open={!paused} centered={false} layout="pane" className={`project-dialog contract-work-dialog contract-subtable-dialog${kind === 'payment' ? '' : ' contract-invoice-dialog'}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
     <ContractSubtables contractId={row.id} historyDate={historyDate} contracts={contracts} workspace={workspace} writable={writable} paused={paused} onlyKind={kind} summaryRow={row}/>
     <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
   </DialogContents></BusinessModal>;
@@ -194,7 +194,7 @@ function ContractPaymentReference({ contractId, contracts, paused, writable, wor
       else { if (result === 'written') setSaved(true); setError(workspace.view(contractId)?.error ?? ''); }
     } finally { lock.current = false; }
   }
-  return <BusinessModal open={!paused} className="project-dialog contract-payment-reference" titleId={titleId} requestClose={closing.requestClose}><DialogContents title="从付款域引用付款记录" titleId={titleId} closing={closing}>
+  return <BusinessModal open={!paused} className="project-dialog contract-work-dialog contract-payment-reference" titleId={titleId} requestClose={closing.requestClose}><DialogContents title="从付款域引用付款记录" titleId={titleId} closing={closing}>
     <p>按集采实际供应商核对；同一通知书只能引用一次。</p>
     {query.isPending ? <p role="status">正在读取可引用通知书…</p> : query.isError ? <p role="alert" className="notice">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读候选</Button></p> : <label className="contract-field">集采通知书<Select aria-label="引用集采通知书" placeholder="请选择通知书" value={selected} disabled={Boolean(state?.busy) || saved || Boolean(state?.uncertain)} onChange={setSelected} getPopupContainer={trigger => (trigger as HTMLElement).closest<HTMLElement>('.ant-modal-container') ?? document.body} options={candidates.map(row => ({ value: row.notice_id, label: `${row.bill_no}，${row.jc_supplier || '未录入供应商'}，${money(row.stat_paid)} 元` }))}/></label>}
     {!query.isPending && !query.isError && !candidates.length && <p>没有可引用的通知书。</p>}

@@ -22,6 +22,19 @@ import type { ContractSubtableWorkspace } from './contract-subtable-workspace';
 export const archiveNoHint = (next: string) => `建议 ${next}`;
 const emptyFields = (): ContractFields => ({ material_name:'',payment_term:'',payment_method:'',remark:'',arch:'未存档',arch_no:'',ret_date:'' });
 
+export function ContractMaterialContext({ project, contract }: {
+  project: string;
+  contract: Pick<ContractRow, 'contract_no' | 'supplier' | 'date'>;
+}) {
+  const { contract_no, supplier, date } = contract;
+  const reference = contract_no.trim() || [supplier, date].filter(value => value.trim()).join(' · ');
+  if (!project && !reference) return null;
+  return <p className="contract-material-context">
+    {project && <strong>{project}</strong>}
+    {reference && <span>{reference}</span>}
+  </p>;
+}
+
 interface Props { nextArchiveNo?:string;inline?:boolean;materialOnly?:boolean;subtables:ContractSubtableWorkspace; contracts:ContractRow[]; created:(id:number)=>void; row: ContractRow | null; projects: Project[]; methods: string[]; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (text: string) => void }
 export function ContractEditor({ nextArchiveNo='1', inline=false, materialOnly=false, subtables, contracts, created, row, projects, methods, me, blocked, close, refresh, announce }: Props) {
   const [fields,setFields] = useState(emptyFields), [baseline,setBaseline] = useState<ContractFields|null>(null);
@@ -73,9 +86,20 @@ export function ContractEditor({ nextArchiveNo='1', inline=false, materialOnly=f
     finally {setBusy(false);}
   }
   if (blocked) return null;
+  const projectName = row && projects.find(item => item.warehouse_name === row.project_key)?.disp;
   const contents=<DialogContents title={materialOnly?'材料名':row?'合同详情与维护':'手工新增合同'} titleId={titleId} closing={closing}><form className="dialog-form" onSubmit={e=>{e.preventDefault();void save();}}><div className="dialog-body contract-editor-body">
-    {row&&materialOnly&&<p>{row.contract_no||'手工合同'}</p>}
-    {row && !materialOnly && <div className="contract-source"><strong>{source?.contract_no||'手工合同'}</strong><span>{projects.find(p=>p.warehouse_name===row.project_key)?.disp||'项目未匹配'}，{source?.date||'合同日期未填'}</span><span>供应商：{source?.supplier||'未填'}，合同金额：{money(source!.contract_amt)} 元</span>{source?.trade_co && <span>贸易公司：{source?.trade_co}，合同金额：{source?.trade_contract_amt===null?'未确定':`${money(source!.trade_contract_amt!)} 元`}</span>}</div>}
+    {row && source && materialOnly && <ContractMaterialContext project={projectName || row.project_key} contract={source} />}
+    {row && source && !materialOnly && <dl className="contract-source">
+      <div><dt>合同编号</dt><dd>{source.contract_no || '手工合同'}</dd></div>
+      <div><dt>项目</dt><dd>{projectName || '项目未匹配'}</dd></div>
+      <div><dt>合同日期</dt><dd>{source.date || '合同日期未填'}</dd></div>
+      <div><dt>供应商</dt><dd>{source.supplier || '未填'}</dd></div>
+      <div><dt>合同金额</dt><dd>{money(source.contract_amt)} 元</dd></div>
+      {source.trade_co && <>
+        <div><dt>贸易公司</dt><dd>{source.trade_co}</dd></div>
+        <div><dt>贸易公司合同金额</dt><dd>{source.trade_contract_amt === null ? '未确定' : `${money(source.trade_contract_amt)} 元`}</dd></div>
+      </>}
+    </dl>}
     {row && detail.isPending ? <p role="status">正在读取合同详情…</p> : row && detail.isError ? <p className="notice" role="alert">{detail.error.message}<Button onClick={()=>void reread()}>重读详情</Button></p> : <>
       {!row&&<><Checkbox checked={history} disabled={unavailable} onChange={e=>setHistory(e.target.checked)}>历史汇总</Checkbox>{history&&<><p>每项目一行。历史未结金额在供应商子表录入；已扣除截至日以前的付款，请勿重复录入。</p><label className="contract-field">核对截至日<BusinessDate label="核对截至日" value={cutoff} disabled={unavailable} onChange={setCutoff}/></label></>}</>}
       {!row && <div className="contract-form-grid"><label>项目<ProjectPicker projects={projects.filter(p=>Boolean(p.warehouse_name))} selected={project} pick={setProject} label="合同项目" disabled={unavailable} /></label><label>合同日期<BusinessDate label="合同日期" value={history?'':date} disabled={unavailable||history} onChange={setDate} /></label><label>供应商<Input value={history?'':supplier} maxLength={128} disabled={unavailable||history} onChange={e=>setSupplier(e.target.value)} /></label><label>合同金额（元）<Input value={history?'':amount} inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" disabled={unavailable||history} onChange={e=>setAmount(e.target.value)} /></label><label>贸易公司<Input value={history?'':trade} disabled={unavailable||history} onChange={e=>setTrade(e.target.value)} /></label><label>贸易公司合同金额（元）<Input value={history?'':tradeAmount} inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" disabled={unavailable||history} onChange={e=>setTradeAmount(e.target.value)} /></label></div>}
@@ -87,5 +111,5 @@ export function ContractEditor({ nextArchiveNo='1', inline=false, materialOnly=f
 
     </div><div className="dialog-actions"><Button disabled={busy||subBusy} onClick={closing.requestClose}>{saved||uncertain?'关闭':'取消'}</Button>{(error||saved||uncertain)&&<Button disabled={busy||blocked} onClick={()=>void reread()}>重读核对</Button>}{!saved&&!uncertain&&<Button htmlType="submit" className="primary" disabled={unavailable||Boolean(row&&!dirty)||!row&&!project.length}>{busy?'正在保存…':materialOnly?'保存材料名':'保存合同'}</Button>}</div>
   </form></DialogContents>;
-  return inline&&!row?<div className={`contract-editor contract-inline-editor${closing.confirming?' contract-editor-discard':''}`}>{contents}</div>:<BusinessModal open layout={materialOnly?'compact':'scroll-body'} className={`project-dialog contract-editor${materialOnly?' contract-material-editor':''}${closing.confirming?' contract-editor-discard':''}`} titleId={titleId} requestClose={closing.requestClose}>{contents}</BusinessModal>;
+  return inline&&!row?<div className={`contract-editor contract-inline-editor${closing.confirming?' contract-editor-discard':''}`}>{contents}</div>:<BusinessModal open layout={materialOnly?'compact':'scroll-body'} className={`project-dialog contract-work-dialog contract-editor${materialOnly?' contract-material-editor':''}${closing.confirming?' contract-editor-discard':''}`} titleId={titleId} requestClose={closing.requestClose}>{contents}</BusinessModal>;
 }

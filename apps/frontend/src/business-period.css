@@ -1,5 +1,8 @@
-.business-period-trigger{width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left;font-variant-numeric:tabular-nums}
-.business-period-trigger svg{width:calc(14px * var(--fscale));height:calc(14px * var(--fscale));flex:none;fill:none;stroke:currentColor;stroke-width:1.5;color:var(--tx2)}
+.business-period-trigger.ant-btn{width:100%;min-height:var(--control-h);display:flex;justify-content:space-between;align-items:center;text-align:left;font-variant-numeric:tabular-nums}
+.business-period-trigger.ant-btn:not(:disabled){border-color:var(--bd3)}
+.business-period-trigger.ant-btn:not(:disabled):hover{border-color:var(--pri)}
+.business-period-year svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.business-period-trigger svg{width:calc(14px * var(--fscale));height:calc(14px * var(--fscale));flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;color:var(--tx2)}
 .business-period-popover .ant-popover-container{padding:calc(12px * var(--fscale));border-radius:6px}
 .business-period-panel{width:calc(284px * var(--fscale));max-width:calc(100vw - 48px);max-height:calc(100dvh - 80px);overflow:auto;overscroll-behavior:contain;font-family:var(--fs);font-size:calc(14px * var(--fscale));color:var(--tx)}
 .business-period-year{display:flex;align-items:center;justify-content:space-between;margin:calc(8px * var(--fscale)) 0}.business-period-year strong{font-weight:500;font-variant-numeric:tabular-nums}

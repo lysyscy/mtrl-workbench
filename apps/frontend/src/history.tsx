@@ -117,7 +117,12 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
   return <div className="history-tools">{(['undo', 'redo'] as const).map(direction => <Button key={direction}
     disabled={!me || blocked || busy || uncertain || Boolean(guard) || !history.data?.[direction]}
     title={guard || history.data?.[direction]?.label || history.data?.notice || '当前没有适用操作'}
-    onClick={() => void replay(direction)}>{direction === 'undo' ? '撤销' : '重做'}</Button>)}
+    onClick={() => void replay(direction)}>
+    <svg className="history-direction-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d={direction === 'undo' ? 'm9 6-5 5 5 5m-5-5h10a5 5 0 0 1 5 5v2' : 'm15 6 5 5-5 5m5-5H10a5 5 0 0 0-5 5v2'} />
+    </svg>
+    {direction === 'undo' ? '撤销' : '重做'}
+  </Button>)}
     {(feedback || history.isError) && <span role="status">{feedback || '操作历史未能读取。'}</span>}
     {(uncertain || history.isError) && <Button disabled={busy || blocked} onClick={() => void reload()}>重读核对</Button>}
     <DialogPresence>{confirmation && <BusinessModal open={!blocked} layout="scroll-body" requestClose={closing.requestClose}

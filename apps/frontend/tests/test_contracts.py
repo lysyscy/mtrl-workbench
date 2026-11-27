@@ -84,7 +84,12 @@ def test_fetch_receipt_handles_pending_items_in_its_window(server, browser_page,
     page.set_viewport_size({'width': 900, 'height': 760})
     default_since = get(api, '/api/m11/list')['fetch_default_since']
     assert default_since, '测试副本没有可用于回填的合同日期'
-    open_page(page, server, 'contracts', '集采台账')
+    open_page(page, server, 'i8', 'i8 接入层')
+    direct = page.locator('.i8-relay .ant-segmented-item').filter(has_text='工作台直连')
+    direct.click()
+    expect(direct).to_have_class(re.compile('ant-segmented-item-selected'))
+    page.locator('a[href="/preview/contracts"]').click()
+    expect(page.locator('#page-title')).to_have_text('集采台账')
     page.get_by_role('button', name='抓取采购合同信息').click()
     dialog = page.get_by_role('dialog', name='抓取采购合同', exact=True)
     expect(dialog.get_by_label('合同日期起点')).to_have_value(default_since)

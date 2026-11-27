@@ -20,7 +20,13 @@
   flex-wrap: wrap;
 }
 
-.history-details-scope { margin-block-end: .65rem; }
+.history-details-scope {
+  margin-block-end: .75rem;
+  padding: .6rem .75rem;
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-inner);
+  background: var(--sf2);
+}
 .history-details-scope span, .history-details-identity span, .history-details-footer span { color: var(--tx2); }
 .history-details-object { margin-block-end: .8rem; }
 
@@ -65,7 +71,7 @@
 .history-details-table tbody tr + tr { border-block-start: 1px solid var(--bd); }
 .history-details-table tbody + tbody { border-block-start: 1px solid var(--bd); }
 
-.history-details-summary { margin-block: -.2rem .4rem; }
+.history-details-summary { margin-block: 0 .6rem; }
 .history-details-summary ul {
   display: flex;
   flex-wrap: wrap;
@@ -81,6 +87,6 @@
   flex-shrink: 0;
   justify-content: flex-end;
   border-block-start: 1px solid var(--bd);
-  padding-block-start: .8rem;
+  padding-block-start: calc(10px * var(--fscale));
 }
 .history-details-footer > span { margin-inline-end: auto; }

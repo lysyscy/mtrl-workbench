@@ -21,9 +21,14 @@ def test_actual_appearance_persists_and_keeps_other_account(server,browser_page,
         with httpx.Client(base_url=server) as other:
             assert other.post('/m15/login',data={'account':'preview-user','password':''}).status_code==303
             before=other.get('/api/m15/theme?surface=react').json()
-            page.get_by_role('button',name=me['name']+'（管理员）',exact=True).click();page.get_by_role('menuitem',name='外观与字号',exact=True).click();dialog=page.locator('.appearance-dialog')
-            expect(dialog.get_by_role('radio')).to_have_count(1+len(original['scales']))
-            expect(dialog.get_by_role('radio',name=theme['label']+'主题',exact=True)).to_have_attribute('aria-checked','true')
+            page.get_by_role('button', name=me['name']+'（管理员）', exact=True).click()
+            page.get_by_role('menuitem', name='外观与字号', exact=True).click()
+            dialog = page.get_by_role('dialog', name='外观与字号', exact=True)
+            expect(dialog.get_by_role('radio')).to_have_count(4)
+            expect(dialog.get_by_text('当前主题：精工深墨松绿', exact=True)).to_be_visible()
+            for scale in original['scales']:
+                choice = dialog.get_by_role('radio', name=scale['label']+'字号', exact=True)
+                expect(choice).to_have_attribute('aria-checked', str(scale['key'] == original['ui_scale']).lower())
             option = dialog.get_by_role('radio',name=target['label']+'字号',exact=True)
             option.click()
             expect(option).to_have_attribute('aria-checked','true')

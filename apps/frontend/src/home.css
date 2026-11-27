@@ -1,24 +1,141 @@
-.home-page{overflow:visible;min-width:0;max-width:calc(920px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.home-block{padding:calc(16px * var(--fscale));background:var(--sf);border-radius:var(--radius-card);box-shadow:var(--shadow)}
-.home-block h2{font-size:calc(15px * var(--fscale));font-weight:600;margin:0 0 calc(16px * var(--fscale));display:flex;align-items:baseline;gap:calc(12px * var(--fscale));flex-wrap:wrap}
-.home-summary{font-size:calc(12px * var(--fscale));font-weight:400;color:var(--tx2)}
-.home-todos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(220px * var(--fscale))),1fr));gap:calc(16px * var(--fscale))}
-.home-tile{border:1px solid var(--bd);border-left-width:calc(4px * var(--fscale));border-radius:var(--radius-card);padding:calc(16px * var(--fscale));display:flex;flex-direction:column;gap:calc(6px * var(--fscale));background:var(--sf);min-width:0}
-.home-wn{border-left-color:var(--wn-bd)}
-.home-dg{border-left-color:var(--dg-bd)}
-.home-tile-label{margin:0;font-size:calc(13px * var(--fscale));font-weight:600}
-.home-tile-count{margin:0;font-size:calc(28px * var(--fscale));font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
-.home-clear .home-tile-count{color:var(--tx2);font-weight:400}
-.home-tile-detail{margin:0;font-size:calc(12px * var(--fscale));color:var(--tx2);overflow-wrap:anywhere}
-.home-tile-link{margin-top:calc(8px * var(--fscale));align-self:flex-start;color:var(--pri);text-decoration:none;padding:calc(2px * var(--fscale)) 0}
-.home-tile-link:hover{text-decoration:underline}
-.home-tile-link:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-
-/* The todo block keeps its tiles while a read is pending or has failed: the number
-   slot holds the same line height, and the status lane follows the tiles, so a late,
-   short or failed read never moves them. */
-.home-tile-count-reading{display:flex;align-items:center;height:calc(28px * var(--fscale) * 1.2)}
-.home-tile-count-reading span{display:block;height:calc(7px * var(--fscale));width:60%;border-radius:var(--radius-pill);background:var(--sf2)}
+.home-page {
+  container: home / inline-size;
+  margin-inline: auto;
+  padding-block: calc(12px * var(--fscale));
+  font-size: 1rem;
+}
+.home-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  margin-block-end: calc(16px * var(--fscale));
+}
+.home-heading h2 { margin: 0; font-size: calc(24px * var(--fscale)); font-weight: 650; line-height: 1.3; }
+.home-summary { font-size: calc(13px * var(--fscale)); color: var(--tx2); }
+.home-todos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@container home (min-width: 600px) {
+  .home-todos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container home (min-width: 920px) {
+  .home-todos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.home-tile {
+  display: grid;
+  grid-template: "icon copy count" auto "action action action" 1fr / auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: calc(16px * var(--fscale)) 12px;
+  padding: calc(16px * var(--fscale));
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-card);
+  background: var(--sf);
+}
+.home-tile:hover { border-color: var(--bd3); }
+.home-tile:focus-within { border-color: var(--pri); }
+.home-tile-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  inline-size: calc(36px * var(--fscale));
+  block-size: calc(36px * var(--fscale));
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-inner);
+  background: var(--sf2);
+  color: var(--tx2);
+}
+.home-tile[data-tone="pending"] .home-tile-icon {
+  border-color: var(--wn-bd);
+  background: var(--wn-l);
+  color: var(--wn-d);
+}
+.home-tile[data-tone="negative"] .home-tile-icon {
+  border-color: var(--dg-bd);
+  background: var(--dg-l);
+  color: var(--dg-d);
+}
+.home-tile svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home-tile-icon svg { width: 19px; height: 19px; }
+.home-tile-copy { grid-area: copy; min-width: 0; }
+.home-tile-label { margin: 0; font-size: calc(15px * var(--fscale)); font-weight: 650; }
+.home-tile-detail { margin: .25em 0 0; color: var(--tx2); line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }
+.home-tile-count {
+  grid-area: count;
+  margin: 0;
+  min-inline-size: 2ch;
+  text-align: end;
+  font-size: calc(29px * var(--fscale));
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.18;
+}
+.home-clear .home-tile-count { color: var(--tx2); font-weight: 500; }
+/* Reserve the count slot through the first read and retry. */
+.home-tile-count-reading {
+  display: grid;
+  place-items: center end;
+  height: 1.18em;
+}
+.home-tile-count-reading span {
+  inline-size: 2ch;
+  block-size: .24em;
+  border-radius: var(--radius-pill);
+  background: var(--sf3);
+}
+.home-tile-action {
+  grid-area: action;
+  align-self: end;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  padding-block-start: calc(12px * var(--fscale));
+  border-block-start: 1px solid var(--bd);
+}
+.home-tile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-sm);
+  padding-inline: 9px;
+  border: 1px solid var(--bd3);
+  border-radius: var(--radius-input);
+  background: var(--sf);
+  color: var(--tx2);
+  text-decoration: none;
+}
+.home-tile-link:hover { background: var(--sf2); text-decoration: none; }
+.home-tile:is([data-tone="pending"],[data-tone="negative"]) .home-tile-link {
+  border-color: var(--pri);
+  background: var(--pri);
+  color: var(--on);
+}
+.home-tile:is([data-tone="pending"],[data-tone="negative"]) .home-tile-link:hover {
+  border-color: var(--pri-d);
+  background: var(--pri-d);
+}
+.home-tile .home-tile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--radius-pill);
+  font-size: calc(12px * var(--fscale));
+}
+.home-tile-status svg { width: 12px; height: 12px; }
 /* Visible feedback follows the tiles; a quiet state leaves no empty row. */
-.home-read-lane{--read-status-pad:0}
-.home-updating{margin:0;font-size:calc(12px * var(--fscale));color:var(--tx2)}
+.home-read-lane { --read-status-pad: 0; }
+.home-updating { margin: 0; font-size: calc(12px * var(--fscale)); color: var(--tx2); }

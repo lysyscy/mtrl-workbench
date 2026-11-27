@@ -183,7 +183,7 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
       restore();
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</Button>
-    {createPortal(<DialogPresence>{open && <BusinessModal open={open && !paused} layout="pane" className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
+    {createPortal(<DialogPresence>{open && <BusinessModal open={open && !paused} layout="pane" className={`ledger-export-dialog${singleList ? ' ledger-project-export' : kind === 'contracts-print' ? ' contract-work-dialog' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
       <p>{description}</p>
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}

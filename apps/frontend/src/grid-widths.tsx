@@ -7,7 +7,8 @@ import { bindGridWidths, gridWidthPreferences } from './grid-width-state';
 import { GridWidthOwner } from './grid-width-owner';
 import { manualGridColumns, widthModeColumns } from './grid-manual-widths';
 
-export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean) {
+export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean,
+  { resetOnContainerResize = true }: { resetOnContainerResize?: boolean } = {}) {
   const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),[dragging,setDragging]=useState<string|null>(null);
   const preferences=useMemo(()=>gridWidthPreferences(owner,table,()=>window.localStorage),[owner,table]);
   const revision=useSyncExternalStore(preferences.subscribe,preferences.getSnapshot);
@@ -52,11 +53,16 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
     };
     node?.addEventListener('pointerdown',capture,true);
     let width=node?.clientWidth??0;
-    const resize=new ResizeObserver(()=>{const next=node?.clientWidth??0;if(next&&next!==width){width=next;setLayoutRevision(n=>n+1);}});
-    if(node)resize.observe(node);
-    cleanup.current = () => {node?.removeEventListener('pointerdown',capture,true);resize.disconnect();controller.dispose();};
+    const resize = node && resetOnContainerResize ? new ResizeObserver(() => {
+      const next = node.clientWidth;
+      if (!next || next === width) return;
+      width = next;
+      setLayoutRevision(n => n + 1);
+    }) : null;
+    if(node)resize?.observe(node);
+    cleanup.current = () => {node?.removeEventListener('pointerdown',capture,true);resize?.disconnect();controller.dispose();};
     api.addEventListener('gridPreDestroyed', cleanup.current);
-  }, [owner, table, root]);
+  }, [owner, table, root, resetOnContainerResize]);
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
   const fit=useCallback((includeFlex = false)=>binding.current?.fit(includeFlex),[]);

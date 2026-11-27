@@ -31,6 +31,63 @@ function ThemePreview({ palette }: { palette: Palette }) {
   return <span className="appearance-mini" style={palette.vars as CSSProperties} aria-hidden="true"><span className="appearance-mini-nav"><i /><i /><i className="is-active" /><i /></span><span className="appearance-mini-body"><span className="appearance-mini-head"><i /><b /></span><span className="appearance-mini-sheet"><span className="appearance-mini-th" /><span className="appearance-mini-row"><i /><b>12,345.67</b></span><span className="appearance-mini-row is-selected"><i /><b>8,560.00</b></span><span className="appearance-mini-row"><i /><b>780.00</b></span></span></span></span>;
 }
 
+function ThemeChoices({ options, unavailable, onChange }: AppearanceChoicesProps) {
+  return <>
+    <div className="appearance-section-title"><h3>配色主题</h3><span>{options.themes.length} 套完整界面</span></div>
+    <div className="appearance-theme-choices" role="radiogroup" aria-label="配色主题">
+      {options.palette.map(item => {
+        const selected = options.theme === item.name;
+        return <button type="button" role="radio" aria-label={item.label + '主题'} aria-checked={selected}
+          aria-disabled={unavailable} key={item.name} className={selected ? 'appearance-choice is-selected' : 'appearance-choice'}
+          onClick={() => onChange('theme', item.name, item.label)}>
+          <ThemePreview palette={item} />
+          <span className="appearance-choice-title">{item.label}<span className="appearance-check">{selected && <Check />}</span></span>
+          <span className="appearance-description">{item.description}</span>
+        </button>;
+      })}
+    </div>
+  </>;
+}
+
+type AppearanceChoicesProps = {
+  options: Preferences;
+  unavailable: boolean;
+  onChange: (field: 'theme' | 'ui_scale', value: string, label: string) => void;
+};
+
+export function AppearanceChoices({ options, unavailable, onChange }: AppearanceChoicesProps) {
+  const multipleThemes = options.themes.length > 1;
+  const themeLabel = options.theme === '松绿' ? '精工深墨松绿' : options.palette[0]?.label ?? options.theme;
+  return <>
+    {multipleThemes && <ThemeChoices options={options} unavailable={unavailable} onChange={onChange} />}
+    <div className="appearance-section-title appearance-size-heading"><h3>界面大小</h3><span>文字、控件和行高一起变化</span></div>
+    <div className="appearance-scale-choices" role="radiogroup" aria-label="界面字号">
+      {options.scales.map(item => {
+        const selected = options.ui_scale === item.key;
+        const label = item.label;
+        const sample: CSSProperties & { '--sample-scale': string } = { '--sample-scale': item.css };
+        return <button type="button" role="radio" aria-label={label + '字号'} aria-checked={selected}
+          aria-disabled={unavailable} key={item.key} style={sample}
+          className={selected ? 'appearance-choice appearance-scale-choice is-selected' : 'appearance-choice appearance-scale-choice'}
+          onClick={() => onChange('ui_scale', item.key, label)}>
+          <span className="appearance-choice-title">
+            {label}<small>{item.css === '1' ? '1.0' : item.css}×</small><span className="appearance-check">{selected && <Check />}</span>
+          </span>
+          <span className="appearance-size-sample"><span>台账</span><span>1,234.56</span></span>
+          <span className="appearance-control-sample" aria-hidden="true">查看明细</span>
+        </button>;
+      })}
+    </div>
+    {!multipleThemes && <div className="appearance-current-theme">
+      <div className="appearance-theme-swatches" aria-hidden="true"><span /><span /><span /></div>
+      <div>
+        <h3>当前主题：{themeLabel}</h3>
+        <p>本站统一使用此主题。</p>
+      </div>
+    </div>}
+  </>;
+}
+
 export function AppearancePreferences({ close, saved, compact }: { close: () => void; saved: () => Promise<void>; compact: boolean }) {
   const present = useIsPresent(), reduced = useWorkspaceReducedMotion();
   const [options, setOptions] = useState<Preferences | null>(null);
@@ -95,19 +152,18 @@ export function AppearancePreferences({ close, saved, compact }: { close: () => 
   }
   function panelKeys(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closing.requestClose(); }
-
   }
   const unavailable = Boolean(busy) || needsReadback;
   return <motion.aside ref={panel} className="appearance-dialog appearance-panel" role="dialog" aria-modal={compact} aria-labelledby="appearance-title" aria-busy={Boolean(busy)} aria-hidden={!present} inert={!present} onKeyDown={panelKeys}
     initial={{ x: reduced ? 0 : 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reduced ? 0 : 28, opacity: 0 }} transition={reduced ? { duration: 0 } : { ...workspaceSpring, opacity: { duration: .18 } }}>
     <div className="appearance-heading"><div><h2 id="appearance-title">外观与字号</h2><p>点击即保存，仅影响当前账号</p></div><button type="button" ref={closeButton} className="appearance-close" aria-label="收起外观面板" disabled={Boolean(busy)} onClick={closing.requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
     <div className="appearance-body">
-      {options ? <><div className="appearance-section-title"><h3>配色主题</h3><span>{options.themes.length} 套完整界面</span></div><div className="appearance-theme-choices" role="radiogroup" aria-label="配色主题">
-        {options.palette.map(item => <button type="button" role="radio" aria-label={`${item.label}主题`} aria-checked={options.theme === item.name} aria-disabled={unavailable} key={item.name} className={`appearance-choice ${options.theme === item.name ? 'is-selected' : ''}`} onClick={() => void change('theme', item.name, item.label)}><ThemePreview palette={item} /><span className="appearance-choice-title">{item.label}<span className="appearance-check">{options.theme === item.name && <Check />}</span></span><span className="appearance-description">{item.description}</span></button>)}
-      </div><div className="appearance-section-title appearance-size-heading"><h3>界面大小</h3><span>文字、控件和行高一起变化</span></div><div className="appearance-scale-choices" role="radiogroup" aria-label="界面字号">
-        {options.scales.map(item => <button type="button" role="radio" aria-label={`${item.label}字号`} aria-checked={options.ui_scale === item.key} aria-disabled={unavailable} key={item.key} style={{ '--sample-scale': item.css } as CSSProperties} className={`appearance-choice appearance-scale-choice ${options.ui_scale === item.key ? 'is-selected' : ''}`} onClick={() => void change('ui_scale', item.key, item.label)}><span className="appearance-choice-title">{item.label}<small>{Number(item.css)}×</small><span className="appearance-check">{options.ui_scale === item.key && <Check />}</span></span><span className="appearance-size-sample"><span>台账</span><span>1,234.56</span></span><span className="appearance-control-sample">查看明细</span></button>)}
-      </div></> : !error && <p role="status">正在读取外观选项…</p>}
+      {options ? <AppearanceChoices options={options} unavailable={unavailable} onChange={(field, value, label) => void change(field, value, label)} />
+        : !error && <p role="status">正在读取外观选项…</p>}
     </div>
-    <div className="appearance-feedback">{busy ? <p role="status">{busy}</p> : error ? <p role="alert">{error}</p> : <p role="status">{feedback || '选择后立即应用，收起面板可查看完整页面。'}</p>}{!busy && (error || needsReadback) && <Button onClick={() => void reload()}>重新读取</Button>}</div>
+    {(busy || error || feedback || needsReadback) && <div className="appearance-feedback">
+      {busy ? <p role="status">{busy}</p> : error ? <p role="alert">{error}</p> : <p role="status">{feedback}</p>}
+      {!busy && (error || needsReadback) && <Button onClick={() => void reload()}>重新读取</Button>}
+    </div>}
   </motion.aside>;
 }
