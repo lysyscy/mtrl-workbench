@@ -16,14 +16,15 @@ import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { pageGridGeometry, textWidth, fixedWidth, gridTheme } from './grid';
-import { completeColumnWidth, EllipsisText, TextPreview } from './grid-text';
+import { pageGridGeometry, fixedWidth, gridTheme } from './grid';
+import { contentColumn } from './grid-content-widths';
+import { EllipsisText, TextPreview } from './grid-text';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { useRetainedGridColumns } from './grid-layout';
 import { EnumTag } from './enum-tag';
 import { useHistoryGuard } from './history';
 import { contractApprovalStatuses, contractMoneyKeys, nextArchiveNumbers, contractWrite, readContracts, contractHistoryDate, contractRemarkText, historyContractRemark } from './contracts-api';
-import { amountColumnIds, contractWidthMeasurements } from './contract-column-widths';
+import { contractColumnWidth, contractTotalSamples, isContractAmount } from './contract-column-widths';
 import type { ContractRow } from './contracts-api';
 import { cents, decimal, money, receipt, searchKey } from './notices-api';
 import { ContractEditor, archiveNoHint } from './contract-dialog';
@@ -37,6 +38,7 @@ import { useContractSubtables } from './use-contract-subtables';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true,suppressAutoSize:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false};
+const contractRowId = (row: ContractRow) => row.id;
 
 type ContractSelection={visibleCount:number;selectedVisible:number;pending:boolean;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
@@ -253,23 +255,22 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const selectedVisible = selected.length - hidden;
   const selection=useMemo<ContractSelection>(()=>({visibleCount,selectedVisible,pending:searchBusy,chooseAll:checked=>setPicked(old=>{const next=new Set(old);for(const row of state.current.shown){if(checked)next.add(row.id);else next.delete(row.id);}return next;})}),[visibleCount,selectedVisible,searchBusy]);
   const scale=Number(me?.ui_scale_css??1);
-  // AG Grid already resizes the viewport and flex columns. Refitting here remounts the inline editors.
-  const widths=useGridWidths('contracts',root,scale,active&&!blocked,{resetOnContainerResize:false});
-  const measureWidths = useMemo(() => contractWidthMeasurements(query.data?.columns ?? [], query.data?.payment_methods ?? [], scale),
-    [query.data?.columns, query.data?.payment_methods, scale]);
-  const {completeWidths, moneyWidths} = useMemo(() => measureWidths(rows, archiveNumbers), [measureWidths, rows, archiveNumbers, widths.layoutKey]);
+  const widthTotals = useMemo(() => contractTotalSamples(rows), [rows]);
+  const widths = useGridWidths('contracts', root, scale, active && !blocked,
+    { content: { rows, totals: widthTotals, readableTextWidth: 205, retainBy: contractRowId } });
   const selectionColumn=useMemo<ColDef<ContractRow>>(()=>({colId:'select',headerName:'选择',...fixedWidth(28,scale),sortable:false,pinned:'left',headerComponent:ContractSelectionHeader,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<Checkbox aria-label={`选择合同${p.data!.contract_no||p.data!.material}`} checked={state.current.picked.has(p.data!.id)} onChange={e=>setPicked(old=>{const next=new Set(old);if(e.target.checked)next.add(p.data!.id);else next.delete(p.data!.id);return next;})}/>}),[scale]);
   const contractColumns=useMemo<ColDef<ContractRow>[]>(()=>[
     selectionColumn,
     ...(query.data?.columns??[]).filter(c=>c.key!=='ops').map(c=>{
-      const numeric=amountColumnIds.has(c.key);
+      const numeric=isContractAmount(c.key);
       const subtable = amountSubtables.get(c.key);
       const editKey = inlineKeys.find(key => key === c.key);
       const editorParams = {editKey, control: () => inlineControl.current};
-      // Keep formatted amounts and totals intact before flexible text columns shrink.
       const header=c.key==='tag'?'纳入状态':c.label.replace('（自动）','');
-      const bounded=c.key==='material'?{initialWidth:260*scale,...textWidth(220,360,scale,0)}:c.key==='remark'?textWidth(110,210,scale,.7):textWidth(120,c.key==='supplier'?260:240,scale,1);
-      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...(completeWidths[c.key]??(numeric?{}:bounded)),wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':completeWidths[c.key]?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
+      const projectName = (row: ContractRow) => projectNames.get(row.project_key) || (projects.isPending ? '项目读取中…' : '项目未匹配');
+      const sizing = contractColumnWidth(c.key, { subtable: Boolean(subtable), projectName,
+        archiveHint: row => archiveNoHint(inlineControl.current.next(row)), methods: query.data?.payment_methods ?? [] });
+      return {field:c.key as keyof ContractRow,hide:!trade&&['trade_co','trade_contract_amt','trade_inv_sum'].includes(c.key),headerName:header,...sizing,wrapHeaderText:false,autoHeaderHeight:false,wrapText:false,autoHeight:false,cellClass:numeric?'money':sizing.context.columnContent.kind==='bounded'?'contract-identifier':'',...(['project_seq','date','material'].includes(c.key)?{pinned:'left' as const}:{}),...(editKey ? {cellRendererParams: {...editorParams, deferRender: editKey === 'payment_method'}} : {}),
         ...(editKey === 'payment_method' ? {loadingCellRenderer: ContractInlineCell, loadingCellRendererParams: {...editorParams, scrolling:true}} : {}),
         comparator:numeric?(a:string|null,b:string|null)=>compareAmounts(a??'0',b??'0'):undefined,
         cellRenderer:editKey ? ContractInlineCell : (p:ICellRendererParams<ContractRow>)=>{
@@ -281,7 +282,7 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
               aria-label={`${row.contract_no || row.material} ${subtable.label}子表`}
               onClick={() => setSubtable({row, kind: subtable.kind})}>子表</Button>}
           </div>;
-          if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectNames.get(row.project_key)||(projects.isPending?'项目读取中…':'项目未匹配')}/></small></div>;
+          if(c.key==='material')return <div className="contract-object"><Button size="small" aria-label={`编辑材料名：${row.material||'材料名未填'}`} onClick={()=>{openEditor(row,true);}}><EllipsisText text={row.material||'材料名未填'}/></Button><small><EllipsisText text={projectName(row)}/></small></div>;
           if(c.key==='tag'||c.key==='arch')return <Tag className={`status-tag ${c.key==='tag'?(row.tag==='纳入台账'?'status-positive':'status-neutral'):(row.arch==='已存档'?'status-positive':row.arch==='资产处'?'status-pending':'status-neutral')}`}>{String(p.value||'未存档')}</Tag>;
           if(c.key==='approve_status'){
             if(row.approve_status===null)return <span className="muted">—</span>;
@@ -290,14 +291,9 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
           return numeric?(p.value===null?'未确定':money(String(p.value))):['supplier','trade_co'].includes(c.key)?<EllipsisText text={String(p.value??'')}/>:String(p.value??'');
         }} as ColDef<ContractRow>;
     }),
-    {colId:'actions',headerName:'操作',...completeColumnWidth(['不纳入 推进存档'],'操作',scale,48),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
-  ],[query.data?.columns,trade,scale,projectNames,projects.isPending,completeWidths,selectionColumn,compareAmounts]);
-  // Keep business renderers mounted when only an amount width changes.
-  const baseColumns=useMemo(()=>contractColumns.map(column=>{
-    const width = column.field && moneyWidths[column.field];
-    return width ? {...column, ...width} : column;
-  }),[contractColumns,moneyWidths]);
-  const retainedColumns=useRetainedGridColumns(baseColumns,root,widths.layoutKey,amountColumnIds);
+    {colId:'actions',headerName:'操作',...contentColumn('bounded', undefined, measure => measure.buttons(['不纳入','推进存档'], { gap: 0 }) + 4),sortable:false,cellRenderer:(p:ICellRendererParams<ContractRow>)=>p.node.rowPinned?'':<div className="contract-row-actions"><Button size="small" disabled={state.current.actionDisabled} onClick={()=>void state.current.tag([p.data!.id],p.data!.tag==='纳入台账'?'不纳入':'纳入台账')}>{p.data!.tag==='纳入台账'?'不纳入':'纳入'}</Button><Button size="small" title={`存档状态将更新为「${nextArch(p.data!.arch)}」`} disabled={state.current.actionDisabled} onClick={()=>void state.current.advance(p.data!)}>推进存档</Button></div>}
+  ],[query.data?.columns,query.data?.payment_methods,trade,projectNames,projects.isPending,selectionColumn,compareAmounts]);
+  const retainedColumns=useRetainedGridColumns(contractColumns,root,widths.layoutKey);
   const activeWidths=useMemo(()=>widths.columns(retainedColumns),[retainedColumns,widths.columns]);
   const widthColumns=useGridWidthColumns(activeWidths,widths.savedWidths,'material');
   const {busy:subBusy,uncertain:subUncertain,dirty:subDirty}=subtables.summary;

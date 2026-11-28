@@ -17,19 +17,14 @@
 .debt-workspace, .debt-overviews { display: flex; flex-direction: column; }
 /* Fade these dense views at their final position while the debt read and grid layout settle. */
 .page-view:has(> :is(.debt-workspace, .flow-workspace)) { transform: none !important; }
-/* AG Grid gives each virtual row an explicit height. Keep the scroll viewport and the measurement host in layout. */
-.page-view:not([hidden]) .flow-grid .ag-grid-scrolling-rows .ag-row {
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto var(--ag-row-height);
-}
-.debt-workspace { gap: calc(16px * var(--fscale)); }
-.debt-overviews { container: debt-overviews / inline-size; gap: calc(12px * var(--fscale)); }
+.debt-workspace { --ledger-body-inline: calc(16px * var(--fscale)); gap: calc(16px * var(--fscale)); }
+.debt-overviews { container: debt-overviews / inline-size; gap: calc(12px * var(--fscale)); margin-inline: calc(var(--ledger-body-inline) + 1px); }
 .debt-overviews-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(12px * var(--fscale));
 }
-@container debt-overviews (38em <= inline-size < 58em) {
+@container debt-overviews (38em <= inline-size < 64em) {
   .debt-overviews-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .debt-overviews-grid > :last-child { grid-column: 1 / -1; }
 }
@@ -42,6 +37,9 @@
   grid-template-columns: minmax(0, 1fr) minmax(1.5em, 1.25fr) max-content;
   gap: 0 calc(10px * var(--fscale));
   align-content: start;
+}
+.debt-overviews .flow-bars {
+  grid-template-columns: fit-content(13em) minmax(1.5em, 1fr) max-content;
 }
 .flow-bar, .flow-bars > .ant-btn.flow-bar {
   display: grid;

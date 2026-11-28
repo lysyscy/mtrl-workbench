@@ -2,6 +2,33 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bindGridWidths, gridWidthKey, gridWidthPreferences } from '../../src/grid-width-state.ts';
 import { manualGridColumns, widthModeColumns } from '../../src/grid-manual-widths.ts';
+import { allocateColumnWidths } from '../../src/grid-content-widths.ts';
+
+const width = (id, pixels) => ({ id, kind: 'bounded', width: pixels });
+const text = (id, minimum, preferred, pinned = false, typical = preferred) => ({ id, kind: 'demand', minimum, typical, preferred, pinned });
+const layout = (columns, available) => Object.fromEntries(allocateColumnWidths(columns, available));
+
+test('measured widths protect amounts and send constrained space to columns with unread text', () => {
+  const columns = [width('amount', 113), text('title', 68, 368), text('project', 64, 124), text('remark', 40, 40)];
+  assert.deepEqual(layout(columns, 465), { amount: 113, title: 218, project: 94, remark: 40 });
+  assert.deepEqual(layout(columns, 645), { amount: 113, title: 368, project: 124, remark: 40 });
+  assert.deepEqual(layout(columns, 685), { amount: 113, title: 388, project: 144, remark: 40 });
+  assert.deepEqual(layout(columns, 220), { amount: 113, title: 68, project: 64, remark: 40 });
+});
+
+test('manual widths use the viewport budget unchanged until reset restores measured demand', () => {
+  const material = text('material', 68, 240, true);
+  const supplier = text('supplier', 64, 160);
+  const amount = width('amount', 113);
+  assert.deepEqual(layout([width('material', 50), supplier, amount], 560), { material: 50, supplier: 397, amount: 113 });
+  assert.deepEqual(layout([material, supplier, amount], 560), { material: 240, supplier: 207, amount: 113 });
+});
+
+test('rare long remarks get space after routinely long text has room for a line', () => {
+  const columns = [width('code', 100), text('title', 60, 380, false, 320), text('remark', 40, 600, false, 40)];
+  assert.deepEqual(layout(columns, 460), { code: 100, title: 320, remark: 40 });
+  assert.deepEqual(layout(columns, 1080), { code: 100, title: 380, remark: 600 });
+});
 
 function fixture(storage, owner = 'reader', scoped = true, scale = 1) {
   const original = [

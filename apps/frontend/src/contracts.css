@@ -133,8 +133,9 @@
 .contracts-grid .contract-inline-select .ant-select-content{display:flex;align-items:center;min-height:0;height:100%}
 .contracts-grid .contract-inline-select.ant-select-disabled .ant-select-content{color:var(--tx2)}
 .contract-object{display:flex;align-items:center;gap:calc(8px * var(--fscale));width:100%;min-width:0}
-.contracts-grid .contract-object .ant-btn{flex:1 1 55%;min-width:0;max-width:100%}
-.contract-object small{flex:1 1 45%;min-width:0;color:var(--tx2);line-height:1.4}
+.contracts-grid .contract-object .ant-btn,.contract-object small{flex:0 1 auto;min-width:0}
+.contracts-grid .contract-object .ant-btn{max-width:100%}
+.contract-object small{color:var(--tx2);line-height:1.4}
 .contract-source {
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));

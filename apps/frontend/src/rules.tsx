@@ -8,7 +8,7 @@ import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
-import { contentWidth } from './grid';
+import { contentColumn } from './grid-content-widths';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
@@ -284,13 +284,18 @@ function ExclusionRules({ query, writable, blocked, scale, selected, onPublished
       placeholder={<div className="rules-table rules-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={4} quiet={readState === 'error'} /></div>}>
     {data && <>
       <Feedback receipt={confirmedReadFailed ? '' : receipt} error={error} />
-      <BoundedGrid maxHeight="52dvh" minRows={4} table="exclusion-rules" className="rules-table" label="剔除规则列表" rows={data.rules} rowId={rule=>String(rule.id)} scale={scale} columns={[
-        {field:'kindLabel',headerName:'规则类别',...contentWidth(168,220,scale),cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
+      <BoundedGrid maxHeight="52dvh" minRows={4} table="exclusion-rules" className="rules-table" label="剔除规则列表" rows={data.rules} contentWidths={{ rows: data.rules }} rowId={rule=>String(rule.id)} scale={scale} columns={[
+        {field:'kindLabel',headerName:'规则类别',...contentColumn<RuleRow>('bounded', (rule, measure) =>
+          measure.text(rule.kindLabel) + measure.px(6) + measure.text(rule.kind === 'bill_name' ? '包含' : '精确', { size: 12 })),
+          cellRenderer:({data:rule}:{data:RuleRow})=><div id={`rule-notice-${rule.id}`} className={selected === rule.id ? 'rules-located' : undefined}>
           {rule.kindLabel}<span className="rules-match-kind">{rule.kind === 'bill_name' ? '包含' : '精确'}</span>
         </div>},
-        {field:'values',headerName:'命中值',minWidth:280*scale,initialFlex:2,suppressAutoSize:true,cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
-        {field:'meaning',headerName:'剔除的业务含义',minWidth:196*scale,initialFlex:1,suppressAutoSize:true,valueFormatter:p=>p.value||'—'},
-        {colId:'actions',headerName:'操作',...contentWidth(140,180,scale),cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
+        {field:'values',headerName:'命中值',...contentColumn<RuleRow>('demand', (rule, measure) => {
+          const values = splitValues(rule.values);
+          return values.reduce((width, value) => width + measure.text(value) + measure.px(14) + 2, 0) + measure.px(4) * Math.max(0, values.length - 1);
+        }),cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-values">{splitValues(rule.values).map(value=><span key={value}>{value}</span>)}</div>},
+        {field:'meaning',headerName:'剔除的业务含义',...contentColumn('demand'),valueFormatter:p=>p.value||'—'},
+        {colId:'actions',headerName:'操作',...contentColumn('bounded', undefined, measure => measure.buttons(['编辑','删除'], { gap: 6 })),cellRenderer:({data:rule}:{data:RuleRow})=><div className="rules-actions"><Button disabled={writeDisabled} onClick={()=>openForm(rule)}>编辑</Button><Button danger disabled={writeDisabled} onClick={()=>{if(canStartWrite())setDeleting(rule);}}>删除</Button></div>},
       ]}/>
     </>}</FirstReadRegion>
     <DialogPresence>{draft && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={recovery ? '核对剔除规则新增结果' : draft.id === null ? '新增剔除规则' : `编辑剔除规则，${original?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>

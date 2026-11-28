@@ -11,7 +11,7 @@ import { estimateBoundedGridHeight } from './bounded-grid-layout';
 import { rowsInOrder, useGridRowDrag } from './use-grid-row-drag';
 import { readProjectPending, readProjectTrails } from './project-maintenance-reads';
 import type { Pending, Trail } from './project-maintenance-reads';
-import { contentWidth, fixedWidth, fullTextWidth } from './grid';
+import { contentColumn } from './grid-content-widths';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -234,11 +234,25 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   }), []);
   useEffect(()=>{gridApi.current?.refreshCells({force:true});},[drafts,statusEdit,statusErrors,unavailable,editableDisabled]);
   useEffect(()=>{gridApi.current?.refreshCells({columns:['actions'],force:true});},[pending.data]);
-  const phidWidth=fullTextWidth(all.map(p=>p.phid||'—'),scale).minWidth;
+  const projectNames = useMemo(() => new Map(all.map(project => [project.id, project.name_full])), [all]);
+  const promotable = useMemo(() => new Set(pending.data?.items.flatMap(item => item.candidates?.filter(candidate => candidate.is_placeholder).map(candidate => candidate.id) ?? [])), [pending.data]);
   const columns=useMemo<ColDef<ArchiveProject>[]>(()=>[
-    {colId:'sequence',headerName:'序号',...fixedWidth(220,scale),rowDrag:()=>!gridState.current.unavailable,cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,inGroup=state.all.filter(item=>item.status===p.status),at=inGroup.findIndex(item=>item.id===p.id);return <div className="project-order"><OrderInput project={p} disabled={state.unavailable} move={state.move}/><Button aria-label={`上移：${label(p)}`} disabled={state.unavailable||at===0} onClick={()=>void state.move(p.id,'up')}>↑</Button><Button aria-label={`下移：${label(p)}`} disabled={state.unavailable||at===inGroup.length-1} onClick={()=>void state.move(p.id,'down')}>↓</Button></div>;}},
-    ...[['project_type','项目类型'],['disp','展示名'],['warehouse_name','仓库名'],['name_full','项目全名'],['phid','信息化编号'],['status','状态'],['parent','父壳'],['keywords','关键词']].map(([key,title]):ColDef<ArchiveProject>=>({colId:key!,headerName:title!,sortable:true,...contentWidth(key==='phid'?phidWidth/scale:key==='status'?110:140,key==='name_full'?400:320,scale,key==='name_full'?2:key==='disp'?1:0),
-      valueGetter:({data:p})=>p?key==='project_type'?typeNames[p.project_type]:key==='status'?p.status==='active'?'在建':'归档':key==='parent'?gridState.current.all.find(item=>item.id===p.parent_shell_id)?.name_full??'':key==='keywords'?p.match_keywords.join('、'):String(p[key as keyof ArchiveProject]??''):'',
+    {colId:'sequence',headerName:'序号',...contentColumn('bounded', undefined,
+      measure => measure.px(48) + measure.buttons(['↑','↓'], { padding: 5 }) + 24),
+      rowDrag:()=>!gridState.current.unavailable,cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,inGroup=state.all.filter(item=>item.status===p.status),at=inGroup.findIndex(item=>item.id===p.id);return <div className="project-order"><OrderInput project={p} disabled={state.unavailable} move={state.move}/><Button aria-label={`上移：${label(p)}`} disabled={state.unavailable||at===0} onClick={()=>void state.move(p.id,'up')}>↑</Button><Button aria-label={`下移：${label(p)}`} disabled={state.unavailable||at===inGroup.length-1} onClick={()=>void state.move(p.id,'down')}>↓</Button></div>;}},
+    ...([['project_type','项目类型'],['disp','展示名'],['warehouse_name','仓库名'],['name_full','项目全名'],['phid','信息化编号'],['status','状态'],['parent','父壳'],['keywords','关键词']] as const).map(([key,title]):ColDef<ArchiveProject>=>{
+      const value = (p: ArchiveProject) => key === 'project_type' ? typeNames[p.project_type] : key === 'status' ? p.status === 'active' ? '在建' : '归档'
+        : key === 'parent' ? projectNames.get(p.parent_shell_id ?? 0) ?? '' : key === 'keywords' ? p.match_keywords.join('、') : String(p[key] ?? '');
+      const sizing = contentColumn<ArchiveProject>(key === 'phid' || key === 'status' || key === 'project_type' ? 'bounded' : 'demand', (p, measure) => {
+        const label = value(p);
+        if (key === 'status') return measure.px(72);
+        if (key === 'project_type') return measure.text(label, { size: 12 }) + measure.px(12) + 2;
+        if (key === 'warehouse_name' && p.is_placeholder) return Math.max(measure.text(label || '—'), measure.text('无仓库（历史项目）', { size: 12 }));
+        if (key === 'disp' && p.project_type === 'shell') return measure.text('—');
+        const editor = key === 'disp' || key === 'name_full' && !p.parent_shell_id || key === 'keywords' && p.project_type === 'small';
+        return measure.text(label || '—') + (editor && label ? measure.px(12) + 2 : 0);
+      });
+      return {colId:key,headerName:title,sortable:true,...sizing,valueGetter:({data:p})=>p?value(p):'',
       comparator:(a,b)=>String(a??'').localeCompare(String(b??''),'zh',{numeric:true}),
       cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current;
         if(key==='project_type')return <Tag className={`enum-tag project-type project-type-${p.project_type}`}>{typeNames[p.project_type]}</Tag>;
@@ -249,9 +263,12 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
         if(key==='keywords')return p.project_type==='small'?state.fieldInput(p,'match_keywords'):p.match_keywords.join('、')||'—';
         if(key==='parent')return state.all.find(item=>item.id===p.parent_shell_id)?.name_full||'—';
         return p.phid||'—';
-      }})),
-    {colId:'actions',headerName:'操作',...contentWidth(96,160,scale),cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,match=state.pending?.items.find(item=>item.candidates?.some(c=>c.id===p.id&&c.is_placeholder));return <div className="project-row-actions">{p.is_placeholder&&match&&<Button disabled={state.unavailable} onClick={()=>state.setModal({kind:'promote',item:match})}>扶正</Button>}<Button danger disabled={state.unavailable} onClick={()=>state.setModal({kind:'delete',project:p})}>删除</Button></div>;}}
-  ],[scale,phidWidth]);
+      }};
+    }),
+    {colId:'actions',headerName:'操作',...contentColumn<ArchiveProject>('bounded', (p, measure) =>
+      measure.buttons(p.is_placeholder && promotable.has(p.id) ? ['扶正','删除'] : ['删除'])),
+      cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current,match=state.pending?.items.find(item=>item.candidates?.some(c=>c.id===p.id&&c.is_placeholder));return <div className="project-row-actions">{p.is_placeholder&&match&&<Button disabled={state.unavailable} onClick={()=>state.setModal({kind:'promote',item:match})}>扶正</Button>}<Button danger disabled={state.unavailable} onClick={()=>state.setModal({kind:'delete',project:p})}>删除</Button></div>;}}
+  ],[projectNames,promotable]);
   const projectsRead = readPhase(projects, projects.data !== undefined && rows.length === 0);
   const projectsPlaceheld = projects.data === undefined;
   const trailsRead = readPhase(trails, trails.data !== undefined && trails.data.length === 0);
@@ -291,7 +308,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       if (!query.data?.items.length) return null;
       return <div className="project-pending" key={index}><h2>{label}</h2><p className="project-source">{query.data.source.target}，{query.data.source.at}</p>{query.data.items.map((item, i) => <div className="project-task" key={`${item.full_name}:${item.warehouse_name ?? i}`}><span>{item.full_name}{item.warehouse_name ? `，${item.warehouse_name}` : ''}</span><Button htmlType="submit" disabled={unavailable} onClick={() => setModal({ kind: index === 0 ? 'promote' : 'archive', item })}>{index === 0 ? '选择档案扶正' : '选择仓库建档'}</Button></div>)}</div>;
     })}
-    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result project-count">共 <strong>{rows.length}</strong> 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" measurement={measurement} style={{height:archiveHeight}} grid={{...drag.grid,
+    {projectsPlaceheld ? <div className="project-table project-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={projectsRead === 'error'} /></div> : projects.data && <><p className="result project-count">共 <strong>{rows.length}</strong> 个项目</p>{!rows.length ? <p className="state">没有符合条件的项目。可调整筛选，或手工建档、同步名单。</p> : <BusinessGrid table="projects" className="project-table" label="项目列表" rows={rows} columns={columns} rowId={p=>String(p.id)} scale={scale} domLayout="normal" measurement={measurement} contentWidths={{ rows }} style={{height:archiveHeight}} grid={{...drag.grid,
       onGridReady: e => {
         gridApi.current = e.api;
         if (page.current) measureProjectGridHeight(e.api, page.current);

@@ -20,8 +20,10 @@ import { ApiError, decodeBase64, confirmWrite, uncertainWrite, projectLabel, rec
 import { loadTextFonts } from './appearance-ready';
 import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { cachedNumberColumnWidths, contentWidth, fixedWidth, gridTheme, textWidth } from './grid';
-import { completeColumnWidth, EllipsisText } from './grid-text';
+import { fixedWidth, gridTheme } from './grid';
+import { contentColumn } from './grid-content-widths';
+import type { WidthMeasure } from './grid-content-widths';
+import { EllipsisText } from './grid-text';
 import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, noticePrintRows, prioritizeNoticeRows, receipt, searchKey, selectable, total } from './notices-api';
 import { noticeListQuery } from './notice-list';
 import type { MoneyKey, NoticeRow } from './notices-api';
@@ -51,7 +53,6 @@ type PickedNotices = Map<number, symbol>;
 type SinglePrintSelection = {noticeId: number; originalPick: symbol};
 interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; searchBusy: boolean; shown: NoticeRow[]; picked: PickedNotices; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
-const noticeMoneyColumns = new Set<string>(moneyKeys);
 const noticeTextFields = ['doc_date', 'bill_no', 'biz_type', 'payee', 'input_by', 'bill_name', 'amount_approved', 'amount_paid'] as const;
 const defaultColumn: ColDef<NoticeRow> = { cellDataType: false, sortable: true, resizable: true, suppressMovable: true, wrapHeaderText: false };
 
@@ -60,33 +61,36 @@ function noticeSummary(rows: NoticeRow[]): NoticeRow[] {
   return liveRows.length ? [{ notice_id: -1, bill_no: '合计', ...Object.fromEntries(moneyKeys.map(key => [key, total(liveRows, key)])) } as NoticeRow] : [];
 }
 
-function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number, measure: ReturnType<typeof cachedNumberColumnWidths>) {
-  const date = Math.max(100, measure('doc_date', shown.map(row => row.doc_date), 1).minWidth);
-  const code = Math.max(142, measure('bill_no', shown.map(row => row.bill_no), 1).minWidth);
-  const widths: Record<string, Partial<ColDef<NoticeRow>>> = {
-    doc_date: contentWidth(date, 200, scale),
-    bill_no: contentWidth(code, Math.max(code, 360), scale),
-    category_label: completeColumnWidth([...Object.values(categories), ...shown.map(archiveLabel)], '分类', scale, 32),
-    biz_type: completeColumnWidth(shown.map(row => row.biz_type), '业务类型', scale),
-    input_by: completeColumnWidth(shown.map(row => row.input_by), '录入人', scale),
-    approve_status: completeColumnWidth(shown.map(row => row.approve_status), '审批状态', scale, 12),
-    pay_status: completeColumnWidth(shown.map(row => row.pay_status), '付款状态', scale, 12),
-    actions: completeColumnWidth(['保存 取消', ...shown.map(row => [row.has_any_flow ? '查看流水' : '', cents(row.amount_paid) > 0n ? '撤销付款' : '', row.is_manual ? '手动 编辑 删除' : ''].filter(Boolean).join(' '))], '操作', scale, 64),
-  };
+function noticeTotalSamples(rows: NoticeRow[]) {
+  const total = noticeSummary(rows)[0];
+  if (!total) return [];
+  const lower = {...total}, upper = {...total};
   for (const key of moneyKeys) {
-    const paymentDraft = key === 'pay_amount';
-    const values = shown.map(row => row[key]);
-    // Reserve the stored amount's precision before typing a session-only payment draft.
-    if (paymentDraft) values.push('-9999999999999999.99');
-    const editable = paymentDraft || key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && shown.some(row => row.is_manual);
-    const display = Math.max(measure(key, values.map(money), 1).minWidth,
-      measure(`${key}-total`, summary.map(row => money(row[key])), 1).minWidth);
-    const input = editable ? measure(`${key}-input`, values, 1, true).minWidth : 0;
-    const min = Math.max(display, input, completeColumnWidth([], amountNames[key], 1).minWidth);
-    widths[key] = contentWidth(min, Math.max(min, 180), scale);
+    let negative = 0n, positive = 0n;
+    for (const row of rows) {
+      if (!live(row)) continue;
+      const value = cents(row[key]);
+      if (value < 0n) negative += value;
+      else positive += value;
+    }
+    // Any search subset total stays between these two sums.
+    lower[key] = decimal(negative);
+    upper[key] = decimal(positive);
   }
-  return widths;
+  return [lower, upper];
 }
+
+const noticeTagWidth = (text: string, measure: WidthMeasure) => measure.text(text, { size: 12 }) + measure.px(8.4);
+const noticeButtonWidth = (labels: readonly string[], measure: WidthMeasure) =>
+  measure.buttons(labels, { scalePadding: false });
+const noticeAmountWidth = (key: MoneyKey) => contentColumn<NoticeRow>('bounded', (row, measure, pinned) => {
+  const display = measure.text(money(row[key]), { tabular: true, weight: pinned ? 600 : 400 });
+  if (pinned) return display;
+  if (key === 'amount_paid') return display + (row.is_overpaid ? noticeTagWidth('超付', measure) : 0);
+  const editable = key === 'pay_amount' || key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && row.is_manual;
+  if (!editable) return display;
+  return Math.max(display, measure.text(row[key], { tabular: true, weight: key === 'pay_amount' ? 500 : 400 }) + measure.px(20) + 2);
+});
 
 const NoticeSelectionContext = createContext<RenderState>(null!);
 function NoticeSelectionHeader() {
@@ -268,11 +272,8 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const selectedAmounts = useMemo(() => ({ approved: money(total(selectedPay, 'amount_approved')), due: money(total(selectedPay, 'pay_amount')) }), [selectedPay]);
   const publishedNotices = useMemo(() => new Map(query.data?.map(row => [row.notice_id, row])), [query.data]);
   const scale = Number(me?.ui_scale_css) || 1;
-  // Each sample checks the actual texts and current font. A successful reread
-  // can reuse unchanged amounts and identifiers within the same account.
-  const measureNumbers = useMemo(cachedNumberColumnWidths, [me?.account]);
   // Use the published scope for sizing while search and session drafts change the visible rows.
-  const widths = useMemo(() => noticeWidths(sourceScope, noticeSummary(sourceScope), scale, measureNumbers), [sourceScope, scale, measureNumbers]);
+  const widthTotals = useMemo(() => sourceScope.length ? noticeTotalSamples(sourceScope) : [], [sourceScope]);
   const summary = useMemo(() => noticeSummary(shown), [shown]);
   const cellSaves = useNoticeCellSaves({ rows: query.data, enabled: active && !blocked && Boolean(me),
     canWrite: !busy && !draft && !draftUncertain && !query.isPending && !query.isError, read: refresh });
@@ -434,12 +435,26 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   }), [scale]);
   const baseColumns = useMemo<ColDef<NoticeRow>[]>(() => ([
     selectionColumn,
-    { field: 'doc_date', headerName: '单据日期', pinned: 'left', wrapText: false }, { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', wrapText: false },
-    { field: 'project_display', headerName: '付款项目', ...textWidth(96, 160, scale, 1), cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? <EllipsisText text={p.data!.project_display} fullText={p.data!.project_name||p.data!.project_display}/> : <Button htmlType="button" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
-    { field: 'category_label', headerName: '分类', wrapText: true, cellRenderer: (p: ICellRendererParams<NoticeRow>) => { if (p.node.rowPinned) return ''; const r = p.data!, label = archiveLabel(r); return label ? <span><span className={`notice-tag ${r.is_excluded ? r.exclude_source : 'revoked'}`} title={r.exclude_rule_hint}>{label}</span>{r.is_revoked && (cents(r.amount_paid) > 0n || r.has_link) && <span className="notice-tag rule notice-revoke-hint">请先撤销付款 / 解绑关联</span>}</span> : <Select className="notice-category-select" aria-label={`${r.bill_no}分类`} value={r.category} disabled={current.current.unavailable} onChange={value => void current.current.action('/api/m03/actions/category', { ids: [r.notice_id], category: value })} options={Object.entries(categories).map(([value,label])=>({value,label}))} popupMatchSelectWidth={false} labelRender={option=><EnumTag kind="category" value={String(option.label)}/>}/>; } },
-    ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(key==='biz_type'||key==='input_by' ? {} : key==='bill_name' ? textWidth(128,280,scale,2) : key==='payee' ? textWidth(112,240,scale,2) : textWidth(180,280,scale,1)),
+    { field: 'doc_date', headerName: '单据日期', pinned: 'left', wrapText: false,
+      ...contentColumn('bounded', undefined, measure => measure.text('0000-00-00', { size: 12, tabular: true }) + measure.px(16)) },
+    { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', wrapText: false,
+      ...contentColumn<NoticeRow>('bounded', (row, measure, pinned) => pinned ? measure.text('合计', { weight: 600 }) : measure.text(row.bill_no) + (row.is_manual ? measure.px(20) + 2 : 0)) },
+    { field: 'project_display', headerName: '付款项目',
+      ...contentColumn<NoticeRow>('demand', (row, measure, pinned) => pinned ? 0 : row.ownership_id ? measure.text(row.project_display) : noticeButtonWidth(['待指定归属'], measure)),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? <EllipsisText text={p.data!.project_display} fullText={p.data!.project_name||p.data!.project_display}/> : <Button htmlType="button" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
+    { field: 'category_label', headerName: '分类', wrapText: true,
+      ...contentColumn<NoticeRow>('bounded', (row, measure, pinned) => {
+        const label = pinned ? '' : archiveLabel(row);
+        return label ? noticeTagWidth(label, measure) : 0;
+      }, measure => Math.max(...Object.values(categories).map(label => noticeTagWidth(label, measure))) + measure.px(28)),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => { if (p.node.rowPinned) return ''; const r = p.data!, label = archiveLabel(r); return label ? <span><span className={`notice-tag ${r.is_excluded ? r.exclude_source : 'revoked'}`} title={r.exclude_rule_hint}>{label}</span>{r.is_revoked && (cents(r.amount_paid) > 0n || r.has_link) && <span className="notice-tag rule notice-revoke-hint">请先撤销付款 / 解绑关联</span>}</span> : <Select className="notice-category-select" aria-label={`${r.bill_no}分类`} value={r.category} disabled={current.current.unavailable} onChange={value => void current.current.action('/api/m03/actions/category', { ids: [r.notice_id], category: value })} options={Object.entries(categories).map(([value,label])=>({value,label}))} popupMatchSelectWidth={false} labelRender={option=><EnumTag kind="category" value={String(option.label)}/>}/>; } },
+    ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!,
+      ...(key === 'jc_supplier' ? contentColumn<NoticeRow>('demand', (row, measure, pinned) => {
+        if (pinned || (row.category !== 'jc' || row.is_excluded || row.is_revoked) && !row.has_link) return measure.text('—');
+        return measure.text(row.jc_supplier || '选择供应商与合同', { size: 12 }) + measure.text(row.has_link ? '已关联合同' : '未关联合同', { size: 12 }) + measure.px(18) + 2;
+      }) : contentColumn(key==='biz_type'||key==='input_by' ? 'bounded' : 'demand')),
       ...(key === 'jc_supplier' ? { cellRenderer: (p: ICellRendererParams<NoticeRow>) => { const r=p.data!; if(p.node.rowPinned || (r.category !== 'jc' || r.is_excluded || r.is_revoked) && !r.has_link) return '—'; return <Button data-contract-notice={r.notice_id} className="notice-association-trigger" htmlType="button" aria-label={`${r.bill_no}供应商与合同关联`} disabled={current.current.unavailable} onClick={() => current.current.open('link',r)}><EllipsisText text={r.jc_supplier || '选择供应商与合同'}/><small>{r.has_link ? '已关联合同' : '未关联合同'}</small></Button>; } } : key==='bill_name'||key==='payee' ? {cellRenderer:(p:ICellRendererParams<NoticeRow>)=><EllipsisText text={String(p.value??'')}/>} : {}) })),
-    ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], cellClass: 'money', comparator: compareAmounts,
+    ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], ...noticeAmountWidth(key), cellClass: 'money', comparator: compareAmounts,
       cellRenderer: (p: ICellRendererParams<NoticeRow>) => {
         const row = p.data!;
         if (p.node.rowPinned) return <span>{money(row[key])}</span>;
@@ -453,8 +468,19 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         }
         return key === 'amount_paid' ? <PaidAmountCell row={row} /> : <span>{money(row[key])}</span>;
       } })),
-    { field: 'approve_status', headerName: '审批状态', cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已批' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> }, { field: 'pay_status', headerName: '付款状态', cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已付清' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
-    { colId: 'actions', headerName: '操作', wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="button" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="button" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="button" danger disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
+    { field: 'approve_status', headerName: '审批状态',
+      ...contentColumn<NoticeRow>('bounded', (row, measure, pinned) => pinned ? 0 : noticeTagWidth(row.approve_status || '—', measure)),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已批' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
+    { field: 'pay_status', headerName: '付款状态',
+      ...contentColumn<NoticeRow>('bounded', (row, measure, pinned) => pinned ? 0 : noticeTagWidth(row.pay_status || '—', measure)),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Tag className={`status-tag ${p.value === '已付清' ? 'status-positive' : 'status-pending'}`}>{p.value || '—'}</Tag> },
+    { colId: 'actions', headerName: '操作', wrapText: true, sortable: false,
+      ...contentColumn<NoticeRow>('bounded', (row, measure, pinned) => {
+        if (pinned) return 0;
+        const labels = [...(row.has_any_flow ? ['查看流水'] : []), ...(cents(row.amount_paid) > 0n ? ['撤销付款'] : []), ...(row.is_manual ? ['编辑', '删除'] : [])];
+        return noticeButtonWidth(labels, measure) + (row.is_manual ? noticeTagWidth('手动', measure) + 4 : 0);
+      }, measure => noticeButtonWidth(['保存', '取消'], measure)),
+      cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="button" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="button" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="button" danger disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
     if (column.colId === 'pick') return column;
     // Published text columns already have measured widths. Only a draft needs an editor.
@@ -469,16 +495,14 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
   }), [scale,Boolean(draft),selectionColumn, compareAmounts]);
-  const columns = useMemo(() => baseColumns.map(column => {
-    const width = widths[column.colId ?? String(column.field)];
-    return width ? { ...column, ...width } : column;
-  }), [baseColumns, widths]);
   const footer = useMemo(() => draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary, [draft,summary]);
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;
     return JSON.stringify([pinned, row.notice_id === -2, id === 'pick' ? '' : id === 'actions' ? [row.has_any_flow,cents(row.amount_paid ?? '0') > 0n,row.is_manual,Boolean(draft)] : [fixedInput ? '' : row[id as keyof NoticeRow],row.is_excluded,row.is_revoked,row.is_manual,row.has_link,row.is_overpaid,row.category]]);
   },textOnly:draft?[]:noticeTextFields}), [draft]);
-  const presentation = useGridPresentation({table: 'notices', growingMinimums: noticeMoneyColumns, root: gridRoot, fontRoot: pageRoot, active: active && !blocked, rows: shown, totals: footer, columns, measurement, rowId: noticeRowId, scale, scope: JSON.stringify([filters,shown === scope ? '' : needle,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
+  const presentation = useGridPresentation({table: 'notices', root: gridRoot, fontRoot: pageRoot, active: active && !blocked, rows: shown, totals: footer,
+    columns: baseColumns, measurement, rowId: noticeRowId, scale, contentWidths: { rows: sourceScope, totals: widthTotals, readableTextWidth: 205, retainBy: noticeRowId },
+    scope: JSON.stringify([filters,shown === scope ? '' : needle,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
   useLayoutEffect(() => {
     if (!searchBusy || !presentation.visible) return;
     // Block the old result's editors and actions while keeping column resizing available.
@@ -492,7 +516,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     prioritizeNoticeRows(nodes, pasteOrder, node => node.data?.notice_id);
   }, [pasteOrder]);
   const gridOptions = useMemo<AgGridReactProps<NoticeRow>>(() => ({
-    theme: gridTheme, defaultColDef: defaultColumn, rowBuffer: 2,
+    theme: gridTheme, defaultColDef: defaultColumn, rowBuffer: 25, suppressColumnVirtualisation: true,
     alwaysShowVerticalScroll: true,
     enableCellTextSelection: true, ensureDomOrder: true, suppressScrollOnNewData: true, animateRows: false,
     getRowId: p => String(p.data.notice_id),

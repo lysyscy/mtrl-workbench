@@ -1,7 +1,7 @@
 .ledger-card{background:var(--sf);font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .ledger-card-head.wb-toolbar{padding-block:calc(4px * var(--fscale));background:var(--sf);border-block-end-color:var(--bd);border-radius:var(--radius-card) var(--radius-card) 0 0}
 .ledger-card-head h1{font-size:calc(15px * var(--fscale));font-weight:600}
-.ledger-card-body{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
+.ledger-card-body{padding:calc(12px * var(--fscale)) var(--ledger-body-inline,calc(16px * var(--fscale)))}
 .ledger-draft-error{margin-block-end:.5em;overflow-wrap:anywhere}
 .ledger-view-project,.ledger-summary,.ledger-exports{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .ledger-view-project.wb-toolbar{padding:0}
@@ -14,11 +14,6 @@
 .ledger-input:focus{background:var(--sf)}
 .ledger-summary{margin-bottom:calc(8px * var(--fscale))}
 .ledger-grid .ag-header-cell{padding-inline:calc(4px * var(--fscale));line-height:1.4}
-/* AG Grid gives each virtual row an explicit height. Keep the scroll viewport and the measurement host in layout. */
-.page-view:not([hidden]) .ledger-grid .ag-grid-scrolling-rows .ag-row {
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto var(--ag-row-height);
-}
 .ledger-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .ledger-grid .ag-row-pinned .ledger-total-label{justify-content:flex-start}
 .business-modal .ledger-export-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}

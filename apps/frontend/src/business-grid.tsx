@@ -7,6 +7,7 @@ import Button from 'antd/es/button';
 import { gridTheme, contentWidth, pageGridGeometry } from './grid';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import type { GridMeasurement } from './grid-presentation';
+import type { ColumnWidthData } from './grid-content-widths';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { loadElementFonts } from './appearance-ready';
 import { useRetainedGridColumns } from './grid-layout';
@@ -23,6 +24,7 @@ type BusinessGridProps<T>={
   gridClassName?: string;
   singleLine?: boolean;
   measurement?: GridMeasurement<T>;
+  contentWidths?: ColumnWidthData<T>;
   grid?: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
 };
 function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number,singleLine=false):(ColDef<T>|ColGroupDef<T>)[]{
@@ -34,7 +36,7 @@ function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number,si
 // Small business views use the same native definitions and lifecycle as page grids.
 // Each caller chooses its native layout; this component supplies no table schema.
 export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, scope = table, scale: suppliedScale,
-  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement, initialScroll }: BusinessGridProps<T> & { initialScroll?: 'bottom' }) {
+  className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement, contentWidths, initialScroll }: BusinessGridProps<T> & { initialScroll?: 'bottom' }) {
   const root = useRef<HTMLDivElement>(null);
   const api = useRef<GridApi<T> | null>(null), initialScrollApplied = useRef(false);
   const active=useContext(PageActivity);
@@ -42,7 +44,8 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
   const totalRows = useMemo(() => totals ?? [], [totals]);
   const definitions = useMemo(() => businessColumns(columns,scale,singleLine), [columns, scale,singleLine]);
   const presentation = useGridPresentation({table, root, active, rows, totals: totalRows, columns: definitions,
-    rowId, scale, scope, identity: scope, context,...(measurement===undefined?{}:{measurement}),...(rowMinimum===undefined?{}:{rowMinimum})});
+    rowId, scale, scope, identity: scope, context,...(measurement===undefined?{}:{measurement}),...(rowMinimum===undefined?{}:{rowMinimum}),
+    ...(contentWidths ? { contentWidths } : {})});
   useLayoutEffect(() => {
     if (initialScroll !== 'bottom' || initialScrollApplied.current || !active || !presentation.visible || presentation.state !== 'ready' || !rows.length) return;
     const last = (api.current?.getDisplayedRowCount() ?? 0) - 1;
@@ -62,11 +65,11 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
 
 // Repeated small views use AG's native row/header auto height; inputs stay business-owned.
 // Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
-export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,fitAfterFonts=false}:BusinessGridProps<T> & {fitAfterFonts?: boolean}) {
+export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,fitAfterFonts=false,contentWidths}:BusinessGridProps<T> & {fitAfterFonts?: boolean}) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
   const scale=suppliedScale??(Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1);
-  const widths=useGridWidths(table,root,scale,active),[ready,setReady]=useState(false),[error,setError]=useState(''),[rendered,setRendered]=useState(0),[retry,setRetry]=useState(0);
+  const widths=useGridWidths(table,root,scale,active,contentWidths ? { content: contentWidths } : undefined),[ready,setReady]=useState(false),[error,setError]=useState(''),[rendered,setRendered]=useState(0),[retry,setRetry]=useState(0);
   useFirstReadGrid(error ? 'error' : ready ? 'ready' : 'preparing');
   const totalRows=useMemo(()=>totals??[],[totals]);
   const definitions=useMemo(()=>businessColumns(columns,scale,singleLine),[columns,scale,singleLine]);
@@ -81,7 +84,9 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
     void (async()=>{try {
       await loadElementFonts(node);if(cancelled||api.isDestroyed())return;
       // A deferred first fit includes flex columns just as the native first-data strategy does.
-      widths.fit(fitAfterFonts);api.resetRowHeights();
+      await widths.fit(fitAfterFonts);
+      if(cancelled||api.isDestroyed())return;
+      api.resetRowHeights();
       const renderedRows=()=>{
         if(domLayout!=='autoHeight')return true;
         const ids=new Set([...node.querySelectorAll('.ag-row[row-id]')].map(row=>row.getAttribute('row-id')));

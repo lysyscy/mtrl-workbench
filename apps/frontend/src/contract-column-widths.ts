@@ -1,70 +1,74 @@
-import { replaceEqualDeep } from '@tanstack/react-query';
 import { cents, decimal, money } from './api';
-import { contractApprovalStatuses, contractMoneyKeys } from './contracts-api';
-import type { ContractList, ContractRow } from './contracts-api';
-import { cacheFontMeasurement, numberColumnWidth } from './grid';
-import { completeColumnWidth } from './grid-text';
+import { contractApprovalStatuses, contractMoneyKeys, contractRemarkText } from './contracts-api';
+import type { ContractRow } from './contracts-api';
+import { contentColumn } from './grid-content-widths';
 
-export const amountColumnIds = new Set<string>(contractMoneyKeys);
-const textKeys = ['project_seq','date','contract_no','approve_status','payment_term','payment_method','tag','arch','arch_no','ret_date'] as const;
-const textColumnIds = new Set<string>(textKeys);
-// The suggested archive number depends on which project each number belongs to.
-const textInputs = [...textKeys, 'project_key'] as const;
-
-function contractAmountWidths(columns: ContractList['columns'], rows: ContractRow[], scale: number) {
-  return Object.fromEntries(columns.filter(column => amountColumnIds.has(column.key)).map(column => {
-    const key = column.key as typeof contractMoneyKeys[number];
-    const header = column.label.replace('（自动）', '');
-    // A filtered total lies between the sum of the negatives and the sum of
-    // the positives, even when opposite entries cancel on the opening view.
-    let positive = 0n, negative = 0n;
-    const values = rows.map(row => {
-      const value = row[key];
-      if (value === null) return '未确定';
-      const amount = cents(value ?? '0');
-      if (amount > 0n) positive += amount;
-      else negative += amount;
-      return money(value ?? '0');
-    });
-    values.push(money(decimal(positive)), money(decimal(negative)));
-    const extra = ['inv_sum', 'trade_inv_sum', 'pay_sum'].includes(key) ? 56 : 0;
-    const width = completeColumnWidth(values, header, scale, extra);
-    width.initialWidth = width.minWidth = Math.max(width.minWidth, numberColumnWidth(values, scale).minWidth + extra * scale);
-    return [key, width];
-  }));
+type AmountKey = typeof contractMoneyKeys[number];
+export function isContractAmount(key: string): key is AmountKey {
+  return contractMoneyKeys.some(amount => amount === key);
 }
 
-export function contractWidthMeasurements(columns: ContractList['columns'], methods: readonly string[], scale: number) {
-  let previous: ContractRow[] = [];
-  let archives: ReadonlyMap<string, string> = new Map();
-  const amounts = () => contractAmountWidths(columns, previous, scale);
-  const text = () => Object.fromEntries(columns.filter(column => textColumnIds.has(column.key)).map(column => {
-    const key = column.key as typeof textKeys[number];
-    const values = previous.map(row => String(row[key] ?? ''));
-    if (key === 'approve_status') values.push(...contractApprovalStatuses);
-    if (key === 'payment_method') values.push('未约定', ...methods);
-    if (key === 'arch_no') values.push(...archives.values());
-    if (key === 'ret_date') values.push('2000-12-31');
-    const extra = key === 'payment_method' || key === 'ret_date' ? 44 : key === 'payment_term' || key === 'arch_no' ? 20
-      : key === 'tag' || key === 'arch' || key === 'approve_status' ? 12 : 0;
-    return [key, completeColumnWidth(values, key === 'tag' ? '纳入状态' : column.label.replace('（自动）',''), scale, extra)];
-  }));
-  let measureText = cacheFontMeasurement(text), measureAmounts = cacheFontMeasurement(amounts);
-  let last: {completeWidths: ReturnType<typeof text>; moneyWidths: ReturnType<typeof amounts>} | undefined;
-  return (rows: ContractRow[], archiveNumbers: ReadonlyMap<string, string>) => {
-    // Query rereads share unchanged rows. Inspect changed rows before invalidating
-    // all identifier or amount measurements; font readiness is checked separately.
-    const changed = (keys: readonly (keyof ContractRow)[]) => rows !== previous &&
-      (rows.length !== previous.length || rows.some((row, index) => {
-        const prior = previous[index]!;
-        return row !== prior && keys.some(key => row[key] !== prior[key]);
-      }));
-    if (changed(textInputs)) measureText = cacheFontMeasurement(text);
-    if (changed(contractMoneyKeys)) measureAmounts = cacheFontMeasurement(amounts);
-    previous = rows;
-    archives = archiveNumbers;
-    // An edited value can fit the same measured bounds. Keep its existing renderers.
-    last = replaceEqualDeep(last, {completeWidths:measureText(), moneyWidths:measureAmounts()});
-    return last;
-  };
+// Either extreme also covers the total of any filtered subset, even when
+// positive and negative rows cancel on the opening view.
+export function contractTotalSamples(rows: ContractRow[]) {
+  const first = rows[0];
+  if (!first) return [];
+  const lower = {...first}, upper = {...first};
+  for (const key of contractMoneyKeys) {
+    let negative = 0n, positive = 0n;
+    for (const row of rows) {
+      const value = cents(row[key] ?? '0');
+      if (value < 0n) negative += value;
+      else positive += value;
+    }
+    lower[key] = decimal(negative);
+    upper[key] = decimal(positive);
+  }
+  return [lower, upper];
+}
+
+export function contractColumnWidth(key: string, options: {
+  subtable: boolean;
+  projectName: (row: ContractRow) => string;
+  archiveHint: (row: ContractRow) => string;
+  methods: readonly string[];
+}) {
+  if (isContractAmount(key)) {
+    return contentColumn<ContractRow>('bounded', (row, measure, pinned) => {
+      const value = row[key];
+      const label = value === null && !options.subtable ? '未确定' : money(value ?? '0');
+      // Match the second CSS grid track and its gap, including on the total row.
+      return measure.text(label, { tabular: true, weight: pinned ? 600 : 400 }) + (options.subtable ? measure.px(40) + 6 : 0);
+    });
+  }
+  if (key === 'material') {
+    return contentColumn<ContractRow>('demand', (row, measure, pinned) => pinned ? measure.text('合计', { weight: 600 })
+      : measure.buttons([row.material || '材料名未填']) + measure.px(8) + measure.text(options.projectName(row), { size: 11.25 }));
+  }
+  if (key === 'remark') {
+    return contentColumn<ContractRow>('demand', (row, measure, pinned) => pinned ? 0
+      : measure.text(contractRemarkText(row.remark ?? '')) + 10);
+  }
+  if (key === 'payment_method') {
+    return contentColumn<ContractRow>('bounded', (row, measure, pinned) => pinned ? 0
+      : measure.text(row.payment_method || '未约定', { size: 12 }) + measure.px(28) + 2,
+      measure => Math.max(...['未约定', ...options.methods].map(label => measure.text(label, { size: 12 }))) + measure.px(28) + 2);
+  }
+  if (key === 'payment_term' || key === 'arch_no') {
+    return contentColumn<ContractRow>('bounded', (row, measure, pinned) => pinned ? 0
+      : measure.text(row[key] || (key === 'arch_no' ? options.archiveHint(row) : '可填')) + 10);
+  }
+  if (key === 'ret_date') {
+    return contentColumn<ContractRow>('bounded', undefined,
+      measure => measure.text('00/00/0000', { tabular: true }) + measure.px(20) + 10);
+  }
+  if (key === 'tag' || key === 'arch' || key === 'approve_status') {
+    return contentColumn<ContractRow>('bounded', (row, measure, pinned) => pinned ? 0
+      : measure.text(row[key] || (key === 'approve_status' ? '—' : '未存档'), { size: 12 }) + measure.px(15) + 2,
+      key === 'approve_status' ? measure => Math.max(...contractApprovalStatuses.map(label => measure.text(label, { size: 12 }))) + measure.px(15) + 2 : undefined);
+  }
+  if (key === 'supplier' || key === 'trade_co' || key === 'project') {
+    return contentColumn<ContractRow>('demand', (row, measure, pinned) => pinned ? 0 : measure.text(key === 'project' ? options.projectName(row) : row[key]));
+  }
+  return contentColumn<ContractRow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(Object.getOwnPropertyDescriptor(row, key)?.value));
 }

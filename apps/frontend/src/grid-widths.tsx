@@ -4,18 +4,21 @@ import type { ComponentType, RefObject } from 'react';
 import type { ColDef, ColGroupDef, GridApi, IHeaderParams, SizeColumnsToContentStrategy } from 'ag-grid-community';
 import Button from 'antd/es/button';
 import { bindGridWidths, gridWidthPreferences } from './grid-width-state';
+import { bindContentColumnWidths } from './grid-content-widths';
+import type { ColumnWidthData } from './grid-content-widths';
 import { GridWidthOwner } from './grid-width-owner';
 import { manualGridColumns, widthModeColumns } from './grid-manual-widths';
 
-export function useGridWidths(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean,
-  { resetOnContainerResize = true }: { resetOnContainerResize?: boolean } = {}) {
+export function useGridWidths<T = unknown>(table: string, root: RefObject<HTMLElement | null>, scale: number, active: boolean,
+  { content, resetOnContainerResize = !content }: { content?: ColumnWidthData<T>; resetOnContainerResize?: boolean } = {}) {
   const owner = useContext(GridWidthOwner),[layoutRevision,setLayoutRevision]=useState(0),[dragging,setDragging]=useState<string|null>(null);
   const preferences=useMemo(()=>gridWidthPreferences(owner,table,()=>window.localStorage),[owner,table]);
   const revision=useSyncExternalStore(preferences.subscribe,preferences.getSnapshot);
   const manualIds=useMemo(()=>new Set([...Object.keys(preferences.getWidths()),...(dragging?[dragging]:[])]),[preferences,revision,dragging]);
-  const current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging});
-  current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging};
+  const current = useRef({scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging,content});
+  current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging,content};
   const binding = useRef<ReturnType<typeof bindGridWidths> | null>(null), cleanup = useRef<(() => void) | null>(null);
+  const contentBinding = useRef<ReturnType<typeof bindContentColumnWidths<T>> | null>(null);
   // AG reads this initial strategy when the first rows arrive, after manual
   // preferences and the current scale have been applied to the native columns.
   const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({
@@ -36,6 +39,9 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
       changed: (_custom, _error, reset) => {if(reset)setLayoutRevision(n=>n+1);}});
     binding.current = controller;
     const node = root.current;
+    const fitted = node && current.current.content ? bindContentColumnWidths<T>(api, node, () => current.current,
+      id => Object.hasOwn(preferences.getWidths(), id)) : null;
+    contentBinding.current = fitted;
     // Before AG starts its native mouse drag, publish the target's manual bounds
     // through the same React columnDefs path used by saved preferences.
     const capture=(event:PointerEvent)=>{
@@ -60,12 +66,16 @@ export function useGridWidths(table: string, root: RefObject<HTMLElement | null>
       setLayoutRevision(n => n + 1);
     }) : null;
     if(node)resize?.observe(node);
-    cleanup.current = () => {node?.removeEventListener('pointerdown',capture,true);resize?.disconnect();controller.dispose();};
+    cleanup.current = () => {node?.removeEventListener('pointerdown',capture,true);resize?.disconnect();fitted?.dispose();controller.dispose();};
     api.addEventListener('gridPreDestroyed', cleanup.current);
-  }, [owner, table, root, resetOnContainerResize]);
+  }, [owner, table, root, resetOnContainerResize, preferences]);
   useEffect(() => () => cleanup.current?.(), []);
   useLayoutEffect(() => { binding.current?.apply(); }, [scale, active,layoutRevision]);
-  const fit=useCallback((includeFlex = false)=>binding.current?.fit(includeFlex),[]);
+  useLayoutEffect(() => { contentBinding.current?.schedule(); }, [active, scale, layoutRevision, revision, content?.rows, content?.totals]);
+  const fit = useCallback((includeFlex = false) => {
+    binding.current?.fit(includeFlex);
+    return contentBinding.current?.fit();
+  }, []);
   const columns=useCallback(<T,>(definitions:(ColDef<T>|ColGroupDef<T>)[])=>widthModeColumns(manualGridColumns(definitions),manualIds),[manualIds]);
   return {attach, strategy,columns,savedWidths:preferences.getWidths(),custom:Object.keys(preferences.getWidths()).length>0,error:preferences.getError(),layoutKey:current.current.layoutKey, reset: () => binding.current?.reset(),fit};
 }
@@ -92,7 +102,8 @@ export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],
     collect(columns);
     const fits=(column:ColDef<T>)=>(savedWidths[column.colId??String(column.field)]
       ??column.minWidth??column.width??column.initialWidth??88)>=80;
-    const reset=leaves.find(column=>(column.colId??column.field)===preferred&&fits(column))
+    const reset=leaves.find(column=>(column.colId??column.field)===preferred&&(fits(column)||column.context?.columnContent))
+      ??leaves.find(column=>column.context?.columnContent?.kind==='demand'&&fits(column))
       ??leaves.find(fits)??leaves[0];
     const visit=(items:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]=>items.map(column=>{
       if('children'in column)return {...column,children:visit(column.children)};

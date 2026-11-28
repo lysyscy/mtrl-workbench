@@ -7,6 +7,7 @@ import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
+import { contentColumn } from './grid-content-widths';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 
@@ -79,14 +80,21 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
       </ReadStatusLane>
       {placeheld ? <div className="users-table users-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div> : data && <>
         <Feedback receipt={receipt} error={error} />
-        <BoundedGrid maxHeight="60dvh" minRows={4} table="users" className="users-table" label="账号列表" rows={data.users} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
-          {field:'account',headerName:'登录账号'},
-          {field:'name',headerName:'姓名',cellRenderer:({data:user}:{data:UserRow})=><>{user.name}{current?.id===user.id&&<span className="muted">（当前登录）</span>}</>},
-          {field:'role',headerName:'角色',cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.role==='admin'?'status-info':'status-neutral')}>{user.role==='admin'?'管理员':'普通用户'}</span>},
-          {field:'state',headerName:'状态',cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.state==='在用'?'status-positive':user.state==='已停用'?'status-pending':'status-negative')}>{user.state}</span>},
-          {field:'lastLogin',headerName:'最近登录',valueFormatter:p=>p.value||'从未登录'},
-          {field:'i8User',headerName:'i8 绑定',valueFormatter:p=>p.value||'未绑定'},
-          {colId:'actions',headerName:'操作',minWidth:300,initialFlex:2,cellRenderer:({data:user}:{data:UserRow})=>{const self=current?.id===user.id;return <div className="users-actions">{user.state==='已删除'?<Button disabled={!isAdmin} title={isAdmin?'恢复软删的账号；恢复不改停用状态':'只有管理员能恢复账号'} onClick={()=>void run(()=>requestJson('/api/m15/actions/restore',{method:'POST',...body({id:user.id})}),'已恢复')}>恢复</Button>:<>
+        <BoundedGrid maxHeight="60dvh" minRows={4} table="users" className="users-table" label="账号列表" rows={data.users} contentWidths={{ rows: data.users }} rowId={user=>String(user.id)} grid={{getRowClass:p=>p.data?.state==='在用'?'':'users-inactive'}} columns={[
+          {field:'account',headerName:'登录账号',...contentColumn('bounded')},
+          {field:'name',headerName:'姓名',...contentColumn<UserRow>('demand', (user, measure) => measure.text(user.name + (current?.id===user.id ? '（当前登录）' : ''))),
+            cellRenderer:({data:user}:{data:UserRow})=><>{user.name}{current?.id===user.id&&<span className="muted">（当前登录）</span>}</>},
+          {field:'role',headerName:'角色',...contentColumn('bounded', undefined, measure => measure.text('普通用户') + measure.px(13.5) + 2),
+            cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.role==='admin'?'status-info':'status-neutral')}>{user.role==='admin'?'管理员':'普通用户'}</span>},
+          {field:'state',headerName:'状态',
+            ...contentColumn<UserRow>('bounded', (user, measure) => measure.text(user.state) + measure.px(13.5) + 2),
+            cellRenderer:({data:user}:{data:UserRow})=><span className={'status-tag '+(user.state==='在用'?'status-positive':user.state==='已停用'?'status-pending':'status-negative')}>{user.state}</span>},
+          {field:'lastLogin',headerName:'最近登录',...contentColumn<UserRow>('bounded', (user, measure) => measure.text(user.lastLogin || '从未登录')),valueFormatter:p=>p.value||'从未登录'},
+          {field:'i8User',headerName:'i8 绑定',...contentColumn<UserRow>('demand', (user, measure) => measure.text(user.i8User || '未绑定')),valueFormatter:p=>p.value||'未绑定'},
+          {colId:'actions',headerName:'操作',...contentColumn<UserRow>('bounded', (user, measure) => {
+            const labels = user.state === '已删除' ? ['恢复'] : ['改密','看密码',user.state === '在用' ? '停用' : '启用', ...(current?.id===user.id ? [] : ['删除'])];
+            return measure.buttons(labels, { gap: 6 });
+          }),cellRenderer:({data:user}:{data:UserRow})=>{const self=current?.id===user.id;return <div className="users-actions">{user.state==='已删除'?<Button disabled={!isAdmin} title={isAdmin?'恢复软删的账号；恢复不改停用状态':'只有管理员能恢复账号'} onClick={()=>void run(()=>requestJson('/api/m15/actions/restore',{method:'POST',...body({id:user.id})}),'已恢复')}>恢复</Button>:<>
             <Button disabled={!writable||!(isAdmin||self)} title={self?'改自己的密码和 i8 绑定（不用找管理员）':isAdmin?'':'改别人的密码要管理员；自己的密码在自己那一行'} onClick={()=>{setDialog({kind:'password',row:user});setError('');}}>改密</Button>
             <Button disabled={!isAdmin} title={isAdmin?'':'查看明文密码要管理员'} onClick={()=>void viewPassword(user)}>看密码</Button>
             <Button disabled={!isAdmin||lockAdmin(user)} title={!isAdmin?'只有管理员可启停账号':lockAdmin(user)?'不能停用最后一个管理员（请先转让）':''} onClick={()=>void run(()=>requestJson('/api/m15/actions/status',{method:'POST',...body({id:user.id,status:user.state==='在用'?'已停用':'在用'})}),'已切换状态')}>{user.state==='在用'?'停用':'启用'}</Button>

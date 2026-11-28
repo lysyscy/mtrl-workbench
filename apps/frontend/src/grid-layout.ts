@@ -27,47 +27,40 @@ function initialSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGr
 }
 // Column state stays in AG Grid. Content-only definition updates keep the same
 // sizing suggestions, while replacing business renderers/formatters normally.
-function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<T>|ColGroupDef<T>)[], growingMinimums?: ReadonlySet<string>):(ColDef<T>|ColGroupDef<T>)[] {
+function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[] {
   const old=new Map(previous.flatMap(column=>'children'in column?[]:[[column.colId??column.field,column] as const]));
   return columns.map(column=>{
-    if('children'in column){const group=previous.find(item=>'children'in item&&item.groupId===column.groupId&&item.headerName===column.headerName);return {...column,children:retainSizing(column.children,group&&'children'in group?group.children:[],growingMinimums)};}
+    if('children'in column){const group=previous.find(item=>'children'in item&&item.groupId===column.groupId&&item.headerName===column.headerName);return {...column,children:retainSizing(column.children,group&&'children'in group?group.children:[])};}
     const prior=old.get(column.colId??column.field);if(!prior)return column;
     const next={...column};for(const key of sizingKeys){delete next[key];const value=prior[key];if(typeof value==='number')next[key]=value;else if(key==='flex'&&value===null)next.flex=null;}
-    // A larger incoming amount can outgrow the automatic minimum on a
-    // retained grid. Manual bounds still belong to the width owner.
-    if (growingMinimums?.has(column.colId ?? String(column.field)) && column.minWidth !== undefined
-        && column.minWidth > (next.minWidth ?? 0)) {
-      next.minWidth = column.minWidth;
-      if (next.maxWidth !== undefined && next.maxWidth < column.minWidth) next.maxWidth = column.minWidth;
-    }
     if(prior.context?.manualWidthBounds)next.context={...next.context,manualWidthBounds:prior.context.manualWidthBounds};
     return next;
   });
 }
-export function useRetainedGridColumns<T>(columns: (ColDef<T>|ColGroupDef<T>)[], root: RefObject<HTMLElement | null>, layoutKey: string|number = '', growingMinimums?: ReadonlySet<string>) {
+export function useRetainedGridColumns<T>(columns: (ColDef<T>|ColGroupDef<T>)[], root: RefObject<HTMLElement | null>, layoutKey: string|number = '') {
   const [displayed, setDisplayed] = useState(()=>initialSizing(columns));
-  const applied = useRef({ columns, layoutKey, growingMinimums });
+  const applied = useRef({ columns, layoutKey });
   useLayoutEffect(() => {
-    if (applied.current.columns === columns && applied.current.layoutKey === layoutKey && applied.current.growingMinimums === growingMinimums) return;
+    if (applied.current.columns === columns && applied.current.layoutKey === layoutKey) return;
     const node = root.current; let frame = 0;
     const publish = () => {
       if (node?.contains(document.activeElement) && document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]),select,textarea')) return;
       const changed = applied.current.layoutKey !== layoutKey;
-      setDisplayed(previous=>changed?initialSizing(columns):retainSizing(initialSizing(columns),previous,growingMinimums));
-      applied.current = { columns, layoutKey, growingMinimums };
+      setDisplayed(previous=>changed?initialSizing(columns):retainSizing(initialSizing(columns),previous));
+      applied.current = { columns, layoutKey };
       node?.removeEventListener('focusout', released);
     };
     const released = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(publish); };
     node?.addEventListener('focusout', released); publish();
     return () => { cancelAnimationFrame(frame); node?.removeEventListener('focusout', released); };
-  }, [columns, root, layoutKey, growingMinimums]);
+  }, [columns, root, layoutKey]);
   return displayed;
 }
 
 export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, fit }: {
   root: RefObject<HTMLElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean; rows: T[]; totals: T[];
   scope: string; identity: string; columns: TextGridColumn<T>[]; rowId: (row: T) => string; minimum: number; headerMinimum: number;
-  fit?: () => void;
+  fit?: () => void | Promise<void>;
 }) {
   const [measurement, setMeasurement] = useState<{ owner: symbol; content: ReactNode } | null>(null);
   const [api, attach] = useState<GridApi<T> | null>(null);
@@ -140,7 +133,11 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         await Promise.all([fontRoot?.current ? loadElementFonts(fontRoot.current) : Promise.resolve(), loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
         if (cancelled(run) || !node!.clientWidth || editable()) return;
-        if(layoutChanged&&fitted.current!==`${scope}:${identity}:${geometryStamp()}`){fit?.();fitted.current=`${scope}:${identity}:${geometryStamp()}`;}
+        if (layoutChanged && fitted.current !== `${scope}:${identity}:${geometryStamp()}`) {
+          await fit?.();
+          if (cancelled(run) || editable()) return;
+          fitted.current = `${scope}:${identity}:${geometryStamp()}`;
+        }
         const fontsAt = performance.now();
         const displayed = grid.getAllDisplayedColumns();
         const viewport = node!.querySelector<HTMLElement>('.ag-grid-viewport,.ag-body-viewport');

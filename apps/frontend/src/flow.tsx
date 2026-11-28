@@ -21,7 +21,8 @@ import type { Flow, PaymentBar } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
-import { contentWidth, gridTheme } from './grid';
+import { gridTheme } from './grid';
+import { contentColumn } from './grid-content-widths';
 import { TimePicker, timeMatches } from './time-picker';
 const flowColumnDefaults: ColDef<Flow> = {cellDataType:false,sortable:true,resizable:true,suppressMovable:true,wrapHeaderText:true};
 const flowRowId = (row: Flow) => row.id == null ? 'flow-total' : String(row.id);
@@ -45,7 +46,7 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   // rows as empty space instead of swapping one box for another.
   const placeholder=phase==='idle'||phase==='reading'||phase==='error';
   return <div className="debt-workspace page-shell page-shell--flow" data-page-layout="flow">
-    <div className="debt-overviews wb-flow-width" role="region" data-read-phase={phase} aria-label="按项目看的欠款汇总"
+    <div className="debt-overviews" role="region" data-read-phase={phase} aria-label="按项目看的欠款汇总"
       aria-busy={phase==='reading'}>
       {/* Visible failures take their own line above the cards, without covering headings or values. */}
       <ReadStatusLane phase={phase} announce="正在读取欠款汇总…" className="debt-overviews-status">
@@ -108,26 +109,39 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   const writable=Boolean(props.me)&&enabled&&!searchPending&&!flows.isFetching&&!flows.isError&&!guard;
   const current=useRef({writable,open:setRevoke});current.current={writable,open:setRevoke};
   const scale=Number(props.me?.ui_scale_css)||1;
-  const widestAmount = useMemo(() => {
-    let length = 0;
-    for (const row of flows.data ?? []) {
-      length = Math.max(length, money(row.amount).length, money(row.amount_approved ?? '0').length);
-    }
-    return length;
-  }, [flows.data]);
-  const amountWidth = Math.max(124, Math.max(widestAmount, money(summary[0]!.amount).length) * 9 + 20);
+  const totalRows = summary as Flow[];
   const columns=useMemo<ColDef<Flow>[]>(()=> { const list:ColDef<Flow>[]=[
-    {field:'doc_no',tooltipField:'doc_no',headerName:'单据编码',wrapText:true,...contentWidth(144,210,scale),colSpan:p=>p.node?.rowPinned?2:1,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?p.value:p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
-    {field:'doc_date',tooltipField:'doc_date',headerName:'通知书日期',wrapText:true,...contentWidth(96,150,scale)},{field:'bill_name',headerName:'通知书名称',...contentWidth(144,320,scale,1),wrapText:true},
-    {field:'project_display',headerName:'付款项目',...contentWidth(100,280,scale,1),wrapText:true},{field:'payee',headerName:'收款单位',...contentWidth(144,320,scale,1),wrapText:true},{field:'category_label',headerName:'分类',...contentWidth(60,90,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="category" value={p.value}/>},
-    {field:'amount_approved',headerName:'审批金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.node?.rowPinned?'':p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>compareAmounts(a??'0',b??'0')},
-    {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',wrapText:true,...contentWidth(96,150,scale)},{field:'amount',headerName:'付款金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:compareAmounts},
-    {field:'pay_method',headerName:'实际付款方式',...contentWidth(96,150,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="payMethod" value={p.value}/>},{field:'remark',headerName:'备注',...contentWidth(70,320,scale,1),wrapText:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',wrapText:true,...contentWidth(112,160,scale)},
-    {field:'status_label',headerName:'状态',...contentWidth(76,100,scale),wrapText:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:p.data?<span><Tag className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</Tag>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
-    {colId:'actions',headerName:'操作',...contentWidth(64,100,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>{ if (current.current.writable) current.current.open(p.data!); }}>撤销</Button>:null},
-  ]; return list; },[scale,amountWidth,compareAmounts]);
+    {field:'doc_no',tooltipField:'doc_no',headerName:'单据编码',wrapText:true,
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.doc_no || '—')),
+      colSpan:p=>p.node?.rowPinned?2:1,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?p.value:p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
+    {field:'doc_date',tooltipField:'doc_date',headerName:'通知书日期',...contentColumn('bounded')},
+    {field:'bill_name',headerName:'通知书名称',...contentColumn('demand'),wrapText:true},
+    {field:'project_display',headerName:'付款项目',...contentColumn('demand'),wrapText:true},
+    {field:'payee',headerName:'收款单位',...contentColumn('demand'),wrapText:true},
+    {field:'category_label',headerName:'分类',
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.category_label || '—') + measure.px(13.5) + 2),
+      cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="category" value={p.value}/>},
+    {field:'amount_approved',headerName:'审批金额',
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.amount_approved == null ? '—' : money(row.amount_approved), { tabular: true })),
+      cellClass:'money',valueFormatter:p=>p.node?.rowPinned?'':p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>compareAmounts(a??'0',b??'0')},
+    {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',...contentColumn('bounded')},
+    {field:'amount',headerName:'付款金额',
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => measure.text(money(row.amount), { tabular: true, weight: pinned ? 600 : 400 })),
+      cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:compareAmounts},
+    {field:'pay_method',headerName:'实际付款方式',
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.pay_method || '—') + measure.px(13.5) + 2),
+      cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="payMethod" value={p.value}/>},
+    {field:'remark',headerName:'备注',...contentColumn('demand'),wrapText:true},
+    {field:'created_by',tooltipField:'created_by',headerName:'操作人',...contentColumn('bounded'),wrapText:true},
+    {field:'status_label',headerName:'状态',...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.status_label, { size: 12 }) + measure.px(12) + 2),
+      wrapText:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:p.data?<span><Tag className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</Tag>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
+    {colId:'actions',headerName:'操作',sortable:false,
+      ...contentColumn<Flow>('bounded', (row, measure, pinned) => !pinned && row.status==='effective' ? measure.buttons(['撤销']) : 0),
+      cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>{ if (current.current.writable) current.current.open(p.data!); }}>撤销</Button>:null},
+  ]; return list; },[compareAmounts]);
   const measurement = useMemo(() => ({textOnly:['doc_no'],signature:(row:Flow,id:string,pinned:boolean)=>JSON.stringify([pinned,id==='actions'?row.status:id==='status_label'?[row.status_label,row.revoke_reason,row.status]:(row as unknown as Record<string,unknown>)[id]])}), []);
-  const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: summary as Flow[], columns, measurement, rowId: flowRowId, scale, scope: JSON.stringify({...filter, keyword:rows === scope ? '' : filter.keyword}), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
+  const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: totalRows, columns, measurement, rowId: flowRowId, scale,
+    contentWidths: { rows, totals: totalRows }, scope: JSON.stringify({...filter, keyword:rows === scope ? '' : filter.keyword}), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
   useEffect(() => {
     if (props.active) api.current?.refreshCells({force:true, columns:['actions']});
   }, [props.active, writable]);
@@ -183,7 +197,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       <label className="flow-search-field">搜索<Input aria-label="流水关键词" allowClear placeholder="搜索各列内容" value={search} onChange={e=>{const value=e.target.value;setSearch(value);if(!searchComposing.current||!value)applyKeyword(value);}} onCompositionStart={()=>{searchComposing.current=true;}} onCompositionEnd={e=>{searchComposing.current=false;const value=e.currentTarget.value;setSearch(value);applyKeyword(value);}}/></label><Button htmlType="submit" onClick={()=>{setFilter(initial());setSearch('');}}>重置</Button><span>显示 {rows.length} 条</span>{filter.notice>0&&<Button htmlType="submit" onClick={()=>setFilter(f=>({...f,notice:0}))}>清除通知书定位</Button>}{filter.projects.includes(0)&&<span>待指定归属</span>}
       </div>
       <ReadStatusLane phase={flowsPhase} announce="正在读取付款流水…" className="flow-read-status flow-list-status">{(flowsPhase==='error'||flowsPhase==='stale')&&<ReadFailure read={flows} retained={flowsPhase==='stale'?'流水更新失败，保留上次结果。':undefined}/>}{projectQuery.isError&&<ReadFailure read={projectQuery} label="项目清单" retained="项目清单更新未成功，保留上次结果。"/>}</ReadStatusLane>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
-      {flowsPlaceheld ? <div className="flow-grid page-fill-stage flow-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={flowsPhase==='error'}/></div> : <PreparedGrid presentation={presentation} className="flow-grid page-fill-stage" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,defaultColDef:flowColumnDefaults,getRowId:p=>p.rowPinned?'flow-total':String(p.data.id),onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选没有付款流水。'}} />}
+      {flowsPlaceheld ? <div className="flow-grid page-fill-stage flow-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={8} quiet={flowsPhase==='error'}/></div> : <PreparedGrid presentation={presentation} className="flow-grid page-fill-stage" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:25,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,defaultColDef:flowColumnDefaults,getRowId:p=>p.rowPinned?'flow-total':String(p.data.id),onGridReady:e=>{api.current=e.api;},overlayNoRowsTemplate:'当前筛选没有付款流水。'}} />}
     </section>
     <DialogPresence>{revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}</DialogPresence>
   </div>;

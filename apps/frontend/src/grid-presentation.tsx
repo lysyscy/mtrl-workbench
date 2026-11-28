@@ -7,6 +7,7 @@ import type { ColDef, ColGroupDef } from 'ag-grid-community';
 import { pageGridGeometry } from './grid';
 import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
 import type { TextGridColumn } from './grid-layout';
+import type { ColumnWidthData } from './grid-content-widths';
 import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
 import { GridWidthContext, useGridWidthColumns, useGridWidths } from './grid-widths';
 import { useFirstReadGrid } from './read-region';
@@ -20,16 +21,17 @@ const details = Symbol('grid-presentation');
 // A page supplies business columns and scope; this module owns their rendering,
 // measurement and publication as one lifecycle. Observations support page labels
 // and existing actions without exposing attach/portal/retry ordering to callers.
-export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, growingMinimums, ...layout}: {
+export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, contentWidths, ...layout}: {
   columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: GridMeasurement<T>;
   root: RefObject<HTMLDivElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean;
   table: string; rows: T[]; totals: T[]; rowId: (row: T) => string; scope: string; identity: string; scale: number;
-  rowMinimum?: number; growingMinimums?: ReadonlySet<string>;
+  rowMinimum?: number;
+  contentWidths?: ColumnWidthData<T>;
 }) {
-  const widths = useGridWidths(table, layout.root, scale, layout.active);
+  const widths = useGridWidths(table, layout.root, scale, layout.active, contentWidths ? { content: contentWidths } : undefined);
   // The first real result must replace placeholder sizing. Keep the key stable
   // through ordinary non-empty saves so existing editing widths stay untouched.
-  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`, growingMinimums);
+  const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`);
   const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
   const widthColumns=useGridWidthColumns(materialized,widths.savedWidths);
   const definitions = useMemo(() => initialLayoutColumns(widthColumns), [widthColumns]);

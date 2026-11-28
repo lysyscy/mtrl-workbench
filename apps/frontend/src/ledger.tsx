@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { ReducedMotion } from './workspace-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { contentWidth, gridTheme } from './grid';
+import { gridTheme } from './grid';
+import { contentColumn } from './grid-content-widths';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, uncertainWrite, readProjects, requestJson } from './api';
 import type { Identity } from './api';
@@ -19,6 +20,10 @@ const ledgerRowId = (row: LedgerRow) => row.key;
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
 const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: true, suppressMovable: true };
+const ledgerAmountWidth = (field: 'other_expense' | 'payment' | 'debt') =>
+  contentColumn<LedgerRow>('bounded', (row, measure, pinned) =>
+    measure.text(amount(row[field]), { tabular: true, weight: pinned ? 600 : 400 })
+    + (!pinned && field !== 'debt' && editable(row, field) ? measure.px(10) + 2 : 0));
 
 interface Scope { key: string; owner: string; project: number; end: string }
 interface Draft { text: string; base: string; version: number; queued: boolean; month: string; error?: string }
@@ -93,16 +98,26 @@ function Side({ active, scale, side, scope, actions, grids, writable, busy, add,
   const upto = latest?.month || side.rows.at(-1)?.month || '—';
   const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
-    { field: 'seq', headerName: '序号', ...contentWidth(44, 58, scale), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
-    { field: 'month', headerName: '月份（按单据日期）', ...contentWidth(124, 180, scale), cellRenderer: Cell },
-    { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...contentWidth(110, 190, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'payment', headerName: '付款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'debt', headerName: '欠款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
-    { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, cellRenderer: Cell },
-    { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
-  ], [side.category, scale, upto]);
+    { field: 'seq', headerName: '序号', ...contentColumn('bounded'), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
+    { field: 'month', headerName: '月份（按单据日期）',
+      ...contentColumn<LedgerRow>('bounded', (row, measure, pinned) => {
+        if (pinned) return 0;
+        const display = measure.text(row.month_label || row.month);
+        return editable(row, 'month') ? Math.max(display, measure.text('September 0000') + measure.px(28) + 2) : display;
+      }), cellRenderer: Cell },
+    { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...ledgerAmountWidth('other_expense'), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'payment', headerName: '付款', ...ledgerAmountWidth('payment'), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'debt', headerName: '欠款', ...ledgerAmountWidth('debt'), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
+    { field: 'remark', headerName: '备注',
+      ...contentColumn<LedgerRow>('demand', (row, measure, pinned) => pinned ? 0 : measure.text(row.remark) + (row.remark && editable(row, 'remark') ? measure.px(10) + 2 : 0)),
+      wrapText: true, cellRenderer: Cell },
+    { colId: 'actions', headerName: '操作', sortable: false,
+      ...contentColumn<LedgerRow>('bounded', (row, measure, pinned) => pinned ? 0 : row.row_kind === 'manual' ? measure.buttons(['删除']) : measure.text('—')),
+      cellRenderer: DeleteCell },
+  ], [side.category, upto]);
   const measurement = useMemo(() => ({signature:(row:LedgerRow,id:string,pinned:boolean)=>JSON.stringify([pinned,row[id as keyof LedgerRow],row.row_kind,row.editable,writable])}), [writable]);
-  const presentation = useGridPresentation({table: `ledger-${side.category}`, root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
+  const presentation = useGridPresentation({table: `ledger-${side.category}`, root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale,
+    contentWidths: { rows: visible, totals: total }, scope: scope.key, identity: scope.key});
   useLayoutEffect(() => { if (presentation.state === 'ready') sizeTable(); }, [presentation.state, visible, total, scale]);
   useEffect(() => {
     if (!focusRecord || !api.current) return;
@@ -117,7 +132,7 @@ function Side({ active, scale, side, scope, actions, grids, writable, busy, add,
   return <FirstReadRegion phase="content" placeholder={<div className="ledger-first-reserve"><ReadPlaceholder rows={8}/></div>}>
     <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div ref={summaryRoot} className="ledger-summary" inert={!presentation.visible} style={{visibility:presentation.visible ? undefined : 'hidden'}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" style={{height:tableHeight,maxHeight:'60dvh'}} grid={{theme:gridTheme,alwaysShowVerticalScroll:false,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
+    <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" style={{height:tableHeight,maxHeight:'60dvh'}} grid={{theme:gridTheme,alwaysShowVerticalScroll:false,rowBuffer:25,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
       getRowId:params=>params.data.key,defaultColDef:defaultColumn,suppressCellFocus:true,suppressScrollOnNewData:true,
       overlayNoRowsTemplate:'暂无台账数据。',animateRows:false,onGridReady:event=>{
         api.current=event.api; grids[side.category]=event.api;

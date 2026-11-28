@@ -42,14 +42,6 @@
 
 /* Animate the check mark, without transitioning inherited visibility on every row at navigation. */
 .notices-page .notice-grid .ant-checkbox::after { transition-property: transform, opacity; }
-/* Prepare the scroll viewport while preserving the grid's normal text rasterization. */
-.notice-grid .ag-grid-viewport { will-change: scroll-position; }
-/* AG Grid fixes the virtual row container's height. Contain it once as rows enter and leave during scroll. */
-.page-view:not([hidden]) .notice-grid .ag-grid-scrolling-container {
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto none;
-}
-
 .notice-grid{width:100%;scrollbar-color:var(--bd3) var(--sf2)}.notice-grid .ag-cell{display:flex;align-items:center;line-height:1.5;padding-inline:calc(8px * var(--fscale));padding-block:calc(5px * var(--fscale))}.notice-grid .ag-cell.money{justify-content:flex-end;font-variant-numeric:tabular-nums}.notice-grid .ag-cell-value{width:100%}.notice-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}.notice-grid .ag-cell input[type=checkbox],.notice-grid .ag-header input{min-height:0;padding:0;width:1.1em;height:1.1em}.notice-grid select{min-height:0;line-height:1.5;padding:.2em .35em;font:inherit;max-width:100%}.notice-feedback{margin:calc(6px * var(--fscale)) calc(13px * var(--fscale));line-height:1.5}.notice-pending-chip{display:inline-flex;align-items:center;gap:calc(2px * var(--fscale));border:1px solid var(--wn-bd);color:var(--wn-d);background:var(--sf);border-radius:var(--r);padding:calc(2px * var(--fscale)) calc(4px * var(--fscale)) calc(2px * var(--fscale)) calc(10px * var(--fscale));font-size:calc(12px * var(--fscale));line-height:1.6;margin-bottom:calc(2px * var(--fscale))}.notice-pending-chip .ant-btn{padding:0 calc(4px * var(--fscale));height:auto;min-height:0;font-weight:600}.notice-tag{display:inline-block;border-radius:4px;font-size:.9em;line-height:1.4;padding:.1em .35em;white-space:normal}.notice-tag.manual{color:var(--bl-d);background:var(--bl-l)}.notice-tag.rule,.notice-tag.revoked{color:var(--dg-d);background:var(--dg-l)}.notice-grid input:disabled{cursor:default}.notice-grid .ag-header-cell{font-weight:500}.notice-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .notices-page .notice-search-field .ant-input-affix-wrapper{width:100%;height:var(--control-h);min-height:var(--control-h);border-radius:var(--radius-pill)}
 .notices-page .notice-search-field .ant-input-affix-wrapper input.ant-input{height:auto;min-height:0;border-radius:0}
