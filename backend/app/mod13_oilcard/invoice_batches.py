@@ -29,7 +29,8 @@ def create(session, request_id, text):
             raise DataConflictError('这次收票批次已建立且链接内容不同，请先核对原批次。')
         return existing
     batch = OilDeliveryBatch(request_id=request_id, fingerprint=fingerprint, created_by=current_operator())
-    session.add(batch); session.flush()
+    session.add(batch)
+    session.flush()
     for position, line in enumerate(lines, 1):
         try:
             token = delivery.link_token(line)
@@ -41,7 +42,8 @@ def create(session, request_id, text):
         reused = link is not None
         if link is None:
             link = OilDeliveryLink(link_key=key, token=token)
-            session.add(link); session.flush()
+            session.add(link)
+            session.flush()
         source = session.get(OilInvoiceOriginal, link.original_id) if link.original_id else None
         deleted_version = None
         if source and source.outcome != 'conflict':
@@ -118,7 +120,8 @@ def _claim(session, batch_id, item_id):
     if (source and not _current_retry(session, item, source)) or (link.state == 'running' and not _expired(link)):
         return None
     link.state, link.attempt, link.claimed_at = 'running', str(uuid4()), datetime.now()
-    link.message = ''; link.attempts += 1
+    link.message = ''
+    link.attempts += 1
     session.flush()
     return link.id, link.token, link.attempt
 
@@ -144,7 +147,8 @@ def _complete(session, link_id, attempt, content, recognized, *, item_id=None):
     received = invoices.receive_pdf(session, content, recognized, submitted_at=batch.created_at if batch else None)
     link.original_id, link.state = received.original_id, 'done'
     link.duplicate = received.duplicate
-    link.message = ''; session.flush()
+    link.message = ''
+    session.flush()
     return True
 
 

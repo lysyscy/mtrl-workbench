@@ -96,11 +96,16 @@ interface RuntimeMessenger {
   sendMessage(extensionId: string, message: unknown, callback: (response: unknown) => void): void;
   lastError?: { message?: string } | undefined;
 }
-interface RuntimeApi { runtime?: RuntimeMessenger | undefined }
 
 /** 扩展注入的全局只在装了扩展的浏览器里存在；不装也必须能正常打开页面。 */
+function isRuntimeMessenger(value: unknown): value is RuntimeMessenger {
+  return record(value) && typeof value.sendMessage === 'function';
+}
 function extensionRuntime(): RuntimeMessenger | null {
-  return (globalThis as unknown as { chrome?: RuntimeApi }).chrome?.runtime ?? null;
+  const host: unknown = globalThis;
+  const chrome = record(host) ? host.chrome : undefined;
+  const runtime = record(chrome) ? chrome.runtime : undefined;
+  return isRuntimeMessenger(runtime) ? runtime : null;
 }
 
 /**
@@ -118,7 +123,7 @@ export function deviceId(): string {
 }
 
 export function relayExtensionId(): string {
-  const injected = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_I8_RELAY_EXTENSION_ID;
+  const injected = import.meta.env?.VITE_I8_RELAY_EXTENSION_ID;
   const stored = sessionStorage.getItem(EXTENSION_ID_KEY) || '';
   return (stored || injected || DEFAULT_EXTENSION_ID).trim();
 }
@@ -156,7 +161,7 @@ export function setRelayConnectionWanted(owner: string, wanted: boolean): void {
   try {
     const key = `mtrl.i8.relay.connect.${owner}`;
     if (wanted) sessionStorage.setItem(key, 'yes'); else sessionStorage.removeItem(key);
-  } catch { /* The current page can still connect when session storage is unavailable. */ }
+  } catch { return; }
 }
 
 /**
@@ -392,7 +397,7 @@ export async function unbindBrowserIdentity(send: Send = sendToExtension): Promi
   try {
     await send({ type: 'i8-relay:unbind', device_id: deviceId() });
   } catch {
-    // 扩展不在/没应答时本来就无从泄漏；这里不阻塞断开。
+    return;
   }
 }
 
@@ -467,12 +472,10 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
         stopped('network');
         return;
       }
-      // A missing broker registration can be recreated; never replay a fetched ticket.
       if (failure instanceof ApiError && failure.code === 'i8_browser_relay_unavailable') {
         stopped('reconnect');
         return;
       }
-      // 身份/配置错误仍停止，服务暂不可达按网络中断恢复。
       if (failure instanceof ApiError && failure.status > 0) {
         stopped(failure.status >= 500 ? 'network' : 'failed');
         return;
@@ -485,7 +488,6 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       await new Promise<void>(resolve => setTimeout(resolve, 500 * networkFaults));
       continue;
     }
-    // await 之后：这一轮结果已经无意义了就别接着做。
     if (aborted()) {
       stopped('idle');
       return;
@@ -494,18 +496,15 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       stopped('failed');
       return;
     }
-    // 真正的"这一轮没活"：服务端明确给出空请求。只有这一种才继续轮询。
     if (payload.request === undefined || payload.request === null) {
       await new Promise<void>(resolve => setTimeout(resolve, EMPTY_ROUND_MS));
       continue;
     }
     const request = readRelayRequest(payload.request);
     if (!request) {
-      // 有任务但形状对不上（例如扩展/后端版本不一致）⇒ 明说停止，⛔ 不当空队列空转。
       stopped('malformed');
       return;
     }
-    // ⭐ 取到活之后**再核一次**：这期间用户可能已经断开、切页或换号。
     if (aborted()) {
       stopped('idle');
       return;
@@ -519,12 +518,9 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       reply = readRelayReply(value);
     } catch (failure) {
       if (aborted()) {
-        // 已经停了：⛔ 不回帖（后端会按自己的等待上限判停），也不把这次当成"已发生"。
         stopped('idle');
         return;
       }
-      // 扩展侧失败也必须回一个「终止」信号，否则后端会一直挂到自己的等待上限。
-      // 回帖本身失败 ⇒ 通道已不可用：停止并把失败交出去（⛔ 不吞、不假装已回帖）。
       try {
         await postReply({ status: 599, headers: {}, body_b64: '', declared_length: 0, relay_failure: relayFailure(failure) }, request, signal);
       } catch (postFailure) {
@@ -538,7 +534,6 @@ export async function runBrowserRelay(hooks: RelayRunHooks = {}): Promise<void> 
       throw failure;
     }
     if (aborted()) {
-      // 已经停了：不回帖（后端会按自己的等待上限判停），⛔ 也不把结果当成"本次成功"。
       stopped('idle');
       return;
     }

@@ -10,10 +10,8 @@
 """
 import re
 import zipfile
-from html import unescape
 from xml.sax.saxutils import escape
 
-from app.core.errors import MustReportError
 from app.report_export.xl_common import NS, fmt_num, norm_num, parse_shared_items
 
 
@@ -24,7 +22,7 @@ def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
     assert len(fields) == field_count, '模板 cacheField 数=%d 期望 %d' % (len(fields), field_count)
     field_maps = []
     new_parts = []
-    for i, (attrs, body) in enumerate(fields):
+    for i, (_attrs, body) in enumerate(fields):
         if i in empty_fields:
             field_maps.append(None)
             new_parts.append(body)
@@ -120,7 +118,7 @@ def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
               + '<cacheFields count="%d">' % field_count
               + ''.join('<cacheField name="%s" numFmtId="0">%s</cacheField>'
                         % (escape(nm, {chr(34): '&quot;', chr(39): '&apos;'}), seg)
-                        for nm, seg in zip(names, new_parts))
+                        for nm, seg in zip(names, new_parts, strict=False))
               + '</cacheFields>' + tpl_pcd[m.end():])
     new_cd = re.sub(r'recordCount="\d+"', 'recordCount="%d"' % len(data), new_cd)
     new_cd = re.sub(r'ref="[^"]*"', 'ref="A1:AB%d"' % (len(data) + 1), new_cd)
@@ -129,7 +127,7 @@ def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
 
 def rebuild_records(data, field_maps, num_cols, empty_fields=()):
     rows = []
-    for i, row in enumerate(data, start=1):
+    for _i, row in enumerate(data, start=1):
         xs = []
         for f in range(len(field_maps)):
             if f in empty_fields or field_maps[f] is None:

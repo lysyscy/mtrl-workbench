@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { DialogPresence } from './workspace-motion';
 import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
@@ -190,8 +191,8 @@ export function ContractSettings({me,blocked,close,refresh}:ToolProps) {
   return <BusinessModal open={!blocked} layout="pane" className={`project-dialog contract-work-dialog contract-settings${closing.confirming?' contract-tool-discard':''}`} titleId="contract-settings-title" requestClose={closing.requestClose}><DialogContents title="甲方单位分类" titleId="contract-settings-title" closing={closing}>
     <p>分类决定下次抓取时合同金额的落列；修改分类不重算已有合同。</p>
     {query.isPending?<p role="status">正在读取清单…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:query.data&&<PartyEditing.Provider value={{drafts,disabled:unavailable,options:query.data.kinds.map(value=>({value,label:query.data!.names[value]||value})),change:(party,value)=>setDrafts(old=>{const next={...old};if(value===party.kind)delete next[party.name];else next[party.name]=value;return next;}),save:party=>void write('/api/m11/party-kind',{name:party.name,kind:drafts[party.name]},'POST',()=>setDrafts(old=>{const next={...old};delete next[party.name];return next;}))}}><BoundedGrid<Party> fill minRows={4} table="contract-settings-party" className="contract-settings-table" label="甲方单位分类" rows={query.data.parties} rowId={row=>row.name} columns={[
-      {colId:'name',headerName:'甲方单位',valueGetter:p=>p.data!.name},
-      {colId:'count',headerName:'合同数',cellClass:'money',valueGetter:p=>p.data!.count},
+      {colId:'name',headerName:'甲方单位',valueGetter:layoutCallback(p=>p.data!.name)},
+      {colId:'count',headerName:'合同数',cellClass:'money',valueGetter:layoutCallback(p=>p.data!.count)},
       {colId:'kind',headerName:'分类',cellRenderer:PartyKindCell},
       {colId:'actions',headerName:'操作',cellRenderer:PartySaveCell},
     ]}/></PartyEditing.Provider>}

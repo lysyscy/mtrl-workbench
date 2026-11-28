@@ -29,7 +29,7 @@ from app.mod07_setl import inventory_extract as I
 from app.mod07_setl import service as S
 from app.mod07_setl.big_repository import load_manual
 from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY, default_month
-from app.mod07_setl.repository import load_balances, load_rows
+from app.mod07_setl.repository import load_balances
 
 router = APIRouter(tags=["mod07"])
 

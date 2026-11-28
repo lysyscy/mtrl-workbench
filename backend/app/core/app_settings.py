@@ -119,8 +119,8 @@ def invalidate() -> None:
         from app.core.config import get_settings
 
         get_settings.cache_clear()
-    except Exception:                                          # noqa: BLE001
-        pass
+    except Exception as exc:
+        logger.warning('设置缓存刷新失败：%s', type(exc).__name__)
 
 
 def effective(key: str, fallback: str) -> str:

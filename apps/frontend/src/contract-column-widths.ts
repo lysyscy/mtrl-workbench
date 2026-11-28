@@ -8,8 +8,6 @@ export function isContractAmount(key: string): key is AmountKey {
   return contractMoneyKeys.some(amount => amount === key);
 }
 
-// Either extreme also covers the total of any filtered subset, even when
-// positive and negative rows cancel on the opening view.
 export function contractTotalSamples(rows: ContractRow[]) {
   const first = rows[0];
   if (!first) return [];
@@ -37,7 +35,6 @@ export function contractColumnWidth(key: string, options: {
     return contentColumn<ContractRow>('bounded', (row, measure, pinned) => {
       const value = row[key];
       const label = value === null && !options.subtable ? '未确定' : money(value ?? '0');
-      // Match the second CSS grid track and its gap, including on the total row.
       return measure.text(label, { tabular: true, weight: pinned ? 600 : 400 }) + (options.subtable ? measure.px(40) + 6 : 0);
     });
   }

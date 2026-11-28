@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
@@ -170,19 +171,17 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
   const columns = useMemo<ColDef<Row>[]>(() => ([
     { field: 'invoice_date', headerName: '开票日期', sortable: true, initialSort: 'asc',
       comparator: (_, __, a, b) => (a.data?.invoice_date ?? '').localeCompare(b.data?.invoice_date ?? ''),
-      ...completeWidths.date, valueGetter: p => p.data ? dateLabel(p.data) : null, valueFormatter: p => p.node?.rowPinned ? '合计' : p.value || (p.data?.manual_request_id ? '' : '待核') },
-    // Renderer metadata is part of the native value comparison. A plain field
-    // value would leave these cells stale when status changes without new text.
+      ...completeWidths.date, valueGetter: layoutCallback(p => p.data ? dateLabel(p.data) : null), valueFormatter: p => p.node?.rowPinned ? '合计' : p.value || (p.data?.manual_request_id ? '' : '待核') },
     { field: 'invoice_no', headerName: '发票号', ...completeWidths.number,
-      valueGetter: p => p.data, valueFormatter: p => p.value ? numberLabel(p.value) || '' : '',
+      valueGetter: layoutCallback(p => p.data), valueFormatter: p => p.value ? numberLabel(p.value) || '' : '',
       equals: (a: Row | undefined, b: Row | undefined) => a?.invoice_no === b?.invoice_no && a?.status === b?.status && a?.kind === b?.kind && a?.manual_request_id === b?.manual_request_id,
       cellRenderer: ({ data, node }: ICellRendererParams<Row>) => !data || node.rowPinned ? '' : <span>{numberLabel(data) || '票号待核'}{(data.status === 'pending' || data.status === 'voided' || data.kind === 'credit') && <small className="muted">（{data.status === 'pending' ? '待确认' : data.status === 'voided' ? '作废' : '红冲'}）</small>}</span> },
-    { field: 'project', headerName: '项目', ...contentWidth(112, 300, scale, 1), valueGetter: p => p.data,
+    { field: 'project', headerName: '项目', ...contentWidth(112, 300, scale, 1), valueGetter: layoutCallback(p => p.data),
       valueFormatter: p => p.value?.project || '', equals: (a, b) => sameAttributionValue(a, b, 'project'), cellRenderer: AttributionCell },
-    { field: 'account', headerName: '用卡账户', ...contentWidth(112, 260, scale, 1), valueGetter: p => p.data,
+    { field: 'account', headerName: '用卡账户', ...contentWidth(112, 260, scale, 1), valueGetter: layoutCallback(p => p.data),
       valueFormatter: p => p.value?.account || '', equals: (a, b) => sameAttributionValue(a, b, 'account'), cellRenderer: AttributionCell },
     { field: 'amount', headerName: '价税合计', cellClass: 'money', ...completeWidths.amount, valueFormatter: p => p.value === null || p.value === undefined ? '待核' : money(p.value) },
-    { field: 'remark', headerName: '备注', ...contentWidth(92, 360, scale, 1), valueGetter: p => p.data,
+    { field: 'remark', headerName: '备注', ...contentWidth(92, 360, scale, 1), valueGetter: layoutCallback(p => p.data),
       valueFormatter: p => p.value?.remark || '', equals: (a: Row | undefined, b: Row | undefined) => a?.remark === b?.remark && a?.invoice_no === b?.invoice_no, cellRenderer: RemarkCell },
     { colId: 'actions', headerName: '操作', pinned: 'right', ...completeWidths.actions, cellRenderer: InvoiceActions },
   ] satisfies ColDef<Row>[]).map(column => 'field' in column ? valueFilterColumn<Row>(column, filterOptions[column.field]!) : column), [scale, completeWidths, filterOptions]);
@@ -322,7 +321,6 @@ export function OilInvoiceSheet({ me, archives, projects, active, blocked, scale
     if (key === 'download') void download('/api/m13/invoices/originals/' + original.id + '?download=true');
   }
   const pending = rows.filter(row => row.status === 'pending').length, conflicts = rows.reduce((n, r) => n + r.originals.filter(o => o.outcome === 'conflict' && !o.resolution).length, 0);
-  // 首读和失败只占表区，工具栏和冲突提示保持可见。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section className="wb-surface oilcard-ledger-pane" aria-label="发票台账">

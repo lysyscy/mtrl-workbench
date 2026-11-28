@@ -16,9 +16,6 @@ interface Cells {
 export const NoticeCells = createContext<Cells | null>(null);
 export const PublishedNotices = createContext<ReadonlyMap<number, NoticeRow>>(new Map());
 
-// A reread can change the overpayment flag or an editor's limit without
-// changing this column's value. Keep the mounted cell in sync, including
-// while a different row has an active input.
 export function PaidAmountCell({ row }: { row: NoticeRow }) {
   const current = useContext(PublishedNotices).get(row.notice_id) ?? row;
   return <span>{money(current.amount_paid)}{current.is_overpaid && <span className="notice-tag rule">超付</span>}</span>;

@@ -1,7 +1,6 @@
 """Authenticated shell and external-agent entry points share one workbench contract."""
 import json
 from datetime import datetime
-from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request

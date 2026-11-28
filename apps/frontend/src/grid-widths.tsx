@@ -19,8 +19,6 @@ export function useGridWidths<T = unknown>(table: string, root: RefObject<HTMLEl
   current.current = {scale, active,layoutKey:`${scale}:${layoutRevision}`,dragging,content};
   const binding = useRef<ReturnType<typeof bindGridWidths> | null>(null), cleanup = useRef<(() => void) | null>(null);
   const contentBinding = useRef<ReturnType<typeof bindContentColumnWidths<T>> | null>(null);
-  // AG reads this initial strategy when the first rows arrive, after manual
-  // preferences and the current scale have been applied to the native columns.
   const strategy = useMemo<SizeColumnsToContentStrategy>(() => ({
     type: 'fitCellContents', skipHeader: true,
     get columnLimits() {
@@ -42,8 +40,6 @@ export function useGridWidths<T = unknown>(table: string, root: RefObject<HTMLEl
     const fitted = node && current.current.content ? bindContentColumnWidths<T>(api, node, () => current.current,
       id => Object.hasOwn(preferences.getWidths(), id)) : null;
     contentBinding.current = fitted;
-    // Before AG starts its native mouse drag, publish the target's manual bounds
-    // through the same React columnDefs path used by saved preferences.
     const capture=(event:PointerEvent)=>{
       if(event.button!==0)return;
       const target=event.target instanceof Element?event.target:null;
@@ -51,8 +47,6 @@ export function useGridWidths<T = unknown>(table: string, root: RefObject<HTMLEl
       if(id){
         controller.beginDrag(id);
         const column=api.getColumn(id);
-        // Releasing a flex column's auto minimum must not shrink it before AG
-        // captures the mouse drag's starting width. Native state owns this handoff.
         if(column?.getFlex())api.applyColumnState({state:[{colId:id,width:column.getActualWidth(),flex:null}]});
         flushSync(()=>setDragging(id));
       }
@@ -90,7 +84,6 @@ function WidthHeader(params:IHeaderParams&{originalHeader?:ComponentType<IHeader
     {widths.error&&<span className="sr-only" role="status">{widths.error}</span>}
   </span>}</span>;
 }
-// Use the native header extension point. One action per grid, without a toolbar row.
 export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],
   savedWidths: Readonly<Record<string, number>>, preferred?: string) {
   return useMemo(()=>{
@@ -107,7 +100,6 @@ export function useGridWidthColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],
       ??leaves.find(fits)??leaves[0];
     const visit=(items:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]=>items.map(column=>{
       if('children'in column)return {...column,children:visit(column.children)};
-      // Pinned columns cannot flex; leaving flex set also makes native reset skip their width.
       const {flex,initialFlex,...fixed}=column;
       const leaf:ColDef<T>=column.pinned&&(flex!==undefined||initialFlex!==undefined)?{...fixed,suppressAutoSize:column.suppressAutoSize??true}:column;
       if(column!==reset)return leaf;

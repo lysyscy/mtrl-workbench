@@ -111,7 +111,7 @@ def body_spec(rows: list[dict]) -> dict:
     # 尾块空列也须显式清掉模板公式；空串是现有引擎的留空约定，不能把None改成0。
     sub = {COL_OF_KEY[k]: totals[k] or "" for k in D.DATA_KEYS}
     segments = D.segment_totals(list(rows or ()))
-    total = {anchor: seg['total'] or '' for anchor, seg in zip(TOTAL_ANCHORS, segments)}
+    total = {anchor: seg['total'] or '' for anchor, seg in zip(TOTAL_ANCHORS, segments, strict=False)}
     # ⚠️ 尾块的**标签写在 B 列**（`小计` / `合计：`），⛔ **不是**引擎的 `label`（那会落到 A 列）——
     #    A 列是**序号**（B 类）：模板里小计 / 合计行**不编号**（清单 §5.3 明写）⇒ `label=None`。
     return {

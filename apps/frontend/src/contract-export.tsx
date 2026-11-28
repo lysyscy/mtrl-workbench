@@ -4,7 +4,6 @@ import type { Project } from './api';
 import { ProjectExport } from './ledger-controls';
 import { loadContractExport } from './contract-export-api';
 
-// getIds reads every filtered grid row in its current sort order, including virtual rows.
 export function ContractExports({ owner, projects, project, getIds, scope, searchBusy, unavailable, paused }: {
   owner: string; projects: Project[]; project: number; getIds: () => number[];
   scope: string; searchBusy: boolean; unavailable: string; paused: boolean;

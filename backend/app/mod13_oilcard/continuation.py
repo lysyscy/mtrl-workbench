@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.core.errors import DataConflictError, MustReportError
 from app.core.identity import current_operator
 from app.core.money import sum_money
-from . import invoice_adjustments, invoices, ledger, linkage, reporting, transfers
+from . import invoice_adjustments, invoices, ledger, linkage, transfers
 from .models import (OilContinuationSource, OilEntry, OilOpeningBalance, OilInvoice,
     OilInvoiceOriginal, OilFeeCustom, OilBigCustom)
 from .service import _check_version, _get, _lock
@@ -219,7 +219,8 @@ def _apply(session, source_id, item, decision, contents):
             for allocation in decision['allocations']:
                 _assignment(session, allocation)
             row = OilInvoice(updated_by=current_operator())
-            session.add(row); session.flush()
+            session.add(row)
+            session.flush()
             invoice_adjustments.correct(session, row.id, {**decision, 'amount': raw['amount'], 'version': row.version},
                 initial_continuation=True)
         return [('invoice', row.id)]

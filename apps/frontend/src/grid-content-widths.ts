@@ -45,11 +45,7 @@ interface ColumnContent<T> {
 export interface ColumnWidthData<T> {
   rows: readonly T[];
   totals?: readonly T[];
-  // Dense single-line tables already scroll at compact sizes. Keep room for
-  // representative text while letting empty or short columns use less.
   readableTextWidth?: number;
-  // Editor saves can reread the same set. Hold its prose widths until the next
-  // scope, appearance change or reset, while allowing larger fixed values.
   retainBy?: (row: T) => string | number;
 }
 
@@ -85,7 +81,6 @@ function createMeasure(scale: number, body: CSSStyleDeclaration, context: Canvas
     if (cached !== undefined) return cached;
     context.font = font;
     let width = 0;
-    // Reserve the widest glyph for tabular digits, including a loaded fallback.
     let digitWidth = digitsByFont.get(font) ?? 0;
     if (tabular && !digitWidth) {
       digitWidth = Math.max(...Array.from('0123456789', digit => context.measureText(digit).width));

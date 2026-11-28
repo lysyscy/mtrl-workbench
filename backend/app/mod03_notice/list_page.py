@@ -150,7 +150,7 @@ def _cell_cls(col: dict) -> str:
 
 def _cells(cols: list, values: list) -> str:
     """一行里的 `<td>` 串 —— **表头 / 数据行 / 合计行 / 总求和行共用**（分段线天然一致）。"""
-    return "".join(f"<td{_cell_cls(c)}>{v}</td>" for c, v in zip(cols, values))
+    return "".join(f"<td{_cell_cls(c)}>{v}</td>" for c, v in zip(cols, values, strict=False))
 
 
 def _render_data(
@@ -338,9 +338,6 @@ def sort_rows(rows, *, column: str, direction: int, pinned=None) -> list:
     return list(ordered) + held
 
 __all__ = [
-    "SCOPE_INCLUDED", "SCOPE_EXCLUDED", "EXCLUDED_KEYWORDS", "PAY_DOMAIN_IDS", "PAY_DOMAIN_PAGES",
-    "pay_domain_nav", "nav_violations",
-    "THEME_CSS", "BASE_CSS", "STICKY_BOTTOM_CSS", "VSEP_CSS",
     # ⚠️ 下面这批**住在新件 `list_page.py`**（`TAIL-06` 拆件），本文件只是**再导出**：
     "SEG_TIP", "SEG_KPIS", "SEG_FILTER", "SEG_DATA", "SEG_EMPTY", "LIST_PAGE_SEGMENTS",
     "DEFAULT_EMPTY_TEXT", "esc", "tip_block_count", "segment_sequence", "render_list_page",

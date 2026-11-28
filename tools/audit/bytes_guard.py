@@ -40,9 +40,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+if __package__:
+    from .git_index import staged_changes, index_bytes
+else:
+    from git_index import staged_changes, index_bytes
+
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
-from tools.audit.git_index import staged_changes, index_bytes
+
 
 #: 只管**文本件**（二进制件的行尾/编码规则无意义 ⇒ 进来就是噪音）
 TEXT_SUFFIXES = {".py", ".md", ".mdc", ".js", ".html", ".css", ".json", ".sql", ".yml", ".yaml",

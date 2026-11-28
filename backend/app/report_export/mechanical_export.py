@@ -142,7 +142,7 @@ def build(data, *, project_rows=None):
 
     styles = {i: {r: [copy(sheet.cell(r, c)._style) for c in range(1, width + 1)]
                   for r in rows} for i, (sheet, rows, width) in enumerate(zip(
-                      wb, ((6, 7), (5, 6, 7), (5, 6, 7), range(1, 8)), (15, 17, 15, 35)))}
+                      wb, ((6, 7), (5, 6, 7), (5, 6, 7), range(1, 8)), (15, 17, 15, 35), strict=False))}
     summary = wb.worksheets[0]
     notes = [([summary.cell(r, c).value for c in range(1, 16)],
               [copy(summary.cell(r, c)._style) for c in range(1, 16)],
@@ -153,7 +153,7 @@ def build(data, *, project_rows=None):
             for cell in row:
                 if isinstance(cell.value, str) and '2026年9月' in cell.value:
                     cell.value = cell.value.replace('2026年9月', f'{ym[:4]}年{int(ym[5:])}月')
-    for sheet, header in zip(wb.worksheets[:3], (5, 4, 4)):
+    for sheet, header in zip(wb.worksheets[:3], (5, 4, 4), strict=False):
         for merged in list(sheet.merged_cells.ranges):
             if merged.min_row > header:
                 sheet.unmerge_cells(str(merged))
@@ -336,7 +336,7 @@ def build(data, *, project_rows=None):
             edge = copy(cell.border)
             edge.top = Side(style='thick', color='000000')
             cell.border = edge
-    for sheet, max_col in zip(wb, (15, 16, 15, width)):
+    for sheet, max_col in zip(wb, (15, 16, 15, width), strict=False):
         sheet.print_area = f'A1:{get_column_letter(max_col)}{sheet.max_row}'
     return wb
 

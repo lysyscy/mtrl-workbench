@@ -75,7 +75,8 @@ def _create_pair(session, transfer_id, amount, date_text, assignments, remarks):
         row = OilEntry(request_id=str(uuid5(UUID(transfer_id), kind)), transfer_id=transfer_id,
             kind=kind, amount=signed, date_text=date_text, entry_date=_date(date_text),
             remark=remarks[side], version=version, updated_by=current_operator(), **assignments[side])
-        session.add(row); rows.append(row)
+        session.add(row)
+        rows.append(row)
     session.flush()
     return validate_pair(rows)
 

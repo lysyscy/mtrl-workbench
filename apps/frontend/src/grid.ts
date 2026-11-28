@@ -6,7 +6,6 @@ import {
 } from 'ag-grid-community';
 import type { SuppressKeyboardEventParams } from 'ag-grid-community';
 
-// Register adopted public modules; their dependencies supply the grid defaults.
 ModuleRegistry.registerModules([
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
@@ -19,16 +18,14 @@ const editorKeys = new Set([
 const editorShortcuts = new Set(['a', 'c', 'd', 'v', 'x', 'y', 'z']);
 
 function suppressEditorKeyboardEvent({ event, editing }: SuppressKeyboardEventParams) {
-  if (editing) return false; // AG Grid's own editors manage their edit lifecycle.
+  if (editing) return false;
   const target = event.target;
   if (!(target instanceof HTMLElement) || !(target.isContentEditable || target.closest('input, textarea, select, [role="combobox"]'))) return false;
   return event.isComposing || editorKeys.has(event.key) ||
     ((event.ctrlKey || event.metaKey) && editorShortcuts.has(event.key.toLowerCase()));
 }
 
-// Merge the input rule into local column defaults, including grids mounted directly.
 provideGlobalGridOptions({
-  // Keep ordinary reads and reordering still, with native text selection.
   animateRows: false, enableCellTextSelection: true, ensureDomOrder: true,
   defaultColDef: { suppressKeyboardEvent: suppressEditorKeyboardEvent },
 }, 'deep');
@@ -38,7 +35,6 @@ export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontS
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
   borderRadius: 0, wrapperBorderRadius: 0 });
 
-// Whole-page tables share compact geometry; dialog tables keep their task-specific sizing.
 export function pageGridGeometry(scale = 1) {
   return { rowHeight: 36 * scale, headerHeight: 34 * scale, groupHeaderHeight: 34 * scale };
 }
@@ -55,8 +51,6 @@ interface ColumnTextSample {
   current: { font: string; ready: Promise<FontFaceSet>; texts: Set<string>; longest: string; width: number } | undefined;
 }
 
-// A changed subset only needs new texts measured while its previous widest
-// text is still present. Keep one result per column in the owning page.
 export function cachedNumberColumnWidths() {
   const fields = new Map<string, ColumnTextSample>();
   return (key: string, values: readonly unknown[], scale: number, editable = false) => {
@@ -69,7 +63,6 @@ export function cachedNumberColumnWidths() {
   };
 }
 
-// Size complete values and totals, rather than imposing the same wide floor on every number.
 export function numberColumnWidth(values: readonly unknown[], scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1, editable = false, stretch = 0, sample?: ColumnTextSample) {
   const css = getComputedStyle(document.documentElement), fontSize = Number(css.getPropertyValue('--font-ui-size')) || 13.5;
   const context = document.createElement('canvas').getContext('2d')!;
@@ -92,8 +85,6 @@ export function numberColumnWidth(values: readonly unknown[], scale = Number(get
   return contentWidth(minimum, Math.max(minimum, 180), scale, stretch);
 }
 
-// The caller owns the immutable values and scale. A new font loading cycle
-// replaces fonts.ready, so a pending fallback measurement is never saved.
 export function cacheFontMeasurement<T>(measure: () => T) {
   let saved: { family: string; size: string; ready: Promise<FontFaceSet>; value: T } | undefined;
   return () => {
@@ -106,7 +97,6 @@ export function cacheFontMeasurement<T>(measure: () => T) {
   };
 }
 
-// Auto-size sees rendered rows; full identifiers also protect offscreen values.
 export function fullTextWidth(values:readonly string[],scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1) {
   const css=getComputedStyle(document.documentElement),context=document.createElement('canvas').getContext('2d')!;
   context.font=`500 ${(Number(css.getPropertyValue('--font-ui-size'))||13.5)*scale}px ${css.fontFamily}`;

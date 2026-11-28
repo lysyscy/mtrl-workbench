@@ -1,6 +1,5 @@
 """设备台账的三套打印表。输入是同一事务取出的普通数据快照。"""
 from datetime import date
-from decimal import Decimal
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side

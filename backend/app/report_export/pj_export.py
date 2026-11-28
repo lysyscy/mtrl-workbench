@@ -25,7 +25,6 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 
 #: 导出的列（**顺序 = 页面表头顺序**去掉「操作」）⇒ 导出的表与屏幕**并排看能对上**。
 #: 第二项 = 行字典里的键；⚠️ 其中 `type_text` / `parent_full` / `keywords` 是

@@ -4,8 +4,6 @@ import type { ReactNode, RefObject } from 'react';
 import type { ColDef, ColGroupDef, GridApi, IRowNode } from 'ag-grid-community';
 import { loadElementFonts, loadTextFonts } from './appearance-ready';
 
-// Opt-in preparation. Rich cells render through a portal in the owning React tree,
-// keeping their real router, appearance and editor context during bounded measurement.
 export interface TextGridColumn<T> {
   id: string;
   text: (row: T, pinned?: boolean) => string;
@@ -16,8 +14,6 @@ export interface TextGridColumn<T> {
   span?: (row: T, pinned: boolean) => number;
 }
 
-// React/AG treats a replacement renderer definition as a new component even if
-// row IDs and values are unchanged. Defer that replacement through an input session.
 const sizingKeys = ['width','initialWidth','minWidth','maxWidth','flex','initialFlex'] as const;
 function initialSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[]{
   return columns.map(column=>{
@@ -25,8 +21,6 @@ function initialSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGr
     const {width,flex,...rest}=column;return {...rest,...(width===undefined?{}:{initialWidth:width}),...(flex===undefined?{}:{initialFlex:flex??0})};
   });
 }
-// Column state stays in AG Grid. Content-only definition updates keep the same
-// sizing suggestions, while replacing business renderers/formatters normally.
 function retainSizing<T>(columns:(ColDef<T>|ColGroupDef<T>)[], previous:(ColDef<T>|ColGroupDef<T>)[]):(ColDef<T>|ColGroupDef<T>)[] {
   const old=new Map(previous.flatMap(column=>'children'in column?[]:[[column.colId??column.field,column] as const]));
   return columns.map(column=>{
@@ -75,7 +69,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     fonts: Promise<FontFaceSet>; sizes: Map<string, number>;
   };
   const currentSizes = useRef<CellMeasurements | null>(null);
-  // A transient filtered result releases its published sizes with the row array.
   const publishedTextSizes = useRef(new WeakMap<T[], CellMeasurements>());
   const headerSize = useRef({ key: '', height: headerMinimum });
   const prepared = useRef<{ grid: GridApi<T>; rows: T[]; totals: T[]; columns: TextGridColumn<T>[]; rowId: (row: T) => string; geometry: string; scope: string; identity: string; errors:string } | null>(null);
@@ -95,9 +88,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     const schedule = () => { if (ready.current) setState('updating'); version++; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { void prepare(version); }); };
     async function prepare(run: number) {
       if (cancelled(run) || !node!.clientWidth) return;
-      // Retained pages and duplicate resize notifications reuse the applied layout.
-      // An immutable value update is not a layout request. Only changed multiline
-      // prose/errors or a real range/column/font/viewport change need measurement.
       const previous = prepared.current;
       const errors=[...node!.querySelectorAll('.ag-row [role=alert],.ag-row .has-error,.ag-row .process-cell-error')].map(element=>element.textContent).join('\n');
       const layoutChanged=!previous||previous.grid!==grid||previous.scope!==scope||previous.identity!==identity||previous.geometry!==geometryStamp();
@@ -119,8 +109,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       if (editable()) { pendingEdit = true; return; }
       pendingEdit = false;
       const started = performance.now();
-      // Effect-local versions can repeat after cleanup. Only this prepare's
-      // portal is ours to clear; its measuring host is always ours to remove.
       const owner = Symbol();
       const clearMeasurement = () => setMeasurement(current => current?.owner === owner ? null : current);
       let host: HTMLDivElement | undefined;
@@ -162,8 +150,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const published = plain && document.fonts.status === 'loaded' ? publishedTextSizes.current.get(rows) : undefined;
         const compatible = (seen: CellMeasurements | null | undefined): seen is CellMeasurements =>
           seen?.key === key && seen.grid === grid && (!plain || (seen.columns === columns && seen.fonts === fonts));
-        // Restoring the same immutable rows at their original flex widths can use
-        // their published text heights. Rich controls use only the working layout.
         let measurements = currentSizes.current;
         if (compatible(published)) measurements = published;
         if (!compatible(measurements)) measurements = { key, grid, columns, fonts, sizes: new Map() };
@@ -176,8 +162,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const plannedRows: { id: string; cells: CellSize[] }[] = [];
         for (const [data, pinned] of [[rows, false], [totals, true]] as const) {
           const weight = pinned ? '600' : '400';
-          // Intern each column's repeated values at their actual width. Rows share
-          // one measured height instead of hashing a new composite key per cell.
           const planners = wrapping.map(column => {
             const width = widthById.get(column.id) ?? 0;
             const values = new Map<string, CellSize>();
@@ -201,14 +185,11 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           });
           for (const row of data) plannedRows.push({ id: rowId(row), cells: planners.map(plan => plan(row)) });
         }
-        // A whole string that fits one actual-font canvas line needs no wrapping DOM.
-        // Multiline/long strings still use the browser's real breaking rules below.
         if (canFitLine && singleLine <= minimum) for (const [key, job] of jobs) {
           context.font = `${job.weight} ${bodyFont}`;
           if (!job.column.render && !job.text.includes('\n') && context.measureText(job.text).width <= job.width - padding - 2) { sizes.set(key, minimum); jobs.delete(key); }
         }
         const pending = [...jobs];
-        // The measuring DOM is bounded; read each batch after writing it, then release it.
         let yieldedAt = performance.now();
         for (let start = 0; start < pending.length; start += 128) {
           const batch = pending.slice(start, start + 128);
@@ -226,7 +207,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
               : []))}));
           }
           if (batch.some(([, job]) => job.column.render)) {
-            // Only the rich controls actually measured here contribute labels and font weights.
             await loadElementFonts(host);
             if (cancelled(run)) return;
           }
@@ -245,12 +225,9 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           }
           next.set(row.id, height);
         }
-        // Header text uses the actual header structure and final width, including sort space.
         const headerKey = `${key}:${headerMinimum}:${displayed.map(c => c.getColDef().headerName ?? '').join('|')}`;
         let header = headerSize.current.key === headerKey ? headerSize.current.height : headerMinimum;
         if (headerSize.current.key !== headerKey) {
-          // Read fallback widths before inserting any clones, then measure the
-          // complete batch to avoid forcing one layout for every header.
           const headers = [...node!.querySelectorAll<HTMLElement>('.ag-header-cell')].map(element => ({
             element, width: widthById.get(element.getAttribute('col-id')!) ?? element.offsetWidth,
           }));
@@ -274,16 +251,12 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (changed) grid.onRowHeightChanged();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (cancelled(run)) return;
-        // Natural-height reports render the whole known result. A complete row model
-        // can precede React's last row commit; publish after that actual dependency.
         if (grid.getGridOption('domLayout') === 'autoHeight') {
           const expected = rows.map(rowId);
           const mounted = () => {
             const ids = new Set([...node!.querySelectorAll('.ag-row[row-id]')].map(row => row.getAttribute('row-id')));
             const center = node!.querySelector<HTMLElement>('.ag-body-horizontal-scroll-viewport');
             const horizontal = node!.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
-            // AG can finish its row queue before its real horizontal scrollbar
-            // takes space. Natural-height reports publish after that dependency too.
             const needsHorizontal = Boolean(grid.getGridOption('alwaysShowHorizontalScroll')) || Boolean(center && center.scrollWidth > center.clientWidth + 1);
             const scrollbarReady = !rows.length || !horizontal || Boolean(grid.getGridOption('suppressHorizontalScroll')) || (!needsHorizontal || horizontal.offsetHeight > 0);
             return scrollbarReady && grid.isAnimationFrameQueueEmpty() && expected.every(id => ids.has(id));
@@ -294,8 +267,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           }
         }
         if (scope !== appliedScope.current) viewport.scrollTop = 0;
-        // Publishing rows can reveal the vertical scrollbar and shrink flex columns.
-        // Never cache heights measured at the previous widths under that new geometry.
         const finalColumns = grid.getAllDisplayedColumns();
         if (finalColumns.length !== displayed.length || finalColumns.some((column, i) => column.getColId() !== displayed[i]!.getColId() || column.getActualWidth() !== plannedWidths[i])) {
           prepared.current = null;
@@ -320,8 +291,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     const resized = (event: { finished?: boolean }) => { if (event.finished) schedule(); };
     grid.addEventListener('columnResized', resized);
     const afterEdit = () => { if (pendingEdit) schedule(); };
-    // Every uncached measurement awaits its own text/control fonts before reading dimensions.
-    // Unrelated page font shards must not invalidate an already prepared grid.
     node.addEventListener('focusout', afterEdit);
     schedule();
     return () => { disposed = true; cancelAnimationFrame(frame); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); };

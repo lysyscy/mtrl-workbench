@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import any_ids
 from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 MOD-02，此处再导出
-    create_run_record,
-    finish_run_record,
+    create_run_record as create_run_record,
+    finish_run_record as finish_run_record,
 )
 from app.mod03_notice.domain import StatTrace, adjust_stat
 from app.mod03_notice.models import NoticeStatLog, PaymentNotice

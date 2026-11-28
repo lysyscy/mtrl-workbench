@@ -39,7 +39,7 @@ export function matchNoticeCodes(raw: string, rows: NoticeRow[]) {
   const result = { total: tokens.length, ids: [] as number[], invalid: [] as string[], missing: [] as string[], ambiguous: [] as string[], duplicates: [] as string[], paid: [] as string[], blocked: [] as NoticeRow[] };
   for (const token of tokens) {
     const code = token
-      .replace(/^["“'‘(（\[【]+/, '')
+      .replace(/^["“'‘(（[【]+/, '')
       .replace(/["”'’)）\]】]+$/, '')
       .toUpperCase();
     if (!/^FKTZS\d{4}(?:0[1-9]|1[0-2])\d{4}$/.test(code)) result.invalid.push(token);

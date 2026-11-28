@@ -18,9 +18,6 @@ interface Snapshot<D> {
   drafts: Drafts<D>; busy: boolean; uncertain: boolean; verified: boolean; error: string; feedback: string;
 }
 
-// Callers own draft identity and reliable domain reads. This module owns the
-// ordering: snapshot -> acknowledged write -> readback -> retire only the submitted draft.
-// An unknown write stops the queue; dropping a draft never releases that lock.
 export class CellSaveQueue<D extends { error: string }, R> {
   private snapshot: Snapshot<D> = { drafts: {}, busy: false, uncertain: false, verified: false, error: '', feedback: '' };
   private listeners = new Set<() => void>();
@@ -94,9 +91,6 @@ export class CellSaveQueue<D extends { error: string }, R> {
     if (outcome === 'rejected' && adapter.stopOnRejection) this.interrupt(key);
     void this.drain();
   }
-  // Non-cell actions on the same page share the write lock and readback rules.
-  // Result classification lets a domain modal keep a rejected choice, but close
-  // an acknowledged or unknown action without inviting duplicate submission.
   run = async (write: (signal: AbortSignal) => Promise<void>, saved: (result: R) => string, description = ''): Promise<SaveOutcome> => {
     const outcome = await this.perform(write, saved, undefined, undefined, description); void this.drain(); return outcome;
   };
@@ -149,7 +143,6 @@ export class CellSaveQueue<D extends { error: string }, R> {
     this.pendingDraft = undefined;
     this.publish({ uncertain: false, verified: false, error: '', feedback });
   };
-  // An external POST (file generation) may have written even after a lost reply.
   reconcile = async (failurePrefix: string) => {
     const generation = ++this.generation;
     try { await this.options().read(); return this.alive && generation === this.generation; }

@@ -102,7 +102,8 @@ def _archive(session, content, recognized, invoice_id, outcome, reason):
     source = OilInvoiceOriginal(sha256=sha256(content).hexdigest(), invoice_id=invoice_id,
         content=content, byte_size=len(content), outcome=outcome, reason=reason,
         recognized_json=json.dumps(recognized, ensure_ascii=False, sort_keys=True), received_by=current_operator())
-    session.add(source); session.flush()
+    session.add(source)
+    session.flush()
     return ReceivedOriginal(source)
 
 
@@ -196,7 +197,8 @@ def receive_pdf(session, content, recognized, *, submitted_at=None):
         reason = '同票号票面一致，原件已补档，未重复记金额。' if same else '同票号内容不同，原件已保留待核；原已确认金额保持。'
     else:
         invoice = OilInvoice(updated_by=current_operator())
-        session.add(invoice); session.flush()
+        session.add(invoice)
+        session.flush()
         _apply_receipt(session, invoice, recognized)
     return _archive(session, content, recognized, invoice.id, outcome, reason)
 

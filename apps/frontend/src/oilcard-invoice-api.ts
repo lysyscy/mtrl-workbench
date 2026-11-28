@@ -1,3 +1,4 @@
+import * as valibot from 'valibot';
 import { ApiError, body, cents, confirmWrite, record, requestJson } from './api';
 import type { OilAccount } from './oilcard-api';
 
@@ -8,15 +9,41 @@ export interface OilInvoices { invoices: OilInvoice[]; total_amount: string }
 const id = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const amount = (v: unknown): v is string => typeof v === 'string' && /^-?\d+\.\d{2}$/.test(v);
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(v);
-const nullableText = (v: unknown) => v === null || typeof v === 'string';
-export function readOilOriginal(v: unknown): OilInvoiceOriginal {
-  if (!record(v) || !id(v.id) || !id(v.invoice_id) || !id(v.byte_size) || typeof v.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(v.sha256) || !['received', 'duplicate', 'conflict'].includes(String(v.outcome)) || typeof v.reason !== 'string' || !nullableText(v.resolution) || !record(v.recognized) || !['invoice_no', 'invoice_date', 'card_no', 'amount'].every(key => nullableText((v.recognized as Record<string, unknown>)[key]))) throw new ApiError('发票原件回执不完整，请重读核对。');
-  return v as unknown as OilInvoiceOriginal;
+const nullableText = valibot.nullable(valibot.string());
+const positiveId = valibot.custom<number>(id);
+const originalSchema = valibot.looseObject({
+  id: positiveId, invoice_id: positiveId, byte_size: positiveId,
+  sha256: valibot.pipe(valibot.string(), valibot.regex(/^[a-f0-9]{64}$/)),
+  outcome: valibot.picklist(['received', 'duplicate', 'conflict']),
+  reason: valibot.string(), resolution: nullableText,
+  recognized: valibot.looseObject(valibot.entriesFromList(['invoice_no', 'invoice_date', 'card_no', 'amount'], nullableText)),
+});
+const invoiceSchema = valibot.looseObject({
+  id: positiveId, version: valibot.custom<string>(uuid), deleted: valibot.boolean(),
+  invoice_no: nullableText, card_no: nullableText, void_date: nullableText,
+  invoice_date: valibot.nullable(valibot.pipe(valibot.string(), valibot.regex(/^\d{4}-\d{2}-\d{2}$/))),
+  amount: valibot.nullable(valibot.custom<string>(amount)),
+  status: valibot.picklist(['pending', 'registered', 'voided']), kind: valibot.picklist(['normal', 'credit']),
+  related_invoice_id: valibot.nullable(positiveId), change_note: valibot.string(), reason: valibot.string(), remark: valibot.string(),
+  allocations: valibot.array(valibot.looseObject({
+    id: positiveId, project_id: positiveId, account_id: positiveId, card_id: valibot.nullable(positiveId),
+    amount: valibot.custom<string>(amount),
+  })),
+  originals: valibot.array(valibot.unknown()),
+});
+const manualFields = valibot.looseObject({
+  manual_request_id: nullableText, manual_date_text: nullableText, manual_cutoff_ym: nullableText,
+});
+export function readOilOriginal(value: unknown): OilInvoiceOriginal {
+  if (!valibot.is(originalSchema, value)) throw new ApiError('发票原件回执不完整，请重读核对。');
+  return value;
 }
 export function readOilInvoice(v: unknown): OilInvoice {
   if (!record(v) || typeof v.deleted !== 'boolean') throw new ApiError('发票删除状态未能核对，请重读。');
-  if (!record(v) || !id(v.id) || !uuid(v.version) || !nullableText(v.invoice_no) || !nullableText(v.card_no) || !(v.invoice_date === null || typeof v.invoice_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.invoice_date)) || !(v.amount === null || amount(v.amount)) || !['pending', 'registered', 'voided'].includes(String(v.status)) || !['normal', 'credit'].includes(String(v.kind)) || !(v.related_invoice_id === null || id(v.related_invoice_id)) || !nullableText(v.void_date) || typeof v.change_note !== 'string' || typeof v.reason !== 'string' || typeof v.remark !== 'string' || !Array.isArray(v.allocations) || !v.allocations.every(a => record(a) && id(a.id) && id(a.project_id) && id(a.account_id) && (a.card_id === null || id(a.card_id)) && amount(a.amount)) || !Array.isArray(v.originals)) throw new ApiError('发票台账读取不完整，请重读核对。');
-  const originals = v.originals.map(readOilOriginal), row = v as unknown as OilInvoice;
+  if (!valibot.is(invoiceSchema, v)) throw new ApiError('发票台账读取不完整，请重读核对。');
+  const originals = v.originals.map(readOilOriginal);
+  if (!valibot.is(manualFields, v)) throw new ApiError('手工登记的日期或身份未能核对，请重读。');
+  const row = v;
   const manualWithoutTicket = uuid(row.manual_request_id) && row.invoice_no === null && row.kind === 'normal';
   if (row.manual_request_id === null ? row.manual_date_text !== null || row.manual_cutoff_ym !== null :
     !uuid(row.manual_request_id) || typeof row.manual_date_text !== 'string' || !(row.manual_cutoff_ym === null || /^\d{4}-(0[1-9]|1[0-2])$/.test(row.manual_cutoff_ym)) ||

@@ -244,6 +244,31 @@ def test_closeout_rechecks_plan_and_finalizers_and_converges(checkout, tmp_path)
     assert [(item['id'], item['reason']) for item in plan['review']] == [('unknown', 'unknown-ownership')]
     assert handoff.exists() and paths['finished-tree'].exists()
 
+    config['closeout']['preview_registries'] = ['runtime/previews/*.json']
+    put_json(config_path, config)
+    registration = put_json(root / 'runtime/previews/slot.json', {
+        'source_root': str(paths['finished-tree']),
+        'owner_path': str(root / 'runtime/preview-receipt.json'),
+    })
+    with_preview = doc(root, config_path, 'closeout-plan')
+    assert 'finished-tree' not in {item['id'] for item in with_preview['actions']}
+    assert next(item for item in with_preview['blocked'] if item['id'] == 'finished-tree')['finalizers'] == [
+        {'code': 'WORKTREE_PREVIEW_REGISTERED', 'record': str(registration)},
+    ]
+    receipt_path = put_json(root / 'runtime/preview-receipt.json', {'source_root': str(paths['finished-tree'])})
+    put_json(registration, {'owner_path': str(receipt_path)})
+    assert doc(root, config_path, 'closeout-plan') == with_preview
+
+    receipt_path.unlink()
+    unresolved = doc(root, config_path, 'closeout-plan')
+    assert 'finished-tree' not in {item['id'] for item in unresolved['actions']}
+    assert next(item for item in unresolved['blocked'] if item['id'] == 'finished-tree')['finalizers'] == [
+        {'code': 'WORKTREE_PREVIEW_SOURCE_UNCONFIRMED', 'record': str(registration)},
+    ]
+    registration.unlink()
+    del config['closeout']['preview_registries']
+    put_json(config_path, config)
+
     note = run_root / 'temporary-run/notes.txt'
     put(note, 'changed after approval')
     refused = doc(root, config_path, 'closeout-apply', '--plan', str(plan_path), expected=1)

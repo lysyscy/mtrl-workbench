@@ -24,13 +24,9 @@ function readHomeTodos(value: unknown): HomeTodos {
   throw new ApiError('待办数量读取不完整，请重试。');
 }
 
-// The summary uses the same capped notice set and effective payment facts as
-// the destination. Membership under 'notices' also keeps invalidation shared.
 export function HomePage({ blocked, active }: { blocked: boolean; active: boolean }) {
   const query = useQuery({ queryKey: noticeTodosKey, enabled: !blocked && active, queryFn: async ({ signal }) => readHomeTodos(await requestJson('/api/m03/notice-todos', { signal })), refetchOnMount: 'always' });
   const readState = readPhase(query, query.data?.notice_count === 0);
-  // Counts stay unknowable until a read settles: an unfinished or failed first
-  // read leaves the tile's number slot empty instead of claiming zero.
   const counts = query.data;
   const reading = readState === 'idle' || readState === 'reading';
   const total = counts && todos.reduce((sum, todo) => sum + counts[todo.key], 0);

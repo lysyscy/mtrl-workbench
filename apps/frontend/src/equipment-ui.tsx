@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { createContext, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -79,7 +80,7 @@ export function ledgerColumn<T>(
   return valueFilterColumn<T>({
     ...column,
     sortable: true,
-    valueGetter: ({ data }) => data ? value(data) : null,
+    valueGetter: layoutCallback(({ data }) => data ? value(data) : null),
     ...(kind === 'number' ? { valueFormatter: ({ value }) => format(value) } : {}),
   }, { kind, value, ...(kind === 'number' ? { format } : {}) });
 }

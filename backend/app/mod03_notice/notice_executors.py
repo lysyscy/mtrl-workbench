@@ -23,7 +23,6 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app.core.config import PROJECT_ROOT, get_settings
 from app.core.db import session_scope
 from app.core.errors import AppError, MustReportError, human_reason
 from app.core.logging import get_logger

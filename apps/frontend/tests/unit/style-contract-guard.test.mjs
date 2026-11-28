@@ -14,7 +14,7 @@ test('style contract: colors are supplied by theme variables', () => {
   const hits = [];
   for (const file of sheets) {
     for (const [rule, , declarations] of rules(file)) {
-      for (const _ of declarations.matchAll(literals)) hits.push([file, rule.trim()]);
+      hits.push(...Array.from(declarations.matchAll(literals), () => [file, rule.trim()]));
     }
   }
 

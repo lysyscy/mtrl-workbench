@@ -255,7 +255,7 @@ def run_fetch(
         with session_scope() as s:
             R.lock_ignored_rules(s)
             current_rows, current_ignored = split_ignored(s, fetched_rows)
-            if len(current_rows) != len(rows) or any(current is not previous for current, previous in zip(current_rows, rows)):
+            if len(current_rows) != len(rows) or any(current is not previous for current, previous in zip(current_rows, rows, strict=False)):
                 raise MustReportError('集采剔除名单已变化，本次未写入合同；请重新抓取。')
             rows, ignored_rows = current_rows, current_ignored
             try:

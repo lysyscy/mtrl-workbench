@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -32,6 +33,15 @@ type Draft = { kind: ArchiveKind; id: number; field: Field; original: string; va
 type PendingAccount = OilAccount;
 const keyOf = (kind: ArchiveKind, id: number, field: Field) => `${kind}:${id}:${field}`;
 const text = (value: unknown) => value === null || value === undefined ? '' : String(value);
+const fieldValues: Record<Field, (row: OilCard | OilAccount) => string | number | null | undefined> = {
+  card_no: row => 'card_no' in row ? row.card_no : undefined,
+  kind: row => 'kind' in row ? row.kind : undefined,
+  remark: row => row.remark,
+  name: row => 'name' in row ? row.name : undefined,
+  project_id: row => 'project_id' in row ? row.project_id : undefined,
+  card_id: row => 'card_id' in row ? row.card_id : undefined,
+  status: row => row.status,
+};
 const cardLabel = (card: OilCard) => `${card.card_no || `卡号待补 #${card.id}`}${card.status === 'archived' ? '（归档）' : ''}`;
 const fieldLabels: Record<Field, string> = { card_no: '完整卡号更正', kind: '主卡/副卡', remark: '备注', name: '账户名称', project_id: '项目', card_id: '关联卡片', status: '账户状态' };
 interface Cells {
@@ -52,7 +62,7 @@ function ArchiveEditor({ kind, row: rendered, field }: { kind: ArchiveKind; row:
   const row = kind === 'card' ? state.cards.find(item => item.request_id === rendered.request_id) : state.accounts.find(item => item.request_id === rendered.request_id) ?? (state.pending?.request_id === rendered.request_id ? state.pending : null);
   if (!row) return null;
   const key = keyOf(kind, row.id, field), draft = state.drafts[key];
-  const original = text((row as unknown as Record<string, unknown>)[field]), value = draft?.value ?? original;
+  const original = text(fieldValues[field](row)), value = draft?.value ?? original;
   const label = `${field === 'status' && kind === 'card' ? '油卡状态' : fieldLabels[field]}：${'name' in row ? row.name || '新增账户' : cardLabel(row)}`;
   const disabled = state.disabled || row.id === 0 && state.busy;
   const change = (next: string) => state.change(kind, row, field, next);
@@ -123,7 +133,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     read: reload, write: async (draft, signal) => {
       const row = draft.kind === 'card' ? currentData.current?.cards.find(r => r.id === draft.id) : currentData.current?.accounts.find(r => r.id === draft.id);
       if (!row) throw new ApiError('这条档案已不在当前结果内，请重读核对。', 409);
-      const original = text((row as unknown as Record<string, unknown>)[draft.field]);
+      const original = text(fieldValues[draft.field](row));
       if (original !== draft.original) throw new ApiError('这个字段已变化，请重读核对后处理保留输入。', 409);
       const value = ['project_id', 'card_id'].includes(draft.field) ? draft.value ? Number(draft.value) : null : draft.field === 'card_no' ? draft.value.trim() || null : draft.field === 'name' ? draft.value.trim() : draft.value;
       if (draft.kind === 'card') {
@@ -172,7 +182,7 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
       if (['project_id', 'card_id', 'status'].includes(field)) void createAccount(next);
       return;
     }
-    const key = keyOf(kind, row.id, field), original = text((row as unknown as Record<string, unknown>)[field]);
+    const key = keyOf(kind, row.id, field), original = text(fieldValues[field](row));
     saves.update((ds, writing) => {
       const next = { ...ds }, previous = ds[key];
       if (value === original && !writing) delete next[key];
@@ -282,7 +292,6 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
   const state: Cells = { drafts, disabled, busy, projects: projects.data ?? [], cards, accounts: data?.accounts ?? [], pending, change, save, showHistory: row => setHistoryAccount(row.id),
     structuralDisabled, remove, addSecondary: row => void addCard(row), collapsed, visibleParents,
     toggleGroup: id => setCollapsed(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; }) };
-  // 档案读失败时页签条与工具栏仍在，占位只替代内容区，避免未读被当成空档案。
   const readState = readPhase(query);
   const projectsWait = projects.isPending && !projects.data;
   const dependencyPhase = data && (projects.data || projects.isError) ? 'content' : !data && query.isError ? 'error' : 'pending';
@@ -347,10 +356,10 @@ export function OilCardPage({ me, blocked, active }: { me: Identity | null; bloc
     {historyAccount > 0 && tab === 'archives' && <section className="wb-surface oilcard-assignment-history" aria-label="用卡账户关联历史"><div className="oilcard-toolbar"><h2>{data?.accounts.find(a => a.id === historyAccount)?.name}的用卡记录</h2><Button onClick={() => setHistoryAccount(0)}>收起用卡记录</Button></div>
       {assignments.isPending ? <p role="status">正在读取关联历史…</p> : assignments.isError ? <p role="alert" className="notice">{assignments.error.message}<Button disabled={blocked} onClick={() => void assignments.refetch()}>重读关联历史</Button></p> : <BoundedGrid maxHeight="24dvh" minRows={2} table="oilcard-assignments" label="账户关联历史" rows={assignments.data ?? []} rowId={row => String(row.id)} scale={scale} columns={[
         { field: 'changed_at', headerName: '关联时间' },
-        { colId: 'change', headerName: '操作', valueGetter: p => p.data?.change_kind === 'replacement' ? '换卡' : '关联维护' },
-        { colId: 'project', headerName: '项目', valueGetter: p => projects.data?.find(project => project.id === p.data?.project_id)?.disp || `项目 #${p.data?.project_id}` },
-        { colId: 'card', headerName: '卡片', valueGetter: p => { const card = cards.find(c => c.id === p.data?.card_id); return card ? cardLabel(card) : '未关联卡片'; } },
-        { colId: 'previous_card', headerName: '换卡前卡片', valueGetter: p => { if (p.data?.change_kind !== 'replacement') return '—'; const card = cards.find(c => c.id === p.data?.previous_card_id); return card ? cardLabel(card) : '未关联卡片'; } },
+        { colId: 'change', headerName: '操作', valueGetter: layoutCallback(p => p.data?.change_kind === 'replacement' ? '换卡' : '关联维护') },
+        { colId: 'project', headerName: '项目', valueGetter: layoutCallback(p => projects.data?.find(project => project.id === p.data?.project_id)?.disp || `项目 #${p.data?.project_id}`) },
+        { colId: 'card', headerName: '卡片', valueGetter: layoutCallback(p => { const card = cards.find(c => c.id === p.data?.card_id); return card ? cardLabel(card) : '未关联卡片'; }) },
+        { colId: 'previous_card', headerName: '换卡前卡片', valueGetter: layoutCallback(p => { if (p.data?.change_kind !== 'replacement') return '—'; const card = cards.find(c => c.id === p.data?.previous_card_id); return card ? cardLabel(card) : '未关联卡片'; }) },
         { field: 'changed_by', headerName: '操作人' },
       ]} />}</section>}
   </section>;

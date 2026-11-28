@@ -34,7 +34,7 @@ from app.mod01_projects.recovery import (
 )
 from app.mod01_projects import service as P1S
 from app.mod02_i8 import fetch_task, report_export
-from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
+from app.mod02_i8.client import I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record

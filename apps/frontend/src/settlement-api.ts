@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 
 export const kinds = ['焊材', '气体'] as const;
@@ -12,34 +13,48 @@ const numeric = (v: unknown): v is string => typeof v === 'string' && /^-?\d+(?:
 const amount = (v: unknown): v is Amount => v === null || numeric(v);
 const invalid = () => new ApiError('报表读取不完整，请重读。');
 const integer = (v: unknown) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+const numberText = v.custom<string>(numeric);
+const amountSchema = v.nullable(numberText);
+const settlement = v.looseObject({
+  ym: v.string(), balance_ok: v.boolean(),
+  counts: v.objectWithRest(v.entriesFromList(['warehouses', 'rows', 'files'], v.custom<number>(integer)), v.unknown()),
+  rows: v.array(v.looseObject({
+    id: v.pipe(v.string(), v.nonEmpty()), name: v.string(), rows: v.custom<number>(integer),
+    begin: numberText, in: numberText, out: numberText, end: numberText,
+  })),
+});
+const annualGrid = v.looseObject({
+  kind: v.picklist(kinds), year: v.string(), months: v.pipe(v.array(v.string()), v.length(12)),
+  sum_row: v.pipe(v.array(amountSchema), v.length(14)),
+  rows: v.array(v.looseObject({
+    warehouse: v.pipe(v.string(), v.nonEmpty()), prior: amountSchema, balance: amountSchema, total: amountSchema,
+    cells: v.pipe(v.array(amountSchema), v.length(12)),
+  })),
+});
+const extract = v.looseObject({
+  annual: v.objectWithRest(v.entriesFromList(kinds, annualGrid), v.unknown()),
+  balances: v.objectWithRest(v.entriesFromList(kinds, v.record(v.string(), amountSchema)), v.unknown()),
+});
 export function readSettlement(value: unknown, ym: string): Settlement {
-  if (!record(value) || value.ym !== ym || !Array.isArray(value.rows) || !record(value.counts) ||
-      ![value.counts.warehouses,value.counts.rows,value.counts.files].every(integer) || typeof value.balance_ok !== 'boolean') throw invalid();
-  for (const r of value.rows) if (!record(r) || typeof r.id !== 'string' || !r.id || r.name !== r.id || !integer(r.rows) ||
-      !['begin','in','out','end'].every(k => numeric(r[k]))) throw invalid();
-  if (new Set(value.rows.map(r => r.id)).size !== value.rows.length) throw invalid();
-  return value as unknown as Settlement;
+  if (!v.is(settlement, value) || value.ym !== ym || value.rows.some(row => row.name !== row.id) ||
+      new Set(value.rows.map(row => row.id)).size !== value.rows.length) throw invalid();
+  return value;
 }
 export function readExtract(value: unknown, year: string): ExtractData {
-  if (!record(value) || !record(value.annual) || !record(value.balances)) throw invalid();
+  if (!v.is(extract, value)) throw invalid();
   for (const kind of kinds) {
-    const grid = value.annual[kind], balances = value.balances[kind];
-    if (!record(grid) || grid.kind !== kind || grid.year !== year || !Array.isArray(grid.months) || grid.months.length !== 12 ||
-        grid.months.some((m, i) => m !== `${year}-${String(i + 1).padStart(2,'0')}`) || !Array.isArray(grid.rows) ||
-        !Array.isArray(grid.sum_row) || grid.sum_row.length !== 14 || !grid.sum_row.every(amount) ||
-        !record(balances) || !Object.values(balances).every(amount)) throw invalid();
-    for (const row of grid.rows) if (!record(row) || typeof row.warehouse !== 'string' || !row.warehouse ||
-        ![row.prior,row.balance,row.total].every(amount) || !Array.isArray(row.cells) || row.cells.length !== 12 || !row.cells.every(amount)) throw invalid();
-    if (new Set(grid.rows.map(r => r.warehouse)).size !== grid.rows.length) throw invalid();
+    const grid = value.annual[kind];
+    if (grid.kind !== kind || grid.year !== year ||
+        grid.months.some((m, i) => m !== `${year}-${String(i + 1).padStart(2,'0')}`) ||
+        new Set(grid.rows.map(row => row.warehouse)).size !== grid.rows.length) throw invalid();
   }
-  return value as unknown as ExtractData;
+  return value;
 }
 export const getSettlement = async (ym: string, signal?: AbortSignal) => readSettlement(await requestJson(`/api/m07/settlement?${new URLSearchParams({ period: ym })}`, signal ? { signal } : {}), ym);
-// 屏幕只消费 annual + balances；完整出口 /api/m07/extract 保留给导出与既有脚本，读模型见后端 screen 端点。
 export const getExtract = async (year: string, status: string, signal?: AbortSignal) => readExtract(await requestJson(`/api/m07/extract-screen?${new URLSearchParams({ year, status })}`, signal ? { signal } : {}), year);
 export async function saveBalance(kind: ExtractKind, warehouse: string, raw: string, signal: AbortSignal) {
   const value = await requestJson('/api/m07/extract/balance', { method: 'POST', signal, ...body({ kind, warehouse, raw }) });
-  // This existing endpoint returns Decimal values as JSON numbers, and null when cleared.
+  // constraint: The balance write endpoint serializes Decimal as a JSON number and clear as null.
   confirmWrite(record(value) && value.ok === true && (amount(value.value) || typeof value.value === 'number' && Number.isFinite(value.value)), '保存回执未确认，请重读核对，勿重复提交。');
 }
 export function settlementTotal(rows: SettlementRow[], field: 'begin' | 'in' | 'out' | 'end') {

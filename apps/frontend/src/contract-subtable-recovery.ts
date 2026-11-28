@@ -45,7 +45,6 @@ function snapshotKey(accountId: number, contractId: number): string {
   return `m11-subtable:${accountId}:${contractId}`;
 }
 
-// sessionStorage 在调用时读取：不缓存引用，也不在模块顶层探测（导入即副作用）。
 function storage(): Storage | null {
   try {
     const value = globalThis.sessionStorage;
@@ -133,7 +132,7 @@ export function readSubtableSnapshot(accountId: number, contractId: number): Sub
   } catch {
     return null;
   }
-  // 未识别的内容一律不采用，但也不删除：写入方可能属于更新的版本。
+  // 外部约束: 旧客户端不得覆盖新版客户端写入的未知快照。
   if (!isObject(parsed)) return null;
   if (parsed.version !== 1) return null;
   if (parsed.accountId !== accountId || parsed.contractId !== contractId) return null;
@@ -153,7 +152,6 @@ export function writeSubtableSnapshot(snapshot: SubtableSnapshot): boolean {
   if (!isId(snapshot.accountId) || !isId(snapshot.contractId)) return false;
   const store = storage();
   if (!store) return false;
-  // 只落已知字段，避免把调用方意外挂上的内容写进 storage。
   const operations: Record<string, SubtableOperation> = {};
   for (const kind of KINDS) {
     const operation = readOperation(kind, snapshot.operations[kind]);
@@ -186,7 +184,7 @@ export function clearSubtableSnapshot(accountId: number, contractId: number): vo
   try {
     store.removeItem(snapshotKey(accountId, contractId));
   } catch {
-    // 清除失败不影响调用方：快照下次写入会被覆盖。
+    return;
   }
 }
 

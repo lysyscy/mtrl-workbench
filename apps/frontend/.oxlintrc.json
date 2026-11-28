@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": { "correctness": "error" },
+  "jsPlugins": ["./scripts/anti-slop.mjs"],
+  "rules": {
+    "eslint/no-empty": "error",
+    "eslint/no-unused-vars": ["error", { "caughtErrors": "all", "ignoreRestSiblings": true }],
+    "typescript/no-explicit-any": "error",
+    "typescript/ban-ts-comment": ["error", { "ts-ignore": true, "ts-expect-error": true }],
+    "anti-slop/no-double-assertion": "error",
+    "anti-slop/no-empty-catch": "error",
+    "anti-slop/no-lint-exemption": "error"
+  }
+}

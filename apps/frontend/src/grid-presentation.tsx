@@ -18,9 +18,6 @@ export type GridMeasurement<T> = TextGridColumn<T>[] | {
 };
 const details = Symbol('grid-presentation');
 
-// A page supplies business columns and scope; this module owns their rendering,
-// measurement and publication as one lifecycle. Observations support page labels
-// and existing actions without exposing attach/portal/retry ordering to callers.
 export function useGridPresentation<T>({table, columns, context, measurement, scale, rowMinimum, contentWidths, ...layout}: {
   columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: GridMeasurement<T>;
   root: RefObject<HTMLDivElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean;
@@ -29,8 +26,6 @@ export function useGridPresentation<T>({table, columns, context, measurement, sc
   contentWidths?: ColumnWidthData<T>;
 }) {
   const widths = useGridWidths(table, layout.root, scale, layout.active, contentWidths ? { content: contentWidths } : undefined);
-  // The first real result must replace placeholder sizing. Keep the key stable
-  // through ordinary non-empty saves so existing editing widths stay untouched.
   const retained = useRetainedGridColumns(columns, layout.root,`${widths.layoutKey}:${layout.scope}:${layout.rows.length ? 'content' : 'empty'}`);
   const materialized=useMemo(()=>widths.columns(retained),[retained,widths.columns]);
   const widthColumns=useGridWidthColumns(materialized,widths.savedWidths);
@@ -54,12 +49,10 @@ export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClass
   grid: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
   errorClassName?: string;
   scrollClassName?: string;
-  // The ledger measures its existing outer region, including the side heading.
   attachRoot?: boolean;
 }) {
   const {visible} = presentation, {root, definitions, context, geometry, preparation, widths, rows, totals} = presentation[details];
   useFirstReadGrid(preparation.state === 'error' ? 'error' : preparation.state === 'ready' && visible ? 'ready' : 'preparing');
-  // A filtered grid can measure its visible rows while keeping the full input for the filter.
   const {onGridReady, rowData = rows, ...options} = grid;
   const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible || container.inert} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
       data-layout-state={preparation.state} data-layout-error={preparation.error || undefined} aria-busy={preparation.state !== 'ready'}>

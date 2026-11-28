@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import Tooltip from 'antd/es/tooltip';
 import { fullTextWidth } from './grid';
 
-// Measure on demand, rather than observing every text/input in a virtual grid.
 function clipped(root: HTMLElement | null) {
   if (!root) return false;
   const input = root.querySelector<HTMLInputElement | HTMLTextAreaElement>('input,textarea');
@@ -42,7 +41,6 @@ export function TextPreview({text, children}: {text: string; children: ReactNode
     document.addEventListener('pointerdown', dismiss, true);
     return () => document.removeEventListener('pointerdown', dismiss, true);
   }, [preview, tooltipId]);
-  // Mount the popup on demand and keep the native editor in place.
   return <span ref={root} className="grid-text-preview" onPointerEnter={event => { if (event.pointerType !== 'touch') enter(); }}
     onPointerLeave={event => { if (event.pointerType !== 'touch') leave(); }}
     onPointerDown={event => {
@@ -73,8 +71,6 @@ export function EllipsisText({text, fullText = text}: {text: string; fullText?: 
   return <TextPreview text={fullText}><span className="grid-ellipsis">{text}</span></TextPreview>;
 }
 
-// Strict fields include the full result and header/sort affordance in their floor.
-// Flexible text columns use explicit bounds instead; this helper never gives them flex.
 export function completeColumnWidth(values: readonly unknown[], header: string, scale: number, extra = 0) {
   const minWidth = Math.ceil(Math.max(fullTextWidth(values.map(value => String(value ?? '')), scale).minWidth + extra * scale,
     fullTextWidth([header], scale).minWidth + 20 * scale));

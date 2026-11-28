@@ -300,7 +300,8 @@ def create_item(s: Session, *, project_key: str, name: str) -> dict:
     if s.execute(select(FeeItem.id).where(FeeItem.project_id == pj.id, FeeItem.name == name, FeeItem.deleted.is_(False))).scalar_one_or_none() is not None:
         return _flash("err", "费用项名称已存在")
     item = FeeItem(project_id=pj.id, name=name)
-    s.add(item); s.flush()
+    s.add(item)
+    s.flush()
     return {**_flash("ok", "已增加费用项"), "row_id": item.id}
 
 
@@ -329,7 +330,8 @@ def item_action(s: Session, *, project_key: str, item_id: int, action: str, valu
         if not value.strip():
             row = s.execute(select(FeeManualItem).where(FeeManualItem.fee_item_id == item.id, FeeManualItem.ym == ym)).scalar_one_or_none()
             if row is not None:
-                s.delete(row); s.flush()
+                s.delete(row)
+                s.flush()
             return _flash("ok", "月度金额已清空")
         problem = D.amount_problem(value)
         if problem:

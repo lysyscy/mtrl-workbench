@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import App from 'antd/es/app';
 import { readHistory, useHistoryState } from './history';
@@ -98,7 +99,7 @@ function Side({ active, scale, side, scope, actions, grids, writable, busy, add,
   const upto = latest?.month || side.rows.at(-1)?.month || '—';
   const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
-    { field: 'seq', headerName: '序号', ...contentColumn('bounded'), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
+    { field: 'seq', headerName: '序号', ...contentColumn('bounded'), colSpan: layoutCallback(p => p.node?.rowPinned ? 2 : 1), cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
     { field: 'month', headerName: '月份（按单据日期）',
       ...contentColumn<LedgerRow>('bounded', (row, measure, pinned) => {
         if (pinned) return 0;
@@ -154,7 +155,7 @@ function Side({ active, scale, side, scope, actions, grids, writable, busy, add,
 export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
   const client = useQueryClient();
   const { busy: historyBusy, uncertain: historyUncertain } = useHistoryState();
-  const end = ''; // The established ledger follows the data's last month; report month belongs to export only.
+  const end = '';
   const [focusRecord, setFocusRecord] = useState<number | null>(null);
   const [, render] = useState(0); const [controlBusy, setControlBusy] = useState(false);
   const owner = me ? `${me.id}:${me.account}` : 'anonymous';
@@ -259,10 +260,8 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
           const full = await refresh(edit.scope);
           const saved = full.sides.flatMap(side => side.rows).find(row => row.key === before.key);
           if (!saved) throw new ApiError('原记录已不在台账中，请刷新核对。');
-          // Only our acknowledged edit advances later drafts of the same cell.
           if (same(task.field, saved[task.field], task.text)) {
             for (const other of edits.current.values()) if (other.scope.owner === edit.scope.owner && other.scope.project === edit.scope.project && other.base.key === before.key) {
-              // Frozen inputs may still carry a token from before our own acknowledged save.
               for (const values of other.own.values()) values[task.field] = saved[task.field];
               const values = other.own.get(before.token) ?? {}; values[task.field] = saved[task.field]; other.own.set(before.token, values);
               if (task.field === 'month') {
@@ -292,7 +291,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     if (acting.current || current.current.blocked || current.current.historyBusy || current.current.historyUncertain || !current.current.me) return '账号待核实或操作正在进行，请稍后重试。';
     acting.current = true; setControlBusy(true);
     try {
-      await Promise.all([...jobs.current]);
+      await Promise.all(jobs.current);
       if (!mounted.current || current.current.blocked || s.key !== current.current.scope.key) return '账号或查看范围已变化，请重新确认。';
       if (exportProjects && (messages.current.get(s.key)?.reload || [...edits.current.values()].some(edit => edit.scope.owner === s.owner && exportProjects.includes(edit.scope.project) && edit.locked))) return '操作结果待核实，请先重新加载核对。';
       const drafts = exportProjects ? [...edits.current.values()].some(edit => edit.scope.owner === s.owner && exportProjects.includes(edit.scope.project) && Object.keys(edit.drafts).length > 0) : hasDrafts(s);
@@ -330,7 +329,6 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       const edit = state(s, row), previous = edit.drafts[field], own = edit.own.get(row.token);
       edit.drafts[field] = { text, base: previous?.base ?? own?.[field] ?? base, version: ++serial.current,
         queued: false, month: previous?.month ?? own?.month ?? row.month };
-      // The cell already displays its text. Update the guard or the failure controls when either changes.
       if (!previous || previous.error) changed();
     },
     commit: (s, row, field) => commit(state(s, row), field),

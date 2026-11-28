@@ -38,8 +38,12 @@ from openpyxl.utils import get_column_letter
 from app.core.errors import MustReportError
 # ⭐ 再导出：全站引用都是 `tpl_engine.X` ⇒ 拆件对外**零改动**
 from app.report_export.pivot_cache import rebuild_cache_def, rebuild_records, verify_cache
-from app.report_export.sheet_display import (pivot_column_specs, pivot_page_filter,
-                                            render_pivot_sheet, verify_display)
+from app.report_export.sheet_display import (
+    pivot_column_specs as pivot_column_specs,
+    pivot_page_filter as pivot_page_filter,
+    render_pivot_sheet,
+    verify_display,
+)
 from app.report_export.xl_common import NS, fmt_num, norm_num, parse_shared_items
 
 

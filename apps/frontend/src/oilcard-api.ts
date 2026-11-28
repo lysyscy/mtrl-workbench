@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export interface OilCard { id: number; request_id: string; card_no: string | null; kind: 'primary' | 'secondary'; parent_card_id: number | null; status: 'active' | 'archived'; remark: string; version: string }
@@ -10,14 +11,25 @@ export type AccountFields = Omit<OilAccount, 'id' | 'request_id' | 'version'>;
 const id = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 const nullableId = (value: unknown) => value === null || id(value);
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
-function base(value: unknown): value is Record<string, unknown> { return record(value) && id(value.id) && uuid(value.request_id) && uuid(value.version) && typeof value.remark === 'string'; }
+const archiveFields = {
+  id: v.custom<number>(id), request_id: v.custom<string>(uuid), version: v.custom<string>(uuid),
+  remark: v.string(), status: v.picklist(['active', 'archived']),
+};
+const card = v.looseObject({
+  ...archiveFields, card_no: v.nullable(v.string()), kind: v.picklist(['primary', 'secondary']),
+  parent_card_id: v.nullable(archiveFields.id),
+});
+const account = v.looseObject({
+  ...archiveFields, name: v.pipe(v.string(), v.check(name => !!name.trim())),
+  project_id: archiveFields.id, card_id: v.nullable(archiveFields.id),
+});
 export function readOilCard(value: unknown): OilCard {
-  if (!base(value) || !(value.card_no === null || typeof value.card_no === 'string') || !['primary', 'secondary'].includes(String(value.kind)) || !nullableId(value.parent_card_id) || !['active', 'archived'].includes(String(value.status))) throw new ApiError('实体油卡读取不完整，请重读核对。');
-  return value as unknown as OilCard;
+  if (!v.is(card, value)) throw new ApiError('实体油卡读取不完整，请重读核对。');
+  return value;
 }
 export function readOilAccount(value: unknown): OilAccount {
-  if (!base(value) || typeof value.name !== 'string' || !value.name.trim() || !id(value.project_id) || !nullableId(value.card_id) || !['active', 'archived'].includes(String(value.status))) throw new ApiError('用卡账户读取不完整，请重读核对。');
-  return value as unknown as OilAccount;
+  if (!v.is(account, value)) throw new ApiError('用卡账户读取不完整，请重读核对。');
+  return value;
 }
 export function readOilArchives(value: unknown): OilArchives {
   if (!record(value) || !Array.isArray(value.cards) || !Array.isArray(value.accounts)) throw new ApiError('油卡档案读取不完整，请重读核对。');

@@ -27,7 +27,6 @@ from app.mod05_flow.domain import (
     CATEGORY_JC,
     CATEGORY_MATERIAL,
     CATEGORY_MECH,
-    PAY_STATUS_PAID,
     PAY_STATUS_UNPAID,
     effective_total,
     payment_status,

@@ -73,7 +73,6 @@ function noticeTotalSamples(rows: NoticeRow[]) {
       if (value < 0n) negative += value;
       else positive += value;
     }
-    // Any search subset total stays between these two sums.
     lower[key] = decimal(negative);
     upper[key] = decimal(positive);
   }
@@ -213,9 +212,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       setPasteScope(null);
     }
   }, [noticeId, linkedNotice, query.isFetching, query.isSuccess, todo]);
-  // Home todo tiles land here with ?todo=: conflicting old filters are reset so the
-  // landed scope matches the tile count exactly (jc via plain filters, the other two
-  // via the removable pending chip).
   useEffect(() => { if (!active) return; const kind = params.get('todo'); if (kind === 'jc') { setFilters({ ...defaults(), category: 'jc', link: 'no' }); setSearch(''); setPasteScope(null); } else if (kind === 'ownership' || kind === 'void') { setFilters({ ...defaults(), period: '全部', paid: '', pending: kind }); setSearch(''); setPasteScope(null); } }, [params.get('todo'), active]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { if (query.data) setPayOverrides(old => { const entries=Object.entries(old).filter(([id,draft]) => query.data.some(row => row.notice_id===Number(id) && draft.basis===`${row.amount_approved}:${row.amount_paid}`));return entries.length===Object.keys(old).length ? old : Object.fromEntries(entries); }); }, [query.data]);
@@ -241,7 +237,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const sourceScope = useMemo(() => scopeRows(sourceRows), [sourceRows, scopeRows]);
   useEffect(() => {
     if (!pageRoot.current?.ownerDocument.fonts) return;
-    // Fixed single-line columns skip height measurement. Load their glyphs before scrolling mounts a new row.
     const text = sourceScope.map(row => noticeTextFields.map(field => row[field]).join('')).join('');
     void loadTextFonts(text, [400]);
   }, [sourceScope]);
@@ -255,7 +250,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     ...moneyKeys.map(key => row[key]),
   ].some(value => searchKey(value).includes(needle))), [scope]);
   const shown = useMemo(() => find(needle), [find, needle]);
-  // Business scope changes trim selection; searching and virtual windows never do.
   function trimPicked(validRows: NoticeRow[]) {
     const valid = new Set(validRows.filter(selectable).map(r => r.notice_id));
     setPicked(old => {
@@ -272,7 +266,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const selectedAmounts = useMemo(() => ({ approved: money(total(selectedPay, 'amount_approved')), due: money(total(selectedPay, 'pay_amount')) }), [selectedPay]);
   const publishedNotices = useMemo(() => new Map(query.data?.map(row => [row.notice_id, row])), [query.data]);
   const scale = Number(me?.ui_scale_css) || 1;
-  // Use the published scope for sizing while search and session drafts change the visible rows.
   const widthTotals = useMemo(() => sourceScope.length ? noticeTotalSamples(sourceScope) : [], [sourceScope]);
   const summary = useMemo(() => noticeSummary(shown), [shown]);
   const cellSaves = useNoticeCellSaves({ rows: query.data, enabled: active && !blocked && Boolean(me),
@@ -400,8 +393,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   useEffect(() => {
     const grid = api.current, root = gridRoot.current;
     if (!active || !grid || !root) { refreshed.current = null; return; }
-    // The header observes selection directly. Checking a row only changes its
-    // checkbox, so keep the other cells and their editors mounted.
     const refresh = () => {
       if (grid.isDestroyed()) return;
       const prior = refreshed.current;
@@ -415,15 +406,11 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     };
     const editor = root.contains(document.activeElement) && document.activeElement?.matches('input:not([type="checkbox"]),select,textarea') ? document.activeElement : null;
     if (!editor) { refresh(); return; }
-    // The current action guard remains authoritative while this renderer retains
-    // its local input. Rebuilding any part of its row can replace the editor.
     let frame = 0;
     const released = () => { frame = requestAnimationFrame(refresh); };
     editor.addEventListener('blur', released, {once: true});
     return () => { cancelAnimationFrame(frame); editor.removeEventListener('blur', released); };
   }, [active, picked, rows, unavailable, draft]);
-  // Amount blur updates the data and measured widths during the following click.
-  // Keep both checkbox component types stable while the other columns resize.
   const selectionColumn = useMemo<ColDef<NoticeRow>>(() => ({
     colId: 'pick', headerName: '', pinned: 'left', ...fixedWidth(36, scale), sortable: false,
     headerComponent: NoticeSelectionHeader,
@@ -483,7 +470,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="button" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="button" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="button" danger disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
     if (column.colId === 'pick') return column;
-    // Published text columns already have measured widths. Only a draft needs an editor.
     if (!draft && !column.cellRenderer) return { ...column, suppressAutoSize: true };
     const original = column.cellRenderer;
     const mapping: Record<string,keyof Draft> = { doc_date:'doc_date',bill_no:'bill_no',project_display:'ownership_id',category_label:'category',bill_name:'bill_name',biz_type:'biz_type',payee:'payee',amount_approved:'amount_approved',stat_settle:'stat_settle',stat_paid:'stat_paid',approve_status:'approve_status' };
@@ -505,7 +491,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     scope: JSON.stringify([filters,shown === scope ? '' : needle,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
   useLayoutEffect(() => {
     if (!searchBusy || !presentation.visible) return;
-    // Block the old result's editors and actions while keeping column resizing available.
     const rows = gridRoot.current?.querySelector<HTMLElement>('.ag-grid-scrolling-rows');
     if (!rows) return;
     rows.inert = true;

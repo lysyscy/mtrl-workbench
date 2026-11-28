@@ -21,7 +21,6 @@ from __future__ import annotations
 import io
 import zipfile
 from datetime import datetime
-from pathlib import Path
 from typing import Callable
 from urllib.parse import quote
 
@@ -70,11 +69,11 @@ from app.mod03_notice.settings_store import apply_printer_setting, configured_pr
 #    但落点表（`tools/chain_expected.txt`）与测试都从**本模块**取
 #    （`test_acc_pay_print.py` / `test_acc_pay_pdf.py` / `test_unresolved_freshness.py`）
 #    ⇒ ⛔ **别删这几行**。（`inspect.getsource()` 取的是函数**自己的源文件** ⇒ 再导出不影响那条断言。）
-from app.mod03_notice.notice_executors import (  # noqa: F401
+from app.mod03_notice.notice_executors import (
     apply_fetched_row,
     get_batch_executor,
     get_fetch_executor,
-    get_notice_lister,
+    get_notice_lister as get_notice_lister,
 )
 
 logger = get_logger()

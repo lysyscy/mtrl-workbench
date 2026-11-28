@@ -126,7 +126,6 @@ export class ContractSubtableWorkspace {
     for (const key of kind ? [kind] : kinds) entry.drafts[key] = emptyDraft(key, entry.historyDate);
     if (!kind || entry.deleting?.kind === kind) entry.deleting = null;
     if (!kind) entry.focus = null;
-    // Persist before the view unmounts. Pending identities deliberately survive.
     this.publish(id, entry);
   };
   selectDeletion = (id: number, target: Deletion | null) => {
@@ -179,7 +178,7 @@ export class ContractSubtableWorkspace {
       date: deleting ? '' : draft.date.trim(), amount: deleting ? '' : draft.amount.trim(), rowId: deleting ? entry.deleting!.id : null, at: Date.now() };
     const epoch = this.epoch;
     entry.busy = true; entry.error = ''; entry.feedback = ''; entry.pending[kind] = operation; entry.unresolved[kind] = 'checking';
-    this.publish(id, entry); // Synchronous persistence always precedes the POST.
+    this.publish(id, entry);
     try {
       const focus = await this.options.write(id, operation);
       if (!this.valid(epoch)) return;

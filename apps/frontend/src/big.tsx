@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import App from 'antd/es/app';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
@@ -21,7 +22,9 @@ import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from '
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import type { ReadLike } from './read-region';
-const bigRowId = (row: BigRow) => row.warehouse;
+type BigSummaryRow = { warehouse: '__total'; display: string; totals: BigData['totals']; seq?: never };
+type BigGridRow = BigRow | BigSummaryRow;
+const bigRowId = (row: BigGridRow) => row.warehouse;
 const emptyBig: BigRow[] = [];
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
@@ -35,9 +38,9 @@ interface Cells {
   save: (key: string,retry?: boolean) => void; cancel: (key: string) => void;
 }
 const BigCells = createContext<Cells | null>(null);
-function ManualInput({data,node,colDef}: ICellRendererParams<BigRow>) {
+function ManualInput({data,node,colDef}: ICellRendererParams<BigGridRow>) {
   const cells = useContext(BigCells)!;
-  if (!data || node.rowPinned) return null;
+  if (!data || 'totals' in data || node.rowPinned) return null;
   const field = colDef!.colId as ManualKey, key = keyOf(data.warehouse,field), draft = cells.drafts[key], cell = data.manual[field];
   return <div className={`big-manual${draft?.error ? ' has-error' : ''}`}>
     <Input aria-label={`${data.display}，${labels[field]}`} value={draft?.value ?? cell.value ?? ''} disabled={cells.disabled}
@@ -82,9 +85,6 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isPending || query.isError;
   const controlsDisabled = disabled || busy || dirty || query.isFetching;
-  // The month report is one read region: visible failures are published under the
-  // toolbar, and the table box keeps its area while nothing is known yet. A failure never
-  // replaces a result that is already on screen.
   const readState = readPhase(query);
   const placeheld = query.data === undefined;
   async function reload() {
@@ -102,10 +102,10 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
   }
   const reconcileExport=()=>saves.reconcile('导出结果待核实，请重读核对本月名单。');
   const scale=Number(me?.ui_scale_css ?? 1);
-  const columns=useMemo<(ColDef<BigRow>|ColGroupDef<BigRow>)[]>(() => {
-    function value(key: AutoKey|DerivedKey|ManualKey,p: {data:BigRow|undefined;node?:{rowPinned?:string|null|undefined}|null}) {
-      if(p.node?.rowPinned) return (p.data as unknown as {totals:BigData['totals']})?.totals[key as TotalKey] ?? null;
-      if(!p.data) return null;
+  const columns=useMemo<(ColDef<BigGridRow>|ColGroupDef<BigGridRow>)[]>(() => {
+    function value(key: AutoKey|DerivedKey|ManualKey,p: {data:BigGridRow|undefined}) {
+      if (!p.data) return null;
+      if ('totals' in p.data) return p.data.totals[key as TotalKey] ?? null;
       return key in p.data.auto ? p.data.auto[key as AutoKey] : key in p.data.derived ? p.data.derived[key as DerivedKey] : p.data.manual[key as ManualKey].value;
     }
     const context = document.createElement('canvas').getContext('2d');
@@ -127,17 +127,16 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
           texts.push(`${amount == null ? '' : money(String(amount))} ${oilPendingLabel}`);
         }
       }
-      // The shared density uses 4px on each side, plus the cell borders.
       const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?11:10;
       const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 14 : edge))));
       return contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1);
     };
-    const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
-    const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
-    const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
+    const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigGridRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:layoutCallback(p=>value(key,p)),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
+    const manual=(key:ManualKey):ColDef<BigGridRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:layoutCallback(p=>value(key,p)),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
+    const boundary = (column: ColDef<BigGridRow>): ColDef<BigGridRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
     return [
       {headerName:'项目',marryChildren:true,children:[
-        {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(40,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 12)),scale)},
+        {field:'seq',headerName:'序号',pinned:'left',valueGetter:layoutCallback(p=>p.node?.rowPinned?'':p.data?.seq),...fixedWidth(Math.max(40,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 12)),scale)},
         {field:'display',headerName:'项目名称',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(46,180,scale,1)},
         {...manual('open_ym'),pinned:'left'},
       ]},
@@ -145,11 +144,11 @@ function BigMonth({ym,me,blocked,active,projects,projectsRead}: Props & {ym:stri
       {headerName:'机械使用与测算',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('rent_cum','外租机械开工累计','有效零租含税＋包月含税，开工累计')),number('rent_mon','外租机械当月'),number('lease_cum','设备租赁开工累计','有效内租设备，开工累计'),number('lease_mon','设备租赁当月'),number('total_cum','合计','外租机械开工累计＋设备租赁开工累计'),manual('mech_est'),number('use_rate','使用率','合计÷机械费测算；零分母留空')]},
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
       boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),
-      boundary({colId:'oil',headerName:labels.oil,headerTooltip:'油卡累计充值＋累计特殊费用自定义额＋截至月大表额外值；在油卡管理维护',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value('oil',p),...amountWidth('oil'),
-        cellRenderer:(p:ICellRendererParams<BigRow>)=>p.node.rowPinned ? p.value==null?'':money(String(p.value)) : p.data?.oil_linked ? money(String(p.value)) : <span title="旧用油完整总额，待接续核对；请在油卡管理查看">{p.value==null?'':money(String(p.value))}<span className="muted"> {oilPendingLabel}</span></span>}),boundary(manual('note')),
+      boundary({colId:'oil',headerName:labels.oil,headerTooltip:'油卡累计充值＋累计特殊费用自定义额＋截至月大表额外值；在油卡管理维护',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:layoutCallback(p=>value('oil',p)),...amountWidth('oil'),
+        cellRenderer:(p:ICellRendererParams<BigGridRow>)=>p.node.rowPinned ? p.value==null?'':money(String(p.value)) : p.data && 'oil_linked' in p.data && p.data.oil_linked ? money(String(p.value)) : <span title="旧用油完整总额，待接续核对；请在油卡管理查看">{p.value==null?'':money(String(p.value))}<span className="muted"> {oilPendingLabel}</span></span>}),boundary(manual('note')),
     ];
   },[scale,query.data]);
-  const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
+  const total=useMemo<BigSummaryRow[]>(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals}] : [],[query.data]);
   const presentation = useGridPresentation({table: 'monthly-big', root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
   return <>
     <div data-page-chrome className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : readState === 'error' ? '项目数尚未读取' : readState === 'reading' ? '正在读取项目数…' : '尚未读取项目数'}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">

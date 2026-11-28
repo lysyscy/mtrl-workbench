@@ -15,14 +15,13 @@ from app.core.errors import MustReportError
 from app.core.identity import current_operator
 from app.mod06_proc import domain as D
 from app.mod06_proc import mech_ui, repository as repo
-from app.mod06_proc.service import build_page_data, parse_state
 # ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
 #    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
 from app.core.query import flatten_query
 
-router = APIRouter(tags=["mod06"])
-
 from app.mod06_proc.workbench_api import router as mechanical_router
+
+router = APIRouter(tags=["mod06"])
 
 router.include_router(mechanical_router)
 

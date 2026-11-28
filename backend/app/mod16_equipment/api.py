@@ -82,8 +82,11 @@ def save_local(fn, request, field):
     return result
 
 
+PreviewQuery = Query()
+
+
 @router.get("/equipment/preview")
-def preview_get(request: S.Preview = Query()):
+def preview_get(request: S.Preview = PreviewQuery):
     return {"codes": call(service.codes, request)}
 
 

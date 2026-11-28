@@ -17,7 +17,7 @@ import json
 
 from app.core.config import I8_PATH_REPORT_EXPORT, I8_REPORTS
 from app.core.errors import ExternalServiceError, MustReportError
-from app.core.period import MODE_MONTH, month_of
+from app.core.period import month_of
 
 EXPORT_TYPE = "excel"
 SHEET_KEY = "0"

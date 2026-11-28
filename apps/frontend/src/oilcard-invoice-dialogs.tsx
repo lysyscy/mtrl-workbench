@@ -16,6 +16,11 @@ import type { OilInvoice, OilInvoiceOriginal, OilManualInvoiceFields } from './o
 export type InvoiceAction = 'edit' | 'resolve' | 'delete';
 type Part = { key: string; project_id: number; account_id: number; amount: string };
 export const invoiceAmountText = (value: string) => value.replace(/[¥￥,，\s]/g, '');
+function draftCents(value: string): bigint | null {
+  try { return cents(invoiceAmountText(value)); }
+  catch { return null; }
+}
+
 type DialogAction = {
   row: OilInvoice; mode: InvoiceAction; source: OilInvoiceOriginal | null;
   submit: (fields: Record<string, unknown>) => Promise<void>;
@@ -50,15 +55,14 @@ export function OilInvoiceDialog(props: DialogAction & {
       return { ...p, [field]: field === 'account_id' ? Number(value) : value };
     })));
   }
-  let allocated = '', invoiceTotal = '', remaining: bigint | null = null;
-  try { invoiceTotal = decimal(cents(invoiceAmountText(amount))); } catch { /* An incomplete draft is not zero. */ }
-  try {
-    allocated = parts.length === 1 ? invoiceTotal : decimal(parts.reduce((n, p) => n + cents(invoiceAmountText(p.amount)), 0n));
-    if (invoiceTotal && allocated) {
-      const target = cents(invoiceTotal);
-      remaining = (target < 0n ? -1n : 1n) * (target - cents(allocated));
-    }
-  } catch { /* Keep the invoice target visible while allocations are incomplete. */ }
+  const target = draftCents(amount);
+  const partAmounts = parts.map(part => draftCents(part.amount));
+  const allocatedCents = parts.length === 1 ? target
+    : partAmounts.every(value => value !== null) ? partAmounts.reduce((sum, value) => sum + value, 0n) : null;
+  const invoiceTotal = target === null ? '' : decimal(target);
+  const allocated = allocatedCents === null ? '' : decimal(allocatedCents);
+  const remaining = target === null || allocatedCents === null ? null
+    : (target < 0n ? -1n : 1n) * (target - allocatedCents);
   async function save(factsOnly = false) {
     if (disabled || busy) return;
     const allocations = factsOnly ? [] : parts.map(part => ({ project_id: part.project_id, account_id: part.account_id, amount: invoiceAmountText(parts.length === 1 ? amount : part.amount) }));

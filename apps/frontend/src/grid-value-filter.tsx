@@ -51,7 +51,6 @@ function ValueFilter<T>({ model, onModelChange, api, column, valueFilter: option
   </div>;
 }
 
-// Compose native column definitions; AG owns the per-grid model, popup and row filtering.
 export function valueFilterColumn<T>(column: ColDef<T>, options: ValueFilterOptions<T>): ColDef<T> {
   return { ...column, cellDataType: false, sortable: column.sortable ?? true, suppressHeaderFilterButton: false,
     comparator: column.comparator ?? ((_a, _b, a, b) => compareFilterValues(a.data ? options.value(a.data) : null, b.data ? options.value(b.data) : null, options.kind)),

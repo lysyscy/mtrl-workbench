@@ -23,6 +23,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from pathlib import Path
 from decimal import Decimal
 from io import BytesIO
@@ -105,8 +107,8 @@ def save_workbook(wb, out: str | Path) -> Path:
     p.write_bytes(workbook_bytes(wb))
     try:
         wb.close()
-    except Exception:                        # noqa: BLE001 —— close 失败不影响"文件已经写出来了"
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).warning('已写文件，但工作簿关闭失败：%s', type(exc).__name__)
     return p.resolve()
 
 

@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { Link } from 'react-router';
 import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
@@ -24,7 +25,25 @@ export interface Candidate {
   supplier_uninvoiced: string; trade_uninvoiced: string | null; invoices: Invoice[];
   recommendation: { reasons: Reason[]; invoice_side: string; combination_limited: boolean };
 }
-interface Candidates { current_contract_id: number | null; notice_amount: string; supplier: string; read_only: boolean; rows: Candidate[] }
+const textSchema = v.string();
+const nullableText = v.nullable(textSchema);
+const candidateResponse = v.looseObject({
+  current_contract_id: v.nullable(v.number()), notice_amount: textSchema, supplier: textSchema, read_only: v.boolean(),
+  rows: v.array(v.looseObject({
+    id: v.number(),
+    ...v.entriesFromList(['contract_no', 'date', 'supplier', 'material', 'contract_amt', 'inv_sum',
+      'trade_inv_sum', 'pay_sum', 'debt', 'supplier_uninvoiced'], textSchema),
+    ...v.entriesFromList(['trade_co', 'trade_contract_amt', 'trade_uninvoiced'], nullableText),
+    invoices: v.array(v.looseObject({ id: v.number(), kind: textSchema, date: textSchema, amount: textSchema })),
+    recommendation: v.looseObject({
+      reasons: v.array(v.looseObject({
+        kind: textSchema, text: textSchema, amounts: v.exactOptional(v.array(textSchema)), prior_amount: v.exactOptional(textSchema),
+        invoice_total: v.exactOptional(textSchema), notice_codes: v.exactOptional(v.array(textSchema)),
+      })),
+      invoice_side: textSchema, combination_limited: v.boolean(),
+    }),
+  })),
+});
 interface Props { row: NoticeRow; blocked: boolean; close: () => void; refresh: () => Promise<NoticeRow[]>; announce: (message: string) => void }
 const contractName = (candidate: Candidate) => candidate.material.trim() || '材料名称未填';
 const hasTradeSide = (candidate: Candidate) => Boolean(candidate.trade_co || candidate.invoices.some(invoice => invoice.kind === 'trade'));
@@ -60,8 +79,8 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
   const [busy,setBusy] = useState(false), [saved,setSaved] = useState(false), [error,setError] = useState('');
   const query = useQuery({ queryKey: ['notice-maintenance','link',row.notice_id,row.bill_no,'all-suppliers'], enabled: !blocked, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: false, retry: false, queryFn: async ({signal}) => {
     const value = await requestJson(`/api/m11/link-recommendations?notice_id=${row.notice_id}&supplier=`,{signal});
-    if (!record(value) || !Array.isArray(value.rows) || !value.rows.every(candidate => record(candidate) && typeof candidate.material === 'string' && Array.isArray(candidate.invoices) && record(candidate.recommendation)) || typeof value.notice_amount !== 'string') throw new ApiError('合同候选读取不完整，请重读。');
-    return value as unknown as Candidates;
+    if (!v.is(candidateResponse, value)) throw new ApiError('合同候选读取不完整，请重读。');
+    return value;
   } });
   const matches = useQuery({ queryKey: ['notice-maintenance','sup-match',row.notice_id,row.bill_no], enabled: !blocked && !row.is_revoked && !row.is_excluded && row.category === 'jc', refetchOnWindowFocus: false, retry: false, queryFn: async ({signal}) => {
     const value = await requestJson('/api/m03/actions/sup-match',{method:'POST',signal,...body({notice_id:row.notice_id})});

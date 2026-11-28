@@ -7,7 +7,6 @@ type GridPreparation = 'preparing' | 'ready' | 'error';
 type FirstReadRegistration = { register: (id: symbol) => () => void; update: (id: symbol, state: GridPreparation) => void };
 const FirstReadContext = createContext<FirstReadRegistration | null>(null);
 
-// The two grid adapters participate without exposing their count or DOM to pages.
 export function useFirstReadGrid(state: GridPreparation) {
   const region = useContext(FirstReadContext), active = useContext(PageActivity), id = useRef(Symbol('first-read-grid'));
   useLayoutEffect(() => active ? region?.register(id.current) : undefined, [region, active]);
@@ -28,7 +27,6 @@ export function FirstReadRegion({ phase, children, placeholder, canPublish = tru
     register(id) { grids.current.set(id, 'preparing'); setRevision(n => n + 1); return () => { if (grids.current.delete(id)) setRevision(n => n + 1); }; },
     update(id, state) { if (grids.current.has(id) && grids.current.get(id) !== state) { grids.current.set(id, state); setRevision(n => n + 1); } },
   }), []);
-  // Once a successor has been released, a retry must not hide it again.
   const settled = notified.current === true || published || (phase === 'error' && canPublish);
   useLayoutEffect(() => {
     if (!published && active && phase === 'content' && canPublish && [...grids.current.values()].every(value => value !== 'preparing')) setPublished(true);

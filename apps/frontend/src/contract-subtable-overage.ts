@@ -56,7 +56,6 @@ export function subtableOverage(input: {
   contractAmount: string | null | undefined;
   pendingAmount?: string | null;
 }): SubtableOverage {
-  // side 只影响调用方文案，数值判定两侧共用同一套 cents 规则。
   const savedCents = cents(input.savedTotal);
   const saved = decimal(savedCents);
   const contractCents = contractCentsOf(input.contractAmount);
@@ -77,7 +76,6 @@ export function subtableOverage(input: {
     };
   }
 
-  // 0.1% 精度即 1/1000：ratioTenths = round(saved * 1000 / contract)，全程整数。
   const ratioTenths = roundHalfUp(savedCents * 1000n, contractCents);
   const ratioAbs = ratioTenths < 0n ? -ratioTenths : ratioTenths;
   const excess = (total: bigint) => {

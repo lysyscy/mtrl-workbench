@@ -13,8 +13,6 @@ type DragOptions<T> = {
 type Drag<T> = { source: T; id: number; previous: number[]; order: number[] };
 const sameOrder = (a: number[], b: number[]) => a.length === b.length && a.every((id, index) => id === b[index]);
 
-// The grid supplies pointer and row animation. Callers supply complete sibling
-// orders, which can include rows hidden by a filter or collapsed into a group.
 export function useGridRowDrag<T>({ disabled, sourceId, targetId, orderFor, save }: DragOptions<T>) {
   const reduced = useWorkspaceReducedMotion();
   const current = useRef<Drag<T> | null>(null), saving = useRef(false);

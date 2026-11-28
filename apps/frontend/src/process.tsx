@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
@@ -20,7 +21,9 @@ import type { Confirmation, Difference, ProcessData, ProcessRow } from './proces
 import { ProcessExport } from './process-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
-const differenceRowId = (row: Difference) => String(row.id);
+type DifferenceSummary = Pick<Difference, 'id' | 'doc_no' | 'before' | 'after' | 'delta'>;
+type DifferenceGridRow = Difference | DifferenceSummary;
+const differenceRowId = (row: DifferenceGridRow) => String(row.id);
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; expected:string|null; revision:number; error:string }
 const acknowledgeDraft=(current:Draft,submitted:Draft)=>current.revision===submitted.revision?undefined:{...current,expected:submitted.value.trim()?submitted.value:null};
@@ -57,7 +60,6 @@ const AmountInput = memo(function AmountInput({cellKey,ym,column,label,amount,dr
   const raw=draft?.value??amount;
   let display=raw;
   if(!focused&&String(raw).trim())display=displayAmount(raw);
-  // Native input records an explicit 0 even when it replaces the same displayed default.
   return <div className={`process-cell${draft?' process-dirty':''}`}><Input className="record-value" htmlSize={1} aria-label={`${ym} ${label}`} value={display} disabled={disabled}
     status={draft?.error?'error':''} title={draft?.error||undefined}
     onFocus={()=>setFocused(true)} onInput={e=>actions.current.change(ym,column,e.currentTarget.value)} onBlur={()=>{setFocused(false);actions.current.save(cellKey);}}
@@ -131,7 +133,10 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
           const signature=query.data?.signatures[draft.warehouse]?.[draft.ym];if(!signature)return;
           setSource({draft:{...draft,expected},signature,details:query.data?.detailSignatures[draft.warehouse]?.[draft.ym]??''});return;
         }
-      } catch { /* Queue validation reports the invalid amount beside its draft. */ }
+      } catch {
+        saves.save(key,retry);
+        return;
+      }
     }
     saves.save(key,retry);
   }
@@ -145,7 +150,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
       const expected=query.data?.matrices[submitted.warehouse]?.[kind].find(row=>row.ym===submitted.ym)?.[submitted.column]??null;
       const hasRecord=!mechKeys.includes(submitted.column)||Boolean(query.data?.effectiveValues[submitted.warehouse]?.[submitted.ym]);
       let matches=false;
-      try{matches=hasRecord&&(submitted.value.trim()?cents(submitted.value):null)===(expected===null?null:cents(expected));}catch{/* An unverified submission remains a draft. */}
+      try{matches=hasRecord&&(submitted.value.trim()?cents(submitted.value):null)===(expected===null?null:cents(expected));}catch{return current;}
       if(!matches)return current;
       const next={...current},retained=acknowledgeDraft(draft,submitted);
       if(retained)next[key]=retained;else delete next[key];
@@ -169,9 +174,9 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     const added=(extraMonths[warehouse]??[]).filter(ym=>!rows.some(row=>row.ym===ym)).map(ym=>({...Object.fromEntries(dataKeys.map(key=>[key,null])),ym,materialEditable:'yes'}) as ProcessRow);
     return [...rows,...added].sort((a,b)=>a.ym.localeCompare(b.ym));
   },[matrix,kind,extraMonths,warehouse]);
-  const diffs=useMemo<ColDef<Difference>[]>(()=>[
-    ...(['doc_no','seq','material','warehouse','before','after','delta','changes','remark','operator','at'] as const).map((field,i):ColDef<Difference>=>({field,headerName:['单据编号','序号','物料','仓库','原值（i8）','调整后','差额','调整内容','备注','操作人','时间'][i]!,...(field==='doc_no'?{pinned:'left' as const}:{}),...contentWidth(field==='seq'?52:['before','after','delta'].includes(field)?130:field==='operator'?96:['material','warehouse','at'].includes(field)?128:140,field==='seq'?80:260,scale,field==='remark'?1:0),wrapText:true,autoHeight:true,...(['before','after','delta'].includes(field)?{cellClass:'money',valueFormatter:(p:{value:unknown})=>show(p.value)}:{})})),
-    {colId:'locate',headerName:'操作',pinned:'right',...contentWidth(100,130,scale),cellRenderer:(p:ICellRendererParams<Difference>)=>p.data&&!p.node.rowPinned&&<Link className="row-button" to={`/inventory?row=${p.data.id}`}>定位原行</Link>},
+  const diffs=useMemo<ColDef<DifferenceGridRow>[]>(()=>[
+    ...(['doc_no','seq','material','warehouse','before','after','delta','changes','remark','operator','at'] as const).map((field,i):ColDef<DifferenceGridRow>=>({field,headerName:['单据编号','序号','物料','仓库','原值（i8）','调整后','差额','调整内容','备注','操作人','时间'][i]!,...(field==='doc_no'?{pinned:'left' as const}:{}),...contentWidth(field==='seq'?52:['before','after','delta'].includes(field)?130:field==='operator'?96:['material','warehouse','at'].includes(field)?128:140,field==='seq'?80:260,scale,field==='remark'?1:0),wrapText:true,autoHeight:true,...(['before','after','delta'].includes(field)?{cellClass:'money',valueFormatter:(p:{value:unknown})=>show(p.value)}:{})})),
+    {colId:'locate',headerName:'操作',pinned:'right',...contentWidth(100,130,scale),cellRenderer:(p:ICellRendererParams<DifferenceGridRow>)=>p.data&&!p.node.rowPinned&&<Link className="row-button" to={`/inventory?row=${p.data.id}`}>定位原行</Link>},
   ],[scale]);
   const dirty=Object.keys(drafts).length>0,reason=uncertain?'先重读核对保存结果':busy?'正在保存':dirty?'先处理未保存输入':query.isError||projects.isError?'先重读资料':query.isFetching?'正在重读':'';
   const currentDrafts=Object.entries(drafts).filter(([,d])=>d.warehouse===warehouse);
@@ -179,12 +184,10 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   function cancel(key:string) {
     saves.update(current=>{const next={...current};delete next[key];return next;});
   }
-  // Unchanged inputs keep their render while events use the latest committed draft and source.
   const actions=useRef<CellActions>({change,save,cancel});
   useLayoutEffect(()=>{actions.current={change,save,cancel};});
   const readState=readPhase(query,(query.data?.projects.length??0)===0);
   const settled=readState==='ready'||readState==='empty';
-  // A settled read without a matrix is a real result (no data, or no project picked yet), never a running read.
   const regionNote=!matrix&&settled?(readState==='empty'||Boolean(warehouse)?'暂无有数据的项目。':'请选择项目查看资料。'):'';
   const regionBody=regionNote?<p className="process-read-note">{regionNote}</p>:<ReadPlaceholder rows={6} quiet={readState==='error'} />;
   const pageLayout = tab === 2 ? 'flow' : 'fill';
@@ -236,9 +239,7 @@ const MatrixGrid=memo(function MatrixGrid({matrix,rows,kind,warehouse,scale,sour
     const messages=new Map<string,string>(JSON.parse(errors));
     return {signature:(row:MatrixRow,column:string,pinned:boolean)=>{
       if (pinned) return JSON.stringify(row);
-      // Read-only amounts use the column's nowrap money renderer, even after a width drag.
       if (!column.startsWith('mech_') && row.materialEditable!=='yes') return row[column]==null?'empty':'amount';
-      // Every amount input occupies one fixed-height line. Only its error or source label can add lines.
       return JSON.stringify(['input',messages.get(keyOf(warehouse,row.ym,column))??'',sources?.[row.ym]?.[column]?.mode==='detail']);
     }};
   },[errors,warehouse,sources]);
@@ -248,16 +249,16 @@ const MatrixGrid=memo(function MatrixGrid({matrix,rows,kind,warehouse,scale,sour
   ],[matrix,kind]);
   const columns=useMemo<(ColDef<MatrixRow>|ColGroupDef<MatrixRow>)[]>(()=>[
     {field:'ym',headerName:'核算月',pinned:'left',...fixedWidth(112,scale)},
-    ...[['入库',0,5],['出库',5,10],['机械',10,14],['机械（不含税）',14,16]].map(([name,start,end])=>({headerName:String(name),children:matrixColumns.slice(Number(start),Number(end)).map((column,index):ColDef<MatrixRow>=>({field:column.field,headerName:column.header,headerTooltip:column.label,headerComponentParams:{innerHeaderComponent:MatrixHeader},...numberColumnWidth([...rows.map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,true,1),wrapText:false,cellClass:p=>'money'+(column.segment?' process-segment':'')+(kind==='adjusted'&&!column.field.startsWith('mech_')&&matrix.raw.some(raw=>raw.ym===p.data?.ym&&raw[column.field]!==p.data?.[column.field])?' process-adjusted':''),colSpan:p=>p.data?.rowkind==='segments'&&index===0?Number(end)-Number(start):1,cellRenderer:MatrixCell}))})),
+    ...[['入库',0,5],['出库',5,10],['机械',10,14],['机械（不含税）',14,16]].map(([name,start,end])=>({headerName:String(name),children:matrixColumns.slice(Number(start),Number(end)).map((column,index):ColDef<MatrixRow>=>({field:column.field,headerName:column.header,headerTooltip:column.label,headerComponentParams:{innerHeaderComponent:MatrixHeader},...numberColumnWidth([...rows.map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,true,1),wrapText:false,cellClass:p=>'money'+(column.segment?' process-segment':'')+(kind==='adjusted'&&!column.field.startsWith('mech_')&&matrix.raw.some(raw=>raw.ym===p.data?.ym&&raw[column.field]!==p.data?.[column.field])?' process-adjusted':''),colSpan:layoutCallback(p=>p.data?.rowkind==='segments'&&index===0?Number(end)-Number(start):1),cellRenderer:MatrixCell}))})),
   ],[matrix,rows,kind,scale]);
   return <div className="process-matrix-scroll page-fill-stage" role="region" aria-label="过程资料月度表，可横向滚动"><BusinessGrid table="process-matrix" className="process-matrix-view" gridClassName="process-matrix" label={tabLabels[kind==='raw'?0:1]+'，金额单位：元'} domLayout="normal" rows={rows} totals={totals} columns={columns} measurement={measurement} rowId={matrixRowId} scope={warehouse+':'+kind} scale={scale} rowMinimum={56*scale} style={{height:'100%'}} grid={{overlayNoRowsTemplate:'当前项目没有月度记录',groupHeaderHeight:34*scale}}/></div>;
 });
 function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
-  matrix: Awaited<ReturnType<typeof getProcess>>['matrices'][string]; diffs: ColDef<Difference>[]; warehouse: string; scale: number; active: boolean;
+  matrix: Awaited<ReturnType<typeof getProcess>>['matrices'][string]; diffs: ColDef<DifferenceGridRow>[]; warehouse: string; scale: number; active: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const diffRows = matrix.diffs;
-  const diffTotals = useMemo(() => [{...matrix.diff_totals,id:-1,doc_no:'合计'} as unknown as Difference], [matrix]);
+  const diffTotals = useMemo<DifferenceSummary[]>(() => [{id:-1,doc_no:'合计',before:matrix.diff_totals.before ?? null,after:matrix.diff_totals.after ?? null,delta:matrix.diff_totals.delta ?? null}], [matrix]);
   const presentation = useGridPresentation({table:'process-differences',root,active,rows:diffRows,totals:diffTotals,columns:diffs,rowId:differenceRowId,scale,scope:warehouse,identity:warehouse});
   return <PreparedGrid presentation={presentation} className="process-grid" grid={{domLayout:'autoHeight',theme:gridTheme,
     getRowId:p=>String(p.data.id),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,overlayNoRowsTemplate:'当前项目没有调整差异',animateRows:false}} />;

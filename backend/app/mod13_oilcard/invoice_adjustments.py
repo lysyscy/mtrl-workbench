@@ -214,7 +214,8 @@ def allocate(session, key, values):
     _replace_allocations(session, row, values['allocations'])
     _touch(row)
     _parent_touch(session, (row.related_invoice_id,))
-    session.flush(); validate_credits(session)
+    session.flush()
+    validate_credits(session)
     return row
 
 
@@ -224,7 +225,8 @@ def resolve_original(session, key, original_id, values):
     _check_version(row, values['version'])
     require_editable(row)
     _review(session, row, original_id, 'keep', values['note'])
-    _touch(row); session.flush()
+    _touch(row)
+    session.flush()
     return row
 
 
@@ -245,7 +247,8 @@ def void(session, key, values):
     if not values['note'].strip():
         raise MustReportError('请填写作废依据。')
     row.status, row.change_note, row.reason = 'voided', values['note'].strip(), '已登记作废'
-    _touch(row); session.flush()
+    _touch(row)
+    session.flush()
     return row
 
 

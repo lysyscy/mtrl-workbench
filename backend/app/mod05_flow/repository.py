@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from datetime import datetime
 from uuid import uuid4
 
@@ -17,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.db import any_ids
 from app.core.identity import current_operator
 from app.core.money import to_money
-from app.mod03_notice.models import NoticeStatLog, PaymentNotice
+from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow.domain import effective_total, revoke_flow
 from app.mod05_flow.models import (
     FLOW_EFFECTIVE,

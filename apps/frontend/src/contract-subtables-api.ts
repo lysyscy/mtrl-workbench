@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, record, requestJson } from './api';
 import { body, cents } from './notices-api';
 
@@ -15,16 +16,34 @@ function payment(value: unknown): value is PaymentRow {
   return record(value) && id(value.id) && typeof value.date === 'string' && amount(value.amount) &&
     (value.source === 'manual' && value.notice_id === null || value.source === 'notice' && id(value.notice_id));
 }
+function invoices(kind: InvoiceRow['kind']) {
+  return v.array(v.looseObject({ id: v.custom<number>(id), kind: v.literal(kind), date: v.string(), amount: v.custom<string>(amount) }));
+}
+function isPaymentDisplay(value: unknown): value is PaymentDisplayRow {
+  if (!record(value) || !payment(value) ||
+      !(value.flow_id === undefined || id(value.flow_id)) ||
+      !(value.mismatch === undefined || typeof value.mismatch === 'boolean')) return false;
+  return value.source === 'manual' && value.display_kind === 'manual' ||
+    value.source === 'notice' && (value.display_kind === 'flow' && id(value.flow_id) || value.display_kind === 'stat' && value.mismatch === true);
+}
 export function readSubtables(value: unknown, contractId: number): SubtableDetail {
   const d = record(value) ? value.data : undefined;
-  if (!record(d) || d.id !== contractId || typeof d.supplier !== 'string' || !(d.trade_co === null || typeof d.trade_co === 'string') ||
-    !['inv_sum','trade_inv_sum','settle','pay_sum','debt'].every(k => amount(d[k]))) throw new ApiError('合同子表读取不完整，请重读核对。');
-  for (const [key,kind] of [['supplier_invoices','supplier'],['trade_invoices','trade']] as const) {
-    if (!Array.isArray(d[key]) || !d[key].every(x => record(x) && id(x.id) && x.kind === kind && typeof x.date === 'string' && amount(x.amount))) throw new ApiError('合同发票读取不完整，请重读核对。');
+  if (!record(d) || d.id !== contractId || typeof d.supplier !== 'string' ||
+      !(d.trade_co === null || typeof d.trade_co === 'string') || !amount(d.inv_sum) ||
+      !amount(d.trade_inv_sum) || !amount(d.settle) || !amount(d.pay_sum) || !amount(d.debt)) {
+    throw new ApiError('合同子表读取不完整，请重读核对。');
   }
-  if (!Array.isArray(d.payments) || !d.payments.every(payment) || !Array.isArray(d.payment_display_rows) || !d.payment_display_rows.every(x => payment(x) && record(x) &&
-    (x.source === 'manual' && x.display_kind === 'manual' || x.source === 'notice' && (x.display_kind === 'flow' && id(x.flow_id) || x.display_kind === 'stat' && x.mismatch === true)))) throw new ApiError('合同付款来源读取不完整，请重读核对。');
-  return d as unknown as SubtableDetail;
+  if (!v.is(invoices('supplier'), d.supplier_invoices) || !v.is(invoices('trade'), d.trade_invoices)) {
+    throw new ApiError('合同发票读取不完整，请重读核对。');
+  }
+  if (!Array.isArray(d.payments) || !d.payments.every(payment) ||
+      !Array.isArray(d.payment_display_rows) || !d.payment_display_rows.every(isPaymentDisplay)) {
+    throw new ApiError('合同付款来源读取不完整，请重读核对。');
+  }
+  return { ...d, id: d.id, supplier: d.supplier, trade_co: d.trade_co, inv_sum: d.inv_sum,
+    trade_inv_sum: d.trade_inv_sum, settle: d.settle, pay_sum: d.pay_sum, debt: d.debt,
+    supplier_invoices: d.supplier_invoices, trade_invoices: d.trade_invoices,
+    payments: d.payments, payment_display_rows: d.payment_display_rows };
 }
 export async function loadSubtables(contractId: number, signal?: AbortSignal) {
   return readSubtables(await requestJson(`/api/m11/detail?id=${contractId}`, { signal: signal ?? null }), contractId);

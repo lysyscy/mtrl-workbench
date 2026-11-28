@@ -46,12 +46,16 @@ export function readProcess(value:unknown,mechanical:unknown):ProcessData {
       return value.map(s=>{if(!record(s) || typeof s.name!=='string') throw invalid();return {name:s.name,total:amount(s.total)};});
     }
     const diffs=m.diffs.map((d:unknown):Difference=>{
-      if(!record(d) || typeof d.id!=='number' || !Number.isSafeInteger(d.id) || !['doc_no','material','warehouse','remark','operator','at'].every(k=>typeof d[k]==='string') || !['string','number'].includes(typeof d.seq)) throw invalid();
-      return {...d,seq:String(d.seq),...amounts(d,['before','after','delta'])} as unknown as Difference;
+      if(!record(d) || typeof d.id!=='number' || !Number.isSafeInteger(d.id) || typeof d.doc_no !== 'string' || typeof d.material !== 'string' ||
+        typeof d.warehouse !== 'string' || typeof d.remark !== 'string' || typeof d.operator !== 'string' || typeof d.at !== 'string' ||
+        !(typeof d.seq === 'string' || typeof d.seq === 'number') ||
+        !(d.changes === undefined || typeof d.changes === 'string')) throw invalid();
+      return { ...d, id: d.id, doc_no: d.doc_no, seq: String(d.seq), material: d.material, warehouse: d.warehouse,
+        before: amount(d.before), after: amount(d.after), delta: amount(d.delta), remark: d.remark,
+        ...(d.changes === undefined ? {} : { changes: d.changes }), operator: d.operator, at: d.at };
     });
     matrices[warehouse]={raw,adjusted,totals:{raw:amounts(m.totals.raw),adjusted:amounts(m.totals.adjusted)},segments:{raw:segments(m.segments.raw),adjusted:segments(m.segments.adjusted)},diffs,diff_totals:amounts(m.diff_totals,['before','after','delta'])};
   }
-  // Sources and signatures belong to the existing mechanical effective-value contract.
   for(const [warehouse,months] of Object.entries(mechanical.sources)) {
     if(!record(months)) throw invalid();
     for(const [ym,columns] of Object.entries(months)) {
@@ -74,8 +78,6 @@ export function readProcess(value:unknown,mechanical:unknown):ProcessData {
 }
 export async function getProcess(signal?:AbortSignal) {
   const init=signal ? {signal} : {};
-  // 屏幕只要 mode/签名/有效值；`/api/m06/mech-screen` 与 `/api/m06/mech` 同值同签名，
-  // 只是不带 `basis`/`history`（那是导出与明细回执才用的完整来源）。
   const [matrix,mechanical]=await Promise.all([requestJson('/api/m06/matrix',init),requestJson('/api/m06/mech-screen',init)]);
   return readProcess(matrix,mechanical);
 }

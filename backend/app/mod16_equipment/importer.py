@@ -229,7 +229,7 @@ def link_jiaozuo_tricycles(items, inventory, links):
                ("tool", "电动三轮车", 5300, 1)]
     if len(matches) == len(codes):
         matches.sort(key=lambda key: inventory[key]["sort_order"])
-        links.update(zip(codes, matches))
+        links.update(zip(codes, matches, strict=False))
 
 
 def inventory_fields(row):

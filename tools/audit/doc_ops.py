@@ -6,14 +6,13 @@ from pathlib import Path
 import subprocess
 import sys
 
-sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.audit.doc_ops import links
-from tools.audit.doc_ops.repo import checkout, json_text, read_json
-from tools.audit.doc_ops.tasks import inspect_entry
-
-
 def main(argv=None) -> int:
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from tools.audit.doc_ops import links
+    from tools.audit.doc_ops.repo import checkout, json_text, read_json
+    from tools.audit.doc_ops.tasks import inspect_entry
+
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     commands = parser.add_subparsers(dest='command', required=True)
     for name, help_text in (

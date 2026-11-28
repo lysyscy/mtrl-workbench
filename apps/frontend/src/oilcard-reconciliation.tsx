@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import Select from 'antd/es/select';
 import { useMemo, useState } from 'react';
@@ -50,7 +51,6 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
         title: value.primary ? '主卡' : '未关联主卡', amount: null, ...(value.primary ? { primary: value.primary } : {}) },
         ...(collapsed.has(group) ? [] : value.children.sort((a, b) => accountOrder.get(a.account!.id)! - accountOrder.get(b.account!.id)!))]);
   }, [archives, projects, query.data, status, collapsed, previewOrder]);
-  // 折叠只改变显示，金额范围仍取本状态下所有账户归属。
   const amount = useMemo(() => decimal((query.data?.rows ?? []).filter(r => status === 'all' || (archives?.accounts ?? []).find(a => a.id === r.account_id)?.status === status).reduce((sum, r) => sum + cents(r.total_amount), 0n)), [query.data, archives, status]);
   const sums = useMemo(() => {
     const included = (query.data?.rows ?? []).filter(r => status === 'all' || (archives?.accounts ?? []).find(a => a.id === r.account_id)?.status === status);
@@ -58,19 +58,18 @@ export function OilReconciliationSheet({ archives, dependencyPhase, projects, ac
   }, [query.data, archives, status]);
   const amountWidth = fullTextWidth([money(amount), ...rows.map(row => row.amount === null ? '' : money(row.amount))], scale).minWidth;
   const columns = useMemo<ColDef<Row>[]>(() => [
-    { colId: 'project', headerName: '项目', rowDrag: p => Boolean(p.data?.primary), ...contentWidth(200, 420, scale, 1), valueGetter: p => p.data?.title ?? '', cellRenderer: ({ data }: ICellRendererParams<Row>) => !data ? null : data.kind === 'primary' ? <div className="oilcard-primary"><Button size="small" aria-expanded={!collapsed.has(data.group)} aria-label={`${collapsed.has(data.group) ? '展开' : '收起'} ${data.primary?.card_no || data.title}`} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(data.group)) next.delete(data.group); else next.add(data.group); return next; })}>{collapsed.has(data.group) ? '展开' : '收起'}</Button><strong>{data.title}</strong></div> : data.title },
-    { colId: 'account', headerName: '用卡账户', ...contentWidth(160, 320, scale, 1), valueGetter: p => p.data?.account?.name ?? '', cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.account && <span>{data.account.name}{data.allocation?.current === false && <small className="muted">（历史关联）</small>}</span> },
-    { colId: 'card', headerName: '卡号', ...contentWidth(200, 350, scale, 1), valueGetter: ({ data }) => {
+    { colId: 'project', headerName: '项目', rowDrag: p => Boolean(p.data?.primary), ...contentWidth(200, 420, scale, 1), valueGetter: layoutCallback(p => p.data?.title ?? ''), cellRenderer: ({ data }: ICellRendererParams<Row>) => !data ? null : data.kind === 'primary' ? <div className="oilcard-primary"><Button size="small" aria-expanded={!collapsed.has(data.group)} aria-label={`${collapsed.has(data.group) ? '展开' : '收起'} ${data.primary?.card_no || data.title}`} onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(data.group)) next.delete(data.group); else next.add(data.group); return next; })}>{collapsed.has(data.group) ? '展开' : '收起'}</Button><strong>{data.title}</strong></div> : data.title },
+    { colId: 'account', headerName: '用卡账户', ...contentWidth(160, 320, scale, 1), valueGetter: layoutCallback(p => p.data?.account?.name ?? ''), cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.account && <span>{data.account.name}{data.allocation?.current === false && <small className="muted">（历史关联）</small>}</span> },
+    { colId: 'card', headerName: '卡号', ...contentWidth(200, 350, scale, 1), valueGetter: layoutCallback(({ data }) => {
       const card = data?.primary ?? data?.card;
       return card ? card.card_no || `卡号待补 #${card.id}` : data?.kind === 'account' ? '未关联卡片' : '';
-    } },
+    }) },
     { field: 'amount', headerName: '充值累计', cellClass: 'money', ...contentWidth(Math.max(130, amountWidth / scale), 240, scale), valueFormatter: p => p.value === null || p.value === undefined ? '' : money(p.value) },
     { field: 'invoiced', headerName: '开票累计', cellClass: 'money', ...contentWidth(Math.max(130, fullTextWidth([money(sums.invoiced), ...rows.map(r => money(r.invoiced || '0.00'))], scale).minWidth / scale), 240, scale), valueFormatter: p => p.value === undefined ? '' : money(p.value) },
     { field: 'difference', headerName: '差额', cellClass: 'money', ...contentWidth(Math.max(130, fullTextWidth([money(sums.difference), ...rows.map(r => money(r.difference || '0.00'))], scale).minWidth / scale), 240, scale), valueFormatter: p => p.value === undefined ? '' : money(p.value) },
     { colId: 'remark', headerName: '备注', ...contentWidth(200, 500, scale, 2), cellRenderer: ({ data }: ICellRendererParams<Row>) => data?.primary ? remark('card', data.primary) : data?.account ? remark('account', data.account) : '' },
   ], [scale, amountWidth, collapsed, remark, rows, sums]);
   const totals = useMemo<Row[]>(() => [{ key: 'total', group: '', kind: 'total', title: '合计', amount, ...sums }], [amount, sums]);
-  // 未读与真空分开呈现：占位只在无数据时占住表区，没有任何数据时绝不给"无账户"结论。
   const readState = readPhase(query);
   const phase = dependencyPhase === 'error' || (!query.data && readState === 'error') ? 'error' : dependencyPhase === 'content' && query.data ? 'content' : 'pending';
   const placeheld = phase !== 'content';

@@ -1,6 +1,30 @@
 {"version": 1,
   "directories": [
     {
+      "path": ".agents",
+      "owner": "项目验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".agents/skills",
+      "owner": "项目验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".agents/skills/verify-mtrl-workbench",
+      "owner": "项目验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false, "check_children": true
+    },
+    {
+      "path": ".agents/skills/verify-mtrl-workbench/features",
+      "owner": "项目验证维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
       "path": ".git",
       "owner": "Git", "class": "metadata", "git_policy": "local",
       "manager": "git worktree / git gc", "retention": "按 Git 的仓库和工作树规则", "exit_condition": "通过 Git 原生入口维护",
@@ -146,6 +170,12 @@
     },
     {
       "path": "apps/frontend/patches",
+      "owner": "React 维护者", "class": "source", "git_policy": "tracked",
+      "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
+      "apply_eligible": false
+    },
+    {
+      "path": "apps/frontend/scripts",
       "owner": "React 维护者", "class": "source", "git_policy": "tracked",
       "manager": "none", "retention": "随在用实现保留", "exit_condition": "退役且无消费者后由负责人移除",
       "apply_eligible": false

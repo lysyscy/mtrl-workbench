@@ -1,5 +1,4 @@
 #!/bin/sh
-# 一人练手项目：提交只核暂存目录、语法、字节与凭据文件；业务和文档按影响入口验一次。
 # 文档、台账、变异登记不随每次提交重复扫描；全量/现场核验由用户按需执行。
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
 PY="$ROOT/backend/.venv/Scripts/python.exe"
@@ -19,7 +18,7 @@ for f in $(git diff --cached --name-only 2>/dev/null); do
   esac
 done
 if [ ! -x "$PY" ]; then
-  echo "pre-commit ⛔ 找不到venv Python，目录、语法和字节检查未执行"
+  echo "pre-commit ⛔ 找不到 venv Python，暂存检查未执行"
   exit 1
 fi
 
@@ -39,7 +38,9 @@ bad=""
 for spec in \
   "tools/audit/directory_audit.py --staged" \
   "tools/audit/syntax_audit.py --staged" \
-  "tools/audit/bytes_guard.py --staged"
+  "tools/audit/bytes_guard.py --staged" \
+  "tools/audit/comment_guard.py --staged" \
+  "tools/audit/staged_lint.py"
 do
   set -- $spec
   script="$1"; shift
@@ -63,5 +64,5 @@ do
   fi
 done
 if [ -n "$bad" ]; then echo "pre-commit：相关检查未完成或失败，先核原因再提交"; exit 1; fi
-echo "pre-commit：暂存目录、语法、字节及凭据文件检查通过"
+echo "pre-commit：暂存目录、语法、字节、凭据文件、注释及 lint 检查通过"
 exit 0

@@ -181,7 +181,24 @@ class RunRecords:
         return {'state': value['state'], 'expires_at': value['expires_at']}
 
 
-def tree_finalizers(root, path, tree, runs, now, active_owners, settings) -> list[dict]:
+def preview_source(record: Path, root: Path) -> Path:
+    saved = read_json(safe_path(record, root))
+    source = saved.get('source_root')
+    if source is None:
+        owner = Path(saved['owner_path'])
+        if not owner.is_absolute():
+            raise ValueError('preview owner path must be absolute')
+        receipt = read_json(owner)
+        if saved.get('process') is not None and saved['process'] != receipt.get('process'):
+            raise ValueError('preview owner receipt has changed')
+        source = receipt['source_root']
+    path = Path(source)
+    if not path.is_absolute() or not path.is_dir():
+        raise ValueError('preview source directory cannot be confirmed')
+    return path.resolve(strict=True)
+
+
+def tree_finalizers(root, path, tree, runs, now, active_owners, settings, registered) -> list[dict]:
     blocked = []
     if tree['state'] != 'retiring' or active_owners:
         blocked.append({'code': 'TASK_OR_WORKTREE_RETAINED', 'state': tree['state'], 'tasks': active_owners})
@@ -203,12 +220,16 @@ def tree_finalizers(root, path, tree, runs, now, active_owners, settings) -> lis
             observed = process_references([path])
             if not observed['checked'] or observed['matches']:
                 blocked.append({'code': 'WORKTREE_PROCESS_CHECK', **observed})
-        if path.is_dir():
-            for pattern in settings.get('preview_registries', []):
-                for record in sorted(root.glob(pattern)):
-                    owner = Path(read_json(safe_path(record, root))['owner_path']).resolve()
-                    if owner == path:
-                        blocked.append({'code': 'WORKTREE_PREVIEW_REGISTERED', 'record': str(record)})
+        for pattern in settings.get('preview_registries', []):
+            for record in sorted(root.glob(pattern)):
+                try:
+                    source = preview_source(record, root)
+                except (OSError, RuntimeError, ValueError, KeyError, TypeError):
+                    source = None
+                if source == path:
+                    blocked.append({'code': 'WORKTREE_PREVIEW_REGISTERED', 'record': str(record)})
+                elif source not in registered:
+                    blocked.append({'code': 'WORKTREE_PREVIEW_SOURCE_UNCONFIRMED', 'record': str(record)})
     return blocked
 
 
@@ -226,7 +247,7 @@ def inspect_tree(root: Path, path: Path, tree: dict, records: dict[Path, dict], 
     absent = not record and not path.exists() and local is None and remote is None and tracking is None
     if absent and state.remote_error is None and tree['state'] in {'retired', 'retiring'}:
         return {**observation, 'disposition': 'already_absent'}
-    finalizers = tree_finalizers(root, path, tree, runs, now, active_owners, settings)
+    finalizers = tree_finalizers(root, path, tree, runs, now, active_owners, settings, records)
     reasons = [item['code'] for item in finalizers]
     inventory = None
     try:
@@ -361,7 +382,7 @@ def plan(root: Path, config: dict) -> dict:
         candidates = {item['id']: item for item in settings['runs'].get('release', [])}
         if len(candidates) != len(settings['runs'].get('release', [])):
             raise ValueError('duplicate run release declaration')
-        for run_id, candidate in sorted(candidates.items()):
+        for _, candidate in sorted(candidates.items()):
             action, keep = runs.close_action(root, candidate, now)
             if action:
                 actions.append(action)

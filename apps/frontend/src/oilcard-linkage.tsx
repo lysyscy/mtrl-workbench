@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -89,7 +90,7 @@ export function OilLinkageSheet({ me, projects, accounts, active, blocked, scale
     return rows.filter(row => status === 'active' ? inUse.has(row.project_id) : withAccount.has(row.project_id) && !inUse.has(row.project_id));
   }, [accounts, rows, status]);
   const columns = useMemo<(ColDef<OilFeeMonth> | ColGroupDef<OilFeeMonth>)[]>(() => [
-    { colId: 'project', headerName: '项目', pinned: 'left', valueGetter: p => { const project = projects.find(project => project.id === p.data?.project_id); return project ? projectLabel(project) : `项目 #${p.data?.project_id}`; }, ...contentWidth(180, 340, scale, 1) },
+    { colId: 'project', headerName: '项目', pinned: 'left', valueGetter: layoutCallback(p => { const project = projects.find(project => project.id === p.data?.project_id); return project ? projectLabel(project) : `项目 #${p.data?.project_id}`; }), ...contentWidth(180, 340, scale, 1) },
     { headerName: '当月特殊费用', marryChildren: true, children: [
     { colId: 'linkage_state', headerName: '联动状态', cellRenderer: LinkageState, ...contentWidth(150, 200, scale) },
     { field: 'recharge_amount', headerName: '当月充值', cellClass: 'money', valueFormatter: p => money(p.value), ...contentWidth(Math.max(130, fullTextWidth(rows.map(row => money(row.recharge_amount)), scale).minWidth / scale), 240, scale, 1) },
@@ -99,14 +100,13 @@ export function OilLinkageSheet({ me, projects, accounts, active, blocked, scale
     ] },
     { headerName: '截至月会议大表', marryChildren: true, children: [
       { colId: 'big_state', headerName: '联动状态', cellRenderer: LinkageState, ...contentWidth(150, 200, scale) },
-      { colId: 'big_auto', headerName: '累计自动金额', cellClass: 'money', valueGetter: p => p.data ? decimal(cents(p.data.big.recharge_amount) + cents(p.data.big.fee_custom_amount)) : '',
+      { colId: 'big_auto', headerName: '累计自动金额', cellClass: 'money', valueGetter: layoutCallback(p => p.data ? decimal(cents(p.data.big.recharge_amount) + cents(p.data.big.fee_custom_amount)) : ''),
         tooltipValueGetter: p => p.data ? `累计充值 ${money(p.data.big.recharge_amount)}＋累计特殊费用自定义额 ${money(p.data.big.fee_custom_amount)}` : '', valueFormatter: p => money(p.value), ...contentWidth(160, 240, scale, 1) },
-      { colId: 'big_amount', headerName: '额外自定义额', autoHeight: true, cellRenderer: Editor, valueGetter: p => p.data?.big.extra_amount, ...contentWidth(170, 250, scale, 1) },
-      { colId: 'big_remark', headerName: '独立备注', cellRenderer: Editor, valueGetter: p => p.data?.big.remark, ...contentWidth(200, 420, scale, 2) },
-      { colId: 'big_total', headerName: '大表工程用油', cellClass: 'money', valueGetter: p => p.data?.big.amount, valueFormatter: p => p.data?.big.enabled ? money(p.value) : '待接续核对', ...contentWidth(160, 260, scale, 1) },
+      { colId: 'big_amount', headerName: '额外自定义额', autoHeight: true, cellRenderer: Editor, valueGetter: layoutCallback(p => p.data?.big.extra_amount), ...contentWidth(170, 250, scale, 1) },
+      { colId: 'big_remark', headerName: '独立备注', cellRenderer: Editor, valueGetter: layoutCallback(p => p.data?.big.remark), ...contentWidth(200, 420, scale, 2) },
+      { colId: 'big_total', headerName: '大表工程用油', cellClass: 'money', valueGetter: layoutCallback(p => p.data?.big.amount), valueFormatter: p => p.data?.big.enabled ? money(p.value) : '待接续核对', ...contentWidth(160, 260, scale, 1) },
     ] },
   ], [projects, rows, scale]);
-  // 切核算月即换查询身份：旧月的金额不留在屏上，占位替代原表而不冒充"无项目"。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <section className="wb-surface" aria-label="用油联动"><div data-page-chrome className="oilcard-toolbar"><label>核算月<TimePicker label="用油联动核算月" modes={['月']} value={ym} onChange={setYm} disabled={blocked || busy || dirty || uncertain} /></label>

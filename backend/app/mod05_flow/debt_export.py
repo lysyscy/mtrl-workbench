@@ -93,7 +93,7 @@ def build_xlsx(items: list[dict], out_dir: Path, *, mark_mech: bool = True,
         ws.append([FOOTNOTE])
         ws.cell(row=ws.max_row, column=1).alignment = openpyxl.styles.Alignment(wrap_text=False)
 
-    for col, width in zip("ABCDE", (6, 46, 16, 16, 16)):
+    for col, width in zip("ABCDE", (6, 46, 16, 16, 16), strict=False):
         ws.column_dimensions[col].width = width
 
     save_workbook = EXP.get("save").save_workbook

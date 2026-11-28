@@ -138,7 +138,8 @@ def save_big_custom(session, *, project_id, ym, amount, remark, version, source_
         raise DataConflictError('这个项目的大表额外值或沿用来源已变化，请重读核对后处理保留输入。')
     if amount is None or not amount.strip():
         if own is not None:
-            session.delete(own); session.flush()
+            session.delete(own)
+            session.flush()
         return
     value = _amount(amount)
     if own is not None and (own.amount, own.remark) == (value, remark):

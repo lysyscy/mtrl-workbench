@@ -3,20 +3,25 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 import json
+import logging
 from threading import Lock
 from typing import Protocol
 
+import httpx
 from sqlalchemy import select
 
 from app.core.db import session_scope
+from app.core.errors import ExternalServiceError
 from app.core.money import to_money
 from app.mod02_i8 import equipment_relay as contract
-from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionUnavailable
+from app.mod02_i8.browser_session import StrictSessionEnded, StrictSessionStopped, StrictSessionUnavailable
 from app.mod02_i8.login import I8AuthFailedError
 from .common import encoded, ledger_lock, record, require
 from .models import EquipmentItem, EquipmentTransfer
 from .projects import ProjectRef, project_index
 
+
+logger = logging.getLogger(__name__)
 
 ISSUES = ("pending", "failed", "conflict")
 UNAVAILABLE = "i8接口暂未接通，已保存本地待同步"
@@ -102,14 +107,20 @@ class I8CustomFormEquipmentAdapter:
                 "clientfilter": self.CLIENT_FILTER, "queryfilter": self.QUERY_FILTER,
                 "page": str(page), "start": str(len(rows)), "limit": "100",
             })
-            batch, count = body["data"], int(body["total"])
+            if not isinstance(body, Mapping) or "data" not in body or "total" not in body:
+                raise ValueError("i8 自定义表单列表不完整")
+            try:
+                count = int(body["total"])
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("i8 自定义表单列表条数无法核对") from exc
+            batch = body["data"]
             if (not isinstance(batch, list) or count < 0 or
                     (total is not None and total != count) or body.get("success") is False
                     or body.get("Success") is False or body.get("status") not in (None, "success")):
                 raise ValueError("i8 自定义表单列表不完整")
             total = count
             for row in batch:
-                if not row.get("phid") or str(row["phid"]) in ids:
+                if not isinstance(row, Mapping) or not row.get("phid") or str(row["phid"]) in ids:
                     raise ValueError("i8 列表主键重复或缺少标识")
                 if business == "sbzx" and not row.get("u_device_code"):
                     raise ValueError("i8 设备缺少编码")
@@ -362,8 +373,8 @@ class I8CustomFormEquipmentAdapter:
         if bill_phid:
             try:
                 bill = next((row for row in self._list_rows("ldzcdb") if str(row["phid"]) == bill_phid), None)
-            except Exception:
-                pass
+            except (ExternalServiceError, StrictSessionStopped, httpx.HTTPError, ValueError) as exc:
+                logger.warning('i8 调拨单读取失败：%s', type(exc).__name__)
         try:
             after = self.lookup_by_code(evidence["code"])
         except Exception:
@@ -461,7 +472,7 @@ def synchronize(item, projects, transfer=None, adapter: Adapter | I8CustomFormEq
             item.i8_snapshot_json = encoded(result.snapshot) if result.snapshot is not None else None
             if transfer is not None:
                 transfer.i8_conflict_json = encoded(result.conflict) if result.conflict else None
-        except (I8AuthFailedError, StrictSessionEnded, StrictSessionUnavailable):
+        except (I8AuthFailedError, StrictSessionEnded, StrictSessionStopped, StrictSessionUnavailable):
             result = SyncResult("pending", "i8 会话已失效，已保存本地待同步")
         except SaveRejected:
             if transfer is not None:

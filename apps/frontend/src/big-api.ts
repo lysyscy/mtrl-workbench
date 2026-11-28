@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export const manualKeys = ['open_ym','mech_est','contract','output_cum','oil','note'] as const;
@@ -21,31 +22,43 @@ export interface BigData {
 const month = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 const amount = (v: unknown) => v === null || typeof v === 'string' && /^-?\d+(?:\.\d+)?$/.test(v);
 const invalid = () => new ApiError('大表读取不完整，请重读。');
+const amountSchema = v.custom<Amount>(amount);
+const bigSchema = v.looseObject({
+  month: v.string(), selected: v.array(v.string()),
+  candidates: v.array(v.looseObject({ warehouse: v.pipe(v.string(), v.nonEmpty()), display: v.string() })),
+  rows: v.array(v.looseObject({
+    seq: v.pipe(v.number(), v.safeInteger()), warehouse: v.string(), display: v.string(),
+    carry_n: v.number(), oil_linked: v.boolean(),
+    manual: v.objectWithRest(v.entriesFromList(manualKeys, v.looseObject({
+      value: v.nullable(v.string()), from: v.string(),
+    })), v.unknown()),
+    auto: v.objectWithRest(v.entriesFromList(autoKeys, amountSchema), v.unknown()),
+    derived: v.objectWithRest(v.entriesFromList(derivedKeys, amountSchema), v.unknown()),
+  })),
+  totals: v.objectWithRest(v.entriesFromList(totalKeys, amountSchema), v.unknown()),
+  selection: v.looseObject({ fixed: v.boolean(), source: v.string() }),
+  manual_keys: v.array(v.string()), manual_fmts: v.array(v.string()),
+  mat_available: v.boolean(), empty_text: v.string(),
+});
 export function readBig(value: unknown, ym: string): BigData {
-  if (!record(value) || value.month !== ym || !Array.isArray(value.selected) || !value.selected.every(v => typeof v === 'string') ||
-      !Array.isArray(value.candidates) || !Array.isArray(value.rows) || !record(value.totals) || !totalKeys.every(k => amount((value.totals as Record<string,unknown>)[k])) ||
-      typeof value.mat_available !== 'boolean' || typeof value.empty_text !== 'string' ||
-      !record(value.selection) || typeof value.selection.fixed !== 'boolean' ||
+  if (!v.is(bigSchema, value) || value.month !== ym ||
       !(value.selection.source === 'legacy' || value.selection.source === 'default' || month(value.selection.source) && value.selection.source <= ym) ||
       (value.selection.fixed && value.selection.source !== ym) ||
-      !Array.isArray(value.manual_keys) || value.manual_keys.join(',') !== manualKeys.join(',') ||
-      !Array.isArray(value.manual_fmts) || value.manual_fmts.join(',') !== 'ym,money,money,money,money,text') throw invalid();
-  for (const c of value.candidates) if (!record(c) || typeof c.warehouse !== 'string' || !c.warehouse || typeof c.display !== 'string') throw invalid();
+      value.manual_keys.join(',') !== manualKeys.join(',') ||
+      value.manual_fmts.join(',') !== 'ym,money,money,money,money,text') throw invalid();
   for (const row of value.rows) {
-    if (!record(row) || typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || typeof row.warehouse !== 'string' || typeof row.display !== 'string' ||
-        typeof row.carry_n !== 'number' || typeof row.oil_linked !== 'boolean' || !record(row.manual) || !record(row.auto) || !record(row.derived) ||
-        !autoKeys.every(k => amount((row.auto as Record<string,unknown>)[k])) || !derivedKeys.every(k => amount((row.derived as Record<string,unknown>)[k]))) throw invalid();
     for (const k of manualKeys) {
       const cell = row.manual[k];
-      if (!record(cell) || !(cell.value === null || typeof cell.value === 'string') || !(cell.from === '' || month(cell.from) && cell.from < ym) ||
-          (k === 'open_ym' && cell.value !== null && !month(cell.value)) || (k !== 'open_ym' && k !== 'note' && !amount(cell.value))) throw invalid();
+      if (!(cell.from === '' || month(cell.from) && cell.from < ym) ||
+          (k === 'open_ym' && cell.value !== null && !month(cell.value)) ||
+          (k !== 'open_ym' && k !== 'note' && !amount(cell.value))) throw invalid();
     }
   }
   const candidates = value.candidates.map(c => c.warehouse);
   if (new Set(candidates).size !== candidates.length || new Set(value.selected).size !== value.selected.length ||
       value.selected.some(k => !candidates.includes(k)) || value.rows.length !== value.selected.length ||
-      value.rows.some((r,i) => r.warehouse !== (value.selected as string[])[i] || r.seq !== i+1)) throw invalid();
-  return value as unknown as BigData;
+      value.rows.some((r, i) => r.warehouse !== value.selected[i] || r.seq !== i + 1)) throw invalid();
+  return value;
 }
 export const getBig = async (ym: string, signal?: AbortSignal) => readBig(await requestJson(`/api/m07/big?${new URLSearchParams({period:ym})}`, signal ? {signal} : {}),ym);
 export async function saveBigCell(ym: string, warehouse: string, key: ManualKey, raw: string, signal: AbortSignal) {

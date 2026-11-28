@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export interface FeeRow { kind: 'auto' | 'manual'; id: number; index: number; item: string; source: string; amount: string; share: string }
@@ -37,13 +38,27 @@ export async function feeWrite(action: string, payload: unknown, signal: AbortSi
 export interface FeeYearRow { item: string; business_key?: string; item_id?: number; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
 export interface FeeYearRecord { ym: string; id: number; index: number; item: string; amount: string }
 export interface FeeYearData { auto_name: string; records: FeeYearRecord[]; year: string; project: string; project_display: string; can_edit: boolean; rows: FeeYearRow[]; prior: string; months: string[]; total: string }
+const moneySchema = v.custom<string>(moneyText);
+const feeYear = v.looseObject({
+  year: v.string(), project: v.string(), project_display: v.string(), can_edit: v.boolean(), auto_name: v.string(),
+  prior: moneySchema, months: v.pipe(v.array(moneySchema), v.length(12)), total: moneySchema,
+  records: v.array(v.looseObject({
+    ym: v.string(), id: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+    index: v.pipe(v.number(), v.safeInteger(), v.minValue(0)), item: v.string(), amount: moneySchema,
+  })),
+  rows: v.array(v.looseObject({
+    item: v.string(), business_key: v.exactOptional(v.string()), item_id: v.exactOptional(v.number()), manual: v.boolean(),
+    prior: v.nullable(moneySchema), months: v.pipe(v.array(v.nullable(moneySchema)), v.length(12)),
+    total: moneySchema, periods: v.array(v.string()),
+  })),
+});
 export async function getFeeYear(year: string, project: string, signal?: AbortSignal): Promise<FeeYearData> {
-  const data = await requestJson(`/api/m09/fee/year?${new URLSearchParams({year,pj:project})}`, signal ? {signal} : {});
-  const amounts = (r: Record<string,unknown>, nullable: boolean) =>
-    (nullable && r.prior === null || moneyText(r.prior)) && moneyText(r.total) && Array.isArray(r.months) && r.months.length === 12 && r.months.every(v => nullable && v === null || moneyText(v));
-  if (!record(data) || typeof data.auto_name !== 'string' || data.year !== year || typeof data.project !== 'string' || project && data.project !== project ||
-    typeof data.project_display !== 'string' || typeof data.can_edit !== 'boolean' || !amounts(data,false) || !Array.isArray(data.records) || !data.records.every(r => record(r) && typeof r.ym === 'string' && new RegExp(`^${year}-(0[1-9]|1[0-2])$`).test(r.ym) && typeof r.id === 'number' && Number.isSafeInteger(r.id) && r.id > 0 && typeof r.index === 'number' && Number.isSafeInteger(r.index) && r.index >= 0 && typeof r.item === 'string' && moneyText(r.amount)) || new Set(data.records.map(r => r.id)).size !== data.records.length || !Array.isArray(data.rows) ||
-    !data.rows.every(r => record(r) && typeof r.item === 'string' && typeof r.manual === 'boolean' && (!r.manual || typeof r.item_id === 'number' && Number.isSafeInteger(r.item_id) && r.item_id > 0) && amounts(r,true) && Array.isArray(r.periods) && r.periods.every(ym => typeof ym === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
+  const data = await requestJson(`/api/m09/fee/year?${new URLSearchParams({ year, pj: project })}`, signal ? { signal } : {});
+  if (!v.is(feeYear, data) || data.year !== year || project && data.project !== project ||
+    !data.records.every(r => new RegExp(`^${year}-(0[1-9]|1[0-2])$`).test(r.ym)) ||
+    new Set(data.records.map(r => r.id)).size !== data.records.length ||
+    !data.rows.every(r => (!r.manual || r.item_id !== undefined && Number.isSafeInteger(r.item_id) && r.item_id > 0) &&
+      r.periods.every(ym => /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
     new Set(data.rows.map(r => r.business_key ?? r.item)).size !== data.rows.length) throw new ApiError('费用年度数据读取不完整，请重读。');
-  return data as unknown as FeeYearData;
+  return data;
 }

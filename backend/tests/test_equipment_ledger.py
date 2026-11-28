@@ -234,7 +234,7 @@ def test_project_display_and_rental_identity_across_transfer_and_scrap(client):
     groups = {g["project_name"]: g for g in request(client, "GET", f"/rental?month={MONTH}")["projects"]}
     linked = groups["乌兰察布储能新名"]
     assert linked["project_id"] == project_id
-    assert [(l["id"], l["project_custom"]) for l in linked["lines"]] == [(first_line, "鄂旗项目"), (second_line, "鄂旗项目")]
+    assert [(row["id"], row["project_custom"]) for row in linked["lines"]] == [(first_line, "鄂旗项目"), (second_line, "鄂旗项目")]
     assert groups["宜阳仓库"]["project_id"] is None
     request(client, "PUT", "/rental/reorder", dict(month=MONTH, project_name="乌兰察布储能新名",
             project_id=project_id, ordered_line_ids=[second_line, first_line]))
@@ -310,7 +310,7 @@ def test_transfer_scrap_pending_queue_and_exports(client):
     tr = request(c, "POST", "/transfers", dict(equipment_ids=keys, to_project="项目乙", transfer_date="2026-11-25"))
     assert len(tr["transfers"]) == 2 and tr["rental_line_ids"] == lines
     assert request(c, "GET", "/inventory")["items"][0]["book_qty"] == "2.0000"
-    for key, line in zip(keys, lines):
+    for key, line in zip(keys, lines, strict=True):
         detail = request(c, "GET", f"/equipment/{key}?month={MONTH}")
         assert detail["equipment"]["current_project"] == "项目乙" and len(detail["transfers"]) == 1
         next_action = resolve(c, line, "this_month")
@@ -1355,6 +1355,24 @@ def test_custom_transfer_save_and_readback(bill_rows, after, status):
     if status == "pending":
         assert result.conflict["bill_phid"] == "B1"
         assert result.conflict["bill_no"] == "20261124-0001"
+
+
+@pytest.mark.parametrize("bad_reply", [httpx.ReadTimeout("private transport URL"), {"data": [None], "total": 1}])
+def test_custom_transfer_retries_bill_read_without_submitting_again(bad_reply, caplog):
+    equipment = page(equipment_row("项目乙全称", "P2"))
+    adapter, calls = custom_adapter(bad_reply, equipment, page(transfer_bill(approved=True)), equipment)
+    evidence = {
+        "bill_phid": "B1", "code": TEST_CODE, "phid": "E1", "origin_id": "P1",
+        "to_project": "项目乙", "destination_id": "P2", "destination_linked": True,
+        "workflow_phase": "submitting",
+    }
+
+    failed = adapter.verify_transfer(evidence)
+    assert failed.status == "failed" and failed.conflict == evidence
+    assert adapter.verify_transfer(failed.conflict).status == "synced"
+    assert [call.args[0] for call in calls.call_args_list] == [LIST_PATH] * 4
+    assert "i8 调拨单读取失败" in caplog.text
+    assert "private transport URL" not in caplog.text
 
 
 def test_custom_adapter_injected_at_normal_sync_entry(client, use_adapter):

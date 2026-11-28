@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { BusinessModal } from './business-modal';
 import { DialogPresence } from './workspace-motion';
 import { BoundedGrid } from './bounded-grid';
@@ -45,7 +46,6 @@ export function ProjectPicker({ projects: allProjects, selected, pick, multiple 
   function focusInput() { picker.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus(); }
   return <span ref={picker} className="business-project-picker" title={summary} style={{ width: `${Math.min(36, Math.max(10, summary.length + 5))}em` }}
     onBlurCapture={event => {
-      // Keyboard focus inside the popup toolbar still belongs to this picker.
       if (event.relatedTarget instanceof Node && actions.current?.contains(event.relatedTarget)) event.stopPropagation();
     }}
     onKeyDownCapture={event => {
@@ -138,7 +138,6 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
   const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
   const reason = unavailable || scopeError;
   const close = () => { setOpen(false); if (!paused && valid()) requestAnimationFrame(() => trigger.current?.focus()); };
-  // Selection is an auto-saved preference, not an unsubmitted business draft.
   const closing = useDialogClose({ busy, dirty: false, close });
   function choose(next: number[]) {
     setIds(next); setFeedback('');
@@ -196,8 +195,8 @@ export function ProjectExport({ kind, owner, projects, project, defaultProjects,
       </> : <>
         <p>{summary(chosen.length)}</p>
         <><Button disabled={busy} onClick={()=>choose([...chosen].sort((a,b)=>projectLabel(a).localeCompare(projectLabel(b),'zh')).map(item=>item.id))}>项目排序</Button><BoundedGrid fill minRows={4} table={'export-project-order-'+kind} className="export-table" label="导出项目顺序" rows={chosen} rowId={item=>String(item.id)} columns={[
-          {colId:'sequence',headerName:'顺序',valueGetter:p=>chosen.findIndex(item=>item.id===p.data!.id)+1},
-          {colId:'project',headerName:'项目',valueGetter:p=>projectLabel(p.data!)},
+          {colId:'sequence',headerName:'顺序',valueGetter:layoutCallback(p=>chosen.findIndex(item=>item.id===p.data!.id)+1)},
+          {colId:'project',headerName:'项目',valueGetter:layoutCallback(p=>projectLabel(p.data!))},
           {colId:'actions',headerName:'调整顺序',cellRenderer:({data:item}:{data:Project})=>{const index=chosen.findIndex(p=>p.id===item.id);return <><Button aria-label={'上移'+projectLabel(item)} disabled={busy||index===0} onClick={()=>move(index,-1)}>上移</Button> <Button aria-label={'下移'+projectLabel(item)} disabled={busy||index===chosen.length-1} onClick={()=>move(index,1)}>下移</Button></>; }},
         ]}/></>
       </>}

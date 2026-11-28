@@ -286,7 +286,6 @@ def build_matrix(
         source = column_source(MATERIAL_KEYS[0], ym=ym, cutoff_ym=cutoff_ym,
                                has_inventory=ym in inv_months)
         bucket = (formal if source == SOURCE_INV else history).get(ym)
-        history_bucket = history.get(ym)
         # ⚠️⚠️ 「该月材料有没有数据」**只看材料 10 列**（⛔ 别看 bucket 整体是不是空）：
         #    自 2026-09-26 起历史段的 bucket 里**还装着机械列** ⇒ 若用 `bucket is None` 判，
         #    那种"**只有机械费、材料一列没填**"的月份会被判成"材料也有数"⇒ 材料列从 `None`（空态）
@@ -544,7 +543,7 @@ __all__ = [
     "TAB_RAW", "TAB_ADJUSTED", "TAB_DIFF", "TABS", "DEFAULT_TAB", "tab_of", "build_matrix", "build_matrix_pair",
     "difference_rows",
     "column_totals", "segment_totals", "segments_from_totals", "grand_total",
-    "DIFF_COLUMNS", "DIFF_SUM_KEYS", "DIFF_PAGE_ONLY_KEYS", "diff_rows", "diff_totals", "jump_query",
+    "DIFF_COLUMNS", "DIFF_SUM_KEYS", "DIFF_PAGE_ONLY_KEYS", "diff_rows", "diff_totals",
     "EXPORT_DOMAIN", "tab_name", "export_selection", "export_file_name", "export_manifest",
     "MATERIAL_READONLY", "boundary_violations",
 ]

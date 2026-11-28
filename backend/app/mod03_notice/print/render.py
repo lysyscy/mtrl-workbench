@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import os
 
 from app.core.errors import ExternalServiceError, human_reason
@@ -58,8 +60,8 @@ class PdfRenderer:
         try:
             if self._playwright is not None:
                 self._playwright.stop()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).warning('PDF 渲染器停止失败：%s', type(exc).__name__)
         self._browser = None
         self._playwright = None
 

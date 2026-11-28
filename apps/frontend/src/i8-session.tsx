@@ -98,7 +98,6 @@ export function I8SessionProvider({blocked, owner, children}: {blocked: boolean;
   const refresh = useCallback(async () => {
     try {
       const next = await readBrowserState();
-      // The active supervisor owns readiness; a stale GET cannot overwrite its result.
       if (alive.current && !wantedRef.current) setState(next);
     } catch (failure) {
       if (alive.current && !wantedRef.current) setNotice(messageOf(failure, '浏览器连接状态没读出来，请重试。'));
@@ -239,7 +238,6 @@ export function I8SessionProvider({blocked, owner, children}: {blocked: boolean;
     };
   }, [wanted, mode, blocked, attempt, remember, finishWaiters]);
 
-  // Temporary account verification pauses work; the same account can resume afterward.
   const connected = wanted && mode === SESSION_MODE_BROWSER && !blocked && !halted && state?.connected === true;
   const value = useMemo<I8SessionValue>(() => ({
     mode, state, connected, maintaining: wanted && mode === SESSION_MODE_BROWSER, halted, busy, notice, connectionCode,

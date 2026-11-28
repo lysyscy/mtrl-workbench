@@ -38,7 +38,6 @@ interface KickConfirmation {
 /** Shared execution lifecycle. Domains own scope, response meaning and subsequent adoption. */
 export function useI8FetchAction({source, me, paused, refresh, enabled = true, scopeKey, pending: initialPending = false, onPending}: Options) {
   const session = useI8Session();
-  // Monthly pages already retain the exact pending month; use that owner when supplied.
   const storageKey = source && !onPending ? `i8-fetch-pending:${source}:${me?.account ?? ''}` : '';
   const [restored] = useState(() => {
     try {return initialPending || Boolean(storageKey && sessionStorage.getItem(storageKey));}
@@ -183,7 +182,6 @@ export function useI8FetchAction({source, me, paused, refresh, enabled = true, s
         try {await refresh();}
         catch (failure) {
           const reason = failure instanceof Error ? failure.message : '请重读核对。';
-          // Mechanical fetch produces a preview for adoption and keeps its own recovery policy.
           if (source === 'mechanical') confirmed = false;
           if (alive.current) {
             if (parsed !== undefined && confirmed) setRefreshError(reason);

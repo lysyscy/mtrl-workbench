@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import Decimal from 'decimal.js';
 import { ApiError, record } from './api';
 
@@ -13,18 +14,23 @@ export type InternalColumn = 'mech_0' | 'mech_1';
 export function internalAmount(value: string): string | null {
   return /^\d+(?:\.\d{1,2})?$/.test(value.trim()) ? detailSum([value]) : null;
 }
+const effective = v.looseObject({
+  warehouse: v.string(), ym: v.string(), signature: v.string(),
+  values: v.record(v.string(), v.nullable(v.string())),
+  sources: v.record(v.string(), v.looseObject({ mode: v.string() })),
+});
 export function readInternalSave(value: unknown, warehouse: string, ym: string, column: InternalColumn, expected: string): Effective {
-  if (!record(value) || value.ok !== true || value.warehouse !== warehouse || value.ym !== ym || typeof value.signature !== 'string' || !value.signature || !record(value.values) || typeof value.values[column] !== 'string' || internalAmount(value.values[column]) !== expected || !record(value.sources)) throw new ApiError('内租保存回执不完整，请重新读取核对。', 0, 'invalid_receipt');
-  return value as unknown as Effective;
+  if (!v.is(effective, value) || value.ok !== true || value.warehouse !== warehouse || value.ym !== ym || !value.signature || typeof value.values[column] !== 'string' || internalAmount(value.values[column]) !== expected) throw new ApiError('内租保存回执不完整，请重新读取核对。', 0, 'invalid_receipt');
+  return value;
 }
-export interface SourceRow { id: string; bill?: string; periodName?: string; periodKey?: string; amount?: string | null; approval?: string | null }
+export interface SourceRow { id: string; bill?: string | null; periodName?: string | null; periodKey?: string | null; amount?: string | null; approval?: string | null }
 export interface Relation { warehouse: string; relation: string; left: string | null; right: string | null; pending: string | null; raw: string | null; ignored: string; revision: number; i8_revision: number; i6: string | null; fetched_at?: string; recorded_total:string|null; recorded_months:string[]; i8_usage:string|null; missing_reasons:string[]; i8_checked_at?:string|null; i8_source_status?:string|null }
 export interface BillDifference extends SourceRow { warehouse: string; document_id: string; fact: string; settlement: string; difference: string; ignored: boolean; revision: number }
 export interface Discovery { id: string; warehouse: string; kind: string; status: string; revision: number; note?: string; projectName?: string; projectId?: string; totals?: Record<string,string | null>; sources?: Record<string,SourceRow[]> }
 export interface Matter { id: string; warehouse: string; text: string; completed: boolean; revision: number; metadata: Record<string,unknown> }
 export interface I8Snapshot { warehouse: string; sources: Record<string,SourceRow[]>; totals: Record<string,string | null>; scope?: unknown }
 export interface I8Project extends I8Snapshot { before: Partial<I8Snapshot>; complete: boolean; reduction: boolean; changed: boolean; missing: string[]; source_status?:'no-records'|'available'|'incomplete' }
-export interface I8Preview { preview_id: string; projects: I8Project[]; unmapped_projects: Discovery[]; counts: Record<string,number> }
+export interface I8Preview { preview_id: string; projects: I8Project[]; unmapped_projects: PreviewDiscovery[]; counts: Record<string,number> }
 export interface WorkbenchSummary { warehouse:string; ym:string; cumulative:Record<string,string|null>; note?:string }
 export interface HistoryBase { warehouse:string; revision:number; signature:string; can_initialize:boolean; base_month:string; category_totals:Record<string,string|null>; i6:string|null; note:string }
 export interface HistoryBaseDraft { base_month:string; zero:string; monthly:string; internal:string; i6:string; note:string }
@@ -37,13 +43,18 @@ export interface Workbench { months: string[]; shown: string[]; warehouses: stri
 export interface CompanyRow { warehouse: string; values: (string | null)[] }
 export interface WorkbenchPage extends Workbench { company_rows: CompanyRow[] }
 export interface CompanySummaryRow { id: string; [column: string]: string | null }
+const detail = v.looseObject({
+  warehouse: v.string(), ym: v.string(), category: v.picklist(['zero', 'monthly']),
+  revision: v.pipe(v.number(), v.safeInteger()), rows: v.array(v.looseObject({ id: v.string() })),
+  totals: v.looseObject({ gross: v.custom<string | null>(value => nullableAmount(value)), net: v.custom<string | null>(value => nullableAmount(value)) }),
+  issues: v.array(v.looseObject({ id: v.string(), fields: v.array(v.string()) })),
+});
 export function readDetail(value: unknown): Detail {
-  if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !nullableAmount(value.totals.gross) || !nullableAmount(value.totals.net)) throw invalid();
-  return value as unknown as Detail;
+  if (!v.is(detail, value)) throw invalid();
+  return value;
 }
 
 function canonicalDetailRow({ net: _net, plateRequired: _plateRequired, ...inputs }: DetailRow) {
-  // Match the API's decimal normalization without rounding source precision.
   const nullableAmounts = ['amount', 'rate', 'sourceNet', 'original'];
   for (const field of [...nullableAmounts, 'qty', 'plan', 'used']) {
     const value = inputs[field];
@@ -73,8 +84,11 @@ const sheetNames = ['工程公司汇总表', '零租设备月报表', '包月外
 const invalid = () => new ApiError('机械报表结果不完整，请重新读取；仍失败请联系维护人员。');
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string');
 const revision = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-const amount = (value: unknown) => typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value);
-const nullableAmount = (value: unknown) => value === null || amount(value);
+const amount = (value: unknown): value is string => typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value);
+const nullableAmount = (value: unknown): value is string | null => value === null || amount(value);
+type PreviewDiscovery = Omit<Discovery, 'revision' | 'note' | 'projectName' | 'projectId'> & {
+  note?: string | null; projectName?: string | null; projectId?: string | null;
+};
 const sourceKinds = ['usage','project','team'] as const;
 function sources(value: unknown): boolean {
   return record(value) && sourceKinds.every(kind => Array.isArray(value[kind]) && value[kind].every((row: unknown) => record(row) && typeof row.id === 'string' && !!row.id && ['bill','periodName','periodKey'].every(key => row[key] == null || typeof row[key] === 'string') && ['amount','approval'].every(key => row[key] === undefined || nullableAmount(row[key]))));
@@ -85,14 +99,43 @@ function discovery(value: unknown, requireRevision = true): boolean {
   return record(value) && typeof value.id === 'string' && !!value.id && typeof value.warehouse === 'string' && ['first','changed','unmapped','missing-project'].includes(String(value.kind)) && ['pending','resolved'].includes(String(value.status)) && (!requireRevision || revision(value.revision)) && ['note','projectName','projectId'].every(key => value[key] == null || typeof value[key] === 'string') && (value.sources === undefined || sources(value.sources)) && (value.totals === undefined || totals(value.totals));
 }
 const matter = (value: unknown) => record(value) && typeof value.id === 'string' && !!value.id && typeof value.warehouse === 'string' && typeof value.text === 'string' && typeof value.completed === 'boolean' && revision(value.revision) && record(value.metadata);
+const sourceRow = v.looseObject({
+  id: v.pipe(v.string(), v.nonEmpty()),
+  ...v.entriesFromList(['bill', 'periodName', 'periodKey'], v.exactOptional(v.nullable(v.string()))),
+  ...v.entriesFromList(['amount', 'approval'], v.exactOptional(v.custom<string | null>(nullableAmount))),
+});
+const sourceRows = v.record(v.string(), v.array(sourceRow));
+const sourceTotals = v.record(v.string(), v.custom<string | null>(nullableAmount));
+const snapshotFields = {
+  warehouse: v.pipe(v.string(), v.nonEmpty()), sources: sourceRows, totals: sourceTotals,
+};
+const snapshotSchema = v.looseObject(snapshotFields);
+const previewDiscovery = v.looseObject({
+  id: v.pipe(v.string(), v.nonEmpty()), warehouse: v.string(),
+  kind: v.picklist(['first', 'changed', 'unmapped', 'missing-project']), status: v.picklist(['pending', 'resolved']),
+  ...v.entriesFromList(['note', 'projectName', 'projectId'], v.exactOptional(v.nullable(v.string()))),
+  sources: v.exactOptional(sourceRows), totals: v.exactOptional(sourceTotals),
+});
+const previewSchema = v.looseObject({
+  ok: v.literal(true), preview_id: v.pipe(v.string(), v.nonEmpty()),
+  counts: v.record(v.string(), v.custom<number>(revision)),
+  projects: v.array(v.looseObject({
+    ...snapshotFields, complete: v.boolean(), reduction: v.boolean(), changed: v.boolean(),
+    missing: v.array(v.string()), source_status: v.exactOptional(v.picklist(['no-records', 'available', 'incomplete'])),
+    before: v.union([snapshotSchema, v.strictObject({})]),
+  })),
+  unmapped_projects: v.array(previewDiscovery),
+});
 export function readI8Preview(value: unknown): I8Preview {
-  const counts=record(value)?value.counts:undefined;
-  if (!record(value) || value.ok !== true || typeof value.preview_id !== 'string' || !value.preview_id || !record(counts) || !sourceKinds.every(kind => revision(counts[kind])) || !Array.isArray(value.projects) || !Array.isArray(value.unmapped_projects) || !value.unmapped_projects.every(item => discovery(item, false))) throw invalid();
+  if (!v.is(previewSchema, value) || !sourceKinds.every(kind => revision(value.counts[kind])) ||
+      !value.unmapped_projects.every(item => discovery(item, false))) throw invalid();
   for (const item of value.projects) {
-    if (!record(item) || !snapshot(item) || typeof item.complete !== 'boolean' || typeof item.reduction !== 'boolean' || typeof item.changed !== 'boolean' || !strings(item.missing) || (item.source_status!==undefined&&!['no-records','available','incomplete'].includes(String(item.source_status))) || (item.source_status==='no-records'&&(item.complete||sourceKinds.some(kind=>(item.totals as Record<string,unknown>)[kind]!==null))) || !record(item.before) || (Object.keys(item.before).length > 0 && (!snapshot(item.before) || item.before.warehouse !== item.warehouse))) throw invalid();
+    if (!snapshot(item) ||
+        (item.source_status === 'no-records' && (item.complete || sourceKinds.some(kind => item.totals[kind] !== null))) ||
+        (Object.keys(item.before).length > 0 && (!snapshot(item.before) || !('warehouse' in item.before) || item.before.warehouse !== item.warehouse))) throw invalid();
   }
   if (new Set(value.projects.map(item => item.warehouse)).size !== value.projects.length) throw invalid();
-  return value as unknown as I8Preview;
+  return value;
 }
 export function readWorkResult(value: unknown, action: string, payload: Record<string,unknown>): void {
   if (!record(value) || value.ok !== true) throw receiptInvalid();
@@ -112,14 +155,12 @@ export function readWorkbench(value: unknown): Workbench {
   if (!record(value) || value.ok !== true || !strings(value.months) || value.months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) || !record(value.settings) || !strings(value.settings.shown_projects) || !Array.isArray(value.projects)) throw invalid();
   const warehouses = value.projects.map((project: unknown) => { if (!record(project) || typeof project.warehouse !== 'string') throw invalid(); return project.warehouse; });
   if (!Array.isArray(value.details) || !Array.isArray(value.effective) || !Array.isArray(value.reconciliations) || !Array.isArray(value.billDifferences) || !Array.isArray(value.discoveries) || !Array.isArray(value.matters) || !Array.isArray(value.i8) || !Array.isArray(value.histories) || !Array.isArray(value.summary) || value.summary.some((item:unknown)=>!record(item)||typeof item.warehouse!=='string'||typeof item.ym!=='string'||!record(item.cumulative)||!Object.values(item.cumulative).every(nullableAmount)||(item.note!=null&&typeof item.note!=='string')) || !revision(value.settings.revision) || !strings(value.settings.plate_keywords)) throw invalid();
-  const effective = value.effective.map((r: unknown): Effective => {
-    if (!record(r) || typeof r.warehouse !== 'string' || typeof r.ym !== 'string' || typeof r.signature !== 'string' || !record(r.values) || !record(r.sources)) throw invalid();
-    return r as unknown as Effective;
-  });
+  if (!v.is(v.array(effective), value.effective)) throw invalid();
+  const effectiveRows = value.effective;
   if (value.reconciliations.some((r: unknown) => !record(r) || typeof r.warehouse !== 'string' || !['report','internal'].includes(String(r.relation)) || !['left','right','pending','raw','i6','recorded_total','i8_usage'].every(key => nullableAmount(r[key])) || !strings(r.recorded_months) || !strings(r.missing_reasons) || !amount(r.ignored) || !revision(r.revision) || !revision(r.i8_revision) || ['fetched_at','i8_checked_at','i8_source_status'].some(key=>r[key]!=null&&typeof r[key]!=='string')) || value.billDifferences.some((r: unknown) => !record(r) || typeof r.warehouse !== 'string' || !['id','document_id','fact'].every(key => typeof r[key] === 'string' && !!r[key]) || !['settlement','approval','difference'].every(key => amount(r[key])) || !revision(r.revision) || typeof r.ignored !== 'boolean') || !value.discoveries.every(item => discovery(item)) || !value.matters.every(matter) || !value.i8.every(snapshot) || value.histories.some((item: unknown) => !record(item) || typeof item.warehouse !== 'string')) throw invalid();
   const history_bases=value.history_bases===undefined?[]:value.history_bases;
   if(!Array.isArray(history_bases)||history_bases.some(item=>!record(item)||typeof item.warehouse!=='string'||!revision(item.revision)||typeof item.signature!=='string'||typeof item.can_initialize!=='boolean'||(item.can_initialize&&!item.signature)||typeof item.base_month!=='string'||!record(item.category_totals)||!Object.values(item.category_totals).every(nullableAmount)||!nullableAmount(item.i6)||typeof item.note!=='string'))throw invalid();
-  return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective, relations: value.reconciliations as Relation[], billDifferences: value.billDifferences as BillDifference[], discoveries: value.discoveries as Discovery[], matters: value.matters as Matter[], i8: value.i8 as I8Snapshot[], histories: value.histories as Record<string,unknown>[], history_bases:history_bases as HistoryBase[], summary:value.summary as WorkbenchSummary[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
+  return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective: effectiveRows, relations: value.reconciliations as Relation[], billDifferences: value.billDifferences as BillDifference[], discoveries: value.discoveries as Discovery[], matters: value.matters as Matter[], i8: value.i8 as I8Snapshot[], histories: value.histories as Record<string,unknown>[], history_bases:history_bases as HistoryBase[], summary:value.summary as WorkbenchSummary[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
 }
 export function readWorkbenchPage(value: unknown, ym: string): WorkbenchPage {
   const data = readWorkbench(value);
@@ -151,7 +192,6 @@ export function companySummaryRows(data: WorkbenchPage, ym: string, projects: { 
   });
   const total: CompanySummaryRow = { id: 'total', c0: '合计', c1: null, c2: null, c3: null, c14: null };
   for (let column = 4; column <= 13; column++) total[`c${column}`] = detailSum(rows.map(row => row[`c${column}`]));
-  // The existing total uses effective weekly amounts; project cells show the historical original month.
   const warehouses = new Set(projects.map(project => project.warehouse));
   total.c11 = detailSum(data.effective.filter(item => item.ym === ym && warehouses.has(item.warehouse)).map(item => item.values.weekly));
   return [...rows, total];
@@ -182,7 +222,6 @@ export function readMechanicalReport(value: unknown, ym: string, warehouses: str
   return { ym, sheets };
 }
 
-// Match the existing detail editor: preserve source precision, round only the total.
 function decimal(value: unknown): { value: bigint; places: number } | null {
   const text = String(value ?? '').trim(); if (!/^-?\d+(?:\.\d+)?$/.test(text)) return null;
   const [whole, fraction = ''] = text.replace(/^-/, '').split('.');

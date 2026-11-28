@@ -110,7 +110,8 @@ def refund(session, values):
         project_id=original.project_id, account_id=original.account_id, card_id=original.card_id,
         date_text=values['date_text'], entry_date=_date(values['date_text']), amount=-amount,
         remark=values['remark'], updated_by=current_operator())
-    session.add(row); session.flush()
+    session.add(row)
+    session.flush()
     return row
 
 
@@ -244,7 +245,8 @@ def stage_opening(session, *, source_key, source_note, account_id, project_id, a
             raise MustReportError('这份期初来源已登记且内容不同，请先核对，不重复接续。')
         return existing
     row = OilOpeningBalance(source_key=source_key, updated_by=current_operator(), **fields)
-    session.add(row); session.flush()
+    session.add(row)
+    session.flush()
     return row
 
 

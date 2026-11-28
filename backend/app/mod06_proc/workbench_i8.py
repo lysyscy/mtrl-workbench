@@ -6,7 +6,7 @@ from app.core.errors import MustReportError
 from app.core.session import current_name
 from app.mod01_projects.domain import resolve_ownership
 from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_NORMAL, TYPE_SHELL
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 
 # Observed on all three Fourth Engineering Company list pages on 2026-10-19.

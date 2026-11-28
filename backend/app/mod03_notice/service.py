@@ -17,13 +17,13 @@
 
 from __future__ import annotations
 
+from app.mod03_notice import repository as _repo
+
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from app.core.config import get_settings
 from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.mod02_i8.browser_session import StrictSessionStopped
@@ -369,7 +369,6 @@ def _reason(exc: BaseException) -> str:
 #    ⛔ 别的包**别** `import app.mod03_notice.repository` —— 守卫 = `backend/tests/test_layering.py` **规则 C**。
 #    ⭐ 与 `repository` 里那份**是同一个对象**（纯再导出，⛔ 不另写一套）——
 #       同款先例：`mod03_notice/repository.py` 再导出 `MOD-02` 的运行记录仓储。
-from app.mod03_notice import repository as _repo      # noqa: E402  ← 顶层导入安全（`repository` 不引 `service`）
 def stat_paid_is_protected(s, notice_id: int) -> bool:
     """统计付款金额是否受人工留痕保护。"""
     from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited

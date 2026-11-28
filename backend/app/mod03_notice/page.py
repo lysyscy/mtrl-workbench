@@ -13,6 +13,28 @@
 
 from __future__ import annotations
 
+from app.mod03_notice.list_page import (
+    DEFAULT_EMPTY_TEXT,
+    LIST_PAGE_SEGMENTS,
+    SEG_DATA,
+    SEG_EMPTY,
+    SEG_FILTER,
+    SEG_KPIS,
+    SEG_TIP,
+    SORT_ASC,
+    SORT_DESC,
+    SORT_NONE,
+    UNSORTABLE_LABELS,
+    esc,
+    is_sortable,
+    nav_html,
+    next_sort_direction,
+    render_list_page,
+    segment_sequence,
+    sort_rows,
+    tip_block_count,
+)
+
 # ============================================================ §4.1.2 付款域的范围定义
 
 SCOPE_INCLUDED: tuple[str, ...] = (
@@ -283,27 +305,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
 #    （2026-09-21 为清 `T5` 的「>600 禁合入」红线而整体切出）⇒ 这里**再导出**，一处不改调用方。
 # ⛔ 加新函数请加到**真正该住的那一件**（列表页骨架 → `list_page.py`；主题真源 → 本文件），
 #    这里只留再导出与付款域范围口径。
-from app.mod03_notice.list_page import (                      # noqa: F401
-    DEFAULT_EMPTY_TEXT,
-    LIST_PAGE_SEGMENTS,
-    SEG_DATA,
-    SEG_EMPTY,
-    SEG_FILTER,
-    SEG_KPIS,
-    SEG_TIP,
-    SORT_ASC,
-    SORT_DESC,
-    SORT_NONE,
-    UNSORTABLE_LABELS,
-    esc,
-    is_sortable,
-    nav_html,
-    next_sort_direction,
-    render_list_page,
-    segment_sequence,
-    sort_rows,
-    tip_block_count,
-)
 __all__ = [
     "SCOPE_INCLUDED", "SCOPE_EXCLUDED", "EXCLUDED_KEYWORDS", "PAY_DOMAIN_IDS", "PAY_DOMAIN_PAGES",
     "pay_domain_nav", "nav_violations",

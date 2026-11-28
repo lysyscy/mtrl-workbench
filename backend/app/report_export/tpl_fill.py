@@ -35,7 +35,6 @@ import re
 from io import BytesIO
 from copy import copy
 from decimal import Decimal
-from pathlib import Path
 
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
@@ -363,7 +362,7 @@ def verify_filled(path, plan) -> list[str]:
         for sp in plan["sheets"]:
             ws, raw = wb[sp["sheet"]], wf[sp["sheet"]]
             max_col = sp["max_col"]
-            ds, n = sp["data_start"], len(sp["data_rows"])
+            ds = sp["data_start"]
             key_idx = column_index_from_string(sp["key_col"])
             for i, (label, cells) in enumerate(sp["data_rows"]):
                 r = ds + i

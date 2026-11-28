@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from datetime import datetime
+import logging
 
-from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
@@ -34,12 +34,9 @@ from app.mod01_projects.recovery import (
     unknown_warehouses,
 )
 from app.mod01_projects import service as P1S
-import logging
-
 from app.mod02_i8 import fetch_task, report_export, source_cache
 
-logger = logging.getLogger(__name__)
-from app.mod02_i8.client import I8Client, I8OnlineConflictError, serialize_fetch
+from app.mod02_i8.client import I8OnlineConflictError, serialize_fetch
 from app.mod02_i8.browser_relay import open_i8_client
 from app.mod02_i8.browser_session import StrictSessionStopped
 from app.mod02_i8.repository import save_run_record
@@ -47,6 +44,8 @@ from app.mod02_i8.fetch_receipt import fetch_receipt
 from app.mod02_i8.sources import load_warehouse_rows
 from app.mod08_inv import importer
 from app.mod08_inv.repository import upsert_details
+
+logger = logging.getLogger(__name__)
 
 TABLE = "inv_detail"          # 同表抓取串行锁的键（D9）
 SPEC_KEY = "inv"              # `app.core.config.I8_REPORTS` 里的登记键

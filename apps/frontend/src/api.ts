@@ -11,7 +11,6 @@ export function setRequestIdentity(identity: string) {
 
 type IdentityCheck = { done: Promise<void>; error: string };
 let identityCheck: IdentityCheck | null = null;
-// Let the first click update local UI while holding network intents until the account is known.
 export function beginIdentityVerification() {
   let release!: () => void;
   const check: IdentityCheck = { done: new Promise<void>(resolve => { release = resolve; }), error: '' };
@@ -25,7 +24,6 @@ export function beginIdentityVerification() {
 
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   const signal = init.signal ? AbortSignal.any([init.signal, identityRequests.signal]) : identityRequests.signal;
-  // Verification itself must be able to pass its own gate. Every other read/write waits.
   if (!(path === '/api/m15/users' && (!init.method || init.method === 'GET'))) {
     while (identityCheck) {
       const check = identityCheck;
@@ -94,7 +92,6 @@ export async function requestFile(path: string, signal?: AbortSignal, method: 'G
   return { blob: await response.blob(), filename };
 }
 
-// Decode into the final buffer without building an intermediate array of characters.
 export function decodeBase64(text: string) {
   const binary = atob(text);
   const bytes = new Uint8Array(binary.length);

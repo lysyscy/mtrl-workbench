@@ -45,8 +45,6 @@ function EntryCell({ data: row, colDef, node }: ICellRendererParams<TableRow>) {
     projects={state.projects} archives={state.archives} change={state.change} save={state.save} />;
 }
 
-// The context follows every draft. Editors in other rows still have identical
-// values, options and actions, and need not rebuild their selects and calendars.
 const EntryEditor = memo(function EntryEditor({ current, field, draft, disabled, projects, archives, change: changeField, save: saveRow }:
   Pick<Cells, 'projects' | 'archives' | 'change' | 'save'> & { current: OilEntry; field: Field; draft: Draft | undefined; disabled: boolean }) {
   const [focused, setFocused] = useState(false);
@@ -136,8 +134,6 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   draftRef.current = drafts;
   useEffect(() => { onWriteLock(busy || uncertain || invoiceLocked); }, [busy, uncertain, invoiceLocked, onWriteLock]);
   useEffect(() => { onUncertain(uncertain || invoiceUncertain); }, [uncertain, invoiceUncertain, onUncertain]);
-  // Inactive sheets are inert. Toggling every native control during the visual
-  // exit would re-render each calendar and select; writes still check activity.
   const editorDisabled = blocked || !me || uncertain || invoiceLocked || !query.data || query.isError || archiveLocked;
   const disabled = !active || editorDisabled;
   const editingAllowed = useRef(false); editingAllowed.current = !disabled;
@@ -222,8 +218,6 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
   const measureAmountWidth = useMemo(() => cacheFontMeasurement(() => fullTextWidth(amountTexts, scale).minWidth),
     [amountTexts, scale]);
   const amountWidth = measureAmountWidth();
-  // Measure equal editors once per column and width. Refunds display plain labels,
-  // while draft amounts and pinned totals can render differently from saved input.
   const measurement = useMemo(() => ({
     signature(row: TableRow, column: string, pinned: boolean) {
       if (pinned) return column === 'amount' ? row.amount : 'footer';
@@ -254,7 +248,6 @@ export function OilLedgerSheet({ me, archives, projects, active, blocked, scale,
     { colId: 'actions', headerName: '操作', pinned: 'right', ...contentWidth(76, 100, scale), cellRenderer: EntryActions },
   ] satisfies ColDef<TableRow>[]).map(column => 'field' in column ? valueFilterColumn<TableRow>(column, filterOptions[column.field]) : column), [scale, amountWidth, filterOptions]);
   const totals = useMemo<TableRow[]>(() => query.data ? [{ id: -1, request_id: 'total', version: '', kind: 'adjustment', project_id: 0, account_id: 0, card_id: null, date_text: '合计', entry_date: null, amount: filteredAmount, remark: '', related_entry_id: null, transfer_id: null, total: true }] : [], [query.data, filteredAmount]);
-  // 台账首读与失败只在表区原位呈现：工具栏和草稿错误行保持可见，未读不被当成空台账。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   return <div className="oilcard-ledger-sheet" role="region" aria-label="充值与发票">

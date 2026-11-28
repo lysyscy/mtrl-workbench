@@ -23,7 +23,6 @@ import { PreparedGrid, useGridPresentation } from './grid-presentation';
 import { FirstReadRegion, ReadFailure, ReadPlaceholder, ReadStatusLane, readPhase } from './read-region';
 import { ProjectExport, ProjectSelectionOrder } from './ledger-controls';
 const summaryRowId = (row: SummaryRow) => row.id;
-// These cells stay one line; let the existing native row-height path size them.
 const summaryMeasurement = {textOnly:Array.from({length:15},(_,index)=>`c${index}`)};
 const plateKeywords = (text: string) => [...new Set(text.split('\n').map(word => word.trim()).filter(Boolean))];
 
@@ -89,7 +88,6 @@ function Summary({ scale, ym, projects, detail, internal, data, warehouses, acti
   useLayoutEffect(() => { if (presentation.state === 'ready') fitHeight(); }, [presentation.state, fitHeight]);
   return <PreparedGrid presentation={presentation} className="mechanical-grid grid-single-line" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
         api.current = event.api;
-        // Header wrapping and scrollbar visibility can settle after the first data render.
         const observer = new ResizeObserver(fitHeight);
         for (const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
           const element = root.current?.querySelector(selector); if (element) observer.observe(element);
@@ -231,7 +229,6 @@ export function MechanicalPage({ me, blocked, exportGuard, active, onHistoryGuar
     return data;
   }
   async function readMonth(readMonth:string){
-    // Other kept-alive pages read their stale data when next activated.
     await client.invalidateQueries({refetchType:'none'});
     await client.cancelQueries({queryKey:['mechanical-state',readMonth],exact:true});
     const data=await client.fetchQuery({queryKey:['mechanical-state',readMonth],staleTime:0,queryFn:async({signal})=>readWorkbenchPage(await requestJson('/api/m06/workbench/page?ym='+encodeURIComponent(readMonth),{signal}),readMonth)});
@@ -266,7 +263,6 @@ export function MechanicalPage({ me, blocked, exportGuard, active, onHistoryGuar
     if(writing||state.isFetching)return;
     if(!await refresh()){setMessage('设置保存结果仍待核实，重新读取失败；输入已保留。');return;}
     const latest=client.getQueryData<WorkbenchPage>(['mechanical-state',month]);
-    // An explicit recovery read may acknowledge an already-saved draft; background reads never reset it.
     if(latest&&dialog==='plate'&&JSON.stringify(plateKeywords(keywords))===JSON.stringify(latest.settings.plate_keywords))setKeywordsBaseline(JSON.stringify(plateKeywords(keywords)));
     if(latest&&dialog==='projects'&&JSON.stringify(pickerOrder.filter(id=>pickerIds.includes(id)).flatMap(id=>candidates.find(p=>p.id===id)?.warehouse_name??[]))===JSON.stringify(latest.shown)){const selected=pickerOrder.filter(id=>pickerIds.includes(id));setPickerBaseline(selected);setIds(selected);setTemporary('');}
     setMessage('已重新读取，请核对设置后继续。');

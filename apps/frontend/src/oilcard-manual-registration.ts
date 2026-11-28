@@ -99,7 +99,6 @@ export class OilManualRegistration {
           await saveManualOilInvoice(submission.fields, submission.identity, signal);
         } catch (failure) {
           if (!(retrying && failure instanceof ApiError && failure.status === 409)) throw failure;
-          // The first POST may have committed after the read and then been changed or deleted.
           canRetry = false;
           throw new ApiError(failure.message, failure.status, 'invalid_response');
         }

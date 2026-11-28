@@ -22,7 +22,8 @@ export function readHistory(value: unknown): { undo: HistoryItem | null; redo: H
   }
   return { undo: item(value.undo), redo: item(value.redo), notice: typeof value.notice === 'string' ? value.notice : '' };
 }
-const ReplayState = createContext({ busy: false, uncertain: false, setBusy: (_value: boolean) => {}, setUncertain: (_value: boolean) => {} });
+type ReplayStatus = { busy: boolean; uncertain: boolean; setBusy: (value: boolean) => void; setUncertain: (value: boolean) => void };
+const ReplayState = createContext<ReplayStatus>({ busy: false, uncertain: false, setBusy: () => {}, setUncertain: () => {} });
 export const useHistoryState = () => useContext(ReplayState);
 export function HistoryGate({ children }: { children: ReactNode }) {
   const { busy, uncertain } = useHistoryState();
@@ -60,7 +61,6 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
   const { busy, uncertain, setBusy, setUncertain } = useHistoryState();
   const [feedback, setFeedback] = useState('');
   const [confirmation, setConfirmation] = useState<{ direction: 'undo' | 'redo'; item: HistoryItem; details: HistoryDetails } | null>(null);
-  // Replay has its own lock; a page guard for this modal would block its confirmation.
   const closing = useDialogClose({ busy, dirty: false, close: () => setConfirmation(null), open: Boolean(confirmation), active: false });
   const lock = useRef(false), alive = useRef(true), request = useRef<AbortController | null>(null);
   const state = useRef({ me, blocked, guard }); state.current = { me, blocked, guard };

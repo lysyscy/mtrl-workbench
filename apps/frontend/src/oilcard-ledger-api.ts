@@ -19,13 +19,15 @@ const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}
 export function readOilEntry(v: unknown): OilEntry {
   if (!record(v) || !id(v.id) || !uuid(v.request_id) || !uuid(v.version) || !id(v.project_id) || !id(v.account_id) || !nullableId(v.card_id) || !nullableId(v.related_entry_id) ||
     typeof v.date_text !== 'string' || !(v.entry_date === null || typeof v.entry_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.entry_date)) || !moneyText(v.amount) || typeof v.remark !== 'string' ||
-    !['recharge', 'adjustment', 'refund', 'transfer_out', 'transfer_in'].includes(String(v.kind)) ||
+    (v.kind !== 'recharge' && v.kind !== 'adjustment' && v.kind !== 'refund' && v.kind !== 'transfer_out' && v.kind !== 'transfer_in') ||
     !(v.transfer_id === null || uuid(v.transfer_id)) ||
     v.kind === 'recharge' && (cents(v.amount) <= 0n || v.related_entry_id !== null || v.transfer_id !== null) ||
     v.kind === 'adjustment' && (v.related_entry_id !== null || v.transfer_id !== null) ||
     v.kind === 'refund' && (cents(v.amount) >= 0n || !id(v.related_entry_id) || v.transfer_id !== null) ||
     (v.kind === 'transfer_out' || v.kind === 'transfer_in') && (v.related_entry_id !== null || !uuid(v.transfer_id) || (v.kind === 'transfer_out' ? cents(v.amount) >= 0n : cents(v.amount) <= 0n))) throw new ApiError('充值记录读取不完整，请重读核对。');
-  return v as unknown as OilEntry;
+  return { ...v, id: v.id, request_id: v.request_id, version: v.version, project_id: v.project_id,
+    account_id: v.account_id, card_id: v.card_id, related_entry_id: v.related_entry_id, date_text: v.date_text,
+    entry_date: v.entry_date, amount: v.amount, remark: v.remark, kind: v.kind, transfer_id: v.transfer_id };
 }
 export function readOilLedger(v: unknown): OilLedger {
   if (!record(v) || !Array.isArray(v.entries) || !moneyText(v.total_amount)) throw new ApiError('充值台账读取不完整，请重读核对。');

@@ -37,7 +37,7 @@ from app.mod03_notice.schemas import (
     PrintBatchExportOut, PrintBatchOut, PrintDispatchRequest,
 )
 from app.mod03_notice.service import (
-    MODE_PDF, MODE_PRINT, BatchResult, ItemOutcome, PreparedPdf, complete_preparation,
+    MODE_PRINT, BatchResult, ItemOutcome, PreparedPdf, complete_preparation,
     dispatch_prepared, prepare_batch,
 )
 

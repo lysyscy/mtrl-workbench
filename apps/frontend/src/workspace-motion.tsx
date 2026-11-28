@@ -2,13 +2,10 @@ import { createContext, isValidElement, useContext, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
-// Motion owns interpolation; business state and mounting decisions stay with callers.
 export const ReducedMotion = createContext(false);
 export const MotionAccess = createContext(true);
 export const useWorkspaceReducedMotion = () => useContext(ReducedMotion);
 export const workspaceSpring = { type: 'spring', stiffness: 420, damping: 38, mass: 1 } as const;
-// Reduced motion places the indicator directly in its new selection. Even a
-// zero-duration shared layout can project the previous box for one frame.
 export function WorkspaceMarker({ className, layoutId }: { className: string; layoutId: string }) {
   const reduced = useWorkspaceReducedMotion();
   return reduced ? <span aria-hidden="true" className={className} />
@@ -22,8 +19,6 @@ export function DialogPresence({ children }: { children: ReactNode }) {
   if (shown !== instance.shown || type !== instance.type || key !== instance.key) {
     setInstance({ shown, type, key, id: instance.id + (shown ? 1 : 0) });
   }
-  // Reopening ends the old business lifecycle before mounting a fresh draft.
-  // Only an ordinary close retains its visual exit; old/new lock owners never overlap.
   return <AnimatePresence key={instance.id}>{children}</AnimatePresence>;
 }
 

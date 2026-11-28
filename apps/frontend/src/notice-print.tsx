@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { BoundedGrid } from './bounded-grid';
@@ -74,37 +75,44 @@ const deliveryLabel = {
   pending: '待投递', in_flight: '正在投递', accepted: '打印机已接收', failed: '明确失败', unknown: '结果待核实',
 };
 const channelLabel: Record<string, string> = {ipp: 'IPP', driver: '系统驱动', raw: 'RAW 9100'};
-const nullableInteger = (value: unknown) => value === null || Number.isSafeInteger(value);
-const validAttempt = (value: unknown) => record(value) && typeof value.channel === 'string'
-  && ['accepted', 'failed', 'unknown'].includes(String(value.status))
-  && nullableInteger(value.job_id) && typeof value.reason === 'string';
+const integer = v.pipe(v.number(), v.safeInteger());
+const nullableInteger = v.nullable(integer);
+const attempt = v.looseObject({
+  channel: v.string(), status: v.picklist(['accepted', 'failed', 'unknown']), job_id: nullableInteger, reason: v.string(),
+});
+const batch = v.looseObject({
+  mode: v.picklist(['pdf', 'print']), batch_id: v.pipe(v.string(), v.nonEmpty()),
+  stage: v.picklist(['connecting', 'preparing', 'dispatching', 'done']),
+  status: v.picklist(['running', 'ready', 'failed', 'complete']),
+  ...v.entriesFromList(['total', 'prepared_count', 'dispatch_processed_count', 'dispatched_count'], integer),
+  ...v.entriesFromList(['current_bill_no', 'failed_bill_no', 'reason', 'kick_token'], v.string()),
+  failed_notice_id: nullableInteger,
+  items: v.array(v.looseObject({
+    notice_id: integer, ...v.entriesFromList(['bill_no', 'status', 'channel', 'reason'], v.string()),
+    delivery_status: v.picklist(['pending', 'in_flight', 'accepted', 'failed', 'unknown']),
+    job_id: nullableInteger, attempts: v.array(attempt),
+  })),
+});
+const a4Block = v.nullable(v.looseObject({
+  code: v.literal('a4_blocked'), reason: v.string(), can_switch_channel: v.boolean(), export_action: v.string(),
+}));
+const batchResult = v.nullable(v.looseObject({
+  total: integer, success: integer, failed: integer,
+  items: v.array(v.looseObject({
+    notice_id: integer, bill_no: v.string(), ok: v.boolean(), unverified: v.boolean(),
+    reason: v.string(), download_url: v.string(),
+  })),
+}));
 
 function readBatch(value: unknown, mode: BatchMode): BatchView {
-  if (!record(value) || value.mode !== mode || typeof value.batch_id !== 'string' || !value.batch_id
-    || !['connecting', 'preparing', 'dispatching', 'done'].includes(String(value.stage))
-    || !['running', 'ready', 'failed', 'complete'].includes(String(value.status))
-    || ![value.total, value.prepared_count, value.dispatch_processed_count, value.dispatched_count].every(Number.isSafeInteger)
-    || ![value.current_bill_no, value.failed_bill_no, value.reason, value.kick_token].every(x => typeof x === 'string')
-    || (value.failed_notice_id !== null && !Number.isSafeInteger(value.failed_notice_id))
-    || !Array.isArray(value.items) || !value.items.every(x => record(x) && Number.isSafeInteger(x.notice_id)
-      && [x.bill_no, x.status, x.channel, x.reason].every(field => typeof field === 'string')
-      && ['pending', 'in_flight', 'accepted', 'failed', 'unknown'].includes(String(x.delivery_status)) && nullableInteger(x.job_id)
-      && Array.isArray(x.attempts) && x.attempts.every(validAttempt))) {
-    throw new ApiError('批次状态不完整，请重查批次。');
-  }
+  if (!v.is(batch, value) || value.mode !== mode) throw new ApiError('批次状态不完整，请重查批次。');
   const block = value.a4_blocked;
-  if (block !== null && (!record(block) || block.code !== 'a4_blocked' || typeof block.reason !== 'string'
-    || typeof block.can_switch_channel !== 'boolean' || block.export_action !== pathOf(value.batch_id) + '/export-pdf')) {
+  if (!v.is(a4Block, block) || block !== null && block.export_action !== pathOf(value.batch_id) + '/export-pdf') {
     throw new ApiError('A4 校验结果不完整，请重查批次。');
   }
   const result = value.result;
-  if (result !== null && (!record(result) || ![result.total, result.success, result.failed].every(Number.isSafeInteger)
-    || !Array.isArray(result.items) || !result.items.every(x => record(x) && Number.isSafeInteger(x.notice_id)
-      && typeof x.bill_no === 'string' && typeof x.ok === 'boolean' && typeof x.unverified === 'boolean'
-      && typeof x.reason === 'string' && typeof x.download_url === 'string'))) {
-    throw new ApiError('执行回执不完整，请重查批次。');
-  }
-  return value as unknown as BatchView;
+  if (!v.is(batchResult, result)) throw new ApiError('执行回执不完整，请重查批次。');
+  return { ...value, a4_blocked: block, result };
 }
 
 const stageLabel: Record<BatchStage, string> = {
@@ -118,13 +126,16 @@ const batchKey = (owner: string) => 'notice-print-batch:' + owner;
 
 function rememberBatch(owner: string, id: string) {
   try { window.sessionStorage.setItem(batchKey(owner), id); }
-  catch { /* The server can still discover the batch if storage is unavailable. */ }
+  catch { return; }
+}
+
+function rememberedBatch(owner: string) {
+  try { return window.sessionStorage.getItem(batchKey(owner)); }
+  catch { return null; }
 }
 
 export async function recoverNoticePrint(owner: string, signal?: AbortSignal): Promise<BatchView | null> {
-  let id: string | null = null;
-  try { id = window.sessionStorage.getItem(batchKey(owner)); }
-  catch { /* Fall back to the owner-scoped endpoint. */ }
+  const id = rememberedBatch(owner);
   if (id) {
     try {
       const batch = readBatch(await requestJson(pathOf(id), {signal: signal ?? null}), 'print');

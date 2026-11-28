@@ -33,8 +33,6 @@ function businessColumns<T>(columns:(ColDef<T>|ColGroupDef<T>)[],scale:number,si
       ...(singleLine?{wrapHeaderText:false,autoHeight:false,autoHeaderHeight:false}:{}),...column});
 }
 
-// Small business views use the same native definitions and lifecycle as page grids.
-// Each caller chooses its native layout; this component supplies no table schema.
 export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, scope = table, scale: suppliedScale,
   className = '', style, domLayout, grid = {}, context, rowMinimum, gridClassName='',singleLine=false,measurement, contentWidths, initialScroll }: BusinessGridProps<T> & { initialScroll?: 'bottom' }) {
   const root = useRef<HTMLDivElement>(null);
@@ -63,8 +61,6 @@ export function BusinessGrid<T>({ table, rows, columns, rowId, totals, label, sc
   </div>;
 }
 
-// Repeated small views use AG's native row/header auto height; inputs stay business-owned.
-// Keep the richer editor/scroll preparation in BusinessGrid for workspaces.
 export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:suppliedScale,className='',style,domLayout,grid={},context,singleLine=false,fitAfterFonts=false,contentWidths}:BusinessGridProps<T> & {fitAfterFonts?: boolean}) {
   const root=useRef<HTMLDivElement>(null),[api,setApi]=useState<GridApi<T>|null>(null);
   const active=useContext(PageActivity);
@@ -83,7 +79,6 @@ export function ReadGrid<T>({table,rows,columns,rowId,totals,label,scale:supplie
     const nextFrame=()=>new Promise<void>(resolve=>{frame=requestAnimationFrame(()=>resolve());});
     void (async()=>{try {
       await loadElementFonts(node);if(cancelled||api.isDestroyed())return;
-      // A deferred first fit includes flex columns just as the native first-data strategy does.
       await widths.fit(fitAfterFonts);
       if(cancelled||api.isDestroyed())return;
       api.resetRowHeights();

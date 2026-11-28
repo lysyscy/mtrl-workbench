@@ -137,7 +137,7 @@ for (const [name, error] of [['rejected', new ApiError('invalid amount', 400)], 
       assert.equal(await queue.reread(), true);
       queue.confirm();
     }
-    queue.update(({ a, ...rest }) => rest);
+    queue.update(drafts => { const rest = { ...drafts }; delete rest.a; return rest; });
     queue.save('b', true);
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual(writes, ['first', 'second']);

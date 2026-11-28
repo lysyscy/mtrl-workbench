@@ -24,8 +24,11 @@ def audit_user(request: Request):
     return identity
 
 
+AuditUser = Depends(audit_user)
+
+
 @router.get('/snapshot')
-def snapshot(response: Response, user=Depends(audit_user)):
+def snapshot(response: Response, user=AuditUser):
     response.headers['Cache-Control'] = 'no-store'
     return DATA.capture()
 
@@ -36,7 +39,7 @@ class MethodRequest(BaseModel):
 
 
 @router.post('/methods')
-def update_methods(req: MethodRequest, response: Response, user=Depends(audit_user)):
+def update_methods(req: MethodRequest, response: Response, user=AuditUser):
     response.headers['Cache-Control'] = 'no-store'
     if sha256(req.preview_json.encode('utf-8')).hexdigest() != req.approved_sha256:
         raise HTTPException(409, '预览与已确认版本不符，未写入')

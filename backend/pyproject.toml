@@ -29,6 +29,7 @@ dev = [
     "pytest",
     "pip-audit",
     "requests",
+    "ruff",
     "starlette",
 ]
 
@@ -39,3 +40,11 @@ default = true
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py315"
+cache-dir = ".venv/.ruff_cache"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "S110", "S112"]
+ignore = ["E501"]

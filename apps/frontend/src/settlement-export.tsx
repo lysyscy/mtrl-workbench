@@ -13,7 +13,6 @@ export function SettlementExport({ url, scope, disabled, paused, children, metho
   const state = useRef({ url, paused, disabled }); state.current = { url, paused, disabled };
   const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
   const closing = useDialogClose({ busy, dirty: false, close, active: !paused });
-  // Keep waiting for a POST that may still be generating and fixing its month.
   useEffect(() => { if (method === 'GET') request.current?.abort(); setOpen(false); setError(''); }, [url, paused, method]);
   useHistoryGuard(`export:${url}`, () => method === 'POST' && lock.current ? '大表文件正在导出，请稍候。' : '');
   useEffect(() => () => request.current?.abort(), []);
@@ -28,7 +27,6 @@ export function SettlementExport({ url, scope, disabled, paused, children, metho
       link.href = object; link.download = file.filename; link.click(); setTimeout(() => URL.revokeObjectURL(object), 1000); close();
     } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '导出失败，请重试。'); }
     finally {
-      // A POST may have fixed the month even when its download response was lost.
       if (method === 'POST' && onSettled && !await onSettled()) close();
       lock.current = false; setBusy(false);
     }

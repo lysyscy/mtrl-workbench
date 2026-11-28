@@ -57,7 +57,8 @@ def bind(session, *, project_id, fee_item_id, reviewed_items, converted_customs,
     binding = FeeOilBinding(project_id=project_id, fee_item_id=fee_item_id,
         reviewed_json=json.dumps({'items': current, 'converted_customs': converted_customs}, ensure_ascii=False, sort_keys=True), source_note=source_note,
         enabled_by=current_operator())
-    session.add(binding); session.flush()
+    session.add(binding)
+    session.flush()
     if old:
         # 绑定是结构切换；原金额保持，旧历史凭据从此不能越过接续改写原依据。
         session.get(FeeItem, fee_item_id).updated_at = datetime.now()

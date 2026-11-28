@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import Button from 'antd/es/button';
@@ -189,7 +190,7 @@ function rentalColumns(scale: number): ColDef<RentalLine>[] {
   return [
     {
       colId: 'sequence', headerName: '序号', ...contentWidth(61, 68, scale), rowDrag: p => !p.node?.rowPinned,
-      valueGetter: p => p.node?.rowPinned ? null : (p.node?.rowIndex ?? 0) + 1,
+      valueGetter: layoutCallback(p => p.node?.rowPinned ? null : (p.node?.rowIndex ?? 0) + 1),
     },
     {
       field: 'name', headerName: '名称', ...contentWidth(84, 140, scale, 1), cellRenderer: EquipmentName,

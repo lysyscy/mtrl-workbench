@@ -150,7 +150,7 @@ def normalize_rows(rows):
             if row.get(field) not in (None, ''):
                 try:
                     value = Decimal(str(row[field]))
-                except (InvalidOperation, ValueError) as exc:
+                except (InvalidOperation, ValueError):
                     # Original quantity text is evidence, never an implicit zero multiplier.
                     row[field] = str(row[field])
                 else:
@@ -543,7 +543,7 @@ def record_details(s, data, operator=''):
     batches = []
     resolutions = data.get('resolutions') or {}
     # Resolve every scope before mutating any detail/effective record.
-    for item, (wh, ym, cat) in zip(incoming, scopes):
+    for item, (wh, ym, cat) in zip(incoming, scopes, strict=False):
         record_key = key('details', wh, ym, cat)
         old, revision = read(s, record_key)
         if revision != item.get('revision'):

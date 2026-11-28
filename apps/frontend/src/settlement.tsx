@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { DialogPresence } from './workspace-motion';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
@@ -55,8 +56,6 @@ function Monthly({ me, blocked, active }: Props) {
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
   const presentation = useGridPresentation({table: 'settlement-month', root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
-  // One read region: visible failures are reported under the toolbar, and the table box
-  // keeps its area while the month's rows are unknown. A failure never replaces a result on screen.
   const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
   const placeheld = query.data === undefined;
   return <>
@@ -116,8 +115,6 @@ function Extract({ me, blocked, active }: Props) {
   const save=saves.save;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
-  // The annual summary is one read region: visible failures appear below the toolbar and
-  // the two natural-height tables keep their area until the year's rows are known.
   const readState = readPhase(query, query.data !== undefined && kinds.every(kind => query.data!.annual[kind].rows.length === 0));
   const placeheld = query.data === undefined;
   return <>
@@ -148,7 +145,6 @@ function Extract({ me, blocked, active }: Props) {
 function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').AnnualGrid;scale:number;active:boolean}) {
   const root = useRef<HTMLDivElement>(null), history = grid.year <= '2025';
   const columns = useMemo<ColDef<AnnualRow>[]>(() => {
-    // Use the complete result and its supplied totals, including rows below the viewport.
     const amountWidth = (values: (string | null | undefined)[], minimum = 72) => {
       const width = Math.max(minimum, ...values.map(value => value == null ? 0 : money(value).length * 8.2 + 20));
       return contentWidth(width,width + 64,scale,1);
@@ -156,7 +152,7 @@ function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').Annua
     return [
       {field:'warehouse',headerName:'仓库名',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(160,320,scale,1)},
       {field:'prior',headerName:'往年金额',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.prior),grid.sum_row[0]])},
-      ...grid.months.map((_month,i):ColDef<AnnualRow> => ({colId:`month-${i+1}`,headerName:`${i+1}月`,valueGetter:p => p.data?.cells[i],valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...amountWidth([...grid.rows.map(row => row.cells[i]),grid.sum_row[i+1]])})),
+      ...grid.months.map((_month,i):ColDef<AnnualRow> => ({colId:`month-${i+1}`,headerName:`${i+1}月`,valueGetter:layoutCallback(p => p.data?.cells[i]),valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...amountWidth([...grid.rows.map(row => row.cells[i]),grid.sum_row[i+1]])})),
       {field:'total',headerName:'合计',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.total),grid.sum_row[13]])},
       ...(history ? [{field:'balance' as const,headerName:'2025-11及之前',cellRenderer:BalanceInput,...amountWidth(grid.rows.map(row => row.balance),148),context:{kind:grid.kind}}] : []),
     ];

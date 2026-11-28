@@ -26,7 +26,6 @@ export function timeRange(value: string): TimeRange {
   }
   throw new RangeError('时间范围无效');
 }
-// A table evaluates the same period for every row. Keep its closed interval private.
 let lastPeriod: { value: string; range: TimeRange } | undefined;
 export function timeMatches(value: string, date: string) {
   if (!lastPeriod || lastPeriod.value !== value) lastPeriod = { value, range: timeRange(value) };

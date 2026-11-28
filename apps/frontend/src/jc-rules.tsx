@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import { useRef, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -95,12 +96,12 @@ export function JcRules({ query, active, writable, selected, clearSelection, onP
       {feedback && <p className="rules-receipt" role="status">{feedback}</p>}
       {visible.length === 0 ? <p className="state">{rows?.length ? '没有此类型的规则' : '暂无剔除规则'}</p>
         : <BoundedGrid maxHeight="52dvh" minRows={4} table="jc-ignore-rules" className="rules-table" label="集采剔除规则" rows={visible} rowId={row => String(row.id)} columns={[
-          {colId:'condition',headerName:'匹配条件',valueGetter:p=>jcCondition(p.data!),cellRenderer:({data:row}:{data:JcRule})=>
+          {colId:'condition',headerName:'匹配条件',valueGetter:layoutCallback(p=>jcCondition(p.data!)),cellRenderer:({data:row}:{data:JcRule})=>
             <div id={`rule-procurement-${row.id}`} className={selected === row.id ? 'rules-located' : undefined}>
               <span className="rules-condition-kind">{jcRuleKinds[row.kind]}</span>{jcCondition(row)}
             </div>},
           {field:'reason',headerName:'业务理由',valueFormatter:p=>p.value || '—'},
-          {colId:'added',headerName:'操作人 / 加入时间',valueGetter:p=>[p.data?.operator,p.data?.created_at].filter(Boolean).join(' · ') || '—'},
+          {colId:'added',headerName:'操作人 / 加入时间',valueGetter:layoutCallback(p=>[p.data?.operator,p.data?.created_at].filter(Boolean).join(' · ') || '—')},
           {colId:'actions',headerName:'操作',cellRenderer:({data:row}:{data:JcRule})=>
             <Button danger disabled={!canWrite} onClick={() => open({ type: 'delete', rule: row })}>删除</Button>},
         ]}/>}

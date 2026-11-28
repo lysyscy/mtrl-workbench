@@ -8,11 +8,8 @@ import { WorkspaceReloadButton } from './page-error';
 import { motion } from 'motion/react';
 import { useWorkspaceReducedMotion, workspaceSpring } from './workspace-motion';
 
-// Keep inactive grids at the content area's size so their layout queues can settle.
-// The retained page stays outside both the interaction and accessibility trees.
 const retainedBox: MotionStyle = { display: 'block', position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 };
 
-// Prepare only the first display. Retained pages, refreshes and editing never hide existing content.
 export function PageSurface({ active, direction, position, title, children }: { active: boolean; direction: number; position: number; title: string; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null), complete = useRef(false);
   const [ready, setReady] = useState(false), [error, setError] = useState('');
@@ -26,8 +23,6 @@ export function PageSurface({ active, direction, position, title, children }: { 
     async function prepare() {
       if (disposed || preparing) return;
       preparing = true;
-      // These pages own their table boundaries; only their existing tool areas
-      // contribute to the page's first font preparation. Data reads stay parallel.
       const scopes = () => [...node!.querySelectorAll<HTMLElement>('[data-page-chrome]')];
       const text = () => scopes().map(scope => scope.textContent ?? '').join('');
       const before = text();

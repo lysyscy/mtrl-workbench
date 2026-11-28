@@ -22,7 +22,7 @@ def annual_grid(amounts, kind: str, *, warehouses, year: str, balances=None) -> 
         prior = sum_money([value for ym,value in values.items() if ym < months[0]])
         base = by_wh[warehouse]
         cells = [None if ym <= '2025-11' else (value or Decimal('0.00'))
-                 for ym, value in zip(months, base['cells'])]
+                 for ym, value in zip(months, base['cells'], strict=False)]
         rows.append({'warehouse':warehouse, 'prior':prior, 'cells':cells,
                      'balance':base['balance'], 'total':base['total']})
     sums = [None if months[i] <= '2025-11' else sum_money([row['cells'][i] for row in rows]) for i in range(12)]

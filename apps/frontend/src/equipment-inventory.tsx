@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
 import Button from 'antd/es/button';
@@ -53,7 +54,7 @@ export function Inventory({ scale, goToDistribution }: {
     }
     return [
       { colId: 'sequence', headerName: '序号', ...contentWidth(48, 60, scale),
-        valueGetter: p => p.node?.rowPinned ? '' : (p.node?.rowIndex ?? 0) + 1 },
+        valueGetter: layoutCallback(p => p.node?.rowPinned ? '' : (p.node?.rowIndex ?? 0) + 1) },
       ledgerColumn<Row>({
         field: 'name', headerName: '名称', ...contentWidth(108, 175, scale, 0.7),
         cellRenderer: ({ data }: ICellRendererParams<Row>) => {

@@ -25,8 +25,6 @@ function channelFor(owner: string, table: string, storage: () => Storage) {
   return {key,channel};
 }
 function releaseChannel(key:string,channel:Channel){if(!channel.listeners.size&&!channel.readers.size)channels.delete(key);}
-// React reads the same persisted-preference channel as the native state binding.
-// This is preference state only; actual column widths continue to live in AG.
 export function gridWidthPreferences(owner:string,table:string,storage:()=>Storage){
   const {key,channel}=channelFor(owner,table,storage);
   return {
@@ -37,7 +35,6 @@ export function gridWidthPreferences(owner:string,table:string,storage:()=>Stora
   };
 }
 
-// Persist only deliberate header resizes. AG Grid owns bounds, width ownership and flex.
 export function bindGridWidths(api: GridApi, options: {
   owner: string; table: string; storage: () => Storage; scale: () => number;
   changed: (custom: boolean, error: string, reset?: boolean) => void;
@@ -80,8 +77,6 @@ export function bindGridWidths(api: GridApi, options: {
   };
   const apply = () => {
     if (api.isDestroyed()) return;
-    // A preference change can precede React's column-def commit. Wait for its
-    // already-materialised bounds instead of temporarily clamping a saved width.
     if(!boundsReady())return;
     const state = Object.entries(shared.widths).flatMap(([colId, width]) => {
       const column = api.getColumn(colId), definition = column?.getColDef();
@@ -112,7 +107,6 @@ export function bindGridWidths(api: GridApi, options: {
   };
   const resetNative = () => {
     if (api.isDestroyed()) return;
-    // Native reset releases user width ownership. Restore every other column attribute.
     const state = api.getColumnState().map(({width: _width, flex: _flex, ...rest}) => rest);
     api.resetColumnState();
     api.applyColumnState({state, applyOrder: true});
@@ -124,8 +118,7 @@ export function bindGridWidths(api: GridApi, options: {
   const columnsLoaded = () => {
     if(!boundsReady())return;
     const nextLayout = options.layoutKey?.() ?? String(options.scale());
-    // Initial widths do not update existing native columns when type shrinks.
-    // Wait for the new definitions, then restore reader state and saved widths.
+    // constraint: AG Grid initialWidth only applies when the column is created.
     if (pendingReset||nextLayout !== columnLayout) { pendingReset=false;columnLayout = nextLayout; resetNative(); }
     apply();
   };

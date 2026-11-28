@@ -65,7 +65,7 @@ def cells_of_row(grid: dict, row: dict) -> dict:
     """
     letters = _month_letters(len(grid["months"]))
     cells: dict = {COL_BALANCE: row.get("balance"), COL_TOTAL: row.get("total")}
-    for letter, value in zip(letters, row.get("cells") or []):
+    for letter, value in zip(letters, row.get("cells") or [], strict=False):
         cells[letter] = value
     return cells
 
@@ -75,7 +75,7 @@ def sum_cells(grid: dict) -> dict:
     letters = _month_letters(len(grid["months"]))
     sums = grid.get("sum_row") or []
     cells: dict = {}
-    for letter, value in zip(letters, sums):
+    for letter, value in zip(letters, sums, strict=False):
         cells[letter] = "" if value is None else value
     if sums:
         cells[COL_TOTAL] = sums[-1]

@@ -7,7 +7,6 @@ interface WidthBounds {
 }
 const key = 'manualWidthBounds';
 
-// Opt in at the page boundary. Ordinary grids retain their existing native bounds.
 export function manualGridColumns<T>(columns: ColDef<T>[]): ColDef<T>[];
 export function manualGridColumns<T>(columns: (ColDef<T> | ColGroupDef<T>)[]): (ColDef<T> | ColGroupDef<T>)[];
 export function manualGridColumns<T>(columns: (ColDef<T> | ColGroupDef<T>)[]): (ColDef<T> | ColGroupDef<T>)[] {

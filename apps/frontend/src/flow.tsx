@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import { useAmountComparator } from './use-amount-comparator';
 import { searchWithinRows } from './grid-search';
 import { DialogPresence } from './workspace-motion';
@@ -25,6 +26,19 @@ import { gridTheme } from './grid';
 import { contentColumn } from './grid-content-widths';
 import { TimePicker, timeMatches } from './time-picker';
 const flowColumnDefaults: ColDef<Flow> = {cellDataType:false,sortable:true,resizable:true,suppressMovable:true,wrapHeaderText:true};
+const flowColumnValues = {
+  doc_no: (row: Flow) => row.doc_no,
+  category_label: (row: Flow) => row.category_label,
+  pay_method: (row: Flow) => row.pay_method,
+  status_label: (row: Flow) => [row.status_label, row.revoke_reason, row.status],
+  actions: (row: Flow) => row.status,
+};
+function isFlowColumn(id: string): id is keyof typeof flowColumnValues {
+  return Object.hasOwn(flowColumnValues, id);
+}
+function flowColumnValue(row: Flow, id: string) {
+  return isFlowColumn(id) ? flowColumnValues[id](row) : undefined;
+}
 const flowRowId = (row: Flow) => row.id == null ? 'flow-total' : String(row.id);
 const initial = () => ({ period:currentMonth(), projects: [] as number[], method:'', status:'effective', keyword:'', notice:0 });
 function Bars({ rows, choose, selected }: { rows: PaymentBar[]; choose?: (key:string) => void; selected?: string[] | undefined }) {
@@ -42,8 +56,6 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
   const phase=readPhase(debt,(debt.data?.length??0)===0);
   const [summarySettled, setSummarySettled] = useState(false);
   useEffect(() => { if (debt.data !== undefined || debt.isError) setSummarySettled(true); }, [debt.data, debt.isError]);
-  // A first read that failed has nothing trustworthy to show, so the placeholder keeps the same
-  // rows as empty space instead of swapping one box for another.
   const placeholder=phase==='idle'||phase==='reading'||phase==='error';
   return <div className="debt-workspace page-shell page-shell--flow" data-page-layout="flow">
     <div className="debt-overviews" role="region" data-read-phase={phase} aria-label="按项目看的欠款汇总"
@@ -113,7 +125,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   const columns=useMemo<ColDef<Flow>[]>(()=> { const list:ColDef<Flow>[]=[
     {field:'doc_no',tooltipField:'doc_no',headerName:'单据编码',wrapText:true,
       ...contentColumn<Flow>('bounded', (row, measure, pinned) => pinned ? 0 : measure.text(row.doc_no || '—')),
-      colSpan:p=>p.node?.rowPinned?2:1,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?p.value:p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
+      colSpan:layoutCallback(p=>p.node?.rowPinned?2:1),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?p.value:p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
     {field:'doc_date',tooltipField:'doc_date',headerName:'通知书日期',...contentColumn('bounded')},
     {field:'bill_name',headerName:'通知书名称',...contentColumn('demand'),wrapText:true},
     {field:'project_display',headerName:'付款项目',...contentColumn('demand'),wrapText:true},
@@ -139,7 +151,9 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
       ...contentColumn<Flow>('bounded', (row, measure, pinned) => !pinned && row.status==='effective' ? measure.buttons(['撤销']) : 0),
       cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>{ if (current.current.writable) current.current.open(p.data!); }}>撤销</Button>:null},
   ]; return list; },[compareAmounts]);
-  const measurement = useMemo(() => ({textOnly:['doc_no'],signature:(row:Flow,id:string,pinned:boolean)=>JSON.stringify([pinned,id==='actions'?row.status:id==='status_label'?[row.status_label,row.revoke_reason,row.status]:(row as unknown as Record<string,unknown>)[id]])}), []);
+  const measurement = useMemo(() => ({ textOnly: ['doc_no'],
+    signature: (row: Flow, id: string, pinned: boolean) => JSON.stringify([pinned, flowColumnValue(row, id)]),
+  }), []);
   const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: totalRows, columns, measurement, rowId: flowRowId, scale,
     contentWidths: { rows, totals: totalRows }, scope: JSON.stringify({...filter, keyword:rows === scope ? '' : filter.keyword}), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
   useEffect(() => {
@@ -157,13 +171,11 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   }
   function chooseProject(key:string) {
     const project=projectQuery.data?.find(p=>p.warehouse_name===key);
-    // Stats entries with no flows still remain a real filter, rather than silently showing all.
     const id=project?.id??0;
     setFilter(f=>({...f,projects:f.projects.includes(id)?f.projects.filter(value=>value!==id):[...f.projects,id]}));
     flowSection.current?.scrollIntoView({block:'nearest'});
   }
   const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]!}));
-  // Statistics and flows read independently; each keeps its placeholder and local failure feedback.
   const statsPhase=readPhase(stats,(stats.data?.buckets.length??0)===0);
   const flowsPhase=readPhase(flows,rows.length===0);
   const statsPlaceheld=!stats.data;

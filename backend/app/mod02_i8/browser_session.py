@@ -232,7 +232,7 @@ def strict_payment_notice_by_bill_no(client: I8Client, bill_no: str) -> dict | N
     if not target:
         raise StrictSessionUnavailable(_STOP_NO_BILL)
     query = json.dumps(
-        {"queryFilter": json.dumps({f"BillNo*string*eq*1": target}, ensure_ascii=False)},
+        {"queryFilter": json.dumps({"BillNo*string*eq*1": target}, ensure_ascii=False)},
         ensure_ascii=False,
     )
     form = {**LIST_FORM, "queryfilter": query, "limit": "5"}

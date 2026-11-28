@@ -137,8 +137,8 @@ def tree_specs(settings: dict) -> dict[str, dict]:
 def validate_tasks(tasks: dict[str, Task], trees: dict[str, dict]) -> list[dict]:
     errors = []
     for task in tasks.values():
-        def report(code, related):
-            errors.append({'code': code, 'task': task.id, 'related': related})
+        def report(code, related, task_id=task.id):
+            errors.append({'code': code, 'task': task_id, 'related': related})
 
         parent = tasks.get(task.parent)
         if task.parent is not None and (parent is None or task.id not in parent.children):

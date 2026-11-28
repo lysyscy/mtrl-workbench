@@ -20,11 +20,10 @@ const ownershipReason: Record<string, string> = {
 };
 
 function receiptRowKey(fields: string[], occurrences: Map<string, number>): string {
-  // AG Grid escapes HTML characters in the DOM row ID used by shared layout.
+  // constraint: AG Grid escapes HTML characters in rendered row IDs.
   const key = encodeURIComponent(JSON.stringify(fields)).replaceAll("'", '%27');
   const occurrence = (occurrences.get(key) ?? 0) + 1;
   occurrences.set(key, occurrence);
-  // Repeated copies of the same evidence still need separate display rows.
   return occurrence === 1 ? key : `${key}:${occurrence}`;
 }
 

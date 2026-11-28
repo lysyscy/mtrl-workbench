@@ -11,8 +11,6 @@ export async function loadTextFonts(text: string, weights: readonly number[] = [
     try {
       await document.fonts.load(font, sample);
     } catch {
-      // One failed shard rejects the whole sample while its other shards can still
-      // be loading. Settle only the remaining glyphs this view needs before measuring.
       if (document.fonts.status === 'loading') {
         const pending = chars.filter(char => !document.fonts.check(font, char));
         await Promise.allSettled(pending.map(char => document.fonts.load(font, char)));
@@ -24,7 +22,6 @@ export async function loadTextFonts(text: string, weights: readonly number[] = [
 export async function prepareAppearance(me: Identity | null, signal: AbortSignal) {
   const key = `${me?.account ?? ''}:${me?.theme ?? ''}`;
   const current = document.querySelector<HTMLLinkElement>('#user-theme');
-  // The server already renders this account's theme on direct entry. Reload only after a preference/account change.
   if (!current?.sheet || (applied !== undefined && applied !== key)) {
     const replacement = document.createElement('link');
     replacement.rel = 'stylesheet'; replacement.media = 'not all';
@@ -45,7 +42,6 @@ export async function prepareAppearance(me: Identity | null, signal: AbortSignal
   applied = key;
 }
 
-// Use the weights actually present in the mounted view, rather than fetching every shard in all weights.
 export async function loadElementFonts(root: HTMLElement) {
   const groups = new Map<number, string>();
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);

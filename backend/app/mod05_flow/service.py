@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import Row, select
+from sqlalchemy import Row
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
@@ -27,7 +27,7 @@ from app.mod01_projects.models import Project
 from app.mod05_flow import domain as dom
 from app.mod05_flow import repository as repo
 from app.mod05_flow import history
-from app.mod05_flow.domain import LedgerRow, NoticeDebtView, OpeningView
+from app.mod05_flow.domain import NoticeDebtView, OpeningView
 from app.mod05_flow.models import (
     CATEGORY_JC,
     CATEGORY_MATERIAL,
@@ -607,7 +607,7 @@ def build_stats(
             "bucket": selected,
             "projects": [{"key": r["key"], "label": r["label"],
                           "amount": f"{to_money(grid[k].get(selected, 0)):.2f}"}
-                         for k, r in zip(sorted(grid, key=lambda k: str(k)), left)
+                         for k, r in zip(sorted(grid, key=lambda k: str(k)), left, strict=False)
                          if grid[k].get(selected, 0)],
             "total": f"{sum((grid[k].get(selected, 0) for k in grid), Decimal('0')):.2f}",
             "count": counts[selected],

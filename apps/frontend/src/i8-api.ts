@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { ApiError, body, record, requestJson } from './api';
 
 export function readI8KickConfirmation(failure: unknown) {
@@ -22,12 +23,16 @@ export async function revokeI8KickToken(token: string): Promise<string> {
 
 export const sourceNames = { notices: '付款通知书', settlement: '收发结存表', inventory: '库存单据明细表', contracts: '采购合同信息', warehouses: '仓库列表', 'common-projects': '常用项目列表' };
 export interface RunRecord { id: number; run_type: string; target: string; status: string; success_count: number; fail_count: number; error_message: string; started_at: string; finished_at: string | null; triggered_by: string; duration_seconds: number | null }
+const count = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
+const runRecord = v.looseObject({
+  id: v.pipe(v.number(), v.safeInteger()), run_type: v.string(), target: v.string(), status: v.string(),
+  success_count: count, fail_count: count, error_message: v.string(), started_at: v.string(),
+  finished_at: v.nullable(v.string()), triggered_by: v.string(),
+  duration_seconds: v.nullable(v.pipe(v.number(), v.finite(), v.minValue(0))),
+});
 export function readRecords(value: unknown): RunRecord[] {
-  if (!Array.isArray(value)) throw new ApiError('执行记录读取不完整，请重试。');
-  return value.map((row: unknown) => {
-    if (!record(row) || typeof row.id !== 'number' || !Number.isSafeInteger(row.id) || !['run_type', 'target', 'status', 'error_message', 'started_at', 'triggered_by'].every(key => typeof row[key] === 'string') || ![row.success_count, row.fail_count].every(n => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0) || (row.finished_at !== null && typeof row.finished_at !== 'string') || (row.duration_seconds !== null && (typeof row.duration_seconds !== 'number' || !Number.isFinite(row.duration_seconds) || row.duration_seconds < 0))) throw new ApiError('执行记录读取不完整，请重试。');
-    return row as unknown as RunRecord;
-  });
+  if (!v.is(v.array(runRecord), value)) throw new ApiError('执行记录读取不完整，请重试。');
+  return value;
 }
 export function recordSource(row: RunRecord): keyof typeof sourceNames | null {
   const target = row.target.trim();

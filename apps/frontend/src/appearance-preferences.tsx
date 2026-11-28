@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import Button from 'antd/es/button';
@@ -7,17 +8,18 @@ import { motion, useIsPresent } from 'motion/react';
 import { useWorkspaceReducedMotion, workspaceSpring } from './workspace-motion';
 
 type Palette = { name: string; label: string; description: string; scene: string; vars: Record<string, string> };
-type Scale = { key: string; label: string; css: string };
-interface Preferences { theme: string; themes: string[]; palette: Palette[]; ui_scale: string; scales: Scale[] }
+type Preferences = v.InferOutput<typeof preferences>;
 const previewRoles = ['--bg', '--sf', '--sf2', '--bd', '--bd2', '--tx', '--tx2', '--pri', '--sel', '--sb', '--sb-tx', '--sb-on'];
-function validPalette(item: unknown): item is Palette {
-  if (!record(item)) return false;
-  const vars = item.vars;
-  return ['name', 'label', 'description', 'scene'].every(key => typeof item[key] === 'string') && record(vars) && Object.values(vars).every(value => typeof value === 'string') && previewRoles.every(key => typeof vars[key] === 'string' && vars[key]);
-}
-function readPreferences(data: unknown): Preferences {
-  if (!record(data) || typeof data.theme !== 'string' || !Array.isArray(data.themes) || !data.themes.every(x => typeof x === 'string') || !Array.isArray(data.palette) || !data.palette.every(validPalette) || typeof data.ui_scale !== 'string' || !Array.isArray(data.scales) || !data.scales.every(x => record(x) && typeof x.key === 'string' && typeof x.label === 'string' && typeof x.css === 'string' && /^1(?:\.\d+)?$/.test(x.css))) throw new Error('外观选项读取不完整，请重试。');
-  const result = data as unknown as Preferences;
+const preferences = v.looseObject({
+  theme: v.string(), themes: v.array(v.string()), ui_scale: v.string(),
+  palette: v.array(v.looseObject({
+    name: v.string(), label: v.string(), description: v.string(), scene: v.string(),
+    vars: v.pipe(v.record(v.string(), v.string()), v.check(vars => previewRoles.every(key => !!vars[key]))),
+  })),
+  scales: v.array(v.looseObject({ key: v.string(), label: v.string(), css: v.pipe(v.string(), v.regex(/^1(?:\.\d+)?$/)) })),
+});
+function readPreferences(result: unknown): Preferences {
+  if (!v.is(preferences, result)) throw new Error('外观选项读取不完整，请重试。');
   if (!result.palette.length || result.palette.length !== result.themes.length || !result.themes.every((name, i) => result.palette[i]?.name === name) || !result.themes.includes(result.theme) || !result.scales.some(item => item.key === result.ui_scale)) throw new Error('外观选项读取不完整，请重试。');
   return result;
 }

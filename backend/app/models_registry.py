@@ -8,29 +8,32 @@
 """
 
 # --- 随阶段登记（未启用时保持注释）---
-from app.core.history import OperationHistory as _operation_history  # noqa: F401
-from app.mod01_projects import models as _m01  # noqa: F401  ← M2 切片 2 启用
-from app.mod02_i8 import models as _m02  # noqa: F401  ← 运行记录 RunRecord 2026-09-15 移入
-from app.mod03_notice import models as _m03  # noqa: F401  ← M1 切片 1 启用
-from app.mod04_plan import models as _m04  # noqa: F401  ← M3 切片 3 启用
-from app.mod05_flow import models as _m05  # noqa: F401  ← M3 切片 3 启用
-from app.mod06_proc import models as _m06  # noqa: F401  ← M4 报表域 2026-09-16 启用
-from app.mod06_proc import workbench_models as _mechanical_workbench  # noqa: F401
-from app.mod07_setl import models as _m07  # noqa: F401  ← M4 报表域 2026-09-16 启用
-from app.mod08_inv import models as _m08  # noqa: F401  ← M4 报表域 2026-09-16 启用
-from app.mod09_fee import models as _m09  # noqa: F401  ← M4 报表域 2026-09-17 启用
-from app.mod11_jc import models as _m11  # noqa: F401  ← M5 切片 5 启用（2026-09-19：集采台账三张表）
-from app.mod13_oilcard import models as _oilcard  # noqa: F401
+from app.core.history import OperationHistory as _operation_history
+from app.mod01_projects import models as _m01
+from app.mod02_i8 import models as _m02
+from app.mod03_notice import models as _m03
+from app.mod04_plan import models as _m04
+from app.mod05_flow import models as _m05
+from app.mod06_proc import models as _m06
+from app.mod06_proc import workbench_models as _mechanical_workbench
+from app.mod07_setl import models as _m07
+from app.mod08_inv import models as _m08
+from app.mod09_fee import models as _m09
+from app.mod11_jc import models as _m11
+from app.mod13_oilcard import models as _oilcard
 # ⛔ `MOD-12` 差异登**已取消**（2026-09-20 用户裁定）⇒ 此处原有一行 `mod12_diff` 导入**已删除**。
 #    依据：《说明书》§5.8.3「差异归属恒为「**库存单据**」（**不独立成模块**）」
 #    ⇒ 差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06` 按调整单算）⇒ ⛔ 无独立模块。
 #    ⭐ 本行是**撤项记录**（相关退役行为由现行业务测试保护）。
-from app.mod14_config import models as _m14  # noqa: F401  ← M6 系统设置 2026-09-16 启用
-from app.mod15_user import models as _m15  # noqa: F401  ← 2026-09-26 启用（`TAIL-102` 修复：原先这行是注释 ⇒
+from app.mod14_config import models as _m14
+from app.mod15_user import models as _m15
 #   `user_account` 在元数据里根本不存在 ⇒ `alembic check` 判成「**要删掉这张表**」（⛔ 谁跑一次 autogenerate
 #   就会生成一条删表的迁移 —— 那正是本条尾巴警告的雷）。⚠️ 登录/账号体系**早就在跑**（`main.py` 挂了
 #   `mod15_api_router`、`core/identity.py` 靠它取「当前登录用户」）⇒ 这行只是**漏登记**，不是"未启用"。
 
-from app.mod16_equipment import models as _equipment  # noqa: F401
+from app.mod16_equipment import models as _equipment
+
+del (_operation_history, _m01, _m02, _m03, _m04, _m05, _m06, _mechanical_workbench,
+     _m07, _m08, _m09, _m11, _oilcard, _m14, _m15, _equipment)
 
 __all__: list[str] = []

@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -15,16 +16,14 @@ export function OilOpeningHistory({ archives, projects, enabled, scale }: {
   const [expanded, setExpanded] = useState(false);
   const query = useQuery({ queryKey: ['oilcard-openings'], enabled, queryFn: ({ signal }) => getOilOpenings(signal) });
   const columns = useMemo<ColDef<OilOpening>[]>(() => [
-    { headerName: '项目', valueGetter: ({ data }) => { const project = projects.find(p => p.id === data?.project_id); return project ? projectLabel(project) : `项目 #${data?.project_id}`; } },
-    { headerName: '用卡账户', valueGetter: ({ data }) => archives.accounts.find(a => a.id === data?.account_id)?.name ?? `账户 #${data?.account_id}` },
+    { headerName: '项目', valueGetter: layoutCallback(({ data }) => { const project = projects.find(p => p.id === data?.project_id); return project ? projectLabel(project) : `项目 #${data?.project_id}`; }) },
+    { headerName: '用卡账户', valueGetter: layoutCallback(({ data }) => archives.accounts.find(a => a.id === data?.account_id)?.name ?? `账户 #${data?.account_id}`) },
     { field: 'amount', headerName: '金额', cellClass: 'money', valueFormatter: p => money(p.value) },
     { field: 'cutoff_ym', headerName: '截至月' },
     { field: 'date_text', headerName: '原日期或标记' },
     { field: 'remark', headerName: '备注' },
     { field: 'source_note', headerName: '来源说明' },
   ], [archives, projects]);
-  // During a staged release, existing confirmed amounts remain visible until
-  // the separately authorized conversion has put them into the ledger.
   if (query.data?.rows.length === 0 && !query.isError) return null;
   return <div className="oilcard-openings" aria-label="已确认充值期初">
     <div className="oilcard-opening-summary">

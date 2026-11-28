@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import App from 'antd/es/app';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
@@ -67,11 +68,6 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
   const {drafts,busy,uncertain,verified,error}=saves,dirty=Object.keys(drafts).length>0;
   const disabled=blocked||!active||!me||uncertain||!ready||!query.data?.can_edit||query.isError;
   const paused=blocked||busy||dirty||uncertain;
-  // One read region keyed by year and project: the lane under the toolbar reports it in every
-  // state. A response that belongs to another range is never rendered as this range's amounts, and
-  // until the matching result arrives the table box keeps its area instead of collapsing. Such a
-  // mismatched payload is not "a retained result" either, so a failed read of the new range reads
-  // as a plain failure rather than as an update of the old one.
   const readState = readPhase(query) === 'stale' && !ready ? 'error' as const
     : query.data !== undefined && !ready ? 'reading' as const
     : readPhase(query, query.data !== undefined && query.data.rows.length === 0);
@@ -91,7 +87,7 @@ export function FeesPage({me,blocked,active}:{me:Identity|null;blocked:boolean;a
     return [
       {field:'item',headerName:'费用项名称',pinned:'left',autoHeight:true,wrapText:true,...contentWidth(160,300,scale,1),cellRenderer:NameCell},
       {field:'prior',headerName:'往年',cellClass:'money',valueFormatter:p=>p.value==null?'':money(p.value),...width([query.data?.prior,...rows.map(r=>r.prior)])},
-      ...Array.from({length:12},(_,i):ColDef<FeeYearRow>=>({colId:`month-${i+1}`,headerName:`${i+1}月`,headerTooltip:year,cellClass:'money',autoHeight:true,valueGetter:p=>p.data?.months[i],cellRenderer:AmountCell,...width([query.data?.months[i],...rows.map(r=>r.months[i])])})),
+      ...Array.from({length:12},(_,i):ColDef<FeeYearRow>=>({colId:`month-${i+1}`,headerName:`${i+1}月`,headerTooltip:year,cellClass:'money',autoHeight:true,valueGetter:layoutCallback(p=>p.data?.months[i]),cellRenderer:AmountCell,...width([query.data?.months[i],...rows.map(r=>r.months[i])])})),
       {field:'total',headerName:'累计',cellClass:'money',valueFormatter:p=>money(p.value),...width([query.data?.total,...rows.map(r=>r.total)])},
     ];
   },[year,scale,rows,query.data]);

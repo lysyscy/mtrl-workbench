@@ -20,7 +20,7 @@ from app.mod07_setl import big_repository as R
 from app.mod07_setl import extract as X
 from app.mod07_setl import inventory_extract as I
 from app.mod06_proc import service as P6S
-from app.mod07_setl.repository import load_rows, load_balances
+from app.mod07_setl.repository import load_balances
 
 #: 主材累计取数口；显式None表示不可得，无纳入合同由owner返回0。
 MAIN_MATERIAL_PORT: Callable[[Session, set[str]], dict[str, Decimal]] | None = None

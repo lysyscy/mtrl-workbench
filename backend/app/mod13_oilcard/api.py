@@ -357,8 +357,11 @@ def read_invoices():
         return invoices.invoices(session)
 
 
+InvoiceFile = File(...)
+
+
 @router.post('/invoices/receive')
-def receive_invoice(file: UploadFile = File(...)):
+def receive_invoice(file: UploadFile = InvoiceFile):
     content = file.file.read(MAX_PDF_BYTES + 1)
     recognized = recognize_pdf(content)
     with session_scope() as session:

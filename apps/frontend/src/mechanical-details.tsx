@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -35,7 +36,6 @@ export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,wr
   scale:number;groups:DetailGroup[];category:Category;ym:string;keywords:string[];problemsOnly:boolean;writable:boolean;change:(warehouse:string,rows:DetailRow[])=>void;save:(warehouse:string)=>void;
 }) {
   const labels=fields[category],grossIndex=labels.findIndex(([field])=>field==='amount');
-  // No offscreen copy of every input is needed to measure a fixed single line.
   const measurement=useMemo(()=>({textOnly:['sequence',...fields[category].map(([field])=>field),'actions']}),[category]);
   const focus=useRef('');
   const root=useRef<HTMLDivElement>(null);
@@ -68,11 +68,11 @@ export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,wr
   };
   const signature=JSON.stringify([fullValues.length,...labels.map(([field,label])=>widthFor(field,label).minWidth)]);
   const columns=useMemo<ColDef<DetailDisplay>[]>(()=>[
-    {colId:'sequence',headerName:'序号',...completeColumnWidth(fullValues.map((_,index)=>index+1),'序号',scale),wrapText:false,autoHeight:false,colSpan:p=>p.data?.kind==='group'?grossIndex+1:1,
-      valueGetter:p=>p.data?.kind==='group'?`${p.data.shown}:${p.data.draft}:${p.data.locked}`:p.data?.index,
+    {colId:'sequence',headerName:'序号',...completeColumnWidth(fullValues.map((_,index)=>index+1),'序号',scale),wrapText:false,autoHeight:false,colSpan:layoutCallback(p=>p.data?.kind==='group'?grossIndex+1:1),
+      valueGetter:layoutCallback(p=>p.data?.kind==='group'?`${p.data.shown}:${p.data.draft}:${p.data.locked}`:p.data?.index),
       cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d?null:d.kind==='group'?<span className="mechanical-group-label"><strong><EllipsisText text={d.name}/></strong><span>，{d.shown}条{d.draft?'，未保存':''}</span></span>:d.index+1},
     ...labels.map(([field,label]):ColDef<DetailDisplay>=>({colId:field,headerName:label,...widthFor(field,label),wrapText:false,autoHeight:false,
-      cellClass:numericFields.includes(field)?'money':'',valueGetter:p=>p.data?.kind==='group'?field==='amount'?p.data.gross:field==='net'?p.data.net:'':field==='net'&&p.data?.row?detailNet(p.data.row):p.data?.row?.[field]??p.data?.row?.[aliases[field]??'']??'',
+      cellClass:numericFields.includes(field)?'money':'',valueGetter:layoutCallback(p=>p.data?.kind==='group'?field==='amount'?p.data.gross:field==='net'?p.data.net:'':field==='net'&&p.data?.row?detailNet(p.data.row):p.data?.row?.[field]??p.data?.row?.[aliases[field]??'']??''),
       cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>{
         if(!d)return null;
         if(d.kind==='group')return field==='amount'?money(d.gross as string):field==='net'?<>{money(d.net as string)}{d.missing>0&&<small>（{d.missing}条待补）</small>}</>:null;
@@ -84,7 +84,6 @@ export function DetailsTable({ scale,groups,category,ym,keywords,problemsOnly,wr
         return longFields.includes(field)?<TextPreview text={value}>{input}</TextPreview>:input;
       }})),
     {colId:'actions',headerName:'操作',pinned:'right',...fixedWidth(80,scale),wrapText:false,autoHeight:false,cellRenderer:({data:d}:ICellRendererParams<DetailDisplay>)=>!d?null:<Button danger={d.kind==='detail'} size="small" disabled={!current.current.writable||d.locked} onClick={()=>{const state=current.current,g=state.groups.find(g=>g.warehouse===d.warehouse),rows=g?.draft?.rows??g?.saved?.rows??[];if(d.kind==='group'){const row={id:randomUUID(),device:'',unit:'台班',amount:'',tax:''};focus.current=row.id;state.change(d.warehouse,[...rows,row]);}else{state.change(d.warehouse,rows.filter(row=>row.id!==d.row!.id));state.save(d.warehouse);}}}>{d.kind==='group'?'增行':'移除'}</Button>},
-  // Numeric bounds update after editing; handlers read the current draft rather than a retained closure.
   ],[category,scale,signature]);
   const count=display.filter(row=>row.kind==='detail').length;
   return <div ref={root}><BusinessGrid table={'mechanical-details-'+category} className="mechanical-detail-table" singleLine label={category==='zero'?'零租明细':'包月明细'} rows={display} columns={columns} measurement={measurement} rowId={row=>row.id} scale={scale} scope={category+':'+ym} domLayout="normal" style={{height:`min(65dvh, ${(display.length*36+48)*scale}px)`}} grid={{defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapText:false,autoHeight:false,wrapHeaderText:false,autoHeaderHeight:false},

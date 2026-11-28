@@ -12,7 +12,6 @@ export const reportFetch = {
 
 export function readReportFetchResult(source: ReportSource, month: string, value: unknown): FetchReceipt {
   const invalid = () => new ApiError('抓取回执不完整，请到执行记录核对，勿重复抓取。', 0, 'invalid_response');
-  // requestJson owns explicit ok:false responses (including empty/degraded reports).
   if (!record(value) || value.ym !== month || value.ok !== true) throw invalid();
   const spec = reportFetch[source], stats = value.stats;
   const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

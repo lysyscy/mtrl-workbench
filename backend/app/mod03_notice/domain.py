@@ -398,7 +398,7 @@ def confirm_batch(
 
 
 __all__ = [
-    "F_APPROVED", "F_PAY_SRC", "F_STAT_SETTLE", "F_STAT_PAID", "DERIVED_PAY",
+    "F_APPROVED", "F_STAT_SETTLE", "F_STAT_PAID", "DERIVED_PAY",
     "SOURCE_FIELDS", "STAT_FIELDS", "THREE_AMOUNT_FIELDS", "STAT_LABELS",
     "derived_pay_amount", "default_stat_value",
     "StatTrace", "adjust_stat", "manual_edited_fields", "was_manually_edited",

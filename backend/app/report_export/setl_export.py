@@ -97,14 +97,10 @@ def frame_from_rows(detail_rows) -> pd.DataFrame:
     ⛔ 列映射只此一处 —— `setl_detail` 的列与导出表头**一一对应**（`models.SetlDetail` 的注释即写明）。
     """
     records = []
-    for r in detail_rows:
-
-        def g(field):
-            return getattr(r, field, None) if not isinstance(r, dict) else r.get(field)
-
+    for row in detail_rows:
         rec = {}
         for field, header in FIELD_TO_HEADER:
-            v = g(field)
+            v = row.get(field) if isinstance(row, dict) else getattr(row, field, None)
             rec[header] = _num(v) if header in SFJC_NUM_FIELDS else ("" if v is None else str(v))
         records.append(rec)
     df = pd.DataFrame(records, columns=SFJC_HEADER)
@@ -247,7 +243,7 @@ def patch_pivot(in_path, out_path, df, show_order, *, template=None):
     cd_new = re.sub(r'(<cacheFields count="17">).*?(</cacheFields>)',
                     lambda mo: mo.group(1) + ''.join(
                         f'<cacheField name="{escape(col)}" numFmtId="0">{seg}</cacheField>'
-                        for col, seg in zip(df.columns, new_parts)) + mo.group(2),
+                        for col, seg in zip(df.columns, new_parts, strict=False)) + mo.group(2),
                     cd, flags=re.S)
     cd_new = re.sub(r'recordCount="\d+"', f'recordCount="{len(df)}"', cd_new)
     cd_new = re.sub(r'ref="A1:Q\d+"', f'ref="A1:Q{len(df) + 1}"', cd_new)
@@ -288,7 +284,7 @@ def patch_pivot(in_path, out_path, df, show_order, *, template=None):
     # dataField pivotField items（4个金额字段）
     pat_df = re.compile(r'<pivotField dataField="1"[^>]*><items count="\d+">.*?</items></pivotField>', re.S)
     dmatches = list(pat_df.finditer(pt))
-    for mm, col in zip(reversed(dmatches), reversed(MONEY_FIELDS)):
+    for mm, col in zip(reversed(dmatches), reversed(MONEY_FIELDS), strict=False):
         uniq_n = len(field_maps[list(df.columns).index(col)])
         head = mm.group(0)[:mm.group(0).find('<items')]
         items_xml = (f'<items count="{uniq_n + 1}">'

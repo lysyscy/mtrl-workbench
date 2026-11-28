@@ -1,11 +1,11 @@
 import { createElement } from 'react';
 import type { ReactNode } from 'react';
-import type { ColDef, ColGroupDef, ColSpanParams, ICellRendererParams, ValueFormatterParams, ValueGetterParams } from 'ag-grid-community';
+import type { ColDef, ColGroupDef, ICellRendererParams, ValueFormatterParams } from 'ag-grid-community';
 import type { TextGridColumn } from './grid-layout';
 
-// Only the opted-in page renderers consume this measurement adapter. They read
-// data/value, pinned state and their existing context; they do not invoke row APIs.
-// Keep grouped report definitions, but give the shared preparer sole ownership of dimensions.
+import { readLayout } from './grid-layout-callback';
+import type { LayoutInput } from './grid-layout-callback';
+
 export function initialLayoutColumns<T>(definitions: (ColDef<T> | ColGroupDef<T>)[]): (ColDef<T> | ColGroupDef<T>)[] {
   return definitions.map(definition => {
     if ('children' in definition) return {...definition, children: initialLayoutColumns(definition.children)};
@@ -21,14 +21,19 @@ export function rendererLayoutColumns<T>(definitions: (ColDef<T> | ColGroupDef<T
   return definitions.flatMap(definition => {
     if ('children' in definition) return rendererLayoutColumns(definition.children, context, signature);
     const id = definition.colId ?? definition.field!;
+    const input = (row: T, pinned: boolean): LayoutInput<T> => ({data: row, node: {rowPinned: pinned ? 'bottom' : null}});
     const params = (row: T, pinned: boolean) => {
-      const p = {data: row, value: definition.field ? (row as Record<string, unknown>)[definition.field] : undefined,
-        node: {rowPinned: pinned ? 'bottom' : null}, colDef: definition, context} as ICellRendererParams<T>;
-      if (typeof definition.valueGetter === 'function') p.value = definition.valueGetter(p as unknown as ValueGetterParams<T>);
-      return p;
+      const cell = input(row, pinned);
+      const value = typeof definition.valueGetter === 'function' ? readLayout(definition.valueGetter, cell)
+        : definition.field ? (row as Record<string, unknown>)[definition.field] : undefined;
+      return {...cell, value, colDef: definition, context} as ICellRendererParams<T>;
     };
+    const colSpan = definition.colSpan;
     return [{ id, wrap: Boolean(definition.wrapText), ...(typeof definition.cellClass === 'string' ? {className: definition.cellClass} : {}),
-      ...(definition.colSpan ? {span:(row:T,pinned:boolean)=>definition.colSpan!(params(row,pinned) as unknown as ColSpanParams<T>)} : {}),
+      ...(colSpan ? {span:(row:T,pinned:boolean) => {
+        const span = readLayout(colSpan, input(row, pinned));
+        return typeof span === 'number' ? span : 1;
+      }} : {}),
       text: (row: T, pinned = false) => { const p = params(row, pinned); return String(typeof definition.valueFormatter === 'function' ? definition.valueFormatter(p as ValueFormatterParams<T>) : p.value ?? ''); },
       ...(definition.cellRenderer || definition.cellRendererSelector ? {render: (row: T, pinned: boolean): ReactNode => {
         const p = params(row, pinned), selected = definition.cellRendererSelector?.(p), component = selected?.component ?? definition.cellRenderer;

@@ -15,15 +15,24 @@ function isCalendarDate(text: string): boolean {
 export function normalizeDateFilterValue(value: string): string {
   const timestamp = /^(\d{4}-\d{2}-\d{2})[ T](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?$/i.exec(value);
   const date = timestamp?.[1];
-  // Keep the source's calendar day, even when its offset crosses midnight in UTC.
+  // constraint: i8 filters use the source calendar day, including offset timestamps.
   return date && isCalendarDate(date) ? date : value;
 }
 
+function finiteDecimal(text: string): Decimal | null {
+  try {
+    const number = new Decimal(text);
+    return number.isFinite() ? number : null;
+  } catch {
+    return null;
+  }
+}
 export function valueFilterKey(value: FilterValue, kind: ValueFilterKind): string {
   if (value === null || value === undefined || value === '') return 'blank:';
   const text = String(value);
   if (kind === 'number') {
-    try { const number = new Decimal(text); if (number.isFinite()) return `n:${number.toFixed()}`; } catch { /* Preserve unexpected source text rather than making it zero. */ }
+    const number = finiteDecimal(text);
+    if (number) return `n:${number.toFixed()}`;
   }
   if (kind === 'date' && isCalendarDate(text)) return `d:${text}`;
   return `t:${text}`;
@@ -44,10 +53,8 @@ function compareText(left: string, right: string): number {
 export function compareFilterValues(a: FilterValue, b: FilterValue, kind: ValueFilterKind): number {
   const left = String(a ?? ''), right = String(b ?? '');
   if (kind === 'number' && left && right) {
-    try {
-      const x = new Decimal(left), y = new Decimal(right);
-      if (x.isFinite() && y.isFinite()) return x.comparedTo(y);
-    } catch { /* Unexpected source text uses the same natural order as text columns. */ }
+    const x = finiteDecimal(left), y = finiteDecimal(right);
+    if (x && y) return x.comparedTo(y);
   }
   return compareText(left, right);
 }

@@ -30,8 +30,6 @@ type WorkspacePageProps = {
   onHistoryGuard: (guard: string) => void;
 };
 
-// The default landing page can prepare alongside the first identity read.
-// Pin the selected component for this mount so a retained page keeps its state.
 let readyHome: ComponentType<WorkspacePageProps> | undefined;
 let homeModule: Promise<{ default: ComponentType<WorkspacePageProps> }> | undefined;
 const loadHome = () => homeModule ??= import('./home').then(({ HomePage }) => {
@@ -70,7 +68,6 @@ const pages: { path: string; title: string; icon: string; group: string; loading
   { path: '/users', title: '用户管理', icon: 'M15 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0z M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2z', group: 'global', loading: '正在读取用户管理…', component: lazy(() => import('./users').then(module => ({ default: module.UsersPage }))) },
 ];
 
-// Skip parent-only updates for unrelated retained pages; context updates still propagate.
 for (const entry of pages) entry.component = memo(entry.component);
 
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -119,7 +116,6 @@ function Sidebar({ collapsed, inert, toggle }: { collapsed: boolean; inert: bool
 }
 
 function AccountWorkspace({ me, blocked, obscured, preparing, fontError, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; preparing: boolean; fontError: boolean; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
-  // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
   const [appearanceOpen, setAppearanceOpen] = useState(false);
@@ -219,14 +215,12 @@ function App() {
       else if (knownIdentity.current) setExpired(true);
       setRequestIdentity(next ? `${next.id}:${next.account}` : 'anonymous');
       knownIdentity.current = next; setMe(next); setChecking(false);
-      // Identity and appearance are verified; font I/O must not hold API intents.
       finishVerification();
       await loadTextFonts(pages.map(entry => entry.title).join('') + groups.map(group => group.title).join('') + '材料工作台独立预览管理员外观与字号撤销重做退出登录' + (next?.name ?? next?.account ?? ''));
       if (!controller.signal.aborted) setFontsReady(true);
     } catch (failure) {
       if (!controller.signal.aborted) {
         verificationError = '账号暂时无法核实，请重试后再操作。';
-        // A failed check cannot establish an account change; keep local state while access is paused.
         setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); setChecking(false);
         if (!pause && !background) throw failure;
       }
@@ -240,10 +234,8 @@ function App() {
     reportFontFailure();
     void check();
     if (window.location.pathname === appBase || window.location.pathname === appBase + '/') {
-      // The page boundary handles a rejected module when it mounts.
       void loadHome().catch(() => {});
     }
-    // Keep local navigation/input responsive; API intents wait at the identity gate.
     const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(false, true); };
     const lost = () => { resetBrowserRelay(); setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);

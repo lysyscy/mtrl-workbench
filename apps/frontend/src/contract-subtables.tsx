@@ -68,7 +68,6 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
   }, [state?.focus, query.data, query.isFetching, paused]);
 
   const unavailable = !writable || paused || !state || state.busy || state.uncertain || query.isFetching || query.isError || !query.data;
-  // 首读保留明细表框；失败反馈按需占行，正常状态不留空行。
   const readState = readPhase(query);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
 
@@ -92,14 +91,12 @@ export function ContractSubtables({ contractId, historyDate, workspace, writable
   const linkedNotices = [...new Set((data?.payments ?? []).filter(p => p.source === 'notice').map(p => p.notice_id!))];
   const currentLinkPage = Math.max(1, Math.min(linkPage, Math.ceil(linkedNotices.length / linkPageSize)));
   const invoiceRows = (kind: 'supplier' | 'trade') => data?.[kind === 'supplier' ? 'supplier_invoices' : 'trade_invoices'] ?? [];
-  // Standalone invoice dialogs share bounded flex; the embedded editor keeps its existing sizing.
   const invoiceWidth = (width: ReturnType<typeof completeColumnWidth>, max: number, flex: number) => onlyKind === 'supplier' || onlyKind === 'trade'
     ? { ...width, maxWidth: Math.max(width.minWidth, max * scale), initialFlex: flex } : width;
 
   /** 超额提醒：只看本侧已保存累计与本侧合同额；历史未结汇总不套发票提醒。 */
   function overageLine(kind: 'supplier' | 'trade') {
     if (!data || !summaryRow) return null;
-    // 历史未结汇总走的是"截至日余额"口径，不套发票超额提醒。
     if (kind === 'supplier' && historyDate) return null;
     const saved = kind === 'supplier' ? data.inv_sum : data.trade_inv_sum;
     const contract = kind === 'supplier' ? summaryRow.contract_amt : summaryRow.trade_contract_amt;

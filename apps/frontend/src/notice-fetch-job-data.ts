@@ -65,7 +65,6 @@ export function fetchJobPollInterval(job: NoticeFetchJob | undefined) {
 }
 
 export function latestFetchJob(previous: NoticeFetchJob | undefined, incoming: NoticeFetchJob) {
-  // A GET started before an ack or stage write may arrive after the newer snapshot.
   if (previous && (previous.acknowledged_at || previous.status !== 'running' && incoming.status === 'running'
     || previous.updated_at >= incoming.updated_at)) return previous;
   return incoming;

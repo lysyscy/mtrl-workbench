@@ -26,7 +26,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -62,7 +62,8 @@ from app.mod16_equipment.api import router as equipment_router
 #    ⚠️ 表在 `app/export_bindings.py`（**唯一一处**）；本处只是"进程一起就填上"。
 #    ⚠️ 放**模块顶层**（⛔ 别塞进 `create_app()`）：任何 `import app.main` 的路径都必须已注册
 #       —— 测试直调导出件那条路走 `backend/tests/conftest.py` 的同一个 `register_all()`。
-from app import export_bindings as _export_bindings                 # noqa: E402
+from app import export_bindings as _export_bindings
+from app import core_bindings as _core_bindings
 
 _export_bindings.register_all()
 
@@ -71,8 +72,6 @@ _export_bindings.register_all()
 #    从此**不再 import 业务包**：口留在 `core`，取数实现留在数据主人的包里，本处负责接上
 #    （表在 `app/core_bindings.py`，**唯一一处**）。
 #    ⚠️ 同样放**模块顶层**：任何 `import app.main` 的路径都必须已接上（测试那条路见 `tests/conftest.py`）。
-from app import core_bindings as _core_bindings                     # noqa: E402
-
 _core_bindings.register_all()
 
 _APP_DIR = Path(__file__).resolve().parent

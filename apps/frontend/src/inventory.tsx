@@ -36,7 +36,7 @@ const defaultColumn: ColDef<InventoryGridRow> = {resizable:true,suppressMovable:
 const inventoryRowId = (row: InventoryRow) => String(row.id);
 const formatFilterAmount = (value: unknown) => money(String(value));
 const emptyResult = '当前筛选条件下没有库存单据';
-// AG Grid resets a column filter if its handler changes when widths are reapplied.
+// constraint: AG Grid resets a column filter when its handler changes.
 const filterColumns = fields.map(([field, headerName, type]) => ({
   field, type,
   definition: valueFilterColumn<InventoryGridRow>({
@@ -91,7 +91,6 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const gridRows = useMemo<InventoryGridRow[]>(() => {
     if (target === null) return coarse;
     const row = displayedRows.find(row => row.id === target);
-    // Update the node even when locating the only row already in the coarse result.
     return row ? [{ ...row, located: true }] : [];
   }, [coarse, displayedRows, target]);
   const rows = target === null && filtered?.source === gridRows ? filtered.rows : gridRows;
@@ -112,7 +111,6 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       return;
     }
     const model = JSON.stringify(api.getFilterModel());
-    // Sizing and sorting also update the model, but do not change the filtered row set.
     if (previous?.source === source && previous.model === model) return;
     const rows: InventoryGridRow[] = [];
     api.forEachNodeAfterFilter(node => { if (node.data) rows.push(node.data); });
@@ -123,7 +121,6 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const controls = useRef({ unavailable: false, pendingId: null as number | null });
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
-  // Clearing column filters returns to this same immutable coarse result.
   const coarseWidths = useMemo(() => cacheFontMeasurement(() => inventoryWidths(coarse, coarseTotals, scale)),
     [coarse, coarseTotals, scale]);
   const widths = useMemo(() => rows === coarse ? coarseWidths() : inventoryWidths(rows, totals, scale), [rows, totals, scale, coarse, coarseWidths]);
@@ -144,9 +141,6 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   }, [active, paused, query.isError, query.isFetching, pending, presentation.state]);
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
   const editMissing = Boolean(editing && query.data && !query.data.rows.some(r => r.id === editing.id));
-  // Inventory keeps one read state for its table: the first read holds the reserved box with a
-  // quiet skeleton, a failed reread keeps the rows it already published, and the status lane
-  // reports either case without adding a line above the table.
   const readState = readPhase(query, query.data !== undefined && query.data.rows.length === 0);
   const placeheld = readState === 'idle' || readState === 'reading' || readState === 'error';
   const singleMonth = /^\d{4}-\d{2}$/.test(period);

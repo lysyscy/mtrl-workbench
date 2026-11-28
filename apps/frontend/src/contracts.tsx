@@ -42,7 +42,6 @@ const contractRowId = (row: ContractRow) => row.id;
 
 type ContractSelection={visibleCount:number;selectedVisible:number;pending:boolean;chooseAll:(checked:boolean)=>void};
 const ContractSelectionContext=createContext<ContractSelection>(null!);
-// The header observes selection and filter results through context, so ticking a row never rebuilds the column definitions.
 function ContractSelectionHeader(){
   const {visibleCount, selectedVisible, pending, chooseAll} = useContext(ContractSelectionContext);
   return <Checkbox aria-label="选择当前合同" disabled={pending}
@@ -60,7 +59,6 @@ const initialFilters=()=>({projects:[] as number[],tag:'纳入台账',arch:'',ap
 const inlineKeys = ['remark','arch_no','ret_date','payment_term','payment_method'] as const;
 type InlineKey = typeof inlineKeys[number];
 type InlineControl={disabled:boolean;methods:string[];drafts:Record<string,string>;change:(id:number,key:InlineKey,value:string)=>void;save:(row:ContractRow,key:InlineKey|'arch',value:string)=>Promise<boolean>;remark:(row:ContractRow,value:string)=>void;next:(row:ContractRow)=>string;advance:(row:ContractRow)=>Promise<void>};
-// 只对完整合法的日期立即保存，半截输入仍留在草稿里。
 const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
 function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKey;control:()=>InlineControl;scrolling?:boolean}){
   const row=p.data!,key=p.editKey,name=`${row.id}:${key}`,control=p.control();
@@ -69,7 +67,6 @@ function ContractInlineCell(p:ICellRendererParams<ContractRow>&{editKey:InlineKe
   useEffect(()=>setText(value),[value]);
   if(p.node.rowPinned)return null;
   if (key === 'payment_method' && p.scrolling && !methodIntent) {
-    // AG can defer the dropdown while scrolling. Show its value and let the first click open it.
     return <button className="contract-scroll-method" type="button" role="combobox" aria-expanded={false} aria-haspopup="listbox"
       aria-label={`${row.contract_no||row.material} 合同付款方式`} disabled={control.disabled}
       onFocus={event => { if (event.currentTarget.matches(':focus-visible')) setMethodIntent('focus'); }}
@@ -152,7 +149,6 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   useHistoryGuard('contracts',()=>busy||lock.current||subtables.summary.busy?'集采合同正在处理，请稍候。':uncertain||subtables.summary.uncertain?'合同操作结果待核实，请先重读。':subtables.summary.dirty?'合同子表有未保存输入，请先处理。':Object.keys(inlineDraftRef.current).length?'合同收发登记有未保存输入，请先处理。':'');
   useEffect(()=>{const valid=new Set(rows.map(row=>row.id));setPicked(old=>{const next=new Set([...old].filter(id=>valid.has(id)));return next.size===old.size?old:next;});},[rows]);
   useEffect(()=>{if(!active)return;const id=Number(params.get('contract'));if(id>0&&query.data){const row=query.data.rows.find(row=>row.id===id);pendingFocus.current=id;if(row){setEditorId(null);setFilters({...initialFilters(),tag:''});setSearch('');grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');}else {setEditorId(null);setError('合同已不在列表中，请重读核对。');}}},[params.get('contract'),active,Boolean(query.data)]);
-  // Uncertain flips do not change row data, so cells must be forced to re-render their disabled state.
   useEffect(()=>{if(active&&grid.current)grid.current.refreshCells({force:true});},[uncertain]);
   async function refresh(){
     await client.invalidateQueries({refetchType:'none'});
@@ -172,8 +168,6 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const fieldQueue=useRef(createInlineFieldQueue());
   const fieldScope=useRef({blocked,active,owner:me?`${me.id}:${me.account}`:'',uncertain});fieldScope.current={blocked,active,owner:me?`${me.id}:${me.account}`:'',uncertain};
   useEffect(()=>{fieldScope.current.blocked=blocked;return()=>{fieldScope.current.blocked=true;fieldQueue.current.reject();};},[]);
-  // 每一笔都排队等待真正写入并刷新后才结算：blur 与"推进存档"共用同一条串行队列，
-  // 因此保存进行中的点击不会被丢弃，也不会把被顶掉的输入当成已保存。
   function saveField(row:ContractRow,key:InlineKey|'arch',value:string,notify=key==='arch'):Promise<boolean> {
     if(blocked||!active||!me||uncertain||query.isError||!query.data)return Promise.resolve(false);
     const name=`${row.id}:${key}`,owner=fieldScope.current.owner;
@@ -216,14 +210,11 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
       }
     }finally{fieldQueue.current.release();lock.current=false;setBusy(false);}
   }
-  // A retained page is inert. Keep its cells at their business access state so
-  // returning to the same data does not remount every inline control.
   const actionDisabled=(active&&blocked)||!me||uncertain||query.isPending||query.isError||!projects.data||projects.isError;
   const inlineDisabled=actionDisabled||busy&&!fieldQueue.current.running;
   const paymentMethodsKey=JSON.stringify(query.data?.payment_methods??[]);
   const nextArch=(arch:string)=>!arch||arch==='未存档'?'资产处':arch==='资产处'?'已存档':'未存档';
   const advancing=useRef(false);
-  // 一次点击完成：先存这一行的存档号草稿（排队等它真的写入并刷新），再推进存档；任一失败/未知都不推进。
   async function advance(row:ContractRow) {
     if(blocked||!active||actionDisabled||advancing.current)return;
     advancing.current=true;
@@ -299,7 +290,6 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   const {busy:subBusy,uncertain:subUncertain,dirty:subDirty}=subtables.summary;
   const exportUnavailable=blocked||!active?'当前页面暂不可操作。':!me?'请先登录。':busy||subBusy?'合同正在保存，请稍候。':uncertain||subUncertain?'合同操作结果待核实，请先重读。':subDirty?'合同子表有未保存输入，请先处理。':query.isPending||query.isFetching||projects.isPending||projects.isFetching?'正在读取合同及项目，请稍候。':query.isError||projects.isError?'合同或项目读取失败，请先重读。':Object.keys(inlineDrafts).length?'请先保存收发登记输入。':Object.keys(editors).length||tool||subtable||remarkEditor?'请先处理并关闭合同窗口。':'';
   function exportIds(){if(!grid.current)throw new Error('合同列表尚未准备好，请稍候。');const ids:number[]=[];grid.current.forEachNodeAfterFilterAndSort(node=>{if(node.data&&!node.rowPinned)ids.push(node.data.id);});return ids;}
-  // 首读以同几何表框占位，只有实际失败反馈占行。
   const readState=readPhase(query);
   const placeheld=readState==='idle'||readState==='reading'||readState==='error';
   const pageState=useRef({blocked,active,editorId});pageState.current={blocked,active,editorId};

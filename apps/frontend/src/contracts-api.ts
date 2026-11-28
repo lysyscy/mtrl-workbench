@@ -28,7 +28,6 @@ const contractEntries = {
   remark: v.string(), tag: v.string(), arch: v.string(), arch_no: v.string(), ret_date: v.string(),
 };
 const contractSchema = v.object(contractEntries);
-// contractRow validates the shared fields before either list or detail checks.
 const rowFields = v.object({
   project_key: v.string(), notice_ids: v.array(positiveId),
   approve_status: v.nullable(v.picklist(contractApprovalStatuses)),

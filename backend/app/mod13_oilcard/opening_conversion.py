@@ -2,7 +2,7 @@
 from datetime import date
 import json
 
-from app.core.errors import DataConflictError, MustReportError
+from app.core.errors import DataConflictError
 from app.core.identity import current_operator
 from app.core.money import sum_money
 from . import continuation, ledger, transfers

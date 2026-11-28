@@ -418,7 +418,7 @@ def replay(session, actor, direction, expected_id):
         if 'target_version' in change:
             restored[(change['table'], change['id'])] = (row, version, change['target_version'])
         change['target_version'], change['version'] = change['version'], version
-    for recorded, replayed in zip(recorded_changes, changes):
+    for recorded, replayed in zip(recorded_changes, changes, strict=False):
         recorded['target_version'], recorded['version'] = replayed['target_version'], replayed['version']
     operation.changes = recorded_changes
     session.flush()

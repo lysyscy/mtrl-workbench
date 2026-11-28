@@ -16,7 +16,7 @@ from app.core.query import query_one
 from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
 from app.mod07_setl import inventory_extract as I
-from app.mod07_setl.repository import load_balances, load_rows, save_balance
+from app.mod07_setl.repository import load_balances, save_balance
 from app.mod07_setl.repository import load_month_rows
 
 

@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import App from 'antd/es/app';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -203,7 +204,6 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   async function move(id: number, position: number | 'up' | 'down') {
     const p = all.find(item => item.id === id); if (!p) return null; setSort(null);
     let saved: number | null = null;
-    // The API inserts within a status group; fields and drop targets use global positions.
     const ok = await run(async () => {
       const ordered = readProjects(await requestJson(`/api/m01/projects/${id}/ord`, { method: 'PUT', ...body(typeof position === 'number' ? { to_position: Math.max(1, position - (p.status === 'archived' ? all.filter(item => item.status === 'active').length : 0)) } : { direction: position }) }));
       saved = ordered.find(item => item.id === id)?.ord ?? null;
@@ -252,7 +252,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
         const editor = key === 'disp' || key === 'name_full' && !p.parent_shell_id || key === 'keywords' && p.project_type === 'small';
         return measure.text(label || '—') + (editor && label ? measure.px(12) + 2 : 0);
       });
-      return {colId:key,headerName:title,sortable:true,...sizing,valueGetter:({data:p})=>p?value(p):'',
+      return {colId:key,headerName:title,sortable:true,...sizing,valueGetter:layoutCallback(({data:p})=>p?value(p):''),
       comparator:(a,b)=>String(a??'').localeCompare(String(b??''),'zh',{numeric:true}),
       cellRenderer:({data:p}:ICellRendererParams<ArchiveProject>)=>{if(!p)return null;const state=gridState.current;
         if(key==='project_type')return <Tag className={`enum-tag project-type project-type-${p.project_type}`}>{typeNames[p.project_type]}</Tag>;
@@ -329,8 +329,8 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     </ReadStatusLane>}
     {trails.data?.length ? <details className="project-trails" open><summary>修改留痕（全名 / 状态）</summary><ReadGrid table="project-trails" label="修改留痕" domLayout="autoHeight" rows={trails.data} rowId={(_row)=>String(trails.data!.indexOf(_row))} columns={[
       {field:'at',headerName:'时间'}, {field:'project',headerName:'项目'}, {field:'field_label',headerName:'字段'},
-      {colId:'before',headerName:'改前值',valueGetter:p=>trailValue(p.data!,p.data!.before)},
-      {colId:'after',headerName:'改后值',valueGetter:p=>trailValue(p.data!,p.data!.after)}, {field:'by',headerName:'改动人'},
+      {colId:'before',headerName:'改前值',valueGetter:layoutCallback(p=>trailValue(p.data!,p.data!.before))},
+      {colId:'after',headerName:'改后值',valueGetter:layoutCallback(p=>trailValue(p.data!,p.data!.after))}, {field:'by',headerName:'改动人'},
     ]}/></details> : null}
     </FirstReadRegion>
     <DialogPresence>{modal && <ProjectDialog key="project-dialog" state={modal} me={me} blocked={blocked} close={() => setModal(null)} refresh={refresh} announce={text => { void message.success(text); }} />}</DialogPresence>
@@ -338,7 +338,6 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
 }
 function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state: DialogState; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
   const p = 'project' in state ? state.project : null, item = 'item' in state ? state.item : null;
-  // 取数方式来自账号工作区的统一选择（「i8 接入」页）；这里只消费，不另设一套。
   const session = useI8Session();
   const [full, setFull] = useState(p?.name_full ?? ''), [disp, setDisp] = useState(p?.disp ?? '');
   const [choice, setChoice] = useState('');

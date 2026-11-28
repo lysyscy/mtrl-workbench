@@ -1,7 +1,5 @@
 import type { IDragAndDropImageParams } from 'ag-grid-community';
 
-// AG Grid owns dragging and positioning; this public image component preserves
-// the existing whole-row preview without maintaining another drag controller.
 export class GridRowDragImage {
   private element=document.createElement('div');
   init(params:IDragAndDropImageParams){
@@ -19,6 +17,6 @@ export class GridRowDragImage {
     this.element.append(copy);
   }
   getGui(){return this.element;}
-  setIcon(_icon:unknown,_shake:boolean){}
-  setLabel(_label:string){}
+  setIcon(){}
+  setLabel(){}
 }

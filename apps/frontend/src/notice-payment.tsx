@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Input from 'antd/es/input';
 import type { Project } from './api';
 import { BusinessDate } from './time-picker';
@@ -286,7 +287,7 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
         {missing.length > 0 && <p className="notice" role="alert">{missing.length} 条记录已不在列表，请关闭并重新勾选核对。</p>}
         {phase === 'saved' ? flows.length > 0 && <BoundedGrid fill minRows={4} table="notice-payment-receipt" className="notice-pay-table" label="付款流水回执" rows={flows}
           totals={[{ notice_id: -1, flow_no: '', amount: receiptTotal, pay_date: '', pay_method: '', remark: '' }]} rowId={flow=>flow.flow_no} columns={[
-          {colId:'bill',headerName:'单据编码',...fullTextWidth(['实付合计', ...rows.map(row=>row.bill_no)], scale),wrapText:false,valueGetter:p=>p.node?.rowPinned?'实付合计':rows.find(row=>row.notice_id===p.data?.notice_id)?.bill_no??''},
+          {colId:'bill',headerName:'单据编码',...fullTextWidth(['实付合计', ...rows.map(row=>row.bill_no)], scale),wrapText:false,valueGetter:layoutCallback(p=>p.node?.rowPinned?'实付合计':rows.find(row=>row.notice_id===p.data?.notice_id)?.bill_no??'')},
           {field:'flow_no',headerName:'付款流水号'}, {field:'pay_date',headerName:'付款日期'}, {field:'pay_method',headerName:'方式'},
           {field:'amount',headerName:'实付金额（元）',...numberColumnWidth([...flows.map(flow=>money(flow.amount)), money(receiptTotal)],scale),cellClass:'money',valueFormatter:p=>money(p.value)},
           {field:'remark',headerName:'备注',valueFormatter:p=>p.node?.rowPinned?'':p.value||'—'},

@@ -1,3 +1,4 @@
+import { layoutCallback } from './grid-layout-callback';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
 import Button from 'antd/es/button';
@@ -148,10 +149,10 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
         {placeheld
           ? <div className="i8-read-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={readState === 'error'}/></div>
           : <ReadGrid table="i8-latest" className="i8-latest" label="各来源最近结果" domLayout="autoHeight" rows={(Object.keys(sourceNames) as (keyof typeof sourceNames)[]).map(source=>({source,row:(records.data??[]).find(item=>recordSource(item)===source)}))} rowId={item=>item.source} columns={[
-            {colId:'source',headerName:'来源',valueGetter:p=>sourceNames[p.data!.source]},
-            {colId:'scope',headerName:'范围',valueGetter:p=>p.data!.row?recordScope(p.data!.row):'—'},
+            {colId:'source',headerName:'来源',valueGetter:layoutCallback(p=>sourceNames[p.data!.source])},
+            {colId:'scope',headerName:'范围',valueGetter:layoutCallback(p=>p.data!.row?recordScope(p.data!.row):'—')},
             {colId:'result',headerName:'最近结果',cellRenderer:({data}:{data:{row:RunRecord|undefined}})=>data.row?<Status row={data.row}/>:'最近 '+limit+' 条中暂无记录'},
-            {colId:'time',headerName:'开始时间',valueGetter:p=>p.data!.row?when(p.data!.row.started_at):'—'},
+            {colId:'time',headerName:'开始时间',valueGetter:layoutCallback(p=>p.data!.row?when(p.data!.row.started_at):'—')},
           ]}/>}
       </div>
       {!placeheld &&
@@ -168,8 +169,8 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
             ? <p className="state">{(records.data ?? []).length === 0 ? '还没有执行记录。完成抓取、同步或打印后可在这里核对。' : '当前读取范围内没有这类执行记录。'}</p>
             : <BoundedGrid maxHeight="min(55dvh, 600px)" minRows={4} table="i8-records" className="i8-records" label="执行记录列表" rows={visible} rowId={row=>String(row.id)} columns={[
             {field:'started_at',headerName:'开始时间',valueFormatter:p=>when(p.value)},
-            {colId:'action',headerName:'动作',valueGetter:p=>recordLabel(p.data!)},
-            {colId:'target',headerName:'范围 / 对象',valueGetter:p=>p.data && recordSource(p.data) === 'contracts' ? recordScope(p.data) : p.data?.target},
+            {colId:'action',headerName:'动作',valueGetter:layoutCallback(p=>recordLabel(p.data!))},
+            {colId:'target',headerName:'范围 / 对象',valueGetter:layoutCallback(p=>p.data && recordSource(p.data) === 'contracts' ? recordScope(p.data) : p.data?.target)},
             {field:'triggered_by',headerName:'操作人',valueFormatter:p=>p.value==='manual'?'未记录（旧记录）':p.value},
             {colId:'result',headerName:'结果',cellRenderer:({data:row}:{data:RunRecord})=>{
               const source = receiptSource(row);
@@ -179,7 +180,7 @@ export function I8Page({ blocked, me }: { blocked: boolean; me: Identity | null 
               {row.error_message && <details className="i8-error"><summary>查看原因</summary><pre>{row.error_message}</pre></details>}
               </>;
             }},
-            {colId:'duration',headerName:'耗时',valueGetter:p=>duration(p.data!)},
+            {colId:'duration',headerName:'耗时',valueGetter:layoutCallback(p=>duration(p.data!))},
           ]}/>}
         </details>}
     </div>

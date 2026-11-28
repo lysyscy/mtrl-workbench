@@ -57,6 +57,8 @@ def get_session() -> Iterator[Session]:
 
 # 写入提交后才发送回执，顶栏历史与返回结果使用同一个已提交事务。
 DBSession = Depends(get_session, scope='function')
+ProjectQuery = Query(default=[])
+NoticeIdsQuery = Query(default=[])
 
 
 def notice_filters(period, project, category, approve_status, pay_status) -> NoticeFilters:
@@ -483,7 +485,7 @@ def get_home_todos(session: Session = DBSession) -> dict[str, int]:
 @api_router.get("/api/m03/notice-list")
 def get_notice_list(
     period: str | None = Query(None),
-    project: list[str] = Query(default=[]),
+    project: list[str] = ProjectQuery,
     category: str = Query(""),
     approve_status: str = Query(""),
     pay_status: str = Query(""),
@@ -517,7 +519,7 @@ def get_notice_list(
 
 
 @api_router.get("/api/m03/payment-preview")
-def payment_preview(ids: list[int] = Query(default=[]), session: Session = DBSession) -> dict:
+def payment_preview(ids: list[int] = NoticeIdsQuery, session: Session = DBSession) -> dict:
     """核对所选通知书的当前付款状态；与列表复用金额和不可付原因。"""
     data = build_page_data(session, filters=notice_filters("", [], "", "", ""), notice_ids=ids)
     return {"payment_methods": list(PAY_METHODS), "items": [_api_item(rec) for rec in data["rows"]]}

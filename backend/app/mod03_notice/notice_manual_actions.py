@@ -294,7 +294,9 @@ def manual_delete_impact(session, notice_id: int) -> dict:
     assert_manual_editable(row)
 
     # ⚠️ 金额列可能是 `None`（未取到 ≠ 0）⇒ 显示成 0.00 而不是抛异常（回执给人看，别 500）
-    money = lambda v: f"{(v if v is not None else _ZERO):.2f}"   # noqa: E731
+    def money(value):
+        return f"{(value if value is not None else _ZERO):.2f}"
+
     settle = money(row.stat_settle)
     paid_stat = money(row.stat_paid)
     label = row.bill_no or row.ph_id

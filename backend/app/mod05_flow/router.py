@@ -103,8 +103,14 @@ class FlowExportIn(BaseModel):
     ids: list[int] = Field(default_factory=list)
 
 
+LoadFlows = Depends(get_flows_data)
+LoadDebt = Depends(get_debt_data)
+LoadLedger = Depends(get_ledger_data)
+LoadStats = Depends(get_stats_data)
+
+
 @router.post("/api/m05/flows/export")
-def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)) -> dict:
+def export_flows(payload: FlowExportIn, load: PageData = LoadFlows) -> dict:
     """导出**付款流水**（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
 
     ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
@@ -178,7 +184,7 @@ def api_flows(
     project_id: str = Query(""),
     keyword: str = Query(""),
     notice_id: str = Query("", description="按单张通知书取流水（弹窗）；空=保持原全量语义"),
-    load: PageData = Depends(get_flows_data),
+    load: PageData = LoadFlows,
 ) -> dict:
     """付款流水列表（筛选即时生效；**不分页**）。
 
@@ -204,7 +210,7 @@ def api_flows(
 
 
 @router.get("/api/m05/debt")
-def api_debt(load: PageData = Depends(get_debt_data)) -> dict:
+def api_debt(load: PageData = LoadDebt) -> dict:
     """欠款：三类合计 ＋ 按项目归集（集采只展示、**不在本域计算**）。"""
     return load()
 
@@ -213,7 +219,7 @@ def api_debt(load: PageData = Depends(get_debt_data)) -> dict:
 def api_ledger(
     project_id: int = Query(..., description="台账两侧**共用**的项目"),
     end_ym: str = Query("", description="止月 YYYY-MM（空=按数据自动取到末月）"),
-    load: PageData = Depends(get_ledger_data),
+    load: PageData = LoadLedger,
 ) -> dict:
     """逐月台账（两侧：辅材 / 机械）。"""
     return load(project_id=int(project_id), end_ym=end_ym)
@@ -223,7 +229,7 @@ def api_ledger(
 def api_stats(
     granularity: str = Query("", description="week（默认）/ month"),
     year: int = Query(0), quarter: int = Query(0), bucket: str = Query(""),
-    load: PageData = Depends(get_stats_data),
+    load: PageData = LoadStats,
 ) -> dict:
     """付款统计（左按项目 · 右时间轴；**换粒度不换口径**）。"""
     return load(granularity=granularity, year=year or None, quarter=quarter or None, bucket=bucket)
