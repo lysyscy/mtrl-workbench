@@ -265,8 +265,8 @@ export function OwnershipDialog({ document, blocked, close, refresh, announce }:
         {!disabled && <OwnershipProjectLink document={document} showNumber />}
         {error && <p className="notice" role="alert">{error}</p>}
         </div>
-        <div className="dialog-footer">
-          {saveHint && <p className="muted ownership-save-hint" id={hintId}>{saveHint}</p>}
+        <div className="dialog-footer ownership-footer">
+          {saveHint && <p className="muted" id={hintId}>{saveHint}</p>}
           <div className="dialog-actions">
             {readback ? <Button htmlType="button" type="primary" loading={busy} disabled={blocked} onClick={() => void reread()}>重读核对</Button>
               : <><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>取消</Button>

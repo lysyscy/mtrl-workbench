@@ -10,16 +10,17 @@ import Checkbox from 'antd/es/checkbox';
 import { EnumTag } from './enum-tag';
 import Button from 'antd/es/button';
 import { readHistory, useHistoryGuard } from './history';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { AgGridReactProps } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams, PostSortRowsParams } from 'ag-grid-community';
 import { ApiError, decodeBase64, confirmWrite, uncertainWrite, projectLabel, record, requestJson } from './api';
+import { loadTextFonts } from './appearance-ready';
 import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
-import { cacheFontMeasurement, cachedNumberColumnWidths, contentWidth, fixedWidth, gridTheme, textWidth } from './grid';
+import { cachedNumberColumnWidths, contentWidth, fixedWidth, gridTheme, textWidth } from './grid';
 import { completeColumnWidth, EllipsisText } from './grid-text';
 import { archiveLabel, body, categories, cents, decimal, live, money, moneyKeys, noticePrintRows, prioritizeNoticeRows, receipt, searchKey, selectable, total } from './notices-api';
 import { noticeListQuery } from './notice-list';
@@ -48,9 +49,10 @@ type NoticeDialogState = { kind: 'delete' | 'link'; row: NoticeRow } | { kind: '
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
 type PickedNotices = Map<number, symbol>;
 type SinglePrintSelection = {noticeId: number; originalPick: symbol};
-interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: PickedNotices; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
+interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; searchBusy: boolean; shown: NoticeRow[]; picked: PickedNotices; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; payDrafts: Record<number,PayOverride>; editPay: (row: NoticeRow, value: string | null) => void; setPay: (row: NoticeRow, value: string) => void; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
 const noticeMoneyColumns = new Set<string>(moneyKeys);
+const noticeTextFields = ['doc_date', 'bill_no', 'biz_type', 'payee', 'input_by', 'bill_name', 'amount_approved', 'amount_paid'] as const;
 const defaultColumn: ColDef<NoticeRow> = { cellDataType: false, sortable: true, resizable: true, suppressMovable: true, wrapHeaderText: false };
 
 function noticeSummary(rows: NoticeRow[]): NoticeRow[] {
@@ -72,11 +74,14 @@ function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number, m
     actions: completeColumnWidth(['保存 取消', ...shown.map(row => [row.has_any_flow ? '查看流水' : '', cents(row.amount_paid) > 0n ? '撤销付款' : '', row.is_manual ? '手动 编辑 删除' : ''].filter(Boolean).join(' '))], '操作', scale, 64),
   };
   for (const key of moneyKeys) {
-    const values = shown.map(row => money(row[key]));
-    const editable = key === 'pay_amount' || key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && shown.some(row => row.is_manual);
-    const display = Math.max(measure(key, values, 1).minWidth,
+    const paymentDraft = key === 'pay_amount';
+    const values = shown.map(row => row[key]);
+    // Reserve the stored amount's precision before typing a session-only payment draft.
+    if (paymentDraft) values.push('-9999999999999999.99');
+    const editable = paymentDraft || key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && shown.some(row => row.is_manual);
+    const display = Math.max(measure(key, values.map(money), 1).minWidth,
       measure(`${key}-total`, summary.map(row => money(row[key])), 1).minWidth);
-    const input = editable ? measure(`${key}-input`, shown.map(row => row[key]), 1, true).minWidth : 0;
+    const input = editable ? measure(`${key}-input`, values, 1, true).minWidth : 0;
     const min = Math.max(display, input, completeColumnWidth([], amountNames[key], 1).minWidth);
     widths[key] = contentWidth(min, Math.max(min, 180), scale);
   }
@@ -86,7 +91,7 @@ function noticeWidths(shown: NoticeRow[], summary: NoticeRow[], scale: number, m
 const NoticeSelectionContext = createContext<RenderState>(null!);
 function NoticeSelectionHeader() {
   const current = useContext(NoticeSelectionContext), ids = current.shown.filter(selectable).map(row => row.notice_id), count = ids.filter(id => current.picked.has(id)).length;
-  return <Checkbox aria-label="全选当前筛选结果" checked={ids.length > 0 && count === ids.length} indeterminate={count > 0 && count < ids.length} disabled={current.unavailable || !ids.length} onChange={event => current.chooseAll(event.target.checked)} />;
+  return <Checkbox aria-label="全选当前筛选结果" checked={ids.length > 0 && count === ids.length} indeterminate={count > 0 && count < ids.length} disabled={current.unavailable || current.searchBusy || !ids.length} onChange={event => current.chooseAll(event.target.checked)} />;
 }
 
 function inTime(r: NoticeRow, f: Filters): boolean { return timeMatches(f.period, r.doc_date); }
@@ -228,7 +233,15 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     });
   }, [sourceRows, payOverrides]);
   const compareAmounts = useAmountComparator(rows);
-  const scope = useMemo(() => rows.filter(r => (!pasteScope || pasteScope.includes(r.notice_id)) && scopeHit(r, filters)), [rows, filters, pasteScope]);
+  const scopeRows = useMemo(() => (list: NoticeRow[]) => list.filter(row => (!pasteScope || pasteScope.includes(row.notice_id)) && scopeHit(row, filters)), [filters, pasteScope]);
+  const sourceScope = useMemo(() => scopeRows(sourceRows), [sourceRows, scopeRows]);
+  useEffect(() => {
+    if (!pageRoot.current?.ownerDocument.fonts) return;
+    // Fixed single-line columns skip height measurement. Load their glyphs before scrolling mounts a new row.
+    const text = sourceScope.map(row => noticeTextFields.map(field => row[field]).join('')).join('');
+    void loadTextFonts(text, [400]);
+  }, [sourceScope]);
+  const scope = useMemo(() => rows === sourceRows ? sourceScope : scopeRows(rows), [rows, sourceRows, sourceScope, scopeRows]);
   const needle = searchKey(search);
   const find = useMemo(() => searchWithinRows(scope, (row, needle) => [
     row.doc_date, row.bill_no, row.project_display, row.project_name, row.category_label,
@@ -258,11 +271,9 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   // Each sample checks the actual texts and current font. A successful reread
   // can reuse unchanged amounts and identifiers within the same account.
   const measureNumbers = useMemo(cachedNumberColumnWidths, [me?.account]);
-  const scopeDisplay = useMemo(() => {
-    const summary = noticeSummary(scope);
-    return { summary, widths: cacheFontMeasurement(() => noticeWidths(scope, summary, scale, measureNumbers)) };
-  }, [scope, scale, measureNumbers]);
-  const summary = useMemo(() => shown === scope ? scopeDisplay.summary : noticeSummary(shown), [shown, scope, scopeDisplay]);
+  // Use the published scope for sizing while search and session drafts change the visible rows.
+  const widths = useMemo(() => noticeWidths(sourceScope, noticeSummary(sourceScope), scale, measureNumbers), [sourceScope, scale, measureNumbers]);
+  const summary = useMemo(() => noticeSummary(shown), [shown]);
   const cellSaves = useNoticeCellSaves({ rows: query.data, enabled: active && !blocked && Boolean(me),
     canWrite: !busy && !draft && !draftUncertain && !query.isPending && !query.isError, read: refresh });
   const cellDirty = Object.keys(cellSaves.drafts).length > 0;
@@ -362,7 +373,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     setPrint({mode, rows: orderedRows, hiddenIds, ...(single ? {single} : {})});
   }
   function pick(id: number, checked: boolean) {
-    if (searchBusy) return;
     setPicked(old => {
       if (old.has(id) === checked) return old;
       const next = new Map(old);
@@ -382,7 +392,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
       return next.size === old.size ? old : next;
     });
   }
-  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind, row) => setMaintenance(kind === 'ownership'
+  const current = useRef<RenderState>(null!); current.current = { viewFlows: setFlowNotice, unavailable, searchBusy, shown, picked, action, pick, chooseAll, draft, begin, saveDraft, cancelDraft, open: (kind, row) => setMaintenance(kind === 'ownership'
     ? { kind, document: { source: 'notice', number: row.bill_no, name: row.bill_name, project: row.project_name, noticeId: row.notice_id } }
     : { kind, row }), payOverrides, payDrafts:payDrafts.current, editPay, setPay, draftCell };
   const refreshed = useRef<{ grid: GridApi<NoticeRow>; rows: NoticeRow[]; draft: Draft | null; unavailable: boolean; picked: PickedNotices } | null>(null);
@@ -411,8 +421,6 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     editor.addEventListener('blur', released, {once: true});
     return () => { cancelAnimationFrame(frame); editor.removeEventListener('blur', released); };
   }, [active, picked, rows, unavailable, draft]);
-  const widths = useMemo(() => shown === scope
-    ? scopeDisplay.widths() : noticeWidths(shown, summary, scale, measureNumbers), [scope, scopeDisplay, shown, summary, scale, measureNumbers]);
   // Amount blur updates the data and measured widths during the following click.
   // Keep both checkbox component types stable while the other columns resize.
   const selectionColumn = useMemo<ColDef<NoticeRow>>(() => ({
@@ -449,6 +457,8 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     { colId: 'actions', headerName: '操作', wrapText: true, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{p.data!.has_any_flow && <Button htmlType="button" disabled={current.current.unavailable} onClick={() => current.current.viewFlows(p.data!)}>查看流水</Button>}{cents(p.data!.amount_paid)>0n && <Link className="row-button danger" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><Button htmlType="button" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</Button><Button htmlType="button" danger disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</Button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
     if (column.colId === 'pick') return column;
+    // Published text columns already have measured widths. Only a draft needs an editor.
+    if (!draft && !column.cellRenderer) return { ...column, suppressAutoSize: true };
     const original = column.cellRenderer;
     const mapping: Record<string,keyof Draft> = { doc_date:'doc_date',bill_no:'bill_no',project_display:'ownership_id',category_label:'category',bill_name:'bill_name',biz_type:'biz_type',payee:'payee',amount_approved:'amount_approved',stat_settle:'stat_settle',stat_paid:'stat_paid',approve_status:'approve_status' };
     return { ...column, wrapText:false, wrapHeaderText:false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => {
@@ -467,15 +477,23 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;
     return JSON.stringify([pinned, row.notice_id === -2, id === 'pick' ? '' : id === 'actions' ? [row.has_any_flow,cents(row.amount_paid ?? '0') > 0n,row.is_manual,Boolean(draft)] : [fixedInput ? '' : row[id as keyof NoticeRow],row.is_excluded,row.is_revoked,row.is_manual,row.has_link,row.is_overpaid,row.category]]);
-  },textOnly:draft?[]:['doc_date','bill_no','biz_type','payee','input_by','bill_name','amount_approved','amount_paid']}), [draft]);
+  },textOnly:draft?[]:noticeTextFields}), [draft]);
   const presentation = useGridPresentation({table: 'notices', growingMinimums: noticeMoneyColumns, root: gridRoot, fontRoot: pageRoot, active: active && !blocked, rows: shown, totals: footer, columns, measurement, rowId: noticeRowId, scale, scope: JSON.stringify([filters,shown === scope ? '' : needle,pasteScope]), identity: `${me?.account ?? ''}:${[...filters.projects].sort().join(',')}`});
+  useLayoutEffect(() => {
+    if (!searchBusy || !presentation.visible) return;
+    // Block the old result's editors and actions while keeping column resizing available.
+    const rows = gridRoot.current?.querySelector<HTMLElement>('.ag-grid-scrolling-rows');
+    if (!rows) return;
+    rows.inert = true;
+    return () => { rows.inert = false; };
+  }, [searchBusy, presentation.visible, placeheld]);
   useEffect(() => { if (presentation.state === 'ready' && pendingFocus.current) { const node = api.current?.getRowNode(String(pendingFocus.current)); if (node) { api.current?.ensureNodeVisible(node, 'middle'); pendingFocus.current = 0; } } }, [presentation.state,shown]);
   const postSortRows = useMemo(() => ({nodes}: PostSortRowsParams<NoticeRow>) => {
     prioritizeNoticeRows(nodes, pasteOrder, node => node.data?.notice_id);
   }, [pasteOrder]);
   const gridOptions = useMemo<AgGridReactProps<NoticeRow>>(() => ({
     theme: gridTheme, defaultColDef: defaultColumn, rowBuffer: 2,
-    alwaysShowVerticalScroll: true, suppressColumnVirtualisation: true,
+    alwaysShowVerticalScroll: true,
     enableCellTextSelection: true, ensureDomOrder: true, suppressScrollOnNewData: true, animateRows: false,
     getRowId: p => String(p.data.notice_id),
     getRowClass: p => p.data?.notice_id === focusId ? 'notice-focused' : '',
@@ -508,11 +526,41 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
     }
   }
   return <NoticeCells.Provider value={cellSaves.cells}><NoticeSelectionContext.Provider value={current.current}><div className="notices-page page-shell page-shell--fill" data-page-layout="fill" ref={pageRoot}>
-    <div className="notice-selection" data-page-chrome role="status"><span>已勾选 <b>{picked.size}</b> 行</span><span>审批金额 <b>{selectedAmounts.approved}</b> 元</span><span>本次应付 <b>{selectedAmounts.due}</b> 元</span>{hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}{picked.size > 0 && <Button htmlType="button" onClick={clearSelection}>清空勾选</Button>}<span className="notice-selection-actions"><Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('print')}>批量打印</Button><Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={()=>startPrint('pdf')}>导出 PDF</Button><Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)}
-      onClick={() => void recoverPrint()}>查看打印批次</Button><Button htmlType="button" disabled={unavailable} onClick={()=>setPrinterOpen(true)}>打印机设置</Button><Button htmlType="button" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button></span></div>
-    {payError && <p className="notice" role="alert">{payError}</p>}
-    <section className="wb-surface notice-card page-fill-card"><div className="notice-tools" data-page-chrome><div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理"><span>批量改分类</span>{Object.entries(categories).map(([key, label]) => <Button htmlType="button" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked.keys()], category: key }); }}>{label}</Button>)}<Button htmlType="button" danger disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked.keys()] }, true); }}>批量剔除</Button><Button htmlType="button" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked.keys()] }, true); }}>恢复剔除</Button></div><div className="notice-toolbar"><Button htmlType="button" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button><Button htmlType="button" disabled={actionsUnavailable||!shown.some(r=>live(r)&&r.category==='jc'&&!r.has_link)} onClick={()=>setAutoIds(shown.filter(r=>live(r)&&r.category==='jc'&&!r.has_link).map(r=>r.notice_id))}>批量关联集采合同</Button><Button type="primary" htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button><Button htmlType="button" loading={exporting} disabled={actionsUnavailable || !shown.length} onClick={() => void exportExcel()}>导出 Excel</Button></div></div>
-      <div className="notice-filters" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
+    <section className="wb-surface notice-card page-fill-card">
+      <div className="notice-selection" data-page-chrome role="status">
+        <span>已勾选 <b>{picked.size}</b> 行</span>
+        <span>审批金额 <b>{selectedAmounts.approved}</b> 元</span>
+        <span>本次应付 <b>{selectedAmounts.due}</b> 元</span>
+        {hidden > 0 && <span className="notice-tag rule">当前列表外 {hidden} 条</span>}
+        {picked.size > 0 && <Button htmlType="button" onClick={clearSelection}>清空勾选</Button>}
+        <div className="notice-selection-actions">
+          <Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={() => startPrint('print')}>批量打印</Button>
+          <Button htmlType="button" disabled={actionsUnavailable || Boolean(print) || !picked.size || Boolean(draft)} onClick={() => startPrint('pdf')}>导出 PDF</Button>
+          <Button htmlType="button" disabled={blocked || !active || Boolean(print) || !printOwner || Boolean(draft)} onClick={() => void recoverPrint()}>查看打印批次</Button>
+          <Button htmlType="button" disabled={unavailable} onClick={() => setPrinterOpen(true)}>打印机设置</Button>
+          <Button htmlType="button" type="primary" className="notice-pay-action" disabled={batchUnavailable || !selectedPay.length || Boolean(draft)} title={batchReason} onClick={openPayment}>付款{selectedPay.length ? `（${selectedPay.length} 条）` : ''}</Button>
+        </div>
+      </div>
+      {payError && <p className="notice" role="alert">{payError}</p>}
+      <div className="notice-tools wb-toolbar" data-page-chrome>
+        <div className="notice-batch" role="group" aria-label="已勾选通知书的批量处理">
+          <div className="notice-batch-group" role="group" aria-label="批量改分类">
+            <span>批量改分类</span>
+            {Object.entries(categories).map(([key, label]) => <Button htmlType="button" key={key} disabled={batchUnavailable} title={batchReason} onClick={() => { if (!hidden) void action('/api/m03/actions/category', { ids: [...picked.keys()], category: key }); }}>{label}</Button>)}
+          </div>
+          <div className="notice-batch-group" role="group" aria-label="剔除与恢复">
+            <Button htmlType="button" danger disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/exclude', { ids: [...picked.keys()] }, true); }}>批量剔除</Button>
+            <Button htmlType="button" disabled={batchUnavailable} title={batchReason || undefined} onClick={() => { if (!hidden) void action('/api/m03/actions/restore', { ids: [...picked.keys()] }, true); }}>恢复剔除</Button>
+          </div>
+        </div>
+        <div className="notice-toolbar">
+          <Button htmlType="button" disabled={unavailable} onClick={() => setFetchOpen(true)}>按月抓取 i8</Button>
+          <Button htmlType="button" disabled={actionsUnavailable || !shown.some(r => live(r) && r.category === 'jc' && !r.has_link)} onClick={() => setAutoIds(shown.filter(r => live(r) && r.category === 'jc' && !r.has_link).map(r => r.notice_id))}>批量关联集采合同</Button>
+          <Button type="primary" htmlType="button" disabled={unavailable || Boolean(draft)} onClick={() => begin()}>手动新增</Button>
+          <Button htmlType="button" loading={exporting} disabled={actionsUnavailable || !shown.length} onClick={() => void exportExcel()}>导出 Excel</Button>
+        </div>
+      </div>
+      <div className="notice-filters wb-toolbar" data-page-chrome><div className="time-picker-field"><span>单据时间</span><TimePicker singleEntry label="单据时间" value={filters.period} modes={['月','跨月','年','全部']} onChange={period => setFilters(f => ({ ...f, period }))} /></div>
       <div className="notice-project"><span>项目</span><ProjectPicker projects={projects.data ?? []} selected={filters.projects} pick={projects => setFilters(f => ({ ...f, projects }))} multiple emptyLabel="全部项目" label="项目筛选" disabled={projects.isPending || projects.isError} /></div>
       <label>分类<Select aria-label="通知书分类" disabled={false} value={filters.category} onChange={value=>setFilters(f=>({...f,category:value, link: ''}))} options={[{value:'',label:'全部'},...Object.entries(categories).map(([value,label])=>({value,label})),{value:'exclude',label:'剔除'}]}/></label><label>合同关联（集采）<Select aria-label="合同关联" disabled={!['','jc'].includes(filters.category)} value={filters.link} onChange={value=>setFilters(f=>({...f,link:value}))} options={[{value:'',label:'全部'},{value:'no',label:'未关联'},{value:'yes',label:'已关联'}]}/></label>
       <label>审批状态<Select aria-label="审批状态" disabled={filters.category === 'exclude'} value={filters.approval} onChange={value=>setFilters(f=>({...f,approval:value}))} options={[{value:'',label:'全部'},...['已批','未批'].map(value=>({value,label:value}))]}/></label><label>付款状态<Select aria-label="付款状态" disabled={filters.category === 'exclude'} value={filters.paid} onChange={value=>setFilters(f=>({...f,paid:value}))} options={[{value:'',label:'全部'},...['已付清','未付清'].map(value=>({value,label:value}))]}/></label>
@@ -538,7 +586,7 @@ export function NoticesPage({ me, blocked, active, query, projects }: {
         placeholder={<div className="notice-read-reserve read-reserve"><ReadPlaceholder rows={8} quiet={readState === 'error'} /></div>}>
         {!placeheld && <PublishedNotices.Provider value={publishedNotices}>
           <NoticeDraftDisabled.Provider value={busy || blocked}>
-            <PreparedGrid inert={searchBusy} presentation={presentation} className="notice-grid page-fill-stage grid-single-line"
+            <PreparedGrid presentation={presentation} className="notice-grid page-fill-stage grid-single-line"
               role="region" aria-label="付款通知书列表" grid={gridOptions} />
           </NoticeDraftDisabled.Provider>
         </PublishedNotices.Provider>}

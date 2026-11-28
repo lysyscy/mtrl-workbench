@@ -90,13 +90,13 @@ export function NoticeFetchJobs({ account, paused, children }: { account: string
     {children}
     {enabled && visible && (running || resultView === 'reminder') && <aside className="notice-fetch-progress" aria-label="付款通知书抓取">
       {running && <div className="notice-fetch-running" role="status">
-        <span>{running.year_month} {pollingError ? '正在重读抓取进度…' : running.stage_label}</span>
+        <div><span>{pollingError ? '正在重读抓取进度…' : running.stage_label}</span><time dateTime={running.year_month}>{running.year_month}</time></div>
         <progress aria-label="付款通知书抓取进度" />
       </div>}
       {finished && resultView === 'reminder' && <Button htmlType="button" className="notice-fetch-reminder"
         onClick={() => setOpenedId(finished.id)}>
         {finished.status === 'completed' ? '抓取完成，查看结果' : '抓取失败，查看详情'}
-        <span className="muted">{finished.year_month}</span>
+        <time dateTime={finished.year_month}>{finished.year_month}</time>
       </Button>}
     </aside>}
     <DialogPresence>{finished && resultView === 'dialog' && <FetchResult key={finished.id} job={finished} acknowledge={() => acknowledge(finished)} />}</DialogPresence>

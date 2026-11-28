@@ -419,30 +419,28 @@ export function NoticePrint({rows, hiddenIds, scale = 1, mode, owner, resumed, b
     finally { lock.current = false; setBusy(false); }
   }
 
-  const footer = <div className="notice-print-footer">
+  const footer = <div className="dialog-actions notice-print-footer">
     <Link to="/i8" onClick={event => { if (!closing.requestClose()) event.preventDefault(); }}>查看运行记录</Link>
-    <div className="dialog-actions">
-      <Button htmlType="button" disabled={closeLocked} onClick={closing.requestClose}>关闭</Button>
-      {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
-      {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
-        <Button htmlType="button" onClick={() => void cancelKick()}>取消下线确认</Button>
-        <Button htmlType="button" type="primary" danger disabled={blocked} onClick={confirmKick}>让现有会话下线并继续</Button>
-      </>}
-      {!busy && !waiting && !kick && !readFailed && scope.length > 0 && (!batch || preparationFailed) &&
-        <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void runWhenReady(prepare)}>
-          {preparationFailed || error ? '重试全批' : '确认本批'}
-        </Button>}
-      {preparationFailed && !readFailed && failedIds.size > 0 && remaining.length > 0 &&
-        <Button htmlType="button" disabled={busy || blocked} onClick={removeFailed}>移出异常单并重新确认剩余批次</Button>}
-      {readFailed && <Button htmlType="button" type="primary" disabled={busy || blocked} onClick={() => void recheck()}>重查原批次</Button>}
-      {batch?.status === 'ready' && visibleScope && !a4Block && !readFailed && !busy &&
-        <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void dispatch()}>投递原批</Button>}
-      {a4Block && !readFailed && <Button htmlType="button" type={file ? 'default' : 'primary'} disabled={blocked}
-        loading={busy} onClick={() => void exportPrepared()}>导出本批 PDF</Button>}
-      {file && <Button htmlType="button" type={readFailed ? 'default' : 'primary'} disabled={busy || blocked} onClick={() => download(file)}>下载 {file.filename}</Button>}
-      {mode === 'pdf' && Boolean(result?.success) && !file &&
-        <Button htmlType="button" disabled={busy || blocked} onClick={() => void retryDownload()}>重试下载</Button>}
-    </div>
+    <Button htmlType="button" disabled={closeLocked} onClick={closing.requestClose}>关闭</Button>
+    {waiting && <Button htmlType="button" onClick={cancelWaiting}>取消等待</Button>}
+    {!busy && !waiting && kick && session.mode !== SESSION_MODE_BROWSER && <>
+      <Button htmlType="button" onClick={() => void cancelKick()}>取消下线确认</Button>
+      <Button htmlType="button" type="primary" danger disabled={blocked} onClick={confirmKick}>让现有会话下线并继续</Button>
+    </>}
+    {!busy && !waiting && !kick && !readFailed && scope.length > 0 && (!batch || preparationFailed) &&
+      <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void runWhenReady(prepare)}>
+        {preparationFailed || error ? '重试全批' : '确认本批'}
+      </Button>}
+    {preparationFailed && !readFailed && failedIds.size > 0 && remaining.length > 0 &&
+      <Button htmlType="button" disabled={busy || blocked} onClick={removeFailed}>移出异常单并重新确认剩余批次</Button>}
+    {readFailed && <Button htmlType="button" type="primary" disabled={busy || blocked} onClick={() => void recheck()}>重查原批次</Button>}
+    {batch?.status === 'ready' && visibleScope && !a4Block && !readFailed && !busy &&
+      <Button htmlType="button" type="primary" disabled={blocked} onClick={() => void dispatch()}>投递原批</Button>}
+    {a4Block && !readFailed && <Button htmlType="button" type={file ? 'default' : 'primary'} disabled={blocked}
+      loading={busy} onClick={() => void exportPrepared()}>导出本批 PDF</Button>}
+    {file && <Button htmlType="button" type={readFailed ? 'default' : 'primary'} disabled={busy || blocked} onClick={() => download(file)}>下载 {file.filename}</Button>}
+    {mode === 'pdf' && Boolean(result?.success) && !file &&
+      <Button htmlType="button" disabled={busy || blocked} onClick={() => void retryDownload()}>重试下载</Button>}
   </div>;
   return <BusinessModal open={!blocked} layout="scroll-body" className="project-dialog notice-dialog notice-print-dialog" titleId="notice-print-title" requestClose={closing.requestClose}>
     <DialogContents title={title} titleId="notice-print-title" closing={closing} footer={footer}>

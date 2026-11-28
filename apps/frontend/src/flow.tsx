@@ -30,7 +30,7 @@ function Bars({ rows, choose, selected }: { rows: PaymentBar[]; choose?: (key:st
   const max=rows.reduce((value,row)=> { const n=cents(row.amount);return n<0n ? -n>value?-n:value : n>value?n:value; },1n);
   return <div className="flow-bars">{rows.map(row => {
     const value=cents(row.amount), width=Number((value<0n?-value:value)*10000n/max)/100;
-    const content=[<span key="name" className="bar-name">{row.label}</span>,<span key="track" className="bar-track"><i className={value<0n?'negative':''} style={{width:`${width}%`}} /></span>,<span key="amount" className="money">{money(row.amount)}</span>];
+    const content=[<span key="name" className="bar-name" title={choose ? row.label : undefined}>{row.label}</span>,<span key="track" className="bar-track" aria-hidden="true"><i style={{width:`${width}%`}} /></span>,<span key="amount" className="money">{money(row.amount)}</span>];
     return choose ? <Button htmlType="submit" key={row.key} className="flow-bar" aria-pressed={selected?.includes(row.key)??false} onClick={()=>choose(row.key)} title="筛选下方付款流水，再点一次取消">{content}</Button> : <div key={row.key} className="flow-bar">{content}</div>;
   })}</div>;
 }
@@ -54,7 +54,7 @@ export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
       <div className="debt-overviews-grid">
         {categories.map(([key,label])=>{
           const items=(debt.data??[]).filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);
-          return <section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body">
+          return <section className="wb-surface flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body">
             {placeholder ? <ReadPlaceholder rows={8} quiet={phase==='error'}/> : items.length ? <Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/> : <p className="muted">暂无{label}未结清欠款</p>}
           </div></section>;
         })}
@@ -128,7 +128,9 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   ]; return list; },[scale,amountWidth,compareAmounts]);
   const measurement = useMemo(() => ({textOnly:['doc_no'],signature:(row:Flow,id:string,pinned:boolean)=>JSON.stringify([pinned,id==='actions'?row.status:id==='status_label'?[row.status_label,row.revoke_reason,row.status]:(row as unknown as Record<string,unknown>)[id]])}), []);
   const presentation = useGridPresentation({table: 'payment-flow', root: gridRoot, active: enabled, rows, totals: summary as Flow[], columns, measurement, rowId: flowRowId, scale, scope: JSON.stringify({...filter, keyword:rows === scope ? '' : filter.keyword}), identity: `${props.me?.account ?? ''}:${[...filter.projects].sort().join(',')}`});
-  useEffect(()=>{api.current?.refreshCells({force:true,columns:['actions']});},[writable]);
+  useEffect(() => {
+    if (props.active) api.current?.refreshCells({force:true, columns:['actions']});
+  }, [props.active, writable]);
   async function exportFlows() {
     if(exporting||searchPending||!props.me||!enabled||flows.isError)return;
     setExporting(true);setError('');
@@ -153,11 +155,28 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuar
   const statsPlaceheld=!stats.data;
   const flowsPlaceheld=flowsPhase==='idle'||flowsPhase==='reading'||flowsPhase==='error';
   return <div className="flow-workspace page-shell page-shell--fill" data-page-layout="fill">
-    <section className="flow-card payment-stats" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
+    <section className="wb-surface flow-card payment-stats" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head wb-toolbar"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
       <ReadStatusLane phase={statsPhase} announce="正在读取付款统计…" className="flow-read-status payment-stats-status">{(statsPhase==='error'||statsPhase==='stale')&&<ReadFailure read={stats} retained={statsPhase==='stale'?'统计更新失败，保留上次结果。':undefined}/>}</ReadStatusLane>
-      {statsPlaceheld ? <div className="payment-stat-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={statsPhase==='error'}/></div> : stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar wb-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元，{stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar wb-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
+      {statsPlaceheld ? <div className="payment-stat-reserve read-reserve" aria-hidden="true"><ReadPlaceholder rows={6} quiet={statsPhase==='error'}/></div> : stats.data && <div className="payment-stat-columns">
+        <div className="payment-stat-projects">
+          <div className="flow-toolbar wb-toolbar">
+            <strong>按项目</strong>
+            <TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/>
+            <span>合计 {money(stats.data.selected.total)} 元，{stats.data.selected.count} 笔</span>
+          </div>
+          {stats.data.selected.projects.length ? <Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/> : <p className="muted">该时段没有付款。</p>}
+        </div>
+        <div className="payment-stat-trend">
+          <div className="flow-toolbar wb-toolbar">
+            <strong>按{gran==='week'?'周':'月'}</strong>
+            <TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/>
+            <span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span>
+          </div>
+          <Bars rows={trend}/>
+        </div>
+      </div>}
     </div></section>
-    <section ref={flowSection} className="flow-card flow-list page-fill-card" aria-labelledby="flows-title" aria-busy={searchPending}><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||searchPending||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
+    <section ref={flowSection} className="wb-surface flow-card flow-list page-fill-card" aria-labelledby="flows-title" aria-busy={searchPending}><div className="flow-card-head wb-toolbar"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||searchPending||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
       <div className="flow-toolbar wb-toolbar"><div className="time-picker-field"><span>付款时间</span><TimePicker singleEntry label="付款时间" value={filter.period} modes={['月','跨月','年','全部']} onChange={period=>setFilter(f=>({...f,period}))} /></div>
       <div className="time-picker-field flow-project-field"><span>付款项目</span><ProjectPicker projects={projects} selected={filter.projects} multiple emptyLabel="全部项目" pick={ids=>setFilter(f=>({...f,projects:ids}))} label="付款项目"/></div>
       <label>实际付款方式<Select aria-label="实际付款方式" value={filter.method} onChange={value=>setFilter(f=>({...f,method:value}))} options={[{value:'',label:'全部'},...['现汇','承兑','供应链','其他'].map(value=>({value,label:value}))]}/></label><label>状态<Select aria-label="流水状态" value={filter.status} onChange={value=>setFilter(f=>({...f,status:value}))} options={[{value:'',label:'全部'},{value:'effective',label:'生效'},{value:'revoked',label:'已撤销'}]}/></label>

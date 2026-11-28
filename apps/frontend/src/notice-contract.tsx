@@ -160,7 +160,15 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
       {chosen && <div className="notice-contract-summary" role="status"><div><span>{modifying ? chosen.id === current?.id ? '保持当前关联' : '拟换合同' : '已选合同'}</span><strong>{contractName(chosen)}</strong></div><div><span>关联前欠款</span><b>{money(chosen.debt)} 元</b></div><div><span>本条统计付款</span><b>{money(row.stat_paid)} 元</b></div><p className="contract-match">{cents(chosen.debt) === cents(row.stat_paid) ? '金额一致' : '金额不一致，仍可关联'}</p></div>}
       </>}
       {error && <p className="notice" role="alert">{error}{saved && <Button disabled={busy} onClick={() => void readBack()}>重读核对</Button>}</p>}
-      <div className="contract-footer">{modifying && <Button htmlType="button" danger disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}<div className="dialog-actions">{step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}<Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>{step === 1 ? <>{!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}<Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button></> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}</div></div>
+      <div className="dialog-actions contract-footer">
+        {modifying && <Button className="contract-unlink-action" htmlType="button" danger disabled={unavailable} onClick={() => setDecision('unlink')}>解除当前关联</Button>}
+        {step === 2 && <Button disabled={busy || saved} onClick={() => goStep(1)}>上一步</Button>}
+        <Button htmlType="button" disabled={busy || saved} onClick={requestClose}>{saved ? '请先重读核对' : '取消'}</Button>
+        {step === 1 ? <>
+          {!modifying && <Button disabled={unavailable || readOnly || supplier.trim() === initialSupplier.current} onClick={() => void save('supplier')}>记住供应商，稍后关联</Button>}
+          <Button type="primary" disabled={unavailable} onClick={() => goStep(2)}>下一步：选择合同</Button>
+        </> : !readOnly && <Button htmlType="button" type="primary" disabled={unavailable || !chosen || chosen.id === current?.id} onClick={() => void save()}>{busy ? '正在保存…' : modifying ? '确认修改关联' : '确认关联'}</Button>}
+      </div>
     </>}
   </BusinessModal>;
 }

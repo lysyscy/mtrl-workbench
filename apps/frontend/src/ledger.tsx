@@ -4,6 +4,7 @@ import { readHistory, useHistoryState } from './history';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
+import { ReducedMotion } from './workspace-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
@@ -70,7 +71,7 @@ function Side({ active, scale, side, scope, actions, grids, writable, busy, add,
   const [tableHeight, setTableHeight] = useState(200 * scale);
   function sizeTable() {
     const grid = api.current, node = root.current;
-    if (!grid || grid.isDestroyed() || !node) return;
+    if (!grid || grid.isDestroyed() || !node || node.closest('.page-view[hidden]')) return;
     const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
     const rowsHeight = last ? (last.rowTop ?? 0) + (last.rowHeight ?? 0) : 36 * scale;
     const header = node.querySelector<HTMLElement>('.ag-header')?.getBoundingClientRect().height ?? 34 * scale;
@@ -360,9 +361,18 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
     <section className="wb-surface ledger-card" aria-labelledby="ledger-title">
-      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
+      <div className="ledger-card-head wb-toolbar" data-page-chrome>
+        <h1 id="ledger-title">逐月欠款台账</h1>
+        <div className="ledger-exports">
+          {/* Release the closed form before the adjacent export opens. */}
+          <ReducedMotion.Provider value={true}>
+            {(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => success(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}
+          </ReducedMotion.Provider>
+          {exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}
+        </div>
+      </div>
       <div className="ledger-card-body">
-        <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
+        <div className="ledger-view-project wb-toolbar" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
         {failedCells.map(({ edit, field, draft }) => {
           const row = edit.base;
           const disabled = !actions.current.writable() || controlBusy || edit.saving;

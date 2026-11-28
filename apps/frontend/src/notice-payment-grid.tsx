@@ -112,8 +112,8 @@ export const PaymentGrid = memo(function PaymentGrid({ rows, due, normalize, war
     ...(['approved','paid','due'] as const).map((field,index):ColDef<PayView>=>({field,headerName:['审批金额','已付金额','本次应付'][index]!,minWidth:floors[index]!,cellClass:'money',wrapText:false})),
     {colId:'method',headerName:'实际付款方式',minWidth:110*scale,cellRenderer:Method},
     {field:'pay',headerName:'本次付款金额',minWidth:payFloor,cellClass:'money',autoHeight:true,cellRenderer:Amount},
-    {field:'reason',headerName:'不可付原因',minWidth:160*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
-    {colId:'actions',headerName:'操作',...actions,cellRenderer:Actions},
+    {field:'reason',headerName:'不可付原因',minWidth:180*scale,wrapText:true,autoHeight:true,valueFormatter:p=>p.data?.notice?p.value||'—':''},
+    {colId:'actions',headerName:'操作',...actions,pinned:'right',cellRenderer:Actions},
   ],[signature,scale]);
   return <PaymentEditing.Provider value={{ ...editing, amountIdPrefix }}>
     <BoundedGrid singleLine fitAfterFonts minRows={4} height={height} onMetrics={onMetrics} table="notice-payment" label="本次付款清单" className="notice-pay-table" rows={views} totals={[total]} rowId={row=>row.id} columns={columns} scale={scale}

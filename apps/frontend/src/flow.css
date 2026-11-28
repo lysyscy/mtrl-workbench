@@ -1,56 +1,142 @@
-.flow-bars{display:grid;grid-template-columns:minmax(90px,1.2fr) minmax(25px,1fr) max-content;column-gap:8px}.flow-bar>.money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.flow-card-head.payment-stat-head{justify-content:flex-start}.payment-stat-head>div{flex-wrap:wrap}
-.flow-card{border:1px solid var(--bd);border-radius:8px;background:var(--sf);min-width:0;overflow:clip}.flow-card h2{font-size:calc(15px * var(--fscale));margin:0;font-weight:600}.flow-card>h2,.flow-card-head{padding:calc(10px * var(--fscale)) calc(14px * var(--fscale));border-bottom:1px solid var(--bd)}.flow-card-head{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.flow-card-head>div{display:flex;gap:6px}.flow-card-body{padding:calc(12px * var(--fscale))}.debt-overviews-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.debt-overviews .flow-bars{max-height:calc(230px * var(--fscale));overflow:auto}.payment-stat-columns{display:grid;grid-template-columns:1fr 1fr;gap:24px}.payment-stat-columns .flow-bars{max-height:calc(290px * var(--fscale));overflow:auto}.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;align-items:center;gap:8px;width:100%;padding:8px 0;border:0;background:transparent;text-align:left;color:var(--tx)}button.flow-bar:hover,button.flow-bar[aria-pressed=true]{background:var(--sf2)}.bar-name{overflow-wrap:anywhere}.bar-track{height:7px;background:var(--sf2);border-radius:4px;overflow:hidden}.bar-track i{display:block;height:100%;background:var(--wn)}.bar-track i.negative{background:var(--ok)}.flow-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}.flow-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}.flow-grid .ag-cell.money{text-align:right}@media(max-width:1000px){.debt-overviews-grid{grid-template-columns:1fr}.payment-stat-columns{grid-template-columns:1fr}}
+.flow-workspace {
+  --page-grid-min: calc(280px * var(--fscale));
+  font-size: calc(var(--font-ui-size) * 1px * var(--fscale));
+  gap: calc(16px * var(--fscale));
+}
+.flow-card { min-inline-size: 0; }
+.flow-card h2 { margin: 0; font-size: calc(15px * var(--fscale)); font-weight: 600; }
+.flow-card > h2, .flow-card-head { border-block-end: 1px solid var(--bd); }
+.flow-card > h2 { padding: calc(10px * var(--fscale)) calc(16px * var(--fscale)); }
+.flow-card-head { justify-content: space-between; }
+.flow-card-head.payment-stat-head { justify-content: flex-start; }
+.payment-stat-head > div { display: flex; flex-wrap: wrap; gap: calc(6px * var(--fscale)); }
+.payment-stat-head .ant-btn[aria-pressed=true] { border-color: var(--pri); }
+.flow-card-body { padding: calc(12px * var(--fscale)) calc(16px * var(--fscale)); }
+.flow-card-body > p { margin-block: 0; }
 
-.flow-grid .ag-cell,.flow-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale))}
+.debt-workspace, .debt-overviews { display: flex; flex-direction: column; }
+/* Fade these dense views at their final position while the debt read and grid layout settle. */
+.page-view:has(> :is(.debt-workspace, .flow-workspace)) { transform: none !important; }
+/* AG Grid gives each virtual row an explicit height. Keep the scroll viewport and the measurement host in layout. */
+.page-view:not([hidden]) .flow-grid .ag-grid-scrolling-rows .ag-row {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--ag-row-height);
+}
+.debt-workspace { gap: calc(16px * var(--fscale)); }
+.debt-overviews { container: debt-overviews / inline-size; gap: calc(12px * var(--fscale)); }
+.debt-overviews-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(12px * var(--fscale));
+}
+@container debt-overviews (38em <= inline-size < 58em) {
+  .debt-overviews-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .debt-overviews-grid > :last-child { grid-column: 1 / -1; }
+}
+@container debt-overviews (inline-size < 38em) {
+  .debt-overviews-grid { grid-template-columns: minmax(0, 1fr); }
+}
 
-.flow-bars>.ant-btn.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;height:auto;white-space:normal;text-align:left;justify-content:normal;box-shadow:none}
+.flow-bars {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(1.5em, 1.25fr) max-content;
+  gap: 0 calc(10px * var(--fscale));
+  align-content: start;
+}
+.flow-bar, .flow-bars > .ant-btn.flow-bar {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  inline-size: 100%;
+  padding-block: calc(4px * var(--fscale));
+  line-height: 1.5;
+}
+.bar-name { overflow-wrap: anywhere; }
+.flow-bar > .money { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar-track { block-size: calc(6px * var(--fscale)); background: var(--pri-l); border-radius: var(--radius-pill); overflow: hidden; }
+.bar-track i { display: block; block-size: 100%; background: var(--pri); }
+.flow-bars > .ant-btn.flow-bar {
+  block-size: auto;
+  padding-inline: calc(4px * var(--fscale));
+  color: var(--tx);
+  border: 0;
+  border-radius: var(--radius-input);
+  box-shadow: none;
+  text-align: start;
+  white-space: normal;
+  justify-content: normal;
+}
+.flow-bars > .ant-btn.flow-bar:hover { background: var(--sf2); color: var(--tx); }
+.flow-bars > .ant-btn.flow-bar[aria-pressed=true] { background: var(--pri-l); color: var(--pri-d); outline: 1px solid var(--pri); outline-offset: -1px; }
+.flow-bars > .ant-btn.flow-bar:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
 
-/* Page-local geometry consumes the shared account theme. */
-.flow-workspace{--page-grid-min:calc(280px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));gap:calc(16px * var(--fscale))}
-.flow-card{border:0;border-radius:var(--radius-card);box-shadow:var(--shadow)}
-.flow-card>h2,.flow-card-head{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf)}
-.flow-card h2{font-size:calc(15px * var(--fscale))}
-.flow-card-body{padding:calc(16px * var(--fscale))}
-.flow-toolbar>:is(label,.time-picker-field){display:inline-flex;align-items:center;gap:calc(6px * var(--fscale));min-width:0;max-width:100%;color:var(--tx2);font-size:calc(12px * var(--fscale))}
-.flow-toolbar .ant-select{width:calc(112px * var(--fscale));max-width:100%;min-width:0;height:var(--control-h)}
-.flow-toolbar .business-period-trigger{width:calc(144px * var(--fscale));max-width:100%;height:var(--control-h)}
-.flow-toolbar .ant-input,.flow-toolbar .ant-input-affix-wrapper{width:calc(200px * var(--fscale));max-width:100%;height:var(--control-h);border-radius:var(--radius-pill)}
-.flow-toolbar .flow-search-field{max-width:100%}
-.flow-toolbar .ant-input-affix-wrapper input.ant-input{width:100%;height:auto;min-height:0;border-radius:0}
-.payment-stat-head+.flow-card-body{padding-top:calc(8px * var(--fscale))}
-.payment-stat-columns .flow-toolbar{padding:0 0 calc(8px * var(--fscale));align-items:center}
-.flow-toolbar>.business-project-picker{max-width:min(100%,calc(300px * var(--fscale)))}
-.flow-toolbar>.business-project-picker .ant-select{width:100%}
-.flow-grid .ag-cell{padding-block:calc(4px * var(--fscale))}
-.flow-grid .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale))}
-.flow-grid .ag-cell.money{font-variant-numeric:tabular-nums;white-space:nowrap}
-.flow-grid .ag-row-pinned .ag-cell{border-top-color:var(--bd3)}
-.flow-bars{grid-template-columns:minmax(90px,1.2fr) minmax(25px,1fr) max-content}
-.bar-track{background:var(--pri-l);border-radius:var(--radius-pill)}
-.bar-track i,.bar-track i.negative{background:var(--pri)}
-.flow-bars>.ant-btn.flow-bar{color:var(--tx);border:0;border-radius:var(--radius-input);padding:calc(8px * var(--fscale)) calc(4px * var(--fscale));box-shadow:none;transform:none;line-height:1.5}
-.flow-bars>.ant-btn.flow-bar[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);outline:1px solid var(--pri-bd);outline-offset:-1px}
-.flow-bars>.ant-btn.flow-bar:not(:disabled):hover{background:var(--sf2);color:var(--tx)}
-.flow-toolbar .business-time-picker .ant-picker{height:var(--control-h);min-height:var(--control-h)}
-.flow-project-field .business-project-picker{max-width:min(100%,calc(180px * var(--fscale)));min-width:0}
-.flow-toolbar .flow-project-field .ant-select{width:100%}
-.flow-grid .ag-cell-wrap-text{line-height:1.5}.flow-grid .ag-cell-wrap-text,.flow-grid .ag-cell-wrap-text a{overflow-wrap:anywhere;white-space:normal;text-overflow:clip}
+.payment-stats > .flow-card-body {
+  display: flex;
+  flex-direction: column;
+  block-size: clamp(calc(200px * var(--fscale)), 27dvh, calc(300px * var(--fscale)));
+  min-block-size: 0;
+  padding-block-start: calc(8px * var(--fscale));
+  overflow: auto;
+}
+.payment-stat-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(24px * var(--fscale)); flex: 1 1 auto; min-block-size: 0; }
+.payment-stat-columns > div { display: flex; flex-direction: column; min-block-size: 0; }
+.payment-stat-columns .flow-toolbar { flex: none; padding: 0 0 calc(4px * var(--fscale)); }
+.payment-stat-columns .flow-toolbar > span { color: var(--tx2); }
+.payment-stat-columns .flow-bars { min-block-size: 0; overflow: auto; padding: 5px; scroll-padding: 5px; }
+.payment-stat-projects .flow-bars { grid-template-columns: fit-content(11em) minmax(1.5em, 1fr) max-content; }
+.payment-stat-projects .bar-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: underline dotted;
+  text-underline-offset: .18em;
+}
+.payment-stat-trend .flow-bars { grid-template-columns: max-content minmax(1.5em, 1fr) max-content; }
+.payment-stat-trend .bar-name { white-space: nowrap; }
+@media (max-width: 1000px) {
+  .debt-overviews-grid, .payment-stat-columns { grid-template-columns: minmax(0, 1fr); }
+  .payment-stats > .flow-card-body { block-size: auto; overflow: visible; }
+  .payment-stat-projects .flow-bars { overflow: visible; }
+  .payment-stat-trend .flow-bars { max-block-size: calc(156px * var(--fscale)); }
+}
 
-.debt-workspace{display:flex;flex-direction:column;gap:calc(16px * var(--fscale))}
-.debt-overviews{display:flex;flex-direction:column;gap:calc(12px * var(--fscale))}
-.debt-overviews .flow-card-body{height:auto;min-height:0;overflow:visible}
-.debt-overviews .flow-bars{max-height:none;overflow:visible}
-.payment-stats>.flow-card-body{height:clamp(calc(200px * var(--fscale)),27dvh,calc(300px * var(--fscale)));min-height:0;overflow:auto}
-.payment-stat-columns{height:auto;flex:1 1 auto;min-height:0}
-.payment-stat-columns>div{display:flex;flex-direction:column;min-height:0}
-.payment-stat-columns .flow-toolbar{flex:none}
-.payment-stat-columns .flow-bars{min-height:0;max-height:none;overflow:auto;align-content:start}
-@media(max-width:1000px){.payment-stat-columns{height:auto}.payment-stat-columns .flow-bars{max-height:calc(180px * var(--fscale))}}
+.flow-toolbar > :is(label, .time-picker-field) { display:inline-flex; align-items:center; gap:calc(6px * var(--fscale)); min-inline-size:0; max-inline-size:100%; color:var(--tx2); font-size:calc(12px * var(--fscale)); white-space:nowrap; }
+.flow-toolbar .ant-select { inline-size:calc(112px * var(--fscale)); max-inline-size:100%; min-inline-size:0; block-size:var(--control-h); }
+.flow-toolbar .time-picker-field .business-period-trigger { inline-size:calc(144px * var(--fscale)); max-inline-size:100%; block-size:var(--control-h); }
+.flow-toolbar .ant-input-affix-wrapper { inline-size:calc(200px * var(--fscale)); max-inline-size:100%; block-size:var(--control-h); border-radius:var(--radius-input); }
+.flow-toolbar .ant-input-affix-wrapper .ant-input { inline-size:100%; block-size:auto; min-block-size:0; border-radius:0; }
+.flow-toolbar .business-time-picker .ant-picker { block-size:var(--control-h); min-block-size:var(--control-h); }
+.flow-project-field .business-project-picker { max-inline-size:min(100%,calc(180px * var(--fscale))); min-inline-size:0; }
+.flow-toolbar .flow-project-field .ant-select { inline-size:100%; }
+.flow-toolbar :is(.ant-select, .ant-input-affix-wrapper, .ant-picker):has(:focus-visible) {
+  outline: 2px solid var(--pri);
+  outline-offset: -2px;
+  box-shadow: none;
+}
 
-/* Statistics and flows read independently. Each uses a visible line only for its own failure. */
-.payment-stats-status,.flow-list-status{--read-status-pad:calc(16px * var(--fscale))}
-.payment-stats>.flow-card-body{display:flex;flex-direction:column}
-/* The reserved boxes (read-region.css `.read-reserve` hides overflow) keep the space their content
-   will take; only the padding belongs to this page. */
-.payment-stat-reserve{flex:1 1 auto;min-height:0;padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
-.flow-read-reserve{padding:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
+/* Rows already have separators. Inactive data cells need no four-sided frame. */
+.flow-grid .ag-cell-not-inline-editing { border-width: 0; }
+.flow-grid :is(.ag-cell-focus, .ag-cell-range-selected) { border-width: 1px; }
+.flow-grid .ag-header-cell { padding-inline: calc(8px * var(--fscale)); }
+.flow-grid .ag-cell .ant-btn { block-size:var(--control-sm); min-block-size:var(--control-sm); padding:0 calc(8px * var(--fscale)); font-size:calc(12px * var(--fscale)); }
+.flow-grid .ag-cell :is(.ant-btn, .text-link):focus-visible,
+:is(.flow-read-status, .debt-overviews-status) .notice .ant-btn:focus-visible { outline-offset: -2px; }
+.flow-grid .ant-btn.danger:not(:disabled), .flow-revoke-actions .ant-btn.danger:not(:disabled) { border-color: var(--dg); }
+.flow-grid .ag-cell.money { text-align:end; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.flow-grid .ag-row-pinned { font-weight:600; background:var(--sf2); }
+.flow-grid .ag-row-pinned .ag-cell { border-block-start:1px solid var(--bd3); }
+.flow-grid .ag-cell-wrap-text, .flow-grid .ag-cell-wrap-text a { overflow-wrap:anywhere; white-space:normal; text-overflow:clip; }
+
+.flow-revoke-dialog .dialog-frame:not([hidden]) { padding: 4px; }
+.flow-revoke-dialog .dialog-body { margin: -4px; padding: 4px; scroll-padding: 4px; }
+.flow-revoke-dialog .dialog-close-heading { align-items: center; }
+.flow-revoke-dialog .dialog-body > :first-child { margin-block-start: 0; }
+.flow-revoke-details { margin-block: calc(12px * var(--fscale)); padding: calc(12px * var(--fscale)); background: var(--sf2); border-radius: var(--radius-inner); }
+.flow-revoke-details dt, .flow-revoke-reason { color: var(--tx2); font-weight: 500; }
+.flow-revoke-reason { margin-block: calc(12px * var(--fscale)) 0; }
+.flow-revoke-reason input:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
+
+.payment-stats-status, .flow-list-status { --read-status-pad:calc(16px * var(--fscale)); }
+.payment-stat-reserve, .flow-read-reserve { padding:calc(8px * var(--fscale)) calc(16px * var(--fscale)); }
+.payment-stat-reserve { flex:1 1 auto; min-block-size:0; }

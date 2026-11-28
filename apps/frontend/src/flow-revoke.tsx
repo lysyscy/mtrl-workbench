@@ -32,14 +32,14 @@ export function FlowRevoke({ flow, blocked, close, completed }: { flow: Flow; bl
     } catch (failure) { setError(failure instanceof Error ? failure.message : '撤销失败，请重试。'); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} layout="scroll-body" className="flow-revoke" titleId="revoke-title" requestClose={closing.requestClose}><DialogContents title={<>撤销付款流水，{flow.flow_no || '—'}</>} titleId="revoke-title" closing={closing}
-    footer={<div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button><Button htmlType="submit" className="danger" disabled={busy || blocked || !reason.trim() || !info.data || info.data.manual && !choice} onClick={() => void submit()}>{busy?'正在撤销…':'确认撤销'}</Button></div>}>
+  return <BusinessModal open={!blocked} layout="scroll-body" className="flow-revoke flow-revoke-dialog" titleId="revoke-title" requestClose={closing.requestClose}><DialogContents title={<>撤销付款流水，{flow.flow_no || '—'}</>} titleId="revoke-title" closing={closing}
+    footer={<div className="dialog-actions flow-revoke-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button><Button htmlType="submit" className="danger" disabled={busy || blocked || !reason.trim() || !info.data || info.data.manual && !choice} onClick={() => void submit()}>{busy?'正在撤销…':'确认撤销'}</Button></div>}>
     <p>撤销后已付金额减少，付款状态重新判定。</p>
-    <dl><dt>单据编码</dt><dd>{flow.doc_no || '—'}</dd><dt>付款项目</dt><dd>{flow.project_display || '—'}</dd><dt>付款金额</dt><dd>{money(flow.amount)} 元</dd><dt>付款日期 / 方式</dt><dd>{flow.pay_date || '—'} / {flow.pay_method || '—'}</dd></dl>
+    <dl className="flow-revoke-details"><dt>单据编码</dt><dd>{flow.doc_no || '—'}</dd><dt>付款项目</dt><dd>{flow.project_display || '—'}</dd><dt>付款金额</dt><dd>{money(flow.amount)} 元</dd><dt>付款日期 / 方式</dt><dd>{flow.pay_date || '—'} / {flow.pay_method || '—'}</dd></dl>
     {info.isPending && <p role="status">正在读取撤销信息…</p>}
     {info.isError && <p role="alert">{info.error.message}<Button htmlType="submit" onClick={() => void info.refetch()}>重试</Button></p>}
     {info.data?.manual && <fieldset disabled={busy || blocked}><legend>统计付款金额</legend><label><input type="radio" name="stat-choice" value="keep" checked={choice==='keep'} onChange={() => setChoice('keep')} />保留人工值</label><label><input type="radio" name="stat-choice" value="auto" checked={choice==='auto'} onChange={() => setChoice('auto')} />恢复按有效流水自动算</label></fieldset>}
-    <label>撤销原因<input aria-label="撤销原因" value={reason} onChange={e=>setReason(e.target.value)} disabled={busy || blocked} /></label>
+    <label className="flow-revoke-reason">撤销原因<input aria-label="撤销原因" value={reason} onChange={e=>setReason(e.target.value)} disabled={busy || blocked} /></label>
     {error && <p className="notice" role="alert">{error}</p>}
   </DialogContents></BusinessModal>;
 }
